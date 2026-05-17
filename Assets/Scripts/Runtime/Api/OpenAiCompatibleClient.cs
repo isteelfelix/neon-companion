@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api.Models;
+using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -17,18 +18,33 @@ namespace NeonCompanion.Runtime.Api
             AiChatRequest request,
             CancellationToken cancellationToken = default)
         {
-            if (provider == null)
-            {
-                throw new ArgumentNullException(nameof(provider));
-            }
+            ProviderValidator.Validate(provider);
 
             if (request == null)
-            {
                 throw new ArgumentNullException(nameof(request));
+
+            var messages = new System.Collections.Generic.List<AiChatMessage>(request.messages);
+
+            // Add system prompt if provided
+            if (!string.IsNullOrWhiteSpace(request.systemPrompt))
+            {
+                messages.Insert(0, new AiChatMessage
+                {
+                    role = "system",
+                    content = request.systemPrompt
+                });
             }
 
+            var requestWithSystem = new AiChatRequest
+            {
+                model = request.model,
+                temperature = request.temperature,
+                maxTokens = request.maxTokens,
+                messages = messages
+            };
+
             var endpoint = BuildEndpoint(provider.baseUrl);
-            var payloadJson = JsonUtility.ToJson(request);
+            var payloadJson = JsonUtility.ToJson(requestWithSystem);
 
             using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
             {
@@ -43,6 +59,7 @@ namespace NeonCompanion.Runtime.Api
                 }
 
                 var operation = webRequest.SendWebRequest();
+
                 while (!operation.isDone)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -51,7 +68,8 @@ namespace NeonCompanion.Runtime.Api
 
                 if (webRequest.result != UnityWebRequest.Result.Success)
                 {
-                    throw new InvalidOperationException($"API request failed: {webRequest.error}");
+                    string errorMessage = ParseErrorMessage(webRequest);
+                    throw new InvalidOperationException($"API request failed: {errorMessage}");
                 }
 
                 var rawResponse = webRequest.downloadHandler.text;
@@ -62,31 +80,41 @@ namespace NeonCompanion.Runtime.Api
         private static string BuildEndpoint(string baseUrl)
         {
             var normalized = (baseUrl ?? string.Empty).Trim().TrimEnd('/');
-            if (string.IsNullOrWhiteSpace(normalized))
+            return $"{normalized}/chat/completions";
+        }
+
+        private static string ParseErrorMessage(UnityWebRequest webRequest)
+        {
+            if (!string.IsNullOrEmpty(webRequest.downloadHandler?.text))
             {
-                throw new InvalidOperationException("Provider baseUrl is empty.");
+                try
+                {
+                    var errorResponse = JsonUtility.FromJson<OpenAiErrorResponse>(webRequest.downloadHandler.text);
+                    if (errorResponse?.error != null && !string.IsNullOrEmpty(errorResponse.error.message))
+                    {
+                        return errorResponse.error.message;
+                    }
+                }
+                catch { /* ignore */ }
             }
 
-            return $"{normalized}/chat/completions";
+            return webRequest.error ?? "Unknown error";
         }
 
         private static AiChatResponse ParseResponse(string rawJson)
         {
             if (string.IsNullOrWhiteSpace(rawJson))
             {
-                return new AiChatResponse
-                {
-                    content = string.Empty
-                };
+                return new AiChatResponse { content = string.Empty };
             }
 
             var response = JsonUtility.FromJson<OpenAiResponseEnvelope>(rawJson);
             var content = string.Empty;
 
-            if (response != null && response.choices != null && response.choices.Length > 0)
+            if (response?.choices != null && response.choices.Length > 0)
             {
                 var first = response.choices[0];
-                if (first != null && first.message != null)
+                if (first?.message != null)
                 {
                     content = first.message.content ?? string.Empty;
                 }
@@ -94,8 +122,8 @@ namespace NeonCompanion.Runtime.Api
 
             return new AiChatResponse
             {
-                id = response != null ? response.id : string.Empty,
-                model = response != null ? response.model : string.Empty,
+                id = response?.id ?? string.Empty,
+                model = response?.model ?? string.Empty,
                 content = content,
                 receivedAtUtc = DateTime.UtcNow
             };
@@ -120,6 +148,19 @@ namespace NeonCompanion.Runtime.Api
         {
             public string role;
             public string content;
+        }
+
+        [Serializable]
+        private class OpenAiErrorResponse
+        {
+            public OpenAiError error;
+        }
+
+        [Serializable]
+        private class OpenAiError
+        {
+            public string message;
+            public string type;
         }
     }
 }
