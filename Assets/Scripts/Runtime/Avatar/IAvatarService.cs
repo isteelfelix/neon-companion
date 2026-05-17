@@ -6,5 +6,6 @@ namespace NeonCompanion.Runtime.Avatar
     public interface IAvatarService
     {
         AvatarProfile GetActiveAvatar(string avatarId, List<AvatarProfile> availableAvatars);
+        string GetSystemPrompt(string avatarId, List<AvatarProfile> availableAvatars);
     }
 }

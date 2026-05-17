@@ -3,6 +3,20 @@ using System.Collections.Generic;
 
 namespace NeonCompanion.Runtime.Api.Models
 {
+    public sealed class ConnectionTestResult
+    {
+        public bool Success { get; }
+        public string Message { get; }
+        public long LatencyMs { get; }
+
+        public ConnectionTestResult(bool success, string message, long latencyMs = 0)
+        {
+            Success = success;
+            Message = message;
+            LatencyMs = latencyMs;
+        }
+    }
+
     [Serializable]
     public class AiChatRequest
     {

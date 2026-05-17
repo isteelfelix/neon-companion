@@ -23,6 +23,8 @@ namespace NeonCompanion.Runtime.Chat
         public float Temperature { get; set; } = 0.7f;
         public int MaxTokens { get; set; } = 512;
         public string SystemPrompt { get; set; }
+        public bool UseStreaming { get; set; }
+        public bool SaveChatHistory { get; set; } = true;
 
         public ProviderConfig CurrentProvider => _currentProvider;
         public ChatViewModel CurrentChatViewModel => _currentChatViewModel;
@@ -43,6 +45,7 @@ namespace NeonCompanion.Runtime.Chat
                 return _currentChatViewModel;
 
             _currentProvider = await _providerManager.GetActiveProviderAsync();
+            SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             ApplyGenerationSettings();
 
@@ -95,6 +98,7 @@ namespace NeonCompanion.Runtime.Chat
                 return;
 
             _currentProvider = newProvider;
+            SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             ApplyGenerationSettings();
 
@@ -123,17 +127,36 @@ namespace NeonCompanion.Runtime.Chat
             NeonLogger.Log("New chat session started.");
         }
 
-        public async Task SendMessageAsync(string message)
+        public async Task RegenerateAsync(Action<string> onStreamToken = null)
+        {
+            if (_currentChatViewModel == null)
+                await GetOrCreateChatAsync();
+
+            _currentChatViewModel.UseStreaming = UseStreaming;
+            await _currentChatViewModel.RegenerateAsync(UseStreaming ? onStreamToken : null);
+
+            SaveCurrentSession();
+        }
+
+        public async Task SendMessageAsync(string message, Action<string> onStreamToken = null)
         {
             if (_currentChatViewModel == null)
             {
                 await GetOrCreateChatAsync();
             }
 
+            _currentChatViewModel.UseStreaming = UseStreaming;
             _currentChatViewModel.InputMessage = message;
-            await _currentChatViewModel.SendAsync();
+            await _currentChatViewModel.SendAsync(UseStreaming ? onStreamToken : null);
 
             SaveCurrentSession();
+        }
+
+        private void SyncFromProvider(ProviderConfig provider)
+        {
+            if (provider == null) return;
+            Temperature = provider.temperature;
+            MaxTokens = provider.maxTokens;
         }
 
         private void ApplyGenerationSettings()
@@ -167,6 +190,9 @@ namespace NeonCompanion.Runtime.Chat
             if (_currentSession == null || _currentChatViewModel == null)
                 return;
 
+            if (!SaveChatHistory)
+                return;
+
             _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
             _currentSession.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             _currentSession.providerId = _currentProvider?.id ?? _currentSession.providerId;
@@ -192,6 +218,9 @@ namespace NeonCompanion.Runtime.Chat
 
         private List<ChatSession> GetSortedSessions()
         {
+            if (!SaveChatHistory)
+                return new List<ChatSession>();
+
             return _sessionRepository.GetAll()
                 .OrderByDescending(session => session.updatedAtUnix)
                 .ToList();

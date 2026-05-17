@@ -14,22 +14,28 @@ namespace NeonCompanion.Runtime.Platform
 
         public Task<string> PickImagePathAsync()
         {
+            return PickFileAsync("png,jpg,jpeg");
+        }
+
+        public Task<string> PickFileAsync(string extension)
+        {
 #if UNITY_EDITOR
-            return Task.FromResult(UnityEditor.EditorUtility.OpenFilePanel("Select avatar image", "", "png,jpg,jpeg"));
+            string title = extension.Contains("png") ? "Select image" : "Select file";
+            return Task.FromResult(UnityEditor.EditorUtility.OpenFilePanel(title, "", extension));
 #elif UNITY_STANDALONE_WIN
-            return PickWindowsImagePathAsync();
+            return PickWindowsFilePathAsync(extension);
 #elif UNITY_ANDROID
-            return PickAndroidImagePathAsync();
+            return PickAndroidImagePathAsync(); // Android path re-used; filter not enforced
 #else
             return Task.FromResult<string>(null);
 #endif
         }
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-        private static Task<string> PickWindowsImagePathAsync()
+        private static Task<string> PickWindowsFilePathAsync(string extension)
         {
             var completion = new TaskCompletionSource<string>();
-            var thread = new Thread(() => completion.TrySetResult(PickWindowsImagePath()));
+            var thread = new Thread(() => completion.TrySetResult(PickWindowsFilePath(extension)));
 
             try
             {
@@ -46,7 +52,7 @@ namespace NeonCompanion.Runtime.Platform
             return completion.Task;
         }
 
-        private static string PickWindowsImagePath()
+        private static string PickWindowsFilePath(string extension)
         {
             try
             {
@@ -55,9 +61,15 @@ namespace NeonCompanion.Runtime.Platform
                 if (dialogType == null || resultType == null)
                     return null;
 
+                bool isImage = extension.Contains("png") || extension.Contains("jpg");
+                string exts = string.Join(";", Array.ConvertAll(extension.Split(','), e => $"*.{e.Trim()}"));
+                string filter = isImage
+                    ? $"Image files ({exts})|{exts}|All files (*.*)|*.*"
+                    : $"Files ({exts})|{exts}|All files (*.*)|*.*";
+
                 var dialog = Activator.CreateInstance(dialogType);
-                SetProperty(dialogType, dialog, "Title", "Select avatar image");
-                SetProperty(dialogType, dialog, "Filter", "Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*");
+                SetProperty(dialogType, dialog, "Title", isImage ? "Select image" : "Select file");
+                SetProperty(dialogType, dialog, "Filter", filter);
                 SetProperty(dialogType, dialog, "CheckFileExists", true);
                 SetProperty(dialogType, dialog, "Multiselect", false);
 

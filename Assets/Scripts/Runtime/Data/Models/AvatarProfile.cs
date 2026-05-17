@@ -9,5 +9,6 @@ namespace NeonCompanion.Runtime.Data.Models
         public string name;
         public string imagePath;
         public bool isBuiltIn;
+        public string systemPrompt;
     }
 }

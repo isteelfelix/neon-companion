@@ -82,6 +82,57 @@ namespace NeonCompanion.Runtime.Api
             }
         }
 
+        public async Task<ConnectionTestResult> TestConnectionAsync(
+            ProviderConfig provider,
+            CancellationToken cancellationToken = default)
+        {
+            ProviderValidator.Validate(provider);
+
+            var normalized = (provider.baseUrl ?? string.Empty).Trim().TrimEnd('/');
+            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+                normalized = normalized.Substring(0, normalized.Length - "/chat/completions".Length);
+
+            var endpoint = $"{normalized}/models";
+            var startMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            using (var webRequest = UnityWebRequest.Get(endpoint))
+            {
+                if (!string.IsNullOrWhiteSpace(provider.apiKey))
+                    webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
+
+                var operation = webRequest.SendWebRequest();
+
+                while (!operation.isDone)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        return new ConnectionTestResult(false, "Cancelled");
+                    }
+
+                    await Task.Yield();
+                }
+
+                long latency = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - startMs;
+
+                if (webRequest.result == UnityWebRequest.Result.Success ||
+                    webRequest.responseCode == 200 ||
+                    webRequest.responseCode == 401)
+                {
+                    // 401 = server reachable, credentials wrong — still proves endpoint is live
+                    bool authed = webRequest.responseCode != 401;
+                    string msg = authed
+                        ? $"OK · {latency} ms"
+                        : $"Reachable but unauthorized · {latency} ms";
+                    return new ConnectionTestResult(authed, msg, latency);
+                }
+
+                return new ConnectionTestResult(false,
+                    $"{webRequest.error ?? "error"} (HTTP {webRequest.responseCode}) · {latency} ms",
+                    latency);
+            }
+        }
+
         private static string BuildEndpoint(string baseUrl)
         {
             var normalized = (baseUrl ?? string.Empty).Trim().TrimEnd('/');
@@ -139,6 +190,70 @@ namespace NeonCompanion.Runtime.Api
             };
         }
 
+        public async Task SendMessageStreamAsync(
+            ProviderConfig provider,
+            AiChatRequest request,
+            Action<string> onToken,
+            CancellationToken cancellationToken = default)
+        {
+            ProviderValidator.Validate(provider);
+
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            var messages = new List<AiChatMessage>(request.messages ?? new List<AiChatMessage>());
+
+            if (!string.IsNullOrWhiteSpace(request.systemPrompt))
+            {
+                messages.Insert(0, new AiChatMessage
+                {
+                    role = "system",
+                    content = request.systemPrompt
+                });
+            }
+
+            var streamRequest = new OpenAiStreamingRequest
+            {
+                model = request.model,
+                temperature = request.temperature,
+                max_tokens = request.maxTokens,
+                messages = messages
+            };
+
+            var endpoint = BuildEndpoint(provider.baseUrl);
+            var payloadJson = JsonUtility.ToJson(streamRequest);
+
+            using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
+            {
+                var bodyRaw = Encoding.UTF8.GetBytes(payloadJson);
+                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                webRequest.downloadHandler = new SseDownloadHandler(onToken);
+                webRequest.SetRequestHeader("Content-Type", "application/json");
+
+                if (!string.IsNullOrWhiteSpace(provider.apiKey))
+                    webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
+
+                var operation = webRequest.SendWebRequest();
+
+                while (!operation.isDone)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    await Task.Yield();
+                }
+
+                if (webRequest.result == UnityWebRequest.Result.ConnectionError ||
+                    webRequest.result == UnityWebRequest.Result.DataProcessingError)
+                {
+                    throw new InvalidOperationException($"Streaming request failed: {webRequest.error}");
+                }
+            }
+        }
+
         [Serializable]
         private class OpenAiChatCompletionRequest
         {
@@ -146,6 +261,88 @@ namespace NeonCompanion.Runtime.Api
             public float temperature;
             public int max_tokens;
             public List<AiChatMessage> messages;
+        }
+
+        [Serializable]
+        private class OpenAiStreamingRequest
+        {
+            public string model;
+            public float temperature;
+            public int max_tokens;
+            public List<AiChatMessage> messages;
+            public bool stream = true;
+        }
+
+        private sealed class SseDownloadHandler : DownloadHandlerScript
+        {
+            private readonly Action<string> _onToken;
+            private readonly StringBuilder _buf = new StringBuilder();
+
+            public SseDownloadHandler(Action<string> onToken) : base(new byte[4096])
+            {
+                _onToken = onToken;
+            }
+
+            protected override bool ReceiveData(byte[] data, int dataLength)
+            {
+                _buf.Append(Encoding.UTF8.GetString(data, 0, dataLength));
+                Flush();
+                return true;
+            }
+
+            private void Flush()
+            {
+                string text = _buf.ToString();
+                int searchFrom = 0;
+
+                while (true)
+                {
+                    int nl = text.IndexOf('\n', searchFrom);
+                    if (nl < 0) break;
+
+                    string line = text.Substring(searchFrom, nl - searchFrom).TrimEnd('\r');
+                    searchFrom = nl + 1;
+
+                    if (!line.StartsWith("data: ")) continue;
+                    string payload = line.Substring(6);
+                    if (payload == "[DONE]") break;
+                    if (string.IsNullOrWhiteSpace(payload)) continue;
+
+                    try
+                    {
+                        var chunk = JsonUtility.FromJson<OpenAiStreamChunk>(payload);
+                        string delta = chunk?.choices != null && chunk.choices.Length > 0
+                            ? chunk.choices[0]?.delta?.content
+                            : null;
+                        if (!string.IsNullOrEmpty(delta))
+                            _onToken?.Invoke(delta);
+                    }
+                    catch { /* malformed chunk, skip */ }
+                }
+
+                _buf.Clear();
+                if (searchFrom < text.Length)
+                    _buf.Append(text.Substring(searchFrom));
+            }
+        }
+
+        [Serializable]
+        private class OpenAiStreamChunk
+        {
+            public OpenAiStreamChoice[] choices;
+        }
+
+        [Serializable]
+        private class OpenAiStreamChoice
+        {
+            public OpenAiStreamDelta delta;
+        }
+
+        [Serializable]
+        private class OpenAiStreamDelta
+        {
+            public string role;
+            public string content;
         }
 
         [Serializable]

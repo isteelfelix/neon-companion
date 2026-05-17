@@ -5,6 +5,7 @@ using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Platform;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -37,6 +38,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _navChatCount;
         private Label _navProvidersCount;
 
+        private VisualElement _root;
+
         private VisualElement _chatStage;
         private VisualElement _providersArea;
         private VisualElement _avatarsArea;
@@ -45,10 +48,52 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _topbarSep;
         private VisualElement _typingIndicator;
 
+        // ===== Settings page =====
+        private DropdownField _settingsLanguage;
+        private Toggle _settingsHistory;
+        private Toggle _settingsStreaming;
+        private Toggle _settingsSystemPrompt;
+        private Toggle _settingsEncryptKeys;
+        private Toggle _settingsMaskLogs;
+        private Label _settingsStoragePath;
+        private Label _settingsVersion;
+        private Button _shapeRound;
+        private Button _shapeSquare;
+        private Button _shapeHex;
+        private Toggle _settingsShowHalo;
+        private Toggle _settingsBreathing;
+        private string _avatarShape = "round";
+
+        // ===== Avatar gallery =====
+        private static readonly string[] BuiltInAvatarIds =
+            { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
+        private string _activeAvatarId = "neon";
+        private VisualElement _avatarArt;
+        private VisualElement _avatarCircle;
+        private VisualElement _previewHero;
+        private Label _previewTitle;
+        private Label _previewTag;
+        private Label _previewPersona;
+        private Label _streamingLabel;
+        private Button _previewApplyBtn;
+        private Button _previewEditPersonaBtn;
+
+        // ===== Typing animation =====
+        private VisualElement _typingDot1;
+        private VisualElement _typingDot2;
+        private VisualElement _typingDot3;
+        private IVisualElementScheduledItem _typingSchedule;
+        private int _typingFrame;
+
+        // ===== Breathing animation =====
+        private IVisualElementScheduledItem _breathSchedule;
+        private long _breathStartMs;
+
         private Label _topbarTitle;
         private Label _topbarSubtitle;
         private Label _placeholderTitle;
         private Label _placeholderBody;
+        private Label _subtitleRole;
         private Label _subtitleBody;
         private Label _connectionStatus;
         private Label _providerShort;
@@ -62,14 +107,31 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _sendButton;
         private Button _summarizeButton;
         private Button _newSessionButton;
+        private Button _settingsOpenFolderBtn;
+        private Button _settingsExportBtn;
+        private Button _settingsClearBtn;
+        private Button _testProviderBtn;
+        private VisualElement _testRow;
+        private Label _testRowLabel;
         private TextField _messageInput;
         private ScrollView _messagesList;
         private ScrollView _sessionsList;
+        private VisualElement _historySearchBar;
+        private TextField _historySearchInput;
+        private Button _historySearchBtn;
+        private Button _historySearchClear;
+        private string _sessionSearchQuery = string.Empty;
 
         private ScrollView _providersList;
         private Button _addProviderButton;
         private Button _saveProviderButton;
         private Button _cancelEditButton;
+        private Button _importProviderButton;
+        private Button _copyButton;
+        private Button _regenerateButton;
+        private Button _avatarUploadBtn;
+        private Button _avatarOpenFolderBtn;
+        private VisualElement _avatarUploadTile;
         private TextField _editName;
         private TextField _editBaseUrl;
         private TextField _editApiKey;
@@ -106,6 +168,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void Bind(VisualElement root)
         {
+            _root = root;
             _navItems.Clear();
 
             _navChat = root.Q<VisualElement>("nav-chat");
@@ -144,6 +207,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _topbarSubtitle = root.Q<Label>("topbar-subtitle");
             _placeholderTitle = root.Q<Label>("placeholder-title");
             _placeholderBody = root.Q<Label>("placeholder-body");
+            _subtitleRole = root.Q<Label>("subtitle-role");
             _subtitleBody = root.Q<Label>("subtitle-body");
             _connectionStatus = root.Q<Label>("connection-status");
             _providerShort = root.Q<Label>("provider-short");
@@ -160,11 +224,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             _newSessionButton = root.Q<Button>("new-session-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
             _sessionsList = root.Q<ScrollView>("sessions-list");
+            _historySearchBar   = root.Q<VisualElement>("history-search-bar");
+            _historySearchInput = root.Q<TextField>("history-search-input");
+            _historySearchBtn   = root.Q<Button>("history-search-btn");
+            _historySearchClear = root.Q<Button>("history-search-clear");
 
             _providersList = root.Q<ScrollView>("providers-list");
-            _addProviderButton = root.Q<Button>("add-provider-btn");
-            _saveProviderButton = root.Q<Button>("save-provider-btn");
-            _cancelEditButton = root.Q<Button>("cancel-edit-btn");
+            _addProviderButton    = root.Q<Button>("add-provider-btn");
+            _importProviderButton = root.Q<Button>("import-provider-btn");
+            _saveProviderButton   = root.Q<Button>("save-provider-btn");
+            _cancelEditButton     = root.Q<Button>("cancel-edit-btn");
+            _copyButton       = root.Q<Button>("copy-btn");
+            _regenerateButton = root.Q<Button>("refresh-btn");
+            _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
+            _avatarOpenFolderBtn  = root.Q<Button>("avatar-open-folder-btn");
+            _avatarUploadTile     = root.Q<VisualElement>("avtile-upload");
             _providerEditPanel = root.Q<VisualElement>("provider-edit-panel");
             _editName = root.Q<TextField>("edit-name");
             _editBaseUrl = root.Q<TextField>("edit-baseurl");
@@ -180,8 +254,52 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navThemesLabel?.Localize("settings.themes");
             _navSettingsLabel?.Localize("tab.settings");
 
+            // Settings action buttons
+            _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
+            _settingsExportBtn     = root.Q<Button>("settings-export-btn");
+            _settingsClearBtn      = root.Q<Button>("settings-clear-btn");
+            _testProviderBtn = root.Q<Button>("test-provider-btn");
+            _testRow         = root.Q<VisualElement>("test-row");
+            _testRowLabel    = root.Q<Label>("test-row-label");
+
+            // Settings page controls
+            _settingsLanguage    = root.Q<DropdownField>("settings-language");
+            _settingsHistory     = root.Q<Toggle>("settings-save-history");
+            _settingsStreaming    = root.Q<Toggle>("settings-streaming");
+            _settingsSystemPrompt = root.Q<Toggle>("settings-system-prompt");
+            _settingsEncryptKeys = root.Q<Toggle>("settings-encrypt-keys");
+            _settingsMaskLogs    = root.Q<Toggle>("settings-mask-logs");
+            _settingsStoragePath = root.Q<Label>("settings-storage-path");
+            _settingsVersion     = root.Q<Label>("settings-version");
+            _shapeRound  = root.Q<Button>("shape-round");
+            _shapeSquare = root.Q<Button>("shape-square");
+            _shapeHex    = root.Q<Button>("shape-hex");
+            _settingsShowHalo   = root.Q<Toggle>("settings-show-halo");
+            _settingsBreathing  = root.Q<Toggle>("settings-breathing");
+
+            // Avatar elements
+            _avatarArt    = root.Q<VisualElement>("avatar-art");
+            _avatarCircle = root.Q<VisualElement>("avatar-circle");
+            _previewHero  = root.Q<VisualElement>("preview-hero");
+            _previewTitle   = root.Q<Label>("preview-title");
+            _previewTag     = root.Q<Label>("preview-tag");
+            _previewPersona = root.Q<Label>("preview-persona");
+            _previewApplyBtn      = root.Q<Button>("preview-apply-btn");
+            _previewEditPersonaBtn = root.Q<Button>("preview-edit-persona-btn");
+
+            // Typing dots
+            var typingEl = root.Q<VisualElement>("typing-indicator");
+            if (typingEl != null)
+            {
+                var dots = typingEl.Query<VisualElement>(className: "typing__dot").ToList();
+                _typingDot1 = dots.Count > 0 ? dots[0] : null;
+                _typingDot2 = dots.Count > 1 ? dots[1] : null;
+                _typingDot3 = dots.Count > 2 ? dots[2] : null;
+            }
+
             SetDisplay(_providerEditPanel, DisplayStyle.None);
             SetSending(false);
+            _ = LoadSettingsAsync();
             _isBound = true;
         }
 
@@ -204,12 +322,32 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_sendButton, OnSendClicked);
             RegisterClick(_summarizeButton, OnSummarizeClicked);
             RegisterClick(_newSessionButton, OnNewSessionClicked);
+            RegisterClick(_historySearchBtn, OnHistorySearchToggled);
+            RegisterClick(_historySearchClear, OnHistorySearchCleared);
+            if (_historySearchInput != null)
+                _historySearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
             RegisterClick(_addProviderButton, OnAddProviderClicked);
+            RegisterClick(_importProviderButton, OnImportProviderClicked);
             RegisterClick(_saveProviderButton, OnSaveProviderClicked);
             RegisterClick(_cancelEditButton, OnCancelEditClicked);
+            RegisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
+            RegisterClick(_settingsExportBtn, OnExportChatsClicked);
+            RegisterClick(_settingsClearBtn, OnClearDataClicked);
+            RegisterClick(_testProviderBtn, OnTestProviderClicked);
+            RegisterClick(_copyButton, OnCopyLastMessageClicked);
+            RegisterClick(_regenerateButton, OnRegenerateClicked);
+            RegisterClick(_avatarUploadBtn, OnAvatarUploadClicked);
+            RegisterClick(_avatarOpenFolderBtn, OnAvatarOpenFolderClicked);
+            if (_avatarUploadTile != null)
+                _avatarUploadTile.RegisterCallback<ClickEvent>(_ => OnAvatarUploadClicked());
 
             if (_messageInput != null)
                 _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
+
+            RegisterSettingsCallbacks();
+            RegisterAvatarGalleryCallbacks();
+            RegisterClick(_previewApplyBtn, OnPreviewApplyClicked);
+            RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
         }
 
         private void UnregisterCallbacks()
@@ -231,6 +369,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
+
+            _typingSchedule?.Pause();
+            _breathSchedule?.Pause();
         }
 
         private static void RegisterClick(VisualElement element, EventCallback<ClickEvent> handler)
@@ -385,8 +526,22 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
                 }
 
+                bool streaming = _settingsStreaming?.value ?? false;
+                chat.UseStreaming = streaming;
+
                 RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message));
-                await chat.SendMessageAsync(message);
+
+                if (streaming)
+                {
+                    AddStreamingBubble();
+                    await chat.SendMessageAsync(message, OnStreamToken);
+                    _streamingLabel = null;
+                }
+                else
+                {
+                    await chat.SendMessageAsync(message);
+                }
+
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
             }
@@ -401,6 +556,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        private void AddStreamingBubble()
+        {
+            if (_messagesList == null) return;
+            var placeholder = CreateMessageElement(new ChatMessage { role = "assistant", content = "" });
+            _messagesList.Add(placeholder);
+            _streamingLabel = placeholder.Q<Label>(className: "transcript__body");
+            ScrollTranscriptToBottom();
+        }
+
+        private void OnStreamToken(string token)
+        {
+            if (_streamingLabel != null)
+                _streamingLabel.text += token;
+        }
+
         private void SetSending(bool isSending)
         {
             _isSending = isSending;
@@ -412,6 +582,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetDisplay(_typingIndicator, isSending ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_subtitleBody, isSending ? DisplayStyle.None : DisplayStyle.Flex);
+
+            if (isSending) StartTypingAnimation();
+            else StopTypingAnimation();
         }
 
         private void OnSummarizeClicked()
@@ -447,9 +620,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             try
             {
-                var chat = await GetChatServiceAsync();
-                if (!_isBound || chat == null)
+                var app = await GetAppAsync();
+                if (!_isBound || app == null) return;
+
+                var providers = await app.ProviderManager.GetAllProvidersAsync();
+                if (providers.Count == 0)
+                {
+                    SetNoProviderState();
                     return;
+                }
+
+                var chat = await GetChatServiceAsync();
+                if (!_isBound || chat == null) return;
 
                 SetProviderHeader(chat.CurrentProvider);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
@@ -460,6 +642,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 NeonLogger.LogError(ex.ToString());
             }
+        }
+
+        private void SetNoProviderState()
+        {
+            if (_subtitleBody != null)
+                _subtitleBody.text = "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ.";
+            if (_subtitleRole != null)
+                _subtitleRole.text = "Система";
+            if (_sendButton != null)
+                _sendButton.SetEnabled(false);
+            if (_connectionStatus != null)
+                _connectionStatus.text = "no provider";
         }
 
         private async Task<CompanionApp> GetAppAsync()
@@ -492,6 +686,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return null;
 
             _chatService = app.ChatService;
+
+            var settingsSnap = app.Settings.Load();
+            if (settingsSnap != null)
+                _chatService.SaveChatHistory = settingsSnap.saveChatHistory;
+
             await _chatService.GetOrCreateChatAsync();
             return _chatService;
         }
@@ -501,23 +700,47 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_sessionsList == null)
                 return;
 
-            var sessions = await chat.GetAllSessionsAsync();
+            var allSessions = await chat.GetAllSessionsAsync();
             if (!_isBound)
                 return;
+
+            if (_navChatCount != null)
+                _navChatCount.text = allSessions.Count.ToString();
+
+            // Sync topbar title with current (first/most-recent) session title
+            if (allSessions.Count > 0 && _topbarTitle != null)
+            {
+                string sessionTitle = allSessions[0].title;
+                if (!string.IsNullOrWhiteSpace(sessionTitle) && sessionTitle != "New chat")
+                    _topbarTitle.text = sessionTitle;
+            }
+
+            RenderSessionList(allSessions);
+        }
+
+        private void RenderSessionList(List<ChatSession> allSessions)
+        {
+            if (_sessionsList == null) return;
 
             _sessionsList.Clear();
             _sessionItems.Clear();
 
-            if (_navChatCount != null)
-                _navChatCount.text = sessions.Count.ToString();
+            var sessions = string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                ? allSessions
+                : allSessions.FindAll(s =>
+                    (s.title ?? string.Empty).IndexOf(_sessionSearchQuery, StringComparison.OrdinalIgnoreCase) >= 0);
 
-            var groupLabel = new Label("Недавние");
+            var groupLabel = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                ? "Недавние"
+                : $"Результаты: {sessions.Count}");
             groupLabel.AddToClassList("history__group");
             _sessionsList.Add(groupLabel);
 
             if (sessions.Count == 0)
             {
-                var empty = new Label("Пока нет сессий");
+                var empty = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                    ? "Пока нет сессий"
+                    : "Ничего не найдено");
                 empty.AddToClassList("history__meta");
                 _sessionsList.Add(empty);
                 return;
@@ -525,10 +748,46 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             for (int i = 0; i < sessions.Count; i++)
             {
-                var item = CreateSessionItem(sessions[i], i == 0);
+                var item = CreateSessionItem(sessions[i], i == 0 && string.IsNullOrWhiteSpace(_sessionSearchQuery));
                 _sessionsList.Add(item);
                 _sessionItems.Add(item);
             }
+        }
+
+        // ---- History search ----
+
+        private void OnHistorySearchToggled()
+        {
+            if (_historySearchBar == null) return;
+            bool isVisible = _historySearchBar.style.display == DisplayStyle.Flex;
+            SetDisplay(_historySearchBar, isVisible ? DisplayStyle.None : DisplayStyle.Flex);
+            if (!isVisible && _historySearchInput != null)
+                _historySearchInput.Focus();
+            if (isVisible)
+                OnHistorySearchCleared();
+        }
+
+        private void OnHistorySearchCleared()
+        {
+            _sessionSearchQuery = string.Empty;
+            if (_historySearchInput != null)
+                _historySearchInput.SetValueWithoutNotify(string.Empty);
+            SetDisplay(_historySearchBar, DisplayStyle.None);
+            _ = RefreshSessionsFromCacheAsync();
+        }
+
+        private void OnHistorySearchChanged(ChangeEvent<string> evt)
+        {
+            _sessionSearchQuery = evt.newValue ?? string.Empty;
+            _ = RefreshSessionsFromCacheAsync();
+        }
+
+        private async Task RefreshSessionsFromCacheAsync()
+        {
+            var chat = await GetChatServiceAsync();
+            if (chat == null) return;
+            var allSessions = await chat.GetAllSessionsAsync();
+            if (_isBound) RenderSessionList(allSessions);
         }
 
         private VisualElement CreateSessionItem(ChatSession session, bool isActive)
@@ -579,7 +838,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void RenderMessages(IReadOnlyList<ChatMessage> messages)
         {
             int count = messages?.Count ?? 0;
-            _chatSubtitle = $"{MessageCountText(count)} · Neon";
+            string avatarName = AvatarDisplayName(_activeAvatarId);
+            _chatSubtitle = $"{MessageCountText(count)} · {avatarName}";
 
             if (_topbarSubtitle != null)
                 _topbarSubtitle.text = _chatSubtitle;
@@ -587,26 +847,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_navChatCount != null)
                 _navChatCount.text = count.ToString();
 
+            if (_subtitleRole != null)
+                _subtitleRole.text = avatarName;
+
             RenderTranscript(messages);
 
             if (_subtitleBody == null)
                 return;
 
-            string text = "Готова помочь. С чего сегодня начнём: настройка провайдера, аватары или прошлый разговор о шейдерах?";
-
+            string text = $"Готова помочь. С чего начнём?";
             if (messages != null)
             {
                 for (int i = messages.Count - 1; i >= 0; i--)
                 {
-                    var message = messages[i];
-                    if (message == null || string.IsNullOrWhiteSpace(message.content))
-                        continue;
-
-                    if (message.role != "user")
-                    {
-                        text = message.content;
-                        break;
-                    }
+                    var msg = messages[i];
+                    if (msg == null || string.IsNullOrWhiteSpace(msg.content)) continue;
+                    if (msg.role != "user") { text = msg.content; break; }
                 }
             }
 
@@ -876,6 +1132,47 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        private void OnTestProviderClicked()
+        {
+            _ = TestProviderConnectionAsync();
+        }
+
+        private async Task TestProviderConnectionAsync()
+        {
+            if (_editingProvider == null) return;
+
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                if (_testProviderBtn != null) _testProviderBtn.SetEnabled(false);
+                SetTestRow(null, "Проверяем соединение…");
+
+                var result = await app.AiClient.TestConnectionAsync(_editingProvider);
+                SetTestRow(result.Success, result.Message);
+            }
+            catch (Exception ex)
+            {
+                SetTestRow(false, ex.Message);
+            }
+            finally
+            {
+                if (_testProviderBtn != null) _testProviderBtn.SetEnabled(true);
+            }
+        }
+
+        private void SetTestRow(bool? success, string message)
+        {
+            if (_testRowLabel != null)
+                _testRowLabel.text = message ?? string.Empty;
+
+            if (_testRow == null) return;
+
+            _testRow.EnableInClassList("testrow--ok",    success == true);
+            _testRow.EnableInClassList("testrow--error", success == false);
+        }
+
         private void OnCancelEditClicked()
         {
             _editingProvider = null;
@@ -1094,6 +1391,612 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             return string.IsNullOrEmpty(compact) ? "API" : compact;
+        }
+
+        // ============================================================
+        // Settings page
+        // ============================================================
+
+        private void RegisterSettingsCallbacks()
+        {
+            RegisterClick(_shapeRound,  () => SetAvatarShape("round"));
+            RegisterClick(_shapeSquare, () => SetAvatarShape("square"));
+            RegisterClick(_shapeHex,    () => SetAvatarShape("hex"));
+
+            RegisterToggleChanged(_settingsHistory,      _ => SaveSettings());
+            RegisterToggleChanged(_settingsStreaming,     _ => SaveSettings());
+            RegisterToggleChanged(_settingsSystemPrompt, _ => SaveSettings());
+            RegisterToggleChanged(_settingsEncryptKeys,  _ => SaveSettings());
+            RegisterToggleChanged(_settingsMaskLogs,     _ => SaveSettings());
+            RegisterToggleChanged(_settingsShowHalo,    v => { ApplyHaloVisibility(v); SaveSettings(); });
+            RegisterToggleChanged(_settingsBreathing,   v => { ApplyBreathingAnimation(v); SaveSettings(); });
+
+            if (_settingsLanguage != null)
+                _settingsLanguage.RegisterCallback<ChangeEvent<string>>(_ => SaveSettings());
+        }
+
+        private static void RegisterToggleChanged(Toggle toggle, Action<bool> handler)
+        {
+            if (toggle != null)
+                toggle.RegisterCallback<ChangeEvent<bool>>(evt => handler(evt.newValue));
+        }
+
+        private async Task LoadSettingsAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (!_isBound || app == null) return;
+
+                var s = app.Settings.Load() ?? new AppSettings();
+                _activeAvatarId = string.IsNullOrEmpty(s.activeAvatarId) ? "neon" : s.activeAvatarId;
+
+                _settingsHistory?.SetValueWithoutNotify(s.saveChatHistory);
+                _settingsStreaming?.SetValueWithoutNotify(s.streaming);
+                _settingsSystemPrompt?.SetValueWithoutNotify(s.useSystemPrompt);
+                _settingsEncryptKeys?.SetValueWithoutNotify(s.encryptKeys);
+                _settingsMaskLogs?.SetValueWithoutNotify(s.maskLogs);
+                _settingsShowHalo?.SetValueWithoutNotify(s.showHalo);
+                _settingsBreathing?.SetValueWithoutNotify(s.breathingAnimation);
+
+                if (_settingsLanguage != null)
+                    _settingsLanguage.SetValueWithoutNotify(s.language == "en" ? "English" : "Русский");
+
+                if (_settingsStoragePath != null)
+                    _settingsStoragePath.text = Application.persistentDataPath;
+
+                if (_settingsVersion != null)
+                    _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
+
+                SetAvatarShape(s.avatarShape ?? "round", save: false);
+                ApplyHaloVisibility(s.showHalo);
+                ApplyAvatarArt(_activeAvatarId);
+                SyncGallerySelection(_activeAvatarId);
+                ApplyBreathingAnimation(s.breathingAnimation);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void SaveSettings()
+        {
+            _ = SaveSettingsAsync();
+        }
+
+        private async Task SaveSettingsAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var s = app.Settings.Load() ?? new AppSettings();
+
+                if (_settingsHistory != null)      s.saveChatHistory     = _settingsHistory.value;
+                if (_settingsStreaming != null)     s.streaming           = _settingsStreaming.value;
+                if (_settingsSystemPrompt != null)  s.useSystemPrompt     = _settingsSystemPrompt.value;
+                if (_settingsEncryptKeys != null)   s.encryptKeys         = _settingsEncryptKeys.value;
+                if (_settingsMaskLogs != null)      s.maskLogs            = _settingsMaskLogs.value;
+                if (_settingsShowHalo != null)      s.showHalo            = _settingsShowHalo.value;
+                if (_settingsBreathing != null)     s.breathingAnimation  = _settingsBreathing.value;
+                if (_settingsLanguage != null)      s.language            = _settingsLanguage.value == "English" ? "en" : "ru";
+
+                s.avatarShape    = _avatarShape;
+                s.activeAvatarId = _activeAvatarId;
+
+                app.Settings.Save(s);
+
+                // Propagate runtime flags to services immediately
+                if (_chatService != null)
+                    _chatService.SaveChatHistory = s.saveChatHistory;
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void SetAvatarShape(string shape, bool save = true)
+        {
+            _avatarShape = shape;
+
+            _shapeRound?.EnableInClassList("seg__btn--active",  shape == "round");
+            _shapeSquare?.EnableInClassList("seg__btn--active", shape == "square");
+            _shapeHex?.EnableInClassList("seg__btn--active",    shape == "hex");
+
+            if (_avatarCircle != null)
+            {
+                _avatarCircle.EnableInClassList("avatar--square", shape == "square");
+                _avatarCircle.EnableInClassList("avatar--hex",    shape == "hex");
+            }
+
+            if (save) SaveSettings();
+        }
+
+        private void ApplyHaloVisibility(bool visible)
+        {
+            var halo = _root?.Q<VisualElement>("avatar-glow");
+            SetDisplay(halo, visible ? DisplayStyle.Flex : DisplayStyle.None);
+        }
+
+        private void ApplyBreathingAnimation(bool enabled)
+        {
+            if (enabled) StartBreathing();
+            else StopBreathing();
+        }
+
+        // ============================================================
+        // Avatar gallery
+        // ============================================================
+
+        private void RegisterAvatarGalleryCallbacks()
+        {
+            if (_root == null) return;
+            foreach (var id in BuiltInAvatarIds)
+            {
+                string capturedId = id;
+                var tile = _root.Q<VisualElement>($"avtile-{id}");
+                if (tile != null)
+                    tile.RegisterCallback<ClickEvent>(_ => SelectAvatar(capturedId));
+            }
+        }
+
+        private void SelectAvatar(string avatarId)
+        {
+            if (_activeAvatarId == avatarId) return;
+            _activeAvatarId = avatarId;
+            SyncGallerySelection(avatarId);
+            ApplyAvatarArt(avatarId);
+            string name = AvatarDisplayName(avatarId);
+            if (_subtitleRole != null) _subtitleRole.text = name;
+            _chatSubtitle = _chatSubtitle.Contains("·")
+                ? _chatSubtitle.Substring(0, _chatSubtitle.LastIndexOf('·') + 2) + name
+                : _chatSubtitle;
+            if (_topbarSubtitle != null) _topbarSubtitle.text = _chatSubtitle;
+            SaveSettings();
+        }
+
+        private void OnPreviewApplyClicked()
+        {
+            _ = ApplyAvatarToSessionAsync();
+        }
+
+        private async Task ApplyAvatarToSessionAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                // Update system prompt on the running chat service
+                if (_chatService != null)
+                {
+                    var avatarProfiles = app.Avatars.GetAll();
+                    string prompt = app.AvatarService.GetSystemPrompt(_activeAvatarId, avatarProfiles);
+                    var s = app.Settings.Load() ?? new AppSettings();
+                    _chatService.SystemPrompt = s.useSystemPrompt ? prompt : null;
+                }
+
+                SaveSettings();
+                ShowChat();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void OnPreviewEditPersonaClicked()
+        {
+            // Placeholder — persona editing UI not implemented yet
+            AddSystemMessage("Редактирование персоны будет добавлено в следующем обновлении.");
+        }
+
+        private void SyncGallerySelection(string avatarId)
+        {
+            if (_root == null) return;
+            foreach (var id in BuiltInAvatarIds)
+            {
+                var tile = _root.Q<VisualElement>($"avtile-{id}");
+                tile?.EnableInClassList("avtile--selected", id == avatarId);
+            }
+        }
+
+        private void ApplyAvatarArt(string avatarId)
+        {
+            if (_avatarArt != null)
+            {
+                foreach (var id in BuiltInAvatarIds)
+                    _avatarArt.EnableInClassList($"avatar__art--{id}", id == avatarId);
+            }
+
+            if (_previewHero != null)
+            {
+                foreach (var id in BuiltInAvatarIds)
+                    _previewHero.EnableInClassList($"preview-hero--{id}", id == avatarId);
+            }
+
+            string name = AvatarDisplayName(avatarId);
+            if (_previewTitle != null)
+                _previewTitle.text = name;
+            if (_previewTag != null)
+                _previewTag.text = AvatarStyleTag(avatarId);
+            if (_previewPersona != null)
+                _previewPersona.text = AvatarPersonaText(avatarId);
+        }
+
+        private static string AvatarStyleTag(string avatarId)
+        {
+            switch (avatarId)
+            {
+                case "aurora": return "cool · gradient";
+                case "ember":  return "warm · vivid";
+                case "glass":  return "minimal · dark";
+                case "flora":  return "natural · green";
+                case "mono":   return "monochrome";
+                case "cobalt": return "bold · blue";
+                case "rose":   return "soft · pink";
+                default:       return "default";
+            }
+        }
+
+        private static string AvatarPersonaText(string avatarId)
+        {
+            switch (avatarId)
+            {
+                case "aurora": return "Aurora — calm and analytical. Explains clearly and thinks before responding.";
+                case "ember":  return "Ember — warm and empathetic. Understands feelings and responds with care.";
+                case "glass":  return "Glass — energetic and bold. Always ready to take on any challenge.";
+                case "flora":  return "Flora — wise and thoughtful. Gives nuanced, balanced perspectives.";
+                case "mono":   return "Mono — precise and efficient. Values accuracy and brevity above all.";
+                case "cobalt": return "Cobalt — creative and imaginative. Loves exploring ideas and connections.";
+                case "rose":   return "Rose — charming and sociable. Makes every interaction feel personal.";
+                default:       return "Neon — helpful and witty. Direct, clever, and a bit playful.";
+            }
+        }
+
+        private static string AvatarDisplayName(string avatarId)
+        {
+            switch (avatarId)
+            {
+                case "aurora": return "Aurora";
+                case "ember":  return "Ember";
+                case "glass":  return "Glass";
+                case "flora":  return "Flora";
+                case "mono":   return "Mono";
+                case "cobalt": return "Cobalt";
+                case "rose":   return "Rose";
+                default:       return "Neon";
+            }
+        }
+
+        // ============================================================
+        // Typing dots animation
+        // ============================================================
+
+        private void StartTypingAnimation()
+        {
+            if (_typingDot1 == null) return;
+            _typingFrame = 0;
+            _typingSchedule?.Pause();
+            _typingSchedule = _typingDot1.schedule.Execute(TickTyping).Every(380);
+        }
+
+        private void StopTypingAnimation()
+        {
+            _typingSchedule?.Pause();
+            SetDotOpacity(_typingDot1, 1f);
+            SetDotOpacity(_typingDot2, 1f);
+            SetDotOpacity(_typingDot3, 1f);
+        }
+
+        private void TickTyping()
+        {
+            int step = _typingFrame % 3;
+            SetDotOpacity(_typingDot1, step == 0 ? 1f : 0.25f);
+            SetDotOpacity(_typingDot2, step == 1 ? 1f : 0.25f);
+            SetDotOpacity(_typingDot3, step == 2 ? 1f : 0.25f);
+            _typingFrame++;
+        }
+
+        private static void SetDotOpacity(VisualElement dot, float opacity)
+        {
+            if (dot != null) dot.style.opacity = opacity;
+        }
+
+        // ============================================================
+        // Breathing animation
+        // ============================================================
+
+        private void StartBreathing()
+        {
+            if (_avatarCircle == null) return;
+            _breathStartMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _breathSchedule?.Pause();
+            _breathSchedule = _avatarCircle.schedule.Execute(TickBreath).Every(33); // ~30 fps
+        }
+
+        private void StopBreathing()
+        {
+            _breathSchedule?.Pause();
+            _breathSchedule = null;
+            if (_avatarCircle != null)
+                _avatarCircle.style.scale = new StyleScale(new Scale(new Vector3(1f, 1f, 1f)));
+        }
+
+        private void TickBreath()
+        {
+            if (_avatarCircle == null) return;
+            float elapsed = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _breathStartMs) / 1000f;
+            // Slow sine wave: period ~5 s, amplitude ±1.5%
+            float s = 1f + 0.015f * (float)Math.Sin(elapsed * (2f * (float)Math.PI / 5f));
+            _avatarCircle.style.scale = new StyleScale(new Scale(new Vector3(s, s, 1f)));
+        }
+
+        // ============================================================
+        // Settings action buttons
+        // ============================================================
+
+        private void OnOpenFolderClicked()
+        {
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+            System.Diagnostics.Process.Start("explorer.exe", Application.persistentDataPath.Replace('/', '\\'));
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            System.Diagnostics.Process.Start("open", Application.persistentDataPath);
+#elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
+            System.Diagnostics.Process.Start("xdg-open", Application.persistentDataPath);
+#else
+            Application.OpenURL("file://" + Application.persistentDataPath);
+#endif
+        }
+
+        private void OnExportChatsClicked()
+        {
+            _ = ExportChatsAsync();
+        }
+
+        private async Task ExportChatsAsync()
+        {
+            try
+            {
+                var chat = await GetChatServiceAsync();
+                if (chat == null) return;
+
+                var sessions = await chat.GetAllSessionsAsync();
+                string json = JsonUtility.ToJson(new ChatSessionCollection { items = sessions }, true);
+                string path = System.IO.Path.Combine(Application.persistentDataPath, $"export_{DateTime.Now:yyyyMMdd_HHmmss}.json");
+                System.IO.File.WriteAllText(path, json);
+
+                if (_subtitleBody != null)
+                    _subtitleBody.text = $"Экспортировано: {System.IO.Path.GetFileName(path)}";
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void OnClearDataClicked()
+        {
+            _ = ClearAllDataAsync();
+        }
+
+        private async Task ClearAllDataAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                // Clear all chat sessions
+                app.Chats.SaveAll(new System.Collections.Generic.List<ChatSession>());
+
+                // Delete all providers
+                var providers = await app.ProviderManager.GetAllProvidersAsync();
+                foreach (var p in providers)
+                    await app.ProviderManager.DeleteProviderAsync(p.id);
+
+                // Reset settings
+                app.Settings.Save(new AppSettings());
+
+                // Reset service cache so next call reinitialises
+                _app = null;
+                _chatService = null;
+
+                RenderMessages(null);
+                SetNoProviderState();
+                if (_sessionsList != null) _sessionsList.Clear();
+                if (_navChatCount != null) _navChatCount.text = "0";
+                if (_navProvidersCount != null) _navProvidersCount.text = "0";
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        // ============================================================
+        // Chat action buttons: Copy, Regenerate
+        // ============================================================
+
+        private void OnCopyLastMessageClicked()
+        {
+            var messages = _chatService?.CurrentChatViewModel?.Messages;
+            if (messages == null || messages.Count == 0) return;
+
+            for (int i = messages.Count - 1; i >= 0; i--)
+            {
+                var msg = messages[i];
+                if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
+                {
+                    GUIUtility.systemCopyBuffer = msg.content;
+                    AddSystemMessage("Скопировано в буфер обмена.");
+                    return;
+                }
+            }
+        }
+
+        private void OnRegenerateClicked()
+        {
+            _ = RegenerateLastAsync();
+        }
+
+        private async Task RegenerateLastAsync()
+        {
+            try
+            {
+                var chat = await GetChatServiceAsync();
+                if (chat == null || _isSending) return;
+
+                var messages = chat.CurrentChatViewModel?.Messages;
+                if (messages == null || messages.Count == 0) return;
+
+                // Remove the last assistant reply so it gets regenerated
+                if (messages[messages.Count - 1].role == "assistant")
+                    messages.RemoveAt(messages.Count - 1);
+
+                if (messages.Count == 0) return;
+
+                SetSending(true);
+                try
+                {
+                    bool streaming = _settingsStreaming?.value ?? false;
+                    chat.UseStreaming = streaming;
+
+                    RenderMessages(chat.CurrentChatViewModel?.Messages);
+
+                    if (streaming)
+                    {
+                        AddStreamingBubble();
+                        await chat.RegenerateAsync(OnStreamToken);
+                        _streamingLabel = null;
+                    }
+                    else
+                    {
+                        await chat.RegenerateAsync();
+                    }
+
+                    RenderMessages(chat.CurrentChatViewModel?.Messages);
+                    await LoadSessionsAsync(chat);
+                }
+                finally
+                {
+                    SetSending(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"[Error] {ex.Message}");
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        // ============================================================
+        // Provider import
+        // ============================================================
+
+        private void OnImportProviderClicked()
+        {
+            _ = ImportProvidersAsync();
+        }
+
+        private async Task ImportProvidersAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var filePicker = app.Services.GetRequired<IFilePickerService>();
+                string path = await filePicker.PickFileAsync("json");
+                if (string.IsNullOrEmpty(path)) return;
+
+                string json = System.IO.File.ReadAllText(path);
+                var imported = JsonUtility.FromJson<ProviderConfigCollection>(json);
+                if (imported?.items == null || imported.items.Count == 0)
+                {
+                    AddSystemMessage("Файл не содержит провайдеров.");
+                    return;
+                }
+
+                foreach (var p in imported.items)
+                {
+                    if (!string.IsNullOrEmpty(p?.id))
+                        await app.ProviderManager.SaveProviderAsync(p);
+                }
+
+                await RefreshProvidersListAsync();
+                AddSystemMessage($"Импортировано: {imported.items.Count} провайдер(ов).");
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"[Ошибка импорта] {ex.Message}");
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        // ============================================================
+        // Avatar upload
+        // ============================================================
+
+        private void OnAvatarUploadClicked()
+        {
+            _ = UploadAvatarAsync();
+        }
+
+        private async Task UploadAvatarAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var filePicker = app.Services.GetRequired<IFilePickerService>();
+                string path = await filePicker.PickFileAsync("png");
+                if (string.IsNullOrEmpty(path)) return;
+
+                string fileName = System.IO.Path.GetFileNameWithoutExtension(path);
+                string destDir  = System.IO.Path.Combine(Application.persistentDataPath, "Avatars");
+                System.IO.Directory.CreateDirectory(destDir);
+                string destPath = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(path));
+                System.IO.File.Copy(path, destPath, overwrite: true);
+
+                var profile = new NeonCompanion.Runtime.Data.Models.AvatarProfile
+                {
+                    id        = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant().Replace(" ", "_"),
+                    name      = fileName,
+                    imagePath = destPath,
+                    isBuiltIn = false
+                };
+
+                var all = app.Avatars.GetAll();
+                int existing = all.FindIndex(a => a.id == profile.id);
+                if (existing >= 0) all[existing] = profile;
+                else all.Add(profile);
+                app.Avatars.SaveAll(all);
+
+                AddSystemMessage($"Аватар «{fileName}» загружен.");
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"[Ошибка загрузки] {ex.Message}");
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void OnAvatarOpenFolderClicked()
+        {
+            string dir = System.IO.Path.Combine(Application.persistentDataPath, "Avatars");
+            System.IO.Directory.CreateDirectory(dir);
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+            System.Diagnostics.Process.Start("explorer.exe", dir.Replace('/', '\\'));
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            System.Diagnostics.Process.Start("open", dir);
+#else
+            Application.OpenURL("file://" + dir);
+#endif
         }
     }
 }

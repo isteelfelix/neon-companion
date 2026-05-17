@@ -43,8 +43,17 @@ namespace NeonCompanion.Runtime.Core
             var providerManager = new ProviderManager(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
 
-            // Localization
+            // Apply avatar system prompt
             var settingsData = settings.Load();
+            if (settingsData != null && settingsData.useSystemPrompt)
+            {
+                var avatarProfiles = avatars.GetAll();
+                var systemPrompt = avatarService.GetSystemPrompt(settingsData.activeAvatarId, avatarProfiles);
+                if (!string.IsNullOrEmpty(systemPrompt))
+                    chatService.SystemPrompt = systemPrompt;
+            }
+
+            // Localization
             string language = settingsData?.language ?? "ru";
             var localizationService = new JsonLocalizationService(language);
             LocalizationExtensions.SetLocalizationService(localizationService);
