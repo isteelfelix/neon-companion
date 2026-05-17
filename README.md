@@ -1,34 +1,83 @@
 # neon-companion
 
-Open-source Unity клиент для подключения к AI-агентам с визуализацией аватара.
+Open-source Unity client for connecting to personal AI agents with avatar visualization.
 
-## Цель проекта
+## About the Project
 
-Создать удобное кросс-платформенное приложение (Desktop + Mobile + VR в будущем), которое позволяет:
+**neon-companion** is a cross-platform desktop/mobile application that allows you to chat with your own AI agents through an OpenAI-compatible API. The app supports custom backends, multiple providers, chat history, and 2D avatar visualization.
 
-- Подключать своих AI-агентов через OpenAI-совместимый API
-- Визуализировать агентов через 2D/3D аватары
-- Вести естественное общение с визуальным и голосовым сопровождением
+This is currently the **first working prototype**. Core chat functionality and custom provider connection are already implemented and usable.
 
-Изначально приложение разрабатывается под нужды Neon, но будет полностью открытым.
+## Current Status
 
-## Текущий статус
+- ✅ Text chat with custom OpenAI-compatible providers
+- ✅ Multiple providers support + switching
+- ✅ Chat sessions and history
+- ✅ Connection to self-hosted agents (tested with Hermes + Grok)
+- 🚧 2D avatar rendering and reactions (in progress)
+- 🚧 Cross-platform builds (Desktop + Mobile)
 
-- [ ] MVP: текст + 2D аватар
-- [ ] Подключение нескольких провайдеров
-- [ ] Кросс-платформенные сборки
+## Features (MVP)
 
-## Стек
+- Connect any OpenAI-compatible API (including self-hosted)
+- Switch between providers directly in the app
+- Persistent chat sessions
+- Modern dark UI built with Unity UI Toolkit
+- Designed with future 2D/3D avatar support in mind
 
-- Unity 2022.3+
-- C#
-- OpenAI-compatible API
+## Getting Started
 
-## Лицензия
+### Requirements
 
-MIT
+- Unity 2022.3 or newer
+- .NET Standard 2.1 compatible environment
 
----
+### Installation
 
-**Автор идеи и основной контрибьютор:** iSteelFelix  
-**Основной разработчик:** Neon (при участии)
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/isteelfelix/neon-companion.git
+   cd neon-companion
+   ```
+
+2. Open the project in Unity.
+
+3. Go to `Assets/Scenes` and open the main scene.
+
+4. Build the project for your target platform (Desktop / Android / iOS).
+
+## Connecting Your Own Agent
+
+The app can connect to any OpenAI-compatible endpoint.
+
+**Example configuration** (for Hermes agent):
+
+- **Base URL**: `http://your-server-ip:8642/v1`
+- **API Key**: Your agent API key (Bearer token)
+- **Model**: `grok-4.3` (or any model your backend supports)
+
+After adding the provider, select it in the Providers tab and start chatting.
+
+## Documentation
+
+More detailed information is available in the `docs/` folder:
+
+- [Architecture](docs/01_Architecture.md)
+- [MVP Features](docs/02_Features_MVP.md)
+- [API Integration](docs/03_API_Integration.md)
+- [Data Models](docs/06_Data_Model.md)
+- [Cross-Platform](docs/07_CrossPlatform.md)
+- [Build & Deploy](docs/08_Build_and_Deploy.md)
+- [Roadmap](docs/09_Roadmap.md)
+
+## Contributing
+
+Contributions are welcome. Please check [Contribution Guide](docs/10_Contribution.md) for details.
+
+## License
+
+MIT License
+
+## Author
+
+Maintained by iSteelFelix with contributions from the community.
