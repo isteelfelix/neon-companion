@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="MainView.uss" />
+
+    <ui:VisualElement name="app-root" class="app-root">
+        <ui:VisualElement name="content-host" class="content-host">
+            <ui:VisualElement name="chat-panel" class="panel panel--active">
+                <ui:Label text="Chat" class="panel-title" />
+                <ui:Label text="Здесь будет чат с агентом." class="panel-subtitle" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="settings-panel" class="panel">
+                <ui:Label text="Settings" class="panel-title" />
+                <ui:Label text="Здесь будут настройки провайдеров и приложения." class="panel-subtitle" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="avatar-panel" class="panel">
+                <ui:Label text="Avatar" class="panel-title" />
+                <ui:Label text="Здесь будет галерея аватаров." class="panel-subtitle" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="tab-bar" class="tab-bar">
+            <ui:Button name="tab-chat" text="Chat" class="tab-btn tab-btn--active" />
+            <ui:Button name="tab-settings" text="Settings" class="tab-btn" />
+            <ui:Button name="tab-avatar" text="Avatar" class="tab-btn tab-btn--last" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

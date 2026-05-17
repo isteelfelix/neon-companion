@@ -1,0 +1,62 @@
+.app-root {
+    flex-grow: 1;
+    background-color: rgb(13, 18, 26);
+    padding: 16px;
+}
+
+.content-host {
+    flex-grow: 1;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+    padding: 14px;
+}
+
+.panel {
+    display: none;
+    flex-grow: 1;
+}
+
+.panel-title {
+    font-size: 24px;
+    color: rgb(238, 242, 248);
+    -unity-font-style: bold;
+    margin-bottom: 8px;
+}
+
+.panel-subtitle {
+    font-size: 15px;
+    color: rgb(177, 188, 204);
+}
+
+.tab-bar {
+    margin-top: 12px;
+    height: 52px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tab-btn {
+    flex-grow: 1;
+    margin-right: 8px;
+    height: 44px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    background-color: rgb(36, 49, 68);
+    color: rgb(227, 233, 243);
+    font-size: 16px;
+}
+
+.tab-btn--last {
+    margin-right: 0;
+}
+
+.tab-btn--active {
+    background-color: rgb(65, 92, 129);
+    color: rgb(245, 249, 255);
+}
