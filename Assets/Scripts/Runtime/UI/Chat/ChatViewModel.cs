@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Models;
 using NeonCompanion.Runtime.Data.Models;
-using NeonCompanion.Runtime.Core;
 
 namespace NeonCompanion.Runtime.UI.Chat
 {
@@ -63,16 +62,26 @@ namespace NeonCompanion.Runtime.UI.Chat
 
             try
             {
+                var requestMessages = new List<AiChatMessage>();
+                foreach (var message in Messages)
+                {
+                    if (string.IsNullOrWhiteSpace(message?.role) || string.IsNullOrWhiteSpace(message.content))
+                        continue;
+
+                    requestMessages.Add(new AiChatMessage
+                    {
+                        role = message.role,
+                        content = message.content
+                    });
+                }
+
                 var request = new AiChatRequest
                 {
                     model = _provider.defaultModel,
                     temperature = Temperature,
                     maxTokens = MaxTokens,
                     systemPrompt = SystemPrompt,
-                    messages = new List<AiChatMessage>
-                    {
-                        new AiChatMessage { role = "user", content = userMessage }
-                    }
+                    messages = requestMessages
                 };
 
                 var response = await _aiClient.SendMessageAsync(_provider, request, _cts.Token);

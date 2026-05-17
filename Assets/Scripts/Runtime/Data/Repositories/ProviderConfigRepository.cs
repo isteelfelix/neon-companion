@@ -15,23 +15,20 @@ namespace NeonCompanion.Runtime.Data.Repositories
             _storage = storage;
         }
 
-        public async Task<List<ProviderConfig>> GetAllAsync()
+        public Task<List<ProviderConfig>> GetAllAsync()
         {
-            // Симуляция асинхронности для совместимости с Task API
-            return await Task.Run(() => {
-                var collection = _storage.Load<ProviderConfigCollection>(AppPaths.ProvidersFile);
-                return collection.items ?? new List<ProviderConfig>();
-            });
+            var collection = _storage.Load<ProviderConfigCollection>(AppPaths.ProvidersFile);
+            return Task.FromResult(collection.items ?? new List<ProviderConfig>());
         }
 
-        public async Task SaveAllAsync(List<ProviderConfig> providers)
+        public Task SaveAllAsync(List<ProviderConfig> providers)
         {
-            await Task.Run(() => {
-                _storage.Save(AppPaths.ProvidersFile, new ProviderConfigCollection
-                {
-                    items = providers ?? new List<ProviderConfig>()
-                });
+            _storage.Save(AppPaths.ProvidersFile, new ProviderConfigCollection
+            {
+                items = providers ?? new List<ProviderConfig>()
             });
+
+            return Task.CompletedTask;
         }
     }
 }

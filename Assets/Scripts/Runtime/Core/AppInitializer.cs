@@ -1,6 +1,5 @@
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
-using NeonCompanion.Runtime.Core;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Core
@@ -9,7 +8,7 @@ namespace NeonCompanion.Runtime.Core
     {
         public static async Task<CompanionApp> InitializeAsync()
         {
-            var bootstrap = Object.FindObjectOfType<AppBootstrap>();
+            var bootstrap = Object.FindFirstObjectByType<AppBootstrap>();
             if (bootstrap == null)
             {
                 Debug.LogError("[NeonCompanion] AppBootstrap not found in scene!");
@@ -17,6 +16,17 @@ namespace NeonCompanion.Runtime.Core
             }
 
             var app = bootstrap.App;
+            if (app == null)
+            {
+                await Task.Yield();
+                app = bootstrap.App;
+            }
+
+            if (app == null)
+            {
+                Debug.LogError("[NeonCompanion] AppBootstrap has not created the application.");
+                return null;
+            }
 
             // Pre-initialize chat service
             var chatService = app.Services.GetRequired<ChatService>();

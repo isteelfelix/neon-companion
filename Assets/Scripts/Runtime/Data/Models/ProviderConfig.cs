@@ -20,7 +20,9 @@ namespace NeonCompanion.Runtime.Data.Models
             {
                 id = Guid.NewGuid().ToString("N"),
                 displayName = name,
-                baseUrl = baseUrl
+                baseUrl = baseUrl,
+                apiKey = string.Empty,
+                defaultModel = "gpt-4o-mini"
             };
         }
     }

@@ -188,6 +188,30 @@
     gap: 8px;
 }
 
+.chat-message {
+    max-width: 78%;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border-width: 1px;
+}
+
+.chat-message--user {
+    align-self: flex-end;
+    background-color: rgb(90, 120, 240);
+    border-color: rgb(90, 120, 240);
+}
+
+.chat-message--assistant {
+    align-self: flex-start;
+    background-color: rgb(28, 30, 36);
+    border-color: rgb(45, 49, 58);
+}
+
+.chat-message__text {
+    white-space: normal;
+    color: rgb(235, 238, 245);
+}
+
 /* Composer */
 .composer {
     flex-direction: row;
@@ -253,6 +277,12 @@
 
 .session-item:hover {
     background-color: rgb(35, 38, 45);
+}
+
+.session-item--active {
+    background-color: rgb(40, 44, 52);
+    border-width: 1px;
+    border-color: rgb(90, 120, 240);
 }
 
 .session-title {

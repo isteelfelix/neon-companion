@@ -53,7 +53,7 @@ namespace NeonCompanion.Runtime.Chat
 
         public async Task<List<ChatSession>> GetAllSessionsAsync()
         {
-            return _sessionRepository.GetAll();
+            return await Task.FromResult(GetSortedSessions());
         }
 
         public async Task SwitchToSessionAsync(ChatSession session)
@@ -65,7 +65,7 @@ namespace NeonCompanion.Runtime.Chat
             ApplyGenerationSettings();
 
             _currentChatViewModel.Messages.Clear();
-            foreach (var msg in session.messages)
+            foreach (var msg in session.messages ?? new List<ChatMessage>())
             {
                 _currentChatViewModel.Messages.Add(msg);
             }
@@ -86,10 +86,14 @@ namespace NeonCompanion.Runtime.Chat
             }
 
             NeonLogger.Log("Current session cleared.");
+            await Task.CompletedTask;
         }
 
         public async Task SwitchProviderAsync(ProviderConfig newProvider)
         {
+            if (newProvider == null)
+                return;
+
             _currentProvider = newProvider;
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             ApplyGenerationSettings();
@@ -110,6 +114,7 @@ namespace NeonCompanion.Runtime.Chat
             {
                 sessionId = Guid.NewGuid().ToString(),
                 providerId = _currentProvider?.id,
+                title = "New chat",
                 updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 messages = new List<ChatMessage>()
             };
@@ -142,11 +147,11 @@ namespace NeonCompanion.Runtime.Chat
 
         private async Task LoadLatestSessionAsync()
         {
-            var sessions = _sessionRepository.GetAll();
+            var sessions = GetSortedSessions();
             if (sessions.Count > 0)
             {
                 _currentSession = sessions[0];
-                foreach (var msg in _currentSession.messages)
+                foreach (var msg in _currentSession.messages ?? new List<ChatMessage>())
                 {
                     _currentChatViewModel.Messages.Add(msg);
                 }
@@ -163,7 +168,45 @@ namespace NeonCompanion.Runtime.Chat
                 return;
 
             _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
-            _sessionRepository.SaveAll(new List<ChatSession> { _currentSession });
+            _currentSession.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            _currentSession.providerId = _currentProvider?.id ?? _currentSession.providerId;
+            _currentSession.title = BuildSessionTitle(_currentSession);
+
+            var sessions = _sessionRepository.GetAll();
+            var index = sessions.FindIndex(session => session.sessionId == _currentSession.sessionId);
+            if (index >= 0)
+            {
+                sessions[index] = _currentSession;
+            }
+            else
+            {
+                sessions.Add(_currentSession);
+            }
+
+            sessions = sessions
+                .OrderByDescending(session => session.updatedAtUnix)
+                .ToList();
+
+            _sessionRepository.SaveAll(sessions);
+        }
+
+        private List<ChatSession> GetSortedSessions()
+        {
+            return _sessionRepository.GetAll()
+                .OrderByDescending(session => session.updatedAtUnix)
+                .ToList();
+        }
+
+        private static string BuildSessionTitle(ChatSession session)
+        {
+            var firstUserMessage = session.messages?
+                .FirstOrDefault(message => message.role == "user" && !string.IsNullOrWhiteSpace(message.content));
+
+            if (firstUserMessage == null)
+                return string.IsNullOrWhiteSpace(session.title) ? "New chat" : session.title;
+
+            var title = firstUserMessage.content.Trim();
+            return title.Length <= 48 ? title : title.Substring(0, 48) + "...";
         }
     }
 }

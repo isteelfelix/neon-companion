@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
-using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.UI.Chat;
 using UnityEngine;
@@ -17,7 +16,7 @@ namespace NeonCompanion.Runtime.Core
         public ChatViewModel CurrentChat => Chat?.CurrentChatViewModel;
         public bool IsInitialized => App != null && Chat != null;
 
-        private async void Awake()
+        private void Awake()
         {
             if (Instance != null)
             {
@@ -28,10 +27,28 @@ namespace NeonCompanion.Runtime.Core
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            App = await AppInitializer.InitializeAsync();
-            Chat = App?.Services.GetRequired<ChatService>();
+            _ = InitializeAsync();
+        }
 
-            NeonLogger.Log("Application ready.");
+        private async Task InitializeAsync()
+        {
+            try
+            {
+                App = await AppInitializer.InitializeAsync();
+                if (App == null)
+                {
+                    NeonLogger.LogError("Application initialization failed.");
+                    return;
+                }
+
+                Chat = App?.Services.GetRequired<ChatService>();
+
+                NeonLogger.Log("Application ready.");
+            }
+            catch (System.Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
         }
 
         public async Task SendMessageAsync(string message)

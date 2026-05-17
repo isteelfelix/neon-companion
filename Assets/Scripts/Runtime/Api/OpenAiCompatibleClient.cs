@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,7 +23,7 @@ namespace NeonCompanion.Runtime.Api
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
 
-            var messages = new System.Collections.Generic.List<AiChatMessage>(request.messages);
+            var messages = new List<AiChatMessage>(request.messages ?? new List<AiChatMessage>());
 
             // Add system prompt if provided
             if (!string.IsNullOrWhiteSpace(request.systemPrompt))
@@ -35,11 +35,11 @@ namespace NeonCompanion.Runtime.Api
                 });
             }
 
-            var requestWithSystem = new AiChatRequest
+            var requestWithSystem = new OpenAiChatCompletionRequest
             {
                 model = request.model,
                 temperature = request.temperature,
-                maxTokens = request.maxTokens,
+                max_tokens = request.maxTokens,
                 messages = messages
             };
 
@@ -62,7 +62,12 @@ namespace NeonCompanion.Runtime.Api
 
                 while (!operation.isDone)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
                     await Task.Yield();
                 }
 
@@ -80,6 +85,11 @@ namespace NeonCompanion.Runtime.Api
         private static string BuildEndpoint(string baseUrl)
         {
             var normalized = (baseUrl ?? string.Empty).Trim().TrimEnd('/');
+            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            {
+                return normalized;
+            }
+
             return $"{normalized}/chat/completions";
         }
 
@@ -127,6 +137,15 @@ namespace NeonCompanion.Runtime.Api
                 content = content,
                 receivedAtUtc = DateTime.UtcNow
             };
+        }
+
+        [Serializable]
+        private class OpenAiChatCompletionRequest
+        {
+            public string model;
+            public float temperature;
+            public int max_tokens;
+            public List<AiChatMessage> messages;
         }
 
         [Serializable]
