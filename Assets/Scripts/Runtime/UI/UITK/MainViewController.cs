@@ -4,6 +4,7 @@ using UnityEngine.UIElements;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
+using NeonCompanion.Runtime.UI.Chat;
 
 namespace NeonCompanion.Runtime.UI.UITK
 {
@@ -21,6 +22,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Button _sendButton;
         private TextField _messageInput;
+        private ScrollView _chatMessagesScroll;
+        private VisualElement _chatMessagesContainer;
 
         private ScrollView _sessionsList;
         private Button _summarizeButton;
@@ -39,6 +42,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private ProviderConfig _editingProvider;
         private List<VisualElement> _sessionItems = new();
+
+        private ChatViewModel _currentChat;
 
         private void OnEnable()
         {
@@ -64,8 +69,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _sendButton = root.Q<Button>("send-button");
             _messageInput = root.Q<TextField>("message-input");
+            _chatMessagesScroll = root.Q<ScrollView>("chat-messages");
+            _chatMessagesContainer = root.Q<VisualElement>("chat-messages-container");
 
             _sendButton?.clicked += OnSendMessage;
+            _messageInput?.RegisterCallback<KeyDownEvent>(OnMessageInputKeyDown);
 
             // Right sidebar
             _sessionsList = root.Q<ScrollView>("sessions-list");
@@ -94,11 +102,92 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Default state
             ShowSection("chat");
+
+            // Try to get current chat
+            TryInitializeChat();
+        }
+
+        private void TryInitializeChat()
+        {
+            if (AppManager.Instance?.Chat != null)
+            {
+                _currentChat = AppManager.Instance.CurrentChat;
+            }
+        }
+
+        private void OnMessageInputKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+            {
+                OnSendMessage();
+                evt.StopPropagation();
+            }
+        }
+
+        private async void OnSendMessage()
+        {
+            if (_messageInput == null || string.IsNullOrWhiteSpace(_messageInput.value))
+                return;
+
+            if (_currentChat == null)
+            {
+                TryInitializeChat();
+                if (_currentChat == null)
+                {
+                    Debug.LogWarning("[MainViewController] Chat not ready yet");
+                    return;
+                }
+            }
+
+            string message = _messageInput.value.Trim();
+            _messageInput.value = "";
+
+            // Add user message to UI immediately
+            AddMessageToUI("user", message);
+
+            // Send via ChatViewModel
+            _currentChat.InputMessage = message;
+            await _currentChat.SendAsync();
+
+            // Refresh messages from ViewModel
+            RefreshChatMessages();
+        }
+
+        private void AddMessageToUI(string role, string content)
+        {
+            if (_chatMessagesContainer == null) return;
+
+            var messageElement = new VisualElement();
+            messageElement.AddToClassList("chat-message");
+            messageElement.AddToClassList(role == "user" ? "user-message" : "assistant-message");
+
+            var label = new Label(content);
+            label.AddToClassList("message-text");
+            messageElement.Add(label);
+
+            _chatMessagesContainer.Add(messageElement);
+
+            // Scroll to bottom
+            _chatMessagesScroll?.schedule.Execute(() =>
+            {
+                _chatMessagesScroll.ScrollTo(messageElement);
+            }).StartingIn(50);
+        }
+
+        private void RefreshChatMessages()
+        {
+            if (_chatMessagesContainer == null || _currentChat == null) return;
+
+            _chatMessagesContainer.Clear();
+
+            foreach (var msg in _currentChat.Messages)
+            {
+                AddMessageToUI(msg.role, msg.content);
+            }
         }
 
         private void ShowSection(string section)
         {
-            // Highlight active nav item
             _navChat?.RemoveFromClassList("nav-item--active");
             _navAvatars?.RemoveFromClassList("nav-item--active");
             _navProviders?.RemoveFromClassList("nav-item--active");
@@ -232,20 +321,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         #endregion
 
-        private void OnSendMessage()
-        {
-            if (_messageInput == null || string.IsNullOrWhiteSpace(_messageInput.value))
-                return;
-
-            // TODO: Send message via AppManager
-            Debug.Log($"[UI] Send: {_messageInput.value}");
-            _messageInput.value = "";
-        }
-
         private void OnSummarize()
         {
             Debug.Log("[UI] Summarize sessions clicked");
-            // TODO: Implement summarization
         }
 
         private void LoadSessions()
@@ -261,7 +339,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            // Real data
             var sessions = AppManager.Instance.GetAllChatSessionsAsync().Result;
 
             if (sessions == null || sessions.Count == 0)
@@ -315,7 +392,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             container.RegisterCallback<ClickEvent>(evt =>
             {
                 Debug.Log($"[UI] Session selected: {title}");
-                // TODO: Load session via AppManager
             });
 
             return container;
