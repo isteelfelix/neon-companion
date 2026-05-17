@@ -1,107 +1,269 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="../Theme/Tokens.uss" />
+    <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="MainView.uss" />
 
-    <ui:VisualElement name="app-root" class="app-root">
-        
-        <!-- === MAIN LAYOUT === -->
-        <ui:VisualElement name="main-layout" class="main-layout">
-            
-            <!-- LEFT SIDEBAR -->
-            <ui:VisualElement name="left-sidebar" class="sidebar left-sidebar">
-                <ui:VisualElement class="sidebar-header">
-                    <ui:Label text="Neon" class="logo" />
-                    <ui:Label text="v0.1" class="version" />
-                </ui:VisualElement>
+    <ui:VisualElement name="app-root" class="app">
+        <ui:VisualElement class="app__atmo" />
 
-                <ui:VisualElement class="nav-section">
-                    <ui:Label text="WORKSPACE" class="section-label" />
-                    <ui:Button name="nav-chat" text="Чат" class="nav-item nav-item--active" />
-                    <ui:Button name="nav-avatars" text="Аватары" class="nav-item" />
-                    <ui:Button name="nav-providers" text="Провайдеры" class="nav-item" />
+        <ui:VisualElement name="rail" class="rail">
+            <ui:VisualElement class="rail__brand">
+                <ui:VisualElement class="brand__mark">
+                    <ui:Label text="N" class="brand__mark-text" />
                 </ui:VisualElement>
+                <ui:Label text="Neon" class="brand__name" />
+                <ui:Label text="v0.1" class="brand__tag" />
+            </ui:VisualElement>
 
-                <ui:VisualElement class="nav-section">
-                    <ui:Label text="LIBRARY" class="section-label" />
-                    <ui:Button name="nav-history" text="История" class="nav-item" />
-                    <ui:Button name="nav-themes" text="Темы" class="nav-item" />
-                    <ui:Button name="nav-settings" text="Настройки" class="nav-item" />
+            <ui:Label text="Workspace" class="nav__group" />
+            <ui:VisualElement name="nav-chat" class="nav__item nav__item--active">
+                <ui:VisualElement class="nav__icon icon icon--chat" />
+                <ui:Label name="nav-chat-label" text="Чат" class="nav__label" />
+                <ui:Label name="nav-chat-count" text="0" class="nav__count" />
+            </ui:VisualElement>
+            <ui:VisualElement name="nav-avatars" class="nav__item">
+                <ui:VisualElement class="nav__icon icon icon--user" />
+                <ui:Label name="nav-avatars-label" text="Аватары" class="nav__label" />
+                <ui:Label text="8" class="nav__count" />
+            </ui:VisualElement>
+            <ui:VisualElement name="nav-providers" class="nav__item">
+                <ui:VisualElement class="nav__icon icon icon--bolt" />
+                <ui:Label name="nav-providers-label" text="Провайдеры" class="nav__label" />
+                <ui:Label name="nav-providers-count" text="0" class="nav__count" />
+            </ui:VisualElement>
+
+            <ui:Label text="Library" class="nav__group" />
+            <ui:VisualElement name="nav-history" class="nav__item">
+                <ui:VisualElement class="nav__icon icon icon--history" />
+                <ui:Label name="nav-history-label" text="История" class="nav__label" />
+            </ui:VisualElement>
+            <ui:VisualElement name="nav-themes" class="nav__item">
+                <ui:VisualElement class="nav__icon icon icon--palette" />
+                <ui:Label name="nav-themes-label" text="Темы" class="nav__label" />
+            </ui:VisualElement>
+            <ui:VisualElement name="nav-settings" class="nav__item">
+                <ui:VisualElement class="nav__icon icon icon--settings" />
+                <ui:Label name="nav-settings-label" text="Настройки" class="nav__label" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="rail__spacer" />
+            <ui:VisualElement class="rail__footer">
+                <ui:VisualElement class="dot--status" />
+                <ui:VisualElement class="rail__footer-text">
+                    <ui:Label name="rail-provider-name" text="OpenAI" class="rail__footer-provider" />
+                    <ui:Label name="rail-provider-model" text="gpt-4o-mini" class="rail__footer-model" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="main" class="main">
+            <ui:VisualElement class="topbar">
+                <ui:VisualElement class="topbar__left">
+                    <ui:Label name="topbar-title" text="Дизайн системы рендеринга 2D" class="topbar__title" />
+                    <ui:VisualElement name="topbar-sep" class="topbar__sep" />
+                    <ui:Label name="topbar-subtitle" text="0 сообщений · Neon" class="topbar__subtitle" />
+                </ui:VisualElement>
+                <ui:VisualElement class="topbar__right">
+                    <ui:Button name="summarize-btn" text="Summarize" class="btn btn--ghost" />
+                    <ui:Button name="search-btn" class="iconbtn icon icon--search" tooltip="Search" />
+                    <ui:Button name="more-btn" class="iconbtn icon icon--dots" tooltip="More" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- CENTER AREA -->
-            <ui:VisualElement name="center-area" class="center-area">
-                
-                <!-- Top Bar -->
-                <ui:VisualElement class="topbar">
-                    <ui:VisualElement class="topbar-left">
-                        <ui:VisualElement class="status-pill">
-                            <ui:VisualElement class="status-dot status-dot--green" />
-                            <ui:Label text="connected - 14:23" class="status-text" />
+            <ui:VisualElement name="chat-stage" class="stage">
+                <ui:VisualElement name="avatar-stage" class="avatar-stage">
+                    <ui:VisualElement class="statusrow">
+                        <ui:VisualElement class="statusrow__dot" />
+                        <ui:Label name="connection-status" text="connected · 14:23" class="statusrow__text" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement name="provider-tag" class="providertag">
+                        <ui:VisualElement class="provider__logo provider__logo--mini">
+                            <ui:Label name="provider-short" text="OAI" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="providertag__body">
+                            <ui:Label name="provider-name" text="OpenAI" class="providertag__name" />
+                            <ui:Label name="provider-model" text="gpt-4o-mini" class="providertag__model" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="icon icon--arrow providertag__arrow" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="avatar-stage__hero">
+                        <ui:VisualElement name="avatar-glow" class="halo" />
+                        <ui:VisualElement name="avatar-circle" class="avatar">
+                            <ui:VisualElement class="avatar__art avatar__art--neon" />
+                            <ui:VisualElement class="avatar__shade" />
+                            <ui:Label text="N" class="avatar__letter" />
                         </ui:VisualElement>
                     </ui:VisualElement>
 
-                    <ui:VisualElement class="topbar-right">
-                        <ui:Button name="provider-button" class="provider-btn">
-                            <ui:Label text="OpenAI" />
-                            <ui:Label text="gpt-4o-mini" class="model-label" />
-                        </ui:Button>
+                    <ui:VisualElement class="dock">
+                        <ui:VisualElement class="subtitle">
+                            <ui:Label name="subtitle-role" text="Neon" class="subtitle__role" />
+                            <ui:Label name="subtitle-body" text="Готова помочь. С чего сегодня начнём: настройка провайдера, аватары или продолжим прошлый разговор о шейдерах?" class="subtitle__body" />
+                            <ui:VisualElement name="typing-indicator" class="typing is-hidden">
+                                <ui:VisualElement class="typing__dot" />
+                                <ui:VisualElement class="typing__dot typing__dot--delay-1" />
+                                <ui:VisualElement class="typing__dot typing__dot--delay-2" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="subtitle__actions">
+                                <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Copy" />
+                                <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Regenerate" />
+                                <ui:Button name="listen-btn" class="iconbtn icon icon--headphones" tooltip="Listen" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="composer">
+                            <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Attach" />
+                            <ui:TextField name="message-input" class="composer__input" placeholder="Напиши Neon что-нибудь..." />
+                            <ui:VisualElement class="composer__hint">
+                                <ui:Label text="⌘" class="kbd" />
+                                <ui:Label text="↵" class="kbd" />
+                            </ui:VisualElement>
+                            <ui:Button name="send-button" text="Send" class="btn btn--primary composer__send" />
+                        </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- Avatar Stage -->
-                <ui:VisualElement name="avatar-stage" class="stage">
-                    <ui:VisualElement name="avatar-glow" class="stage__glow" />
-                    <ui:VisualElement name="avatar-circle" class="stage__avatar">
-                        <ui:Label text="●" class="stage__placeholder" />
+                <ui:VisualElement name="history-panel" class="history">
+                    <ui:VisualElement class="history__head">
+                        <ui:Label text="Сессии" class="history__title-label" />
+                        <ui:VisualElement class="history__actions">
+                            <ui:Button name="history-search-btn" class="iconbtn icon icon--search" tooltip="Search sessions" />
+                            <ui:Button name="new-session-btn" class="iconbtn icon icon--plus" tooltip="New chat" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:ScrollView name="sessions-list" class="history__list" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="providers-area" class="page providers-page">
+                <ui:VisualElement class="page__head">
+                    <ui:VisualElement class="page__head-copy">
+                        <ui:Label text="Провайдеры" class="page__title" />
+                        <ui:Label text="Подключи любой OpenAI-совместимый API и переключайся прямо из чата." class="page__subtitle" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="page__actions">
+                        <ui:Button text="Импорт" class="btn" />
+                        <ui:Button name="add-provider-btn" text="Добавить" class="btn btn--primary" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- Chat Area -->
-                <ui:VisualElement name="chat-area" class="chat-area">
-                    <ui:ScrollView name="chat-scroll" class="chat-scroll">
-                        <ui:VisualElement name="chat-messages" class="chat-messages" />
-                    </ui:ScrollView>
-
-                    <!-- Composer -->
-                    <ui:VisualElement class="composer">
-                        <ui:TextField name="message-input" class="composer__input" placeholder="Напиши Neon что-нибудь..." />
-                        <ui:Button name="send-button" class="btn btn--primary" text="→" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <!-- Providers Area -->
-                <ui:VisualElement name="providers-area" class="providers-area">
-                    <ui:VisualElement class="providers-header">
-                        <ui:Label text="Providers" class="providers-title" />
-                        <ui:Button name="add-provider-btn" text="Add" class="btn btn--primary" />
-                    </ui:VisualElement>
-
+                <ui:VisualElement class="split">
                     <ui:ScrollView name="providers-list" class="providers-list" />
 
-                    <ui:VisualElement name="provider-edit-panel" class="provider-edit-panel">
-                        <ui:TextField name="edit-name" label="Name" class="provider-field" />
-                        <ui:TextField name="edit-baseurl" label="Base URL" class="provider-field" />
-                        <ui:TextField name="edit-apikey" label="API Key" class="provider-field" />
-                        <ui:TextField name="edit-model" label="Model" class="provider-field" />
-                        <ui:Slider name="edit-temperature" label="Temperature" low-value="0" high-value="2" value="0.7" class="provider-field" />
+                    <ui:VisualElement name="provider-edit-panel" class="editor">
+                        <ui:VisualElement class="editor__header">
+                            <ui:VisualElement class="provider__logo provider__logo--editor">
+                                <ui:Label name="editor-provider-short" text="OAI" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="editor__header-copy">
+                                <ui:Label name="editor-provider-name" text="OpenAI" class="editor__title" />
+                                <ui:Label text="Конфигурация подключения" class="editor__sub" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="field">
+                            <ui:Label text="Name" class="label" />
+                            <ui:TextField name="edit-name" class="input" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="field">
+                            <ui:Label text="Base URL" class="label" />
+                            <ui:TextField name="edit-baseurl" class="input input--mono" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="field">
+                            <ui:Label text="API Key" class="label" />
+                            <ui:TextField name="edit-apikey" class="input input--mono" is-password-field="true" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="field">
+                            <ui:Label text="Default model" class="label" />
+                            <ui:TextField name="edit-model" class="input input--mono" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="field__row">
+                            <ui:VisualElement class="field field--half">
+                                <ui:Label text="Temperature" class="label" />
+                                <ui:Slider name="edit-temperature" low-value="0" high-value="2" value="0.7" class="input slider-input" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="field field--half">
+                                <ui:Label text="Max tokens" class="label" />
+                                <ui:TextField name="edit-maxtokens" class="input input--mono" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="testrow testrow--ok">
+                            <ui:VisualElement class="icon icon--check testrow__icon" />
+                            <ui:Label text="Соединение проверено · local config" />
+                        </ui:VisualElement>
+
                         <ui:VisualElement class="provider-edit-actions">
-                            <ui:Button name="save-provider-btn" text="Save" class="btn btn--primary" />
-                            <ui:Button name="cancel-edit-btn" text="Cancel" class="btn" />
+                            <ui:Button name="test-provider-btn" text="Тест" class="btn" />
+                            <ui:Button name="save-provider-btn" text="Сохранить" class="btn btn--primary" />
+                            <ui:Button name="cancel-edit-btn" text="Отмена" class="btn btn--ghost" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- RIGHT SIDEBAR (Sessions) -->
-            <ui:VisualElement name="right-sidebar" class="sidebar right-sidebar">
-                <ui:VisualElement class="sessions-header">
-                    <ui:Label text="Сессии" class="sessions-title" />
-                    <ui:Button name="summarize-btn" text="Summarize" class="icon-btn small" />
+            <ui:VisualElement name="avatars-area" class="page avatars-page">
+                <ui:VisualElement class="page__head">
+                    <ui:VisualElement class="page__head-copy">
+                        <ui:Label text="Аватары" class="page__title" />
+                        <ui:Label text="Визуальное представление агента. Можно выбрать готовый образ или загрузить свой PNG." class="page__subtitle" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="page__actions">
+                        <ui:Button text="Открыть папку" class="btn" />
+                        <ui:Button text="Загрузить" class="btn btn--primary" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
-                <ui:ScrollView name="sessions-list" class="sessions-list" />
+                <ui:VisualElement class="filterrow">
+                    <ui:VisualElement class="filterchip filterchip--active"><ui:Label text="Все" /><ui:Label text="8" class="filterchip__count" /></ui:VisualElement>
+                    <ui:VisualElement class="filterchip"><ui:Label text="Стандартные" /><ui:Label text="1" class="filterchip__count" /></ui:VisualElement>
+                    <ui:VisualElement class="filterchip"><ui:Label text="Градиентные" /><ui:Label text="5" class="filterchip__count" /></ui:VisualElement>
+                    <ui:VisualElement class="filterchip"><ui:Label text="Минимал" /><ui:Label text="2" class="filterchip__count" /></ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="avatar-split">
+                    <ui:VisualElement class="gallery">
+                        <ui:VisualElement class="avtile avtile--selected avtile--neon"><ui:Label text="Neon" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--aurora"><ui:Label text="Aurora" class="avtile__name" /></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--ember"><ui:Label text="Ember" class="avtile__name" /></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--glass"><ui:Label text="Glass" class="avtile__name" /></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--flora"><ui:Label text="Flora" class="avtile__name" /></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--mono"><ui:Label text="Mono" class="avtile__name" /></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--cobalt"><ui:Label text="Cobalt" class="avtile__name" /></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--rose"><ui:Label text="Rose" class="avtile__name" /></ui:VisualElement>
+                        <ui:VisualElement class="avtile avtile--upload">
+                            <ui:VisualElement class="avtile__upload">
+                                <ui:VisualElement class="icon icon--upload" />
+                                <ui:Label text="drop PNG" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="previewcard">
+                        <ui:VisualElement class="preview-hero preview-hero--neon">
+                            <ui:Label text="Neon" class="preview-hero__title" />
+                            <ui:Label text="default" class="preview-hero__tag" />
+                        </ui:VisualElement>
+                        <ui:Label text="Параметры" class="label" />
+                        <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label text="breathing · 5s" class="preview-row__value" /></ui:VisualElement>
+                        <ui:VisualElement class="preview-row"><ui:Label text="Halo" /><ui:Label text="indigo · 40%" class="preview-row__value" /></ui:VisualElement>
+                        <ui:VisualElement class="preview-row"><ui:Label text="Talking-pulse" /><ui:Label text="auto" class="preview-row__value" /></ui:VisualElement>
+                        <ui:Label text="Персона" class="label preview-persona-label" />
+                        <ui:Label text="Ты - Neon, спокойный AI-компаньон разработчика. Отвечай кратко и по делу, но дружелюбно." class="persona-box" />
+                        <ui:VisualElement class="preview-actions">
+                            <ui:Button text="Изменить" class="btn" />
+                            <ui:Button text="Применить" class="btn btn--primary" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
 
+            <ui:VisualElement name="placeholder-area" class="page placeholder-page">
+                <ui:Label name="placeholder-title" text="Раздел" class="page__title" />
+                <ui:Label name="placeholder-body" text="Экран будет добавлен следующим этапом." class="page__subtitle" />
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
