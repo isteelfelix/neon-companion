@@ -36,7 +36,7 @@ namespace NeonCompanion.Runtime.Core
             var aiClient = new OpenAiCompatibleClient();
             var avatarService = new AvatarService();
             var providerManager = new ProviderManager(providers);
-            var chatService = new ChatService(aiClient, providerManager);
+            var chatService = new ChatService(aiClient, providerManager, sessions);
 
             App = new CompanionApp(
                 services,
@@ -57,7 +57,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<ProviderManager>(providerManager);
             services.Register<ChatService>(chatService);
 
-            Debug.Log("[NeonCompanion] App bootstrap completed.");
+            NeonLogger.Log("App bootstrap completed.");
         }
     }
 }

@@ -46,6 +46,7 @@ namespace NeonCompanion.Runtime.Chat
             ApplyGenerationSettings();
 
             await LoadLatestSessionAsync();
+            NeonLogger.Log("Chat session ready.");
             return _currentChatViewModel;
         }
 
@@ -67,6 +68,8 @@ namespace NeonCompanion.Runtime.Chat
             {
                 _currentChatViewModel.Messages.Add(msg);
             }
+
+            NeonLogger.Log($"Switched to session {session.id}");
         }
 
         public async Task ClearCurrentSessionAsync()
@@ -80,6 +83,8 @@ namespace NeonCompanion.Runtime.Chat
                 _currentSession.messages.Clear();
                 SaveCurrentSession();
             }
+
+            NeonLogger.Log("Current session cleared.");
         }
 
         public async Task SwitchProviderAsync(ProviderConfig newProvider)
@@ -89,6 +94,7 @@ namespace NeonCompanion.Runtime.Chat
             ApplyGenerationSettings();
 
             await StartNewSessionAsync();
+            NeonLogger.Log($"Switched to provider: {newProvider.name}");
         }
 
         public async Task StartNewSessionAsync()
@@ -107,6 +113,7 @@ namespace NeonCompanion.Runtime.Chat
             };
 
             SaveCurrentSession();
+            NeonLogger.Log("New chat session started.");
         }
 
         public async Task SendMessageAsync(string message)
