@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
+using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.UI.Chat;
 using UnityEngine;
 
@@ -14,6 +15,7 @@ namespace NeonCompanion.Runtime.Core
 
         public CompanionApp App { get; private set; }
         public ChatService Chat { get; private set; }
+        public ProviderManager ProviderManager { get; private set; }
         public ChatViewModel CurrentChat => Chat?.CurrentChatViewModel;
         public bool IsInitialized => App != null && Chat != null;
 
@@ -30,6 +32,13 @@ namespace NeonCompanion.Runtime.Core
 
             App = await AppInitializer.InitializeAsync();
             Chat = App?.Services.GetRequired<ChatService>();
+
+            // Initialize ProviderManager
+            var providerRepo = App?.Services.GetRequired<IProviderConfigRepository>();
+            if (providerRepo != null)
+            {
+                ProviderManager = new ProviderManager(providerRepo);
+            }
 
             NeonLogger.Log("Application ready.");
         }
