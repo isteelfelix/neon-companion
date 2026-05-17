@@ -105,3 +105,17 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# API keys, secrets and sensitive config
+*.key
+*.env
+.env*
+secrets/
+secrets.*
+api_key*
+API_KEY*
+config/secrets*
+*.pem
+HermesConfig*
+*ApiKey*
+*APIKey*
