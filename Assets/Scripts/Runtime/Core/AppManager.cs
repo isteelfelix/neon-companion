@@ -13,8 +13,9 @@ namespace NeonCompanion.Runtime.Core
 
         public CompanionApp App { get; private set; }
         public ChatService Chat { get; private set; }
+        public ProviderManager ProviderManager { get; private set; }
         public ChatViewModel CurrentChat => Chat?.CurrentChatViewModel;
-        public bool IsInitialized => App != null && Chat != null;
+        public bool IsInitialized => App != null && Chat != null && ProviderManager != null;
 
         private void Awake()
         {
@@ -41,7 +42,8 @@ namespace NeonCompanion.Runtime.Core
                     return;
                 }
 
-                Chat = App?.Services.GetRequired<ChatService>();
+                Chat = App.ChatService;
+                ProviderManager = App.ProviderManager;
 
                 NeonLogger.Log("Application ready.");
             }

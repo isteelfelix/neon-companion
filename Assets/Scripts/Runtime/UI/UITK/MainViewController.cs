@@ -31,11 +31,25 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextField _messageInput;
         private VisualElement _avatarStage;
         private VisualElement _chatArea;
+        private VisualElement _providersArea;
         private VisualElement _chatMessages;
         private ScrollView _chatScroll;
         private ScrollView _sessionsList;
 
+        private ScrollView _providersList;
+        private Button _addProviderButton;
+        private VisualElement _providerEditPanel;
+        private TextField _editName;
+        private TextField _editBaseUrl;
+        private TextField _editApiKey;
+        private TextField _editModel;
+        private Slider _editTemperature;
+        private Button _saveProviderButton;
+        private Button _cancelEditButton;
+
+        private CompanionApp _app;
         private ChatService _chatService;
+        private ProviderConfig _editingProvider;
         private bool _isBound;
         private bool _isSending;
 
@@ -78,12 +92,24 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _avatarStage = root.Q<VisualElement>("avatar-stage");
             _chatArea = root.Q<VisualElement>("chat-area");
+            _providersArea = root.Q<VisualElement>("providers-area");
             _chatScroll = root.Q<ScrollView>("chat-scroll");
             _chatMessages = root.Q<VisualElement>("chat-messages");
             _messageInput = root.Q<TextField>("message-input");
             _sendButton = root.Q<Button>("send-button");
             _sessionsList = root.Q<ScrollView>("sessions-list");
             _summarizeButton = root.Q<Button>("summarize-btn");
+
+            _providersList = root.Q<ScrollView>("providers-list");
+            _addProviderButton = root.Q<Button>("add-provider-btn");
+            _providerEditPanel = root.Q<VisualElement>("provider-edit-panel");
+            _editName = root.Q<TextField>("edit-name");
+            _editBaseUrl = root.Q<TextField>("edit-baseurl");
+            _editApiKey = root.Q<TextField>("edit-apikey");
+            _editModel = root.Q<TextField>("edit-model");
+            _editTemperature = root.Q<Slider>("edit-temperature");
+            _saveProviderButton = root.Q<Button>("save-provider-btn");
+            _cancelEditButton = root.Q<Button>("cancel-edit-btn");
 
             _navChat?.Localize("tab.chat");
             _navAvatars?.Localize("tab.avatar");
@@ -92,9 +118,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navThemes?.Localize("settings.themes");
             _navSettings?.Localize("tab.settings");
 
-            if (_messageInput != null)
-                _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
-
+            SetDisplay(_providerEditPanel, DisplayStyle.None);
             _isBound = true;
         }
 
@@ -114,6 +138,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navSettings?.clicked += ShowSettings;
             _sendButton?.clicked += OnSendClicked;
             _summarizeButton?.clicked += OnSummarizeClicked;
+            _addProviderButton?.clicked += OnAddProviderClicked;
+            _saveProviderButton?.clicked += OnSaveProviderClicked;
+            _cancelEditButton?.clicked += OnCancelEditClicked;
+
+            if (_messageInput != null)
+                _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
         }
 
         private void UnregisterCallbacks()
@@ -126,6 +156,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navSettings?.clicked -= ShowSettings;
             _sendButton?.clicked -= OnSendClicked;
             _summarizeButton?.clicked -= OnSummarizeClicked;
+            _addProviderButton?.clicked -= OnAddProviderClicked;
+            _saveProviderButton?.clicked -= OnSaveProviderClicked;
+            _cancelEditButton?.clicked -= OnCancelEditClicked;
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
@@ -136,6 +169,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetActiveNav(_navChat);
             SetDisplay(_avatarStage, DisplayStyle.Flex);
             SetDisplay(_chatArea, DisplayStyle.Flex);
+            SetDisplay(_providersArea, DisplayStyle.None);
         }
 
         private void ShowAvatars()
@@ -143,6 +177,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetActiveNav(_navAvatars);
             SetDisplay(_avatarStage, DisplayStyle.Flex);
             SetDisplay(_chatArea, DisplayStyle.None);
+            SetDisplay(_providersArea, DisplayStyle.None);
         }
 
         private void ShowProviders()
@@ -150,6 +185,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetActiveNav(_navProviders);
             SetDisplay(_avatarStage, DisplayStyle.None);
             SetDisplay(_chatArea, DisplayStyle.None);
+            SetDisplay(_providersArea, DisplayStyle.Flex);
+            _ = RefreshProvidersListAsync();
         }
 
         private void ShowHistory()
@@ -157,6 +194,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetActiveNav(_navHistory);
             SetDisplay(_avatarStage, DisplayStyle.None);
             SetDisplay(_chatArea, DisplayStyle.Flex);
+            SetDisplay(_providersArea, DisplayStyle.None);
         }
 
         private void ShowThemes()
@@ -164,6 +202,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetActiveNav(_navThemes);
             SetDisplay(_avatarStage, DisplayStyle.None);
             SetDisplay(_chatArea, DisplayStyle.None);
+            SetDisplay(_providersArea, DisplayStyle.None);
         }
 
         private void ShowSettings()
@@ -171,6 +210,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetActiveNav(_navSettings);
             SetDisplay(_avatarStage, DisplayStyle.None);
             SetDisplay(_chatArea, DisplayStyle.None);
+            SetDisplay(_providersArea, DisplayStyle.None);
         }
 
         private void SetActiveNav(Button active)
@@ -187,7 +227,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnInputKeyDown(KeyDownEvent evt)
         {
-            if (evt.keyCode != KeyCode.Return || !evt.ctrlKey)
+            if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
                 return;
 
             evt.StopPropagation();
@@ -261,26 +301,38 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private async Task<ChatService> GetChatServiceAsync()
+        private async Task<CompanionApp> GetAppAsync()
         {
-            if (_chatService != null)
-                return _chatService;
+            if (_app != null)
+                return _app;
 
             for (int i = 0; i < 120 && isActiveAndEnabled; i++)
             {
                 var bootstrap = UnityEngine.Object.FindFirstObjectByType<AppBootstrap>();
-                var app = bootstrap?.App;
-                if (app != null)
+                if (bootstrap?.App != null)
                 {
-                    _chatService = app.ChatService;
-                    await _chatService.GetOrCreateChatAsync();
-                    return _chatService;
+                    _app = bootstrap.App;
+                    return _app;
                 }
 
                 await Task.Yield();
             }
 
             return null;
+        }
+
+        private async Task<ChatService> GetChatServiceAsync()
+        {
+            if (_chatService != null)
+                return _chatService;
+
+            var app = await GetAppAsync();
+            if (app == null)
+                return null;
+
+            _chatService = app.ChatService;
+            await _chatService.GetOrCreateChatAsync();
+            return _chatService;
         }
 
         private async Task LoadSessionsAsync(ChatService chat)
@@ -392,6 +444,180 @@ namespace NeonCompanion.Runtime.UI.UITK
                 content = text,
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             }));
+        }
+
+        private void OnAddProviderClicked()
+        {
+            _editingProvider = ProviderConfig.CreateDefault("New Provider", "https://api.openai.com/v1");
+            ShowProviderEditPanel();
+        }
+
+        private void StartEditingProvider(ProviderConfig provider)
+        {
+            _editingProvider = provider;
+            ShowProviderEditPanel();
+        }
+
+        private void ShowProviderEditPanel()
+        {
+            if (_providerEditPanel == null || _editingProvider == null)
+                return;
+
+            if (_editName != null)
+                _editName.value = _editingProvider.displayName ?? string.Empty;
+            if (_editBaseUrl != null)
+                _editBaseUrl.value = _editingProvider.baseUrl ?? string.Empty;
+            if (_editApiKey != null)
+                _editApiKey.value = _editingProvider.apiKey ?? string.Empty;
+            if (_editModel != null)
+                _editModel.value = _editingProvider.defaultModel ?? string.Empty;
+            if (_editTemperature != null)
+                _editTemperature.value = _editingProvider.temperature;
+
+            _providerEditPanel.style.display = DisplayStyle.Flex;
+        }
+
+        private void OnSaveProviderClicked()
+        {
+            _ = SaveProviderAsync();
+        }
+
+        private async Task SaveProviderAsync()
+        {
+            if (_editingProvider == null)
+                return;
+
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null)
+                    return;
+
+                _editingProvider.displayName = _editName?.value ?? _editingProvider.displayName;
+                _editingProvider.baseUrl = _editBaseUrl?.value ?? _editingProvider.baseUrl;
+                _editingProvider.apiKey = _editApiKey?.value ?? _editingProvider.apiKey;
+                _editingProvider.defaultModel = _editModel?.value ?? _editingProvider.defaultModel;
+                if (_editTemperature != null)
+                    _editingProvider.temperature = _editTemperature.value;
+
+                await app.ProviderManager.SaveProviderAsync(_editingProvider);
+                _editingProvider = null;
+                SetDisplay(_providerEditPanel, DisplayStyle.None);
+                await RefreshProvidersListAsync();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void OnCancelEditClicked()
+        {
+            _editingProvider = null;
+            SetDisplay(_providerEditPanel, DisplayStyle.None);
+        }
+
+        private void DeleteProvider(ProviderConfig provider)
+        {
+            _ = DeleteProviderAsync(provider);
+        }
+
+        private async Task DeleteProviderAsync(ProviderConfig provider)
+        {
+            if (provider == null)
+                return;
+
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null)
+                    return;
+
+                await app.ProviderManager.DeleteProviderAsync(provider.id);
+                await RefreshProvidersListAsync();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void SwitchProvider(ProviderConfig provider)
+        {
+            _ = SwitchProviderAsync(provider);
+        }
+
+        private async Task SwitchProviderAsync(ProviderConfig provider)
+        {
+            try
+            {
+                var chat = await GetChatServiceAsync();
+                if (chat == null)
+                    return;
+
+                await chat.SwitchProviderAsync(provider);
+                RenderMessages(chat.CurrentChatViewModel?.Messages);
+                await LoadSessionsAsync(chat);
+                ShowChat();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private async Task RefreshProvidersListAsync()
+        {
+            if (_providersList == null)
+                return;
+
+            _providersList.Clear();
+
+            var app = await GetAppAsync();
+            if (!_isBound || app == null)
+            {
+                _providersList.Add(new Label("ProviderManager is not ready."));
+                return;
+            }
+
+            var providers = await app.ProviderManager.GetAllProvidersAsync();
+            if (providers.Count == 0)
+            {
+                _providersList.Add(new Label("No providers configured."));
+                return;
+            }
+
+            foreach (var provider in providers)
+                _providersList.Add(CreateProviderListItem(provider));
+        }
+
+        private VisualElement CreateProviderListItem(ProviderConfig provider)
+        {
+            var container = new VisualElement();
+            container.AddToClassList("provider-item");
+
+            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? "Provider" : provider.displayName);
+            nameLabel.AddToClassList("provider-name");
+
+            var urlLabel = new Label(provider.baseUrl ?? string.Empty);
+            urlLabel.AddToClassList("provider-url");
+
+            var modelLabel = new Label(provider.defaultModel ?? string.Empty);
+            modelLabel.AddToClassList("provider-model");
+
+            var buttons = new VisualElement();
+            buttons.AddToClassList("provider-actions");
+
+            buttons.Add(new Button(() => SwitchProvider(provider)) { text = "Use" });
+            buttons.Add(new Button(() => StartEditingProvider(provider)) { text = "Edit" });
+            buttons.Add(new Button(() => DeleteProvider(provider)) { text = "Delete" });
+
+            container.Add(nameLabel);
+            container.Add(urlLabel);
+            container.Add(modelLabel);
+            container.Add(buttons);
+
+            return container;
         }
     }
 }

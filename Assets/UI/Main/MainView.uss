@@ -248,6 +248,76 @@
     border-color: rgb(90, 120, 240);
 }
 
+/* Providers */
+.providers-area {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.providers-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.providers-title {
+    font-size: 18px;
+    -unity-font-style: bold;
+    color: rgb(230, 232, 236);
+}
+
+.providers-list {
+    flex-grow: 1;
+    margin-bottom: 12px;
+}
+
+.provider-item {
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    background-color: rgb(28, 30, 36);
+    border-width: 1px;
+    border-color: rgb(45, 49, 58);
+}
+
+.provider-name {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(230, 232, 236);
+    margin-bottom: 4px;
+}
+
+.provider-url,
+.provider-model {
+    font-size: 11px;
+    color: rgb(130, 140, 155);
+    margin-bottom: 3px;
+}
+
+.provider-actions {
+    flex-direction: row;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.provider-edit-panel {
+    padding: 12px;
+    border-radius: 8px;
+    background-color: rgb(28, 30, 36);
+    border-width: 1px;
+    border-color: rgb(45, 49, 58);
+}
+
+.provider-field {
+    margin-bottom: 8px;
+}
+
+.provider-edit-actions {
+    flex-direction: row;
+    gap: 8px;
+}
+
 /* ============ RIGHT SIDEBAR (SESSIONS) ============ */
 
 .sessions-header {

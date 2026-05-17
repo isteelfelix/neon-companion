@@ -68,6 +68,28 @@
                         <ui:Button name="send-button" class="btn btn--primary" text="→" />
                     </ui:VisualElement>
                 </ui:VisualElement>
+
+                <!-- Providers Area -->
+                <ui:VisualElement name="providers-area" class="providers-area">
+                    <ui:VisualElement class="providers-header">
+                        <ui:Label text="Providers" class="providers-title" />
+                        <ui:Button name="add-provider-btn" text="Add" class="btn btn--primary" />
+                    </ui:VisualElement>
+
+                    <ui:ScrollView name="providers-list" class="providers-list" />
+
+                    <ui:VisualElement name="provider-edit-panel" class="provider-edit-panel">
+                        <ui:TextField name="edit-name" label="Name" class="provider-field" />
+                        <ui:TextField name="edit-baseurl" label="Base URL" class="provider-field" />
+                        <ui:TextField name="edit-apikey" label="API Key" class="provider-field" />
+                        <ui:TextField name="edit-model" label="Model" class="provider-field" />
+                        <ui:Slider name="edit-temperature" label="Temperature" low-value="0" high-value="2" value="0.7" class="provider-field" />
+                        <ui:VisualElement class="provider-edit-actions">
+                            <ui:Button name="save-provider-btn" text="Save" class="btn btn--primary" />
+                            <ui:Button name="cancel-edit-btn" text="Cancel" class="btn" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- RIGHT SIDEBAR (Sessions) -->
