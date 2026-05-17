@@ -1,0 +1,51 @@
+/* ============== Neon Companion — design tokens ==============
+   Conversion notes:
+   - oklch(...) → approximated hex (UITK has no oklch).
+   - accent  oklch(0.68 0.18 268) ≈ #7C7AED  (indigo)
+   - accent2 oklch(0.74 0.18 295) ≈ #A285F0  (violet)
+   - ok      oklch(0.78 0.16 152) ≈ #4DCB85
+   - warn    oklch(0.82 0.16 75)  ≈ #E5B25C
+   - danger  oklch(0.7  0.20 25)  ≈ #E27047
+   - text-on-accent oklch(0.86 0.1 268) ≈ #C7C5FF
+*/
+
+* {
+    /* surfaces */
+    --bg-0: #0B0C10;
+    --bg-1: #101218;
+    --bg-2: #16181F;
+    --bg-3: #1C1F27;
+    --bg-4: #232732;
+
+    /* lines */
+    --line-1: #232733;
+    --line-2: #2D3240;
+    --line-3: #3A4052;
+
+    /* text */
+    --text-0: #F3F5FA;
+    --text-1: #D8DCE6;
+    --text-2: #9AA2B3;
+    --text-3: #6B7387;
+    --text-4: #4A5163;
+
+    /* accent (indigo→violet) */
+    --accent: #7C7AED;
+    --accent-2: #A285F0;
+    --accent-soft: rgba(124, 122, 237, 0.16);
+    --accent-glow: rgba(124, 122, 237, 0.40);
+    --accent-text: #C7C5FF;
+
+    /* semantic */
+    --ok: #4DCB85;
+    --warn: #E5B25C;
+    --danger: #E27047;
+    --ok-soft: rgba(77, 203, 133, 0.16);
+
+    /* radii */
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 20px;
+    --r-pill: 999px;
+}

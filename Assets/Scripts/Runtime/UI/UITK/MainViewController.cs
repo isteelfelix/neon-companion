@@ -6,125 +6,54 @@ namespace NeonCompanion.Runtime.UI.UITK
     [RequireComponent(typeof(UIDocument))]
     public sealed class MainViewController : MonoBehaviour
     {
-        private VisualElement _chatPanel;
-        private VisualElement _settingsPanel;
-        private VisualElement _avatarPanel;
+        private static readonly string[] NavItems = { "nav-chat", "nav-avatar", "nav-providers", "nav-history", "nav-themes", "nav-settings" };
 
-        private Button _chatTab;
-        private Button _settingsTab;
-        private Button _avatarTab;
+        private VisualElement _root;
+        private string _activeNav = "nav-chat";
 
         private void OnEnable()
         {
             var document = GetComponent<UIDocument>();
-            if (document == null || document.rootVisualElement == null)
+            if (document == null || document.rootVisualElement == null) return;
+            _root = document.rootVisualElement;
+
+            foreach (var id in NavItems)
             {
-                return;
+                var item = _root.Q<VisualElement>(id);
+                if (item == null) continue;
+                var captured = id;
+                item.RegisterCallback<ClickEvent>(_ => SetActiveNav(captured));
             }
 
-            var root = document.rootVisualElement;
-
-            _chatPanel = root.Q<VisualElement>("chat-panel");
-            _settingsPanel = root.Q<VisualElement>("settings-panel");
-            _avatarPanel = root.Q<VisualElement>("avatar-panel");
-
-            _chatTab = root.Q<Button>("tab-chat");
-            _settingsTab = root.Q<Button>("tab-settings");
-            _avatarTab = root.Q<Button>("tab-avatar");
-
-            if (_chatTab != null)
+            var historyList = _root.Q<ScrollView>(className: "history__list");
+            if (historyList != null)
             {
-                _chatTab.clicked += ShowChat;
+                foreach (var item in historyList.Query<VisualElement>(className: "history__item").ToList())
+                {
+                    var captured = item;
+                    item.RegisterCallback<ClickEvent>(_ => SetActiveHistory(historyList, captured));
+                }
             }
 
-            if (_settingsTab != null)
-            {
-                _settingsTab.clicked += ShowSettings;
-            }
-
-            if (_avatarTab != null)
-            {
-                _avatarTab.clicked += ShowAvatar;
-            }
-
-            ShowChat();
+            SetActiveNav(_activeNav);
         }
 
-        private void OnDisable()
+        private void SetActiveNav(string id)
         {
-            if (_chatTab != null)
+            _activeNav = id;
+            foreach (var n in NavItems)
             {
-                _chatTab.clicked -= ShowChat;
-            }
-
-            if (_settingsTab != null)
-            {
-                _settingsTab.clicked -= ShowSettings;
-            }
-
-            if (_avatarTab != null)
-            {
-                _avatarTab.clicked -= ShowAvatar;
+                var el = _root.Q<VisualElement>(n);
+                if (el == null) continue;
+                el.EnableInClassList("nav__item--active", n == id);
             }
         }
 
-        private void ShowChat()
+        private static void SetActiveHistory(ScrollView list, VisualElement selected)
         {
-            SetPanelState(chat: true, settings: false, avatar: false);
-            SetTabState(chatActive: true, settingsActive: false, avatarActive: false);
-        }
-
-        private void ShowSettings()
-        {
-            SetPanelState(chat: false, settings: true, avatar: false);
-            SetTabState(chatActive: false, settingsActive: true, avatarActive: false);
-        }
-
-        private void ShowAvatar()
-        {
-            SetPanelState(chat: false, settings: false, avatar: true);
-            SetTabState(chatActive: false, settingsActive: false, avatarActive: true);
-        }
-
-        private void SetPanelState(bool chat, bool settings, bool avatar)
-        {
-            SetDisplay(_chatPanel, chat);
-            SetDisplay(_settingsPanel, settings);
-            SetDisplay(_avatarPanel, avatar);
-        }
-
-        private void SetTabState(bool chatActive, bool settingsActive, bool avatarActive)
-        {
-            SetActiveClass(_chatTab, chatActive);
-            SetActiveClass(_settingsTab, settingsActive);
-            SetActiveClass(_avatarTab, avatarActive);
-        }
-
-        private static void SetDisplay(VisualElement element, bool visible)
-        {
-            if (element == null)
+            foreach (var item in list.Query<VisualElement>(className: "history__item").ToList())
             {
-                return;
-            }
-
-            element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-        }
-
-        private static void SetActiveClass(VisualElement element, bool active)
-        {
-            if (element == null)
-            {
-                return;
-            }
-
-            const string className = "tab-btn--active";
-            if (active)
-            {
-                element.AddToClassList(className);
-            }
-            else
-            {
-                element.RemoveFromClassList(className);
+                item.EnableInClassList("history__item--active", item == selected);
             }
         }
     }

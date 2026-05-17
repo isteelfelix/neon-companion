@@ -1,195 +1,500 @@
-/* ============ Calm Productivity — Avatar-first layout ============ */
+/* ============== Main view — Chat (desktop) ============== */
 
-.app-root {
+/* root: full-bleed app */
+.app {
     flex-grow: 1;
-    background-color: rgb(16, 17, 21);
-    padding: 16px;
-}
-
-.content-host {
-    flex-grow: 1;
-    background-color: rgb(22, 24, 29);
-    border-radius: 14px;
-    border-width: 1px;
-    border-color: rgb(40, 44, 52);
-    padding: 16px;
-}
-
-/* ---- panels ---- */
-.panel {
-    display: none;
-    flex-grow: 1;
-}
-.panel--active {
-    display: flex;
-}
-.panel-title {
-    font-size: 22px;
-    color: rgb(230, 232, 236);
-    -unity-font-style: bold;
-    margin-bottom: 6px;
-}
-.panel-subtitle {
-    font-size: 14px;
-    color: rgb(130, 138, 150);
-}
-
-/* ---- top bar ---- */
-.topbar {
     flex-direction: row;
-    align-items: center;
-    padding-bottom: 10px;
-    border-bottom-width: 1px;
-    border-bottom-color: rgb(34, 37, 44);
-    margin-bottom: 12px;
-}
-.topbar__name {
-    font-size: 16px;
-    -unity-font-style: bold;
-    color: rgb(230, 232, 236);
-    margin-right: 10px;
-}
-.topbar__model {
-    font-size: 12px;
-    color: rgb(120, 128, 140);
-    padding: 3px 8px;
-    background-color: rgb(28, 30, 36);
-    border-radius: 10px;
-    border-width: 1px;
-    border-color: rgb(40, 44, 52);
-}
-.topbar__spacer {
-    flex-grow: 1;
-}
-.icon-btn {
-    height: 30px;
-    padding: 0 12px;
-    border-radius: 8px;
-    border-width: 1px;
-    border-color: rgb(40, 44, 52);
-    background-color: rgba(0, 0, 0, 0);
-    color: rgb(180, 188, 200);
-    font-size: 12px;
-}
-.icon-btn:hover {
-    background-color: rgb(28, 30, 36);
-    color: rgb(220, 224, 232);
-}
-
-/* ---- stage (avatar hero) ---- */
-.stage {
-    flex-grow: 1;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 14px;
+    background-color: var(--bg-0);
+    color: var(--text-1);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Regular.ttf");
+    font-size: 14px;
     overflow: hidden;
 }
-.stage__glow {
+
+/* atmospheric glow behind everything (replaces CSS radial-gradients on .app::before) */
+.atmo {
     position: absolute;
-    width: 380px;
-    height: 380px;
-    border-radius: 190px;
-    background-color: rgba(90, 120, 240, 0.18);
+    left: 0; top: 0; right: 0; bottom: 0;
+    /* background-image: url("project://database/Assets/UI/Avatars/atmo.png"); */
+    -unity-background-scale-mode: stretch-to-fill;
+    opacity: 0.9;
 }
-.stage__avatar {
-    width: 260px;
-    height: 260px;
-    border-radius: 130px;
-    background-color: rgb(30, 33, 40);
+
+/* ============ Rail (sidebar) ============ */
+.rail {
+    width: 232px;
+    flex-shrink: 0;
+    background-color: var(--bg-1);
+    border-right-width: 1px;
+    border-right-color: var(--line-1);
+    padding: 14px 12px;
+}
+
+.rail__brand {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 10px 14px 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    margin-bottom: 10px;
+}
+.brand__mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background-color: var(--accent);
+    /* background-image: url("project://database/Assets/UI/Avatars/brand-mark.png"); */
+    -unity-background-scale-mode: scale-and-crop;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+}
+.brand__mark-letter {
+    font-size: 11px;
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+}
+.brand__name {
+    font-size: 15px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    color: var(--text-0);
+}
+.brand__tag {
+    margin-left: auto;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 10px;
+    color: var(--text-3);
+    background-color: var(--bg-3);
+    padding: 2px 6px;
+    border-radius: 6px;
     border-width: 1px;
-    border-color: rgb(50, 55, 64);
+    border-color: var(--line-1);
+}
+
+.nav__group {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-4);
+    padding: 16px 10px 6px 10px;
+}
+
+.nav__item {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    margin-bottom: 2px;
+    transition-property: background-color, color, border-color;
+    transition-duration: 0.12s;
+}
+.nav__item:hover {
+    background-color: var(--bg-2);
+}
+.nav__item--active {
+    background-color: var(--bg-3);
+    border-color: var(--line-2);
+}
+.nav__icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 10px;
+    -unity-background-image-tint-color: var(--text-3);
+    flex-shrink: 0;
+}
+.nav__item--active .nav__icon {
+    -unity-background-image-tint-color: var(--accent);
+}
+.nav__label {
+    color: var(--text-2);
+    font-size: 13px;
+    flex-grow: 1;
+}
+.nav__item--active .nav__label {
+    color: var(--text-0);
+}
+.nav__item:hover .nav__label {
+    color: var(--text-1);
+}
+.nav__count {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 10px;
+    color: var(--text-3);
+}
+
+.rail__spacer { flex-grow: 1; }
+
+.rail__footer {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 10px;
+    border-top-width: 1px;
+    border-top-color: var(--line-1);
+}
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    margin-right: 10px;
+}
+.dot--status {
+    background-color: var(--ok);
+    border-width: 3px;
+    border-color: var(--ok-soft);
+}
+.rail__footer-text { flex-direction: column; }
+.rail__footer-name {
+    font-size: 12px;
+    color: var(--text-1);
+}
+.rail__footer-model {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 10px;
+    color: var(--text-3);
+    margin-top: 2px;
+}
+
+/* ============ Main viewport ============ */
+.main {
+    flex-grow: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.topbar {
+    height: 56px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 22px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    background-color: var(--bg-1);
+}
+.topbar__title {
+    font-size: 14px;
+    color: var(--text-0);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    margin-right: 12px;
+}
+.topbar__sep {
+    width: 1px;
+    height: 18px;
+    background-color: var(--line-2);
+    margin: 0 8px;
+}
+.topbar__subtitle {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 11px;
+    color: var(--text-3);
+}
+.topbar__spacer { flex-grow: 1; }
+.topbar > .btn,
+.topbar > .iconbtn { margin-left: 8px; }
+
+/* ============ Stage (chat + history) ============ */
+.stage {
+    flex-grow: 1;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+.avatar-stage {
+    flex-grow: 1;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Floating status pills */
+.statusrow {
+    position: absolute;
+    top: 26px;
+    left: 26px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(11, 12, 16, 0.7);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 999px;
+    padding: 5px 10px 5px 7px;
+}
+.statusrow__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background-color: var(--ok);
+    margin-right: 8px;
+}
+.statusrow__text {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 11px;
+    color: var(--text-2);
+}
+
+.providertag {
+    position: absolute;
+    top: 26px;
+    right: 26px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(11, 12, 16, 0.7);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    padding: 7px 12px;
+    transition-property: border-color;
+    transition-duration: 0.12s;
+}
+.providertag:hover {
+    border-color: var(--line-3);
+}
+.providertag__logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background-color: var(--bg-3);
+    border-width: 1px;
+    border-color: var(--line-2);
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+}
+.providertag__logo-text {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+    font-size: 9px;
+    color: var(--text-1);
+}
+.providertag__meta { flex-direction: column; margin-right: 8px; }
+.providertag__name {
+    font-size: 12px;
+    color: var(--text-1);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
+}
+.providertag__model {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 2px;
+}
+
+/* Hero area: halo + avatar */
+.avatar-stage__hero {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow: hidden;
+}
+.halo {
+    position: absolute;
+    width: 520px;
+    height: 520px;
+    /* background-image: url("project://database/Assets/UI/Avatars/halo.png"); */
+    -unity-background-scale-mode: scale-to-fit;
+    opacity: 0.55;
+}
+.avatar {
+    width: 280px;
+    height: 280px;
+    border-radius: 999px;
+    background-color: var(--bg-3);
+    border-width: 1px;
+    border-color: var(--line-2);
+    overflow: hidden;
     align-items: center;
     justify-content: center;
 }
-.stage__placeholder {
-    font-size: 14px;
-    color: rgb(90, 98, 110);
-    -unity-font-style: italic;
+.avatar__art {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    /* background-image: url("project://database/Assets/UI/Avatars/neon.png"); */
+    -unity-background-scale-mode: scale-and-crop;
+}
+.avatar__vignette {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    /* background-image: url("project://database/Assets/UI/Avatars/vignette.png"); */
+    -unity-background-scale-mode: scale-and-crop;
+    opacity: 0.7;
 }
 
-/* ---- subtitle (last assistant message) ---- */
-.subtitle {
-    min-height: 56px;
-    background-color: rgb(28, 30, 36);
-    border-width: 1px;
-    border-color: rgb(40, 44, 52);
-    border-radius: 10px;
-    border-left-width: 3px;
-    border-left-color: rgb(90, 120, 240);
-    padding: 12px 14px;
-    margin-bottom: 12px;
+/* ============ Dock (subtitle + composer) ============ */
+.dock {
+    padding: 18px 28px 22px 28px;
+    border-top-width: 1px;
+    border-top-color: var(--line-1);
+    background-color: var(--bg-1);
 }
+.subtitle {
+    flex-direction: row;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-left-width: 2px;
+    border-left-color: var(--accent);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+}
+.subtitle__role {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-right: 12px;
+    padding-top: 2px;
+    flex-shrink: 0;
+}
+.subtitle__body { flex-grow: 1; }
 .subtitle__text {
-    font-size: 15px;
-    color: rgb(220, 224, 232);
+    font-size: 14px;
+    color: var(--text-0);
     white-space: normal;
 }
+.subtitle__actions {
+    flex-direction: row;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.15s;
+}
+.subtitle:hover .subtitle__actions { opacity: 1; }
 
-/* ---- composer ---- */
+/* Composer */
 .composer {
     flex-direction: row;
     align-items: center;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 14px;
+    padding: 8px 8px 8px 14px;
+    transition-property: border-color;
+    transition-duration: 0.15s;
 }
+
 .composer__input {
     flex-grow: 1;
-    margin-right: 10px;
-    height: 44px;
-    border-radius: 10px;
+    margin: 0 6px;
 }
-.composer__input > .unity-text-field__input {
-    background-color: rgb(28, 30, 36);
-    border-color: rgb(45, 49, 58);
-    border-width: 1px;
-    border-radius: 10px;
-    color: rgb(230, 232, 236);
-    padding: 0 14px;
-    font-size: 14px;
-}
-
-/* ---- buttons ---- */
-.btn {
-    height: 44px;
-    padding: 0 20px;
-    border-radius: 10px;
-    border-width: 1px;
-    font-size: 14px;
-    -unity-font-style: bold;
-}
-.btn--primary {
-    background-color: rgb(90, 120, 240);
-    color: rgb(245, 247, 255);
-    border-color: rgb(90, 120, 240);
-}
-.btn--primary:hover {
-    background-color: rgb(110, 138, 250);
-}
-
-/* ---- tab bar ---- */
-.tab-bar {
-    margin-top: 12px;
-    height: 48px;
-    flex-direction: row;
-}
-.tab-btn {
-    flex-grow: 1;
-    margin-right: 6px;
-    height: 40px;
-    border-radius: 8px;
-    border-width: 1px;
-    border-color: rgb(40, 44, 52);
+.composer__input > .unity-text-field__input,
+.composer__input > .unity-base-text-field__input {
     background-color: rgba(0, 0, 0, 0);
-    color: rgb(180, 188, 200);
+    border-width: 0;
+    color: var(--text-0);
     font-size: 14px;
+    height: 36px;
+    padding: 0 6px;
 }
-.tab-btn:hover {
-    background-color: rgb(28, 30, 36);
-    color: rgb(220, 224, 232);
+.composer__hint {
+    flex-direction: row;
+    align-items: center;
+    padding: 0 6px;
 }
-.tab-btn--last {
-    margin-right: 0;
+.composer__hint > .kbd { margin-right: 2px; }
+
+/* ============ History side panel ============ */
+.history {
+    width: 320px;
+    flex-shrink: 0;
+    background-color: var(--bg-1);
+    border-left-width: 1px;
+    border-left-color: var(--line-1);
+    flex-direction: column;
 }
-.tab-btn--active {
-    background-color: rgb(28, 30, 36);
-    color: rgb(230, 232, 236);
-    border-color: rgb(90, 120, 240);
+.history__head {
+    flex-direction: row;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
 }
+.history__title-h {
+    font-size: 13px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    color: var(--text-0);
+    flex-grow: 1;
+}
+.history__head-actions { flex-direction: row; }
+.history__head-actions > .iconbtn { margin-left: 4px; }
+
+.history__list {
+    flex-grow: 1;
+    padding: 8px;
+}
+.history__group {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-4);
+    padding: 14px 12px 6px 12px;
+}
+.history__item {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    margin-bottom: 2px;
+    transition-property: background-color, border-color;
+    transition-duration: 0.12s;
+}
+.history__item:hover {
+    background-color: var(--bg-2);
+}
+.history__item--active {
+    background-color: var(--bg-3);
+    border-color: var(--line-2);
+}
+.history__item-title {
+    font-size: 13px;
+    color: var(--text-1);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -unity-text-overflow-position: end;
+}
+.history__item-meta {
+    flex-direction: row;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 10px;
+    color: var(--text-3);
+}
+.history__item-meta > Label { margin-right: 4px; color: var(--text-3); font-size: 10px; }
+
+/* ============ Icons (background-image stamps) ============
+   Pattern: .icon is a 16x16 (or sized externally) box that tints a white SVG.
+*/
+.icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--text-2);
+}
+
+.icon--chat       { background-image: url("project://database/Assets/UI/Icons/chat.svg"); }
+.icon--user       { background-image: url("project://database/Assets/UI/Icons/user.svg"); }
+.icon--bolt       { background-image: url("project://database/Assets/UI/Icons/bolt.svg"); }
+.icon--history    { background-image: url("project://database/Assets/UI/Icons/history.svg"); }
+.icon--palette    { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
+.icon--settings   { background-image: url("project://database/Assets/UI/Icons/settings.svg"); }
+.icon--search     { background-image: url("project://database/Assets/UI/Icons/search.svg"); }
+.icon--plus       { background-image: url("project://database/Assets/UI/Icons/plus.svg"); }
+.icon--sparkle    { background-image: url("project://database/Assets/UI/Icons/sparkle.svg"); }
+.icon--dots       { background-image: url("project://database/Assets/UI/Icons/dots.svg"); }
+.icon--copy       { background-image: url("project://database/Assets/UI/Icons/copy.svg"); }
+.icon--refresh    { background-image: url("project://database/Assets/UI/Icons/refresh.svg"); }
+.icon--headphones { background-image: url("project://database/Assets/UI/Icons/headphones.svg"); }
+.icon--attach     { background-image: url("project://database/Assets/UI/Icons/attach.svg"); }
+.icon--send       { background-image: url("project://database/Assets/UI/Icons/send.svg"); width: 14px; height: 14px; -unity-background-image-tint-color: rgb(255,255,255); }
+.icon--arrow      { background-image: url("project://database/Assets/UI/Icons/arrow.svg"); width: 14px; height: 14px; }
+
+/* iconbtn-hosted icons get the hover tint */
+.iconbtn:hover .icon { -unity-background-image-tint-color: var(--text-0); }
+
+/* Buttons in the topbar with icon+label children: spacing */
+.btn > .icon { margin-right: 6px; }
