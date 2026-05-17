@@ -1,254 +1,85 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
-    <ui:Style src="project://database/Assets/UI/Theme/Tokens.uss" />
-    <ui:Style src="project://database/Assets/UI/Theme/Components.uss" />
-    <ui:Style src="project://database/Assets/UI/Main/MainView.uss" />
+    <ui:Style src="MainView.uss" />
 
-    <ui:VisualElement name="app" class="app">
-
-        <!-- Atmospheric background glow (radial substitute) -->
-        <ui:VisualElement name="atmo" class="atmo" picking-mode="Ignore" />
-
-        <!-- ====== Rail (sidebar) ====== -->
-        <ui:VisualElement name="rail" class="rail">
-
-            <ui:VisualElement class="rail__brand">
-                <ui:VisualElement class="brand__mark">
-                    <ui:Label text="N" class="brand__mark-letter" />
+    <ui:VisualElement name="app-root" class="app-root">
+        
+        <!-- === MAIN LAYOUT === -->
+        <ui:VisualElement name="main-layout" class="main-layout">
+            
+            <!-- LEFT SIDEBAR -->
+            <ui:VisualElement name="left-sidebar" class="sidebar left-sidebar">
+                <ui:VisualElement class="sidebar-header">
+                    <ui:Label text="Neon" class="logo" />
+                    <ui:Label text="v0.1" class="version" />
                 </ui:VisualElement>
-                <ui:Label text="Neon" class="brand__name" />
-                <ui:Label text="v0.1" class="brand__tag" />
-            </ui:VisualElement>
 
-            <ui:Label text="Workspace" class="nav__group" />
+                <ui:VisualElement class="nav-section">
+                    <ui:Label text="WORKSPACE" class="section-label" />
+                    <ui:Button name="nav-chat" text="Чат" class="nav-item nav-item--active" />
+                    <ui:Button name="nav-avatars" text="Аватары" class="nav-item" />
+                    <ui:Button name="nav-providers" text="Провайдеры" class="nav-item" />
+                </ui:VisualElement>
 
-            <ui:VisualElement name="nav-chat" class="nav__item nav__item--active">
-                <ui:VisualElement class="nav__icon icon icon--chat" picking-mode="Ignore" />
-                <ui:Label text="Чат" class="nav__label" />
-                <ui:Label text="7" class="nav__count" />
-            </ui:VisualElement>
-
-            <ui:VisualElement name="nav-avatar" class="nav__item">
-                <ui:VisualElement class="nav__icon icon icon--user" picking-mode="Ignore" />
-                <ui:Label text="Аватары" class="nav__label" />
-                <ui:Label text="8" class="nav__count" />
-            </ui:VisualElement>
-
-            <ui:VisualElement name="nav-providers" class="nav__item">
-                <ui:VisualElement class="nav__icon icon icon--bolt" picking-mode="Ignore" />
-                <ui:Label text="Провайдеры" class="nav__label" />
-                <ui:Label text="5" class="nav__count" />
-            </ui:VisualElement>
-
-            <ui:Label text="Library" class="nav__group" />
-
-            <ui:VisualElement name="nav-history" class="nav__item">
-                <ui:VisualElement class="nav__icon icon icon--history" picking-mode="Ignore" />
-                <ui:Label text="История" class="nav__label" />
-            </ui:VisualElement>
-
-            <ui:VisualElement name="nav-themes" class="nav__item">
-                <ui:VisualElement class="nav__icon icon icon--palette" picking-mode="Ignore" />
-                <ui:Label text="Темы" class="nav__label" />
-            </ui:VisualElement>
-
-            <ui:VisualElement name="nav-settings" class="nav__item">
-                <ui:VisualElement class="nav__icon icon icon--settings" picking-mode="Ignore" />
-                <ui:Label text="Настройки" class="nav__label" />
-            </ui:VisualElement>
-
-            <ui:VisualElement class="rail__spacer" />
-
-            <ui:VisualElement class="rail__footer">
-                <ui:VisualElement class="dot dot--status" />
-                <ui:VisualElement class="rail__footer-text">
-                    <ui:Label text="OpenAI" class="rail__footer-name" />
-                    <ui:Label text="gpt-4o-mini" class="rail__footer-model" />
+                <ui:VisualElement class="nav-section">
+                    <ui:Label text="LIBRARY" class="section-label" />
+                    <ui:Button name="nav-history" text="История" class="nav-item" />
+                    <ui:Button name="nav-themes" text="Темы" class="nav-item" />
+                    <ui:Button name="nav-settings" text="Настройки" class="nav-item" />
                 </ui:VisualElement>
             </ui:VisualElement>
-        </ui:VisualElement>
 
-        <!-- ====== Main ====== -->
-        <ui:VisualElement name="main" class="main">
-
-            <!-- Topbar -->
-            <ui:VisualElement class="topbar">
-                <ui:Label text="Дизайн системы рендеринга 2D" class="topbar__title" />
-                <ui:VisualElement class="topbar__sep" />
-                <ui:Label text="14 сообщений · Neon" class="topbar__subtitle" />
-                <ui:VisualElement class="topbar__spacer" />
-                <ui:Button class="btn btn--ghost">
-                    <ui:VisualElement class="icon icon--sparkle" picking-mode="Ignore" />
-                    <ui:Label text="Summarize" />
-                </ui:Button>
-                <ui:Button class="iconbtn">
-                    <ui:VisualElement class="icon icon--search" picking-mode="Ignore" />
-                </ui:Button>
-                <ui:Button class="iconbtn">
-                    <ui:VisualElement class="icon icon--dots" picking-mode="Ignore" />
-                </ui:Button>
-            </ui:VisualElement>
-
-            <!-- Stage = chat area + history side panel -->
-            <ui:VisualElement class="stage">
-
-                <!-- Avatar stage column -->
-                <ui:VisualElement class="avatar-stage">
-
-                    <!-- Floating status pill (top-left) -->
-                    <ui:VisualElement class="statusrow">
-                        <ui:VisualElement class="statusrow__dot" />
-                        <ui:Label text="connected · 14:23" class="statusrow__text" />
-                    </ui:VisualElement>
-
-                    <!-- Floating provider tag (top-right) -->
-                    <ui:VisualElement name="provider-tag" class="providertag">
-                        <ui:VisualElement class="providertag__logo">
-                            <ui:Label text="OAI" class="providertag__logo-text" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="providertag__meta">
-                            <ui:Label text="OpenAI" class="providertag__name" />
-                            <ui:Label text="gpt-4o-mini" class="providertag__model" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="icon icon--arrow" picking-mode="Ignore" />
-                    </ui:VisualElement>
-
-                    <!-- Avatar hero -->
-                    <ui:VisualElement class="avatar-stage__hero">
-                        <ui:VisualElement name="halo" class="halo" picking-mode="Ignore" />
-                        <ui:VisualElement name="avatar" class="avatar">
-                            <ui:VisualElement name="avatar-art" class="avatar__art" picking-mode="Ignore" />
-                            <ui:VisualElement class="avatar__vignette" picking-mode="Ignore" />
+            <!-- CENTER AREA -->
+            <ui:VisualElement name="center-area" class="center-area">
+                
+                <!-- Top Bar -->
+                <ui:VisualElement class="topbar">
+                    <ui:VisualElement class="topbar-left">
+                        <ui:VisualElement class="status-pill">
+                            <ui:VisualElement class="status-dot status-dot--green" />
+                            <ui:Label text="connected - 14:23" class="status-text" />
                         </ui:VisualElement>
                     </ui:VisualElement>
 
-                    <!-- Dock (subtitle + composer) -->
-                    <ui:VisualElement class="dock">
-
-                        <ui:VisualElement class="subtitle">
-                            <ui:Label text="NEON" class="subtitle__role" />
-                            <ui:VisualElement class="subtitle__body">
-                                <ui:Label name="subtitle-text" class="subtitle__text"
-                                    text="Готов помочь. С чего сегодня начнём — настройка провайдера, аватары, или продолжим прошлый разговор о шейдерах?" />
-                            </ui:VisualElement>
-                            <ui:VisualElement class="subtitle__actions">
-                                <ui:Button class="iconbtn">
-                                    <ui:VisualElement class="icon icon--copy" picking-mode="Ignore" />
-                                </ui:Button>
-                                <ui:Button class="iconbtn">
-                                    <ui:VisualElement class="icon icon--refresh" picking-mode="Ignore" />
-                                </ui:Button>
-                                <ui:Button class="iconbtn">
-                                    <ui:VisualElement class="icon icon--headphones" picking-mode="Ignore" />
-                                </ui:Button>
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="composer">
-                            <ui:Button class="iconbtn">
-                                <ui:VisualElement class="icon icon--attach" picking-mode="Ignore" />
-                            </ui:Button>
-                            <ui:TextField name="input-message" class="composer__input input"
-                                          placeholder-text="Напиши Neon что-нибудь…" />
-                            <ui:VisualElement class="composer__hint">
-                                <ui:Label text="Ctrl" class="kbd" />
-                                <ui:Label text="↵" class="kbd" />
-                            </ui:VisualElement>
-                            <ui:Button name="send-btn" class="btn btn--primary">
-                                <ui:VisualElement class="icon icon--send" picking-mode="Ignore" />
-                                <ui:Label text="Send" />
-                            </ui:Button>
-                        </ui:VisualElement>
-
+                    <ui:VisualElement class="topbar-right">
+                        <ui:Button name="provider-button" class="provider-btn">
+                            <ui:Label text="OpenAI" />
+                            <ui:Label text="gpt-4o-mini" class="model-label" />
+                        </ui:Button>
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- History side panel -->
-                <ui:VisualElement class="history">
-                    <ui:VisualElement class="history__head">
-                        <ui:Label text="Сессии" class="history__title-h" />
-                        <ui:VisualElement class="history__head-actions">
-                            <ui:Button class="iconbtn">
-                                <ui:VisualElement class="icon icon--search" picking-mode="Ignore" />
-                            </ui:Button>
-                            <ui:Button class="iconbtn">
-                                <ui:VisualElement class="icon icon--plus" picking-mode="Ignore" />
-                            </ui:Button>
-                        </ui:VisualElement>
+                <!-- Avatar Stage -->
+                <ui:VisualElement name="avatar-stage" class="stage">
+                    <ui:VisualElement name="avatar-glow" class="stage__glow" />
+                    <ui:VisualElement name="avatar-circle" class="stage__avatar">
+                        <ui:Label text="●" class="stage__placeholder" />
                     </ui:VisualElement>
+                </ui:VisualElement>
 
-                    <ui:ScrollView class="history__list">
-                        <ui:Label text="Сегодня" class="history__group" />
-
-                        <ui:VisualElement class="history__item history__item--active">
-                            <ui:Label text="Дизайн системы рендеринга 2D" class="history__item-title" />
-                            <ui:VisualElement class="history__item-meta">
-                                <ui:Label text="neon" />
-                                <ui:Label text="·" />
-                                <ui:Label text="14 msg" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="history__item">
-                            <ui:Label text="Шейдер аватара — breathing" class="history__item-title" />
-                            <ui:VisualElement class="history__item-meta">
-                                <ui:Label text="neon" />
-                                <ui:Label text="·" />
-                                <ui:Label text="6 msg" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="history__item">
-                            <ui:Label text="Парсинг ответа OpenAI compatible" class="history__item-title" />
-                            <ui:VisualElement class="history__item-meta">
-                                <ui:Label text="ember" />
-                                <ui:Label text="·" />
-                                <ui:Label text="22 msg" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:Label text="Вчера" class="history__group" />
-
-                        <ui:VisualElement class="history__item">
-                            <ui:Label text="Архитектура ProviderManager" class="history__item-title" />
-                            <ui:VisualElement class="history__item-meta">
-                                <ui:Label text="cobalt" />
-                                <ui:Label text="·" />
-                                <ui:Label text="38 msg" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="history__item">
-                            <ui:Label text="UI Toolkit vs uGUI — выбор" class="history__item-title" />
-                            <ui:VisualElement class="history__item-meta">
-                                <ui:Label text="neon" />
-                                <ui:Label text="·" />
-                                <ui:Label text="9 msg" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:Label text="Эта неделя" class="history__group" />
-
-                        <ui:VisualElement class="history__item">
-                            <ui:Label text="Кросс-платформенный file picker" class="history__item-title" />
-                            <ui:VisualElement class="history__item-meta">
-                                <ui:Label text="glass" />
-                                <ui:Label text="·" />
-                                <ui:Label text="17 msg" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="history__item">
-                            <ui:Label text="JSON storage для chat sessions" class="history__item-title" />
-                            <ui:VisualElement class="history__item-meta">
-                                <ui:Label text="ember" />
-                                <ui:Label text="·" />
-                                <ui:Label text="4 msg" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
+                <!-- Chat Area -->
+                <ui:VisualElement name="chat-area" class="chat-area">
+                    <ui:ScrollView name="chat-scroll" class="chat-scroll">
+                        <ui:VisualElement name="chat-messages" class="chat-messages" />
                     </ui:ScrollView>
+
+                    <!-- Composer -->
+                    <ui:VisualElement class="composer">
+                        <ui:TextField name="message-input" class="composer__input" placeholder="Напиши Neon что-нибудь..." />
+                        <ui:Button name="send-button" class="btn btn--primary" text="→" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- RIGHT SIDEBAR (Sessions) -->
+            <ui:VisualElement name="right-sidebar" class="sidebar right-sidebar">
+                <ui:VisualElement class="sessions-header">
+                    <ui:Label text="Сессии" class="sessions-title" />
+                    <ui:Button name="summarize-btn" text="Summarize" class="icon-btn small" />
                 </ui:VisualElement>
 
+                <ui:ScrollView name="sessions-list" class="sessions-list" />
             </ui:VisualElement>
+
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
