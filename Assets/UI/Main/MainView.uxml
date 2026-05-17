@@ -2,6 +2,8 @@
     <ui:Style src="../Theme/Tokens.uss" />
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="MainView.uss" />
+    <ui:Style src="MainView.Tints.uss" />
+    <ui:Style src="SettingsView.uss" />
 
     <ui:VisualElement name="app-root" class="app">
         <ui:VisualElement class="app__atmo" />
@@ -98,6 +100,8 @@
                     </ui:VisualElement>
 
                     <ui:VisualElement class="dock">
+                        <ui:ScrollView name="messages-list" class="transcript" />
+
                         <ui:VisualElement class="subtitle">
                             <ui:Label name="subtitle-role" text="Neon" class="subtitle__role" />
                             <ui:Label name="subtitle-body" text="Готова помочь. С чего сегодня начнём: настройка провайдера, аватары или продолжим прошлый разговор о шейдерах?" class="subtitle__body" />
@@ -263,6 +267,193 @@
             <ui:VisualElement name="placeholder-area" class="page placeholder-page">
                 <ui:Label name="placeholder-title" text="Раздел" class="page__title" />
                 <ui:Label name="placeholder-body" text="Экран будет добавлен следующим этапом." class="page__subtitle" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="settings-area" class="page settings-page">
+                <ui:VisualElement class="page__head">
+                    <ui:VisualElement class="page__head-copy">
+                        <ui:Label text="Настройки" class="page__title" />
+                        <ui:Label text="Общие параметры приложения, данные и информация." class="page__subtitle" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:ScrollView class="settings-scroll">
+
+                    <!-- ===== General ===== -->
+                    <ui:VisualElement class="settings-card">
+                        <ui:VisualElement class="settings-card__head">
+                            <ui:VisualElement class="icon icon--globe settings-card__icon" />
+                            <ui:Label text="Общие" class="settings-card__title" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Язык" class="settings-row__name" />
+                                <ui:Label text="Язык интерфейса. Применяется сразу." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:DropdownField name="settings-language" choices="Русский,English" index="0" class="settings-dropdown" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Сохранять историю чатов" class="settings-row__name" />
+                                <ui:Label text="Локально, в JSON-файлах." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Toggle name="settings-save-history" class="settings-toggle" value="true" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Streaming ответов" class="settings-row__name" />
+                                <ui:Label text="Показывать ответ по мере поступления токенов." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Toggle name="settings-streaming" class="settings-toggle" value="true" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="System prompt персонажа" class="settings-row__name" />
+                                <ui:Label text="Использовать персону выбранного аватара." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Toggle name="settings-system-prompt" class="settings-toggle" value="true" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- ===== Security ===== -->
+                    <ui:VisualElement class="settings-card">
+                        <ui:VisualElement class="settings-card__head">
+                            <ui:VisualElement class="icon icon--shield settings-card__icon" />
+                            <ui:Label text="Безопасность" class="settings-card__title" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Шифровать API-ключи" class="settings-row__name" />
+                                <ui:Label text="Хранить ключи в защищённом виде на устройстве." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Toggle name="settings-encrypt-keys" class="settings-toggle" value="false" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Скрывать ключи в логах" class="settings-row__name" />
+                                <ui:Label text="Маскировать значения при отладке." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Toggle name="settings-mask-logs" class="settings-toggle" value="true" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- ===== Appearance ===== -->
+                    <ui:VisualElement class="settings-card">
+                        <ui:VisualElement class="settings-card__head">
+                            <ui:VisualElement class="icon icon--palette settings-card__icon" />
+                            <ui:Label text="Внешний вид" class="settings-card__title" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Форма аватара" class="settings-row__name" />
+                                <ui:Label text="Круг, квадрат или шестиугольник." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="seg">
+                                <ui:Button name="shape-round" text="Круг" class="seg__btn seg__btn--active" />
+                                <ui:Button name="shape-square" text="Квадрат" class="seg__btn" />
+                                <ui:Button name="shape-hex" text="Hex" class="seg__btn" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Halo вокруг аватара" class="settings-row__name" />
+                                <ui:Label text="Мягкое неоновое свечение позади." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Toggle name="settings-show-halo" class="settings-toggle" value="true" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Анимация breathing" class="settings-row__name" />
+                                <ui:Label text="Лёгкое дыхание аватара." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Toggle name="settings-breathing" class="settings-toggle" value="true" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- ===== Data ===== -->
+                    <ui:VisualElement class="settings-card">
+                        <ui:VisualElement class="settings-card__head">
+                            <ui:VisualElement class="icon icon--folder settings-card__icon" />
+                            <ui:Label text="Данные" class="settings-card__title" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Папка хранения" class="settings-row__name" />
+                                <ui:Label name="settings-storage-path" text="—" class="settings-row__sub settings-row__sub--mono" />
+                            </ui:VisualElement>
+                            <ui:Button name="settings-open-folder" text="Открыть" class="btn" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Экспорт чатов" class="settings-row__name" />
+                                <ui:Label text="Сохранить всю историю в JSON." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Button name="settings-export-btn" class="btn">
+                                <ui:VisualElement class="icon icon--download btn__icon" />
+                                <ui:Label text="Экспорт" />
+                            </ui:Button>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row settings-row--danger">
+                            <ui:VisualElement class="settings-row__copy">
+                                <ui:Label text="Очистить все данные" class="settings-row__name" />
+                                <ui:Label text="Удалить сессии, провайдеров и настройки. Действие необратимо." class="settings-row__sub" />
+                            </ui:VisualElement>
+                            <ui:Button name="settings-clear-btn" class="btn btn--danger">
+                                <ui:VisualElement class="icon icon--trash btn__icon" />
+                                <ui:Label text="Очистить" />
+                            </ui:Button>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- ===== About ===== -->
+                    <ui:VisualElement class="settings-card">
+                        <ui:VisualElement class="settings-card__head">
+                            <ui:VisualElement class="icon icon--info settings-card__icon" />
+                            <ui:Label text="О приложении" class="settings-card__title" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row settings-row--compact">
+                            <ui:Label text="Версия" class="settings-row__name" />
+                            <ui:Label name="settings-version" text="0.1.0" class="settings-row__value-mono" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-row settings-row--compact">
+                            <ui:Label text="Лицензия" class="settings-row__name" />
+                            <ui:Label text="MIT" class="settings-row__value-mono" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-row settings-row--compact">
+                            <ui:Label text="Шрифты" class="settings-row__name" />
+                            <ui:Label text="Geist · SIL OFL" class="settings-row__value-mono" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="settings-row settings-actions-row">
+                            <ui:Button name="settings-github-btn" class="btn">
+                                <ui:VisualElement class="icon icon--external btn__icon" />
+                                <ui:Label text="GitHub" />
+                            </ui:Button>
+                            <ui:Button name="settings-docs-btn" class="btn">
+                                <ui:VisualElement class="icon icon--external btn__icon" />
+                                <ui:Label text="Документация" />
+                            </ui:Button>
+                            <ui:Button name="settings-donate-btn" class="btn btn--primary">
+                                <ui:VisualElement class="icon icon--heart btn__icon" />
+                                <ui:Label text="Поддержать" />
+                            </ui:Button>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

@@ -268,7 +268,8 @@ namespace NeonCompanion.Editor
         {
             var importer = AssetImporter.GetAtPath(path) as TextureImporter;
             if (importer == null) return;
-            importer.textureType = TextureImporterType.Default;
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
             importer.alphaSource = TextureImporterAlphaSource.FromInput;
             importer.alphaIsTransparency = true;
             importer.mipmapEnabled = false;

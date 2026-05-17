@@ -41,6 +41,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _providersArea;
         private VisualElement _avatarsArea;
         private VisualElement _placeholderArea;
+        private VisualElement _settingsArea;
         private VisualElement _topbarSep;
         private VisualElement _typingIndicator;
 
@@ -62,6 +63,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _summarizeButton;
         private Button _newSessionButton;
         private TextField _messageInput;
+        private ScrollView _messagesList;
         private ScrollView _sessionsList;
 
         private ScrollView _providersList;
@@ -134,6 +136,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _providersArea = root.Q<VisualElement>("providers-area");
             _avatarsArea = root.Q<VisualElement>("avatars-area");
             _placeholderArea = root.Q<VisualElement>("placeholder-area");
+            _settingsArea = root.Q<VisualElement>("settings-area");
             _topbarSep = root.Q<VisualElement>("topbar-sep");
             _typingIndicator = root.Q<VisualElement>("typing-indicator");
 
@@ -155,6 +158,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sendButton = root.Q<Button>("send-button");
             _summarizeButton = root.Q<Button>("summarize-btn");
             _newSessionButton = root.Q<Button>("new-session-btn");
+            _messagesList = root.Q<ScrollView>("messages-list");
             _sessionsList = root.Q<ScrollView>("sessions-list");
 
             _providersList = root.Q<ScrollView>("providers-list");
@@ -299,7 +303,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void ShowSettings()
         {
             SetActiveNav(_navSettings);
-            SetPlaceholder("Настройки", "Общие настройки приложения будут добавлены после провайдеров и аватаров.");
+            SetTopbar("Настройки", string.Empty);
+            ShowArea(_settingsArea);
         }
 
         private void SetPlaceholder(string title, string body)
@@ -318,6 +323,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_providersArea, visible == _providersArea ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_avatarsArea, visible == _avatarsArea ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_placeholderArea, visible == _placeholderArea ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_settingsArea, visible == _settingsArea ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
         private void SetTopbar(string title, string subtitle)
@@ -379,6 +385,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
                 }
 
+                RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message));
                 await chat.SendMessageAsync(message);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
@@ -580,6 +587,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_navChatCount != null)
                 _navChatCount.text = count.ToString();
 
+            RenderTranscript(messages);
+
             if (_subtitleBody == null)
                 return;
 
@@ -602,6 +611,161 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _subtitleBody.text = TrimForSubtitle(text);
+        }
+
+        private void RenderTranscript(IReadOnlyList<ChatMessage> messages)
+        {
+            if (_messagesList == null)
+                return;
+
+            _messagesList.Clear();
+
+            if (messages == null || messages.Count == 0)
+            {
+                _messagesList.Add(CreateEmptyTranscript());
+                return;
+            }
+
+            bool hasVisibleMessages = false;
+            for (int i = 0; i < messages.Count; i++)
+            {
+                var message = messages[i];
+                if (message == null || string.IsNullOrWhiteSpace(message.content))
+                    continue;
+
+                _messagesList.Add(CreateMessageElement(message));
+                hasVisibleMessages = true;
+            }
+
+            if (!hasVisibleMessages)
+            {
+                _messagesList.Add(CreateEmptyTranscript());
+                return;
+            }
+
+            ScrollTranscriptToBottom();
+        }
+
+        private static VisualElement CreateEmptyTranscript()
+        {
+            var container = new VisualElement();
+            container.AddToClassList("transcript__empty");
+
+            var title = new Label("Пока нет сообщений");
+            title.AddToClassList("transcript__empty-title");
+
+            var body = new Label("Начни диалог ниже, и здесь появится полная история текущей сессии.");
+            body.AddToClassList("transcript__empty-body");
+
+            container.Add(title);
+            container.Add(body);
+            return container;
+        }
+
+        private static VisualElement CreateMessageElement(ChatMessage message)
+        {
+            string role = NormalizeRole(message.role);
+
+            var row = new VisualElement();
+            row.AddToClassList("transcript__row");
+            row.AddToClassList($"transcript__row--{role}");
+
+            var bubble = new VisualElement();
+            bubble.AddToClassList("transcript__bubble");
+            bubble.AddToClassList($"transcript__bubble--{role}");
+
+            var meta = new VisualElement();
+            meta.AddToClassList("transcript__meta");
+
+            var roleLabel = new Label(DisplayRole(role));
+            roleLabel.AddToClassList("transcript__role");
+
+            var timeLabel = new Label(FormatMessageTime(message.unixTimeSeconds));
+            timeLabel.AddToClassList("transcript__time");
+
+            var body = new Label(message.content);
+            body.AddToClassList("transcript__body");
+
+            meta.Add(roleLabel);
+            meta.Add(timeLabel);
+            bubble.Add(meta);
+            bubble.Add(body);
+            row.Add(bubble);
+
+            return row;
+        }
+
+        private void ScrollTranscriptToBottom()
+        {
+            if (_messagesList == null)
+                return;
+
+            _messagesList.schedule.Execute(() =>
+            {
+                var content = _messagesList?.contentContainer;
+                if (content == null || content.childCount == 0)
+                    return;
+
+                _messagesList.ScrollTo(content[content.childCount - 1]);
+            });
+        }
+
+        private static IReadOnlyList<ChatMessage> BuildPendingMessages(IReadOnlyList<ChatMessage> currentMessages, string pendingText)
+        {
+            var messages = new List<ChatMessage>();
+
+            if (currentMessages != null)
+            {
+                for (int i = 0; i < currentMessages.Count; i++)
+                {
+                    if (currentMessages[i] != null)
+                        messages.Add(currentMessages[i]);
+                }
+            }
+
+            messages.Add(new ChatMessage
+            {
+                role = "user",
+                content = pendingText,
+                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            });
+
+            return messages;
+        }
+
+        private static string NormalizeRole(string role)
+        {
+            if (string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
+                return "user";
+
+            if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
+                return "system";
+
+            return "assistant";
+        }
+
+        private static string DisplayRole(string role)
+        {
+            switch (role)
+            {
+                case "user":
+                    return "Ты";
+                case "system":
+                    return "Система";
+                default:
+                    return "Neon";
+            }
+        }
+
+        private static string FormatMessageTime(long unixTimeSeconds)
+        {
+            if (unixTimeSeconds <= 0)
+                return string.Empty;
+
+            return DateTimeOffset
+                .FromUnixTimeSeconds(unixTimeSeconds)
+                .ToLocalTime()
+                .ToString("HH:mm");
         }
 
         private static string MessageCountText(int count)

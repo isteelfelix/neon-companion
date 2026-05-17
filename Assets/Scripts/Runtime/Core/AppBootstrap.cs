@@ -2,8 +2,10 @@ using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Repositories;
+using NeonCompanion.Runtime.Data.Secrets;
 using NeonCompanion.Runtime.Data.Storage;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Platform;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Core
@@ -29,8 +31,10 @@ namespace NeonCompanion.Runtime.Core
 
             var services = new ServiceRegistry();
             var storage = new JsonFileStorage();
+            var secrets = new DeviceSecretStore(storage);
+            var filePicker = new DefaultFilePickerService();
 
-            var providers = new ProviderConfigRepository(storage);
+            var providers = new ProviderConfigRepository(storage, secrets);
             var sessions = new ChatSessionRepository(storage);
             var avatars = new AvatarRepository(storage);
             var settings = new AppSettingsRepository(storage);
@@ -55,6 +59,8 @@ namespace NeonCompanion.Runtime.Core
                 avatarService);
 
             services.Register<IJsonStorage>(storage);
+            services.Register<ISecretStore>(secrets);
+            services.Register<IFilePickerService>(filePicker);
             services.Register<IProviderConfigRepository>(providers);
             services.Register<IChatSessionRepository>(sessions);
             services.Register<IAvatarRepository>(avatars);

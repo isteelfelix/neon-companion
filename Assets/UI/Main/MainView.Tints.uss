@@ -1,0 +1,40 @@
+/* ============== Avatar texture overlays ==============
+   Drop-in addon: include AFTER MainView.uss in the UXML.
+   Adds PNG art on top of flat color fallbacks so tiles match the design
+   once `Tools → Neon Companion → Generate UI Textures` has been run.
+   While the PNGs are missing, the flat colors in MainView.uss still show.
+*/
+
+/* ---- Chat-stage hero avatar ---- */
+.avatar__art--neon    { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
+.avatar__art--aurora  { background-image: url("project://database/Assets/UI/Avatars/aurora.png");  -unity-background-scale-mode: scale-and-crop; }
+.avatar__art--ember   { background-image: url("project://database/Assets/UI/Avatars/ember.png");   -unity-background-scale-mode: scale-and-crop; }
+.avatar__art--glass   { background-image: url("project://database/Assets/UI/Avatars/glass.png");   -unity-background-scale-mode: scale-and-crop; }
+.avatar__art--flora   { background-image: url("project://database/Assets/UI/Avatars/flora.png");   -unity-background-scale-mode: scale-and-crop; }
+.avatar__art--mono    { background-image: url("project://database/Assets/UI/Avatars/mono.png");    -unity-background-scale-mode: scale-and-crop; }
+.avatar__art--cobalt  { background-image: url("project://database/Assets/UI/Avatars/cobalt.png");  -unity-background-scale-mode: scale-and-crop; }
+.avatar__art--rose    { background-image: url("project://database/Assets/UI/Avatars/rose.png");    -unity-background-scale-mode: scale-and-crop; }
+
+/* ---- Gallery tiles ---- */
+.avtile--neon   { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
+.avtile--aurora { background-image: url("project://database/Assets/UI/Avatars/aurora.png"); -unity-background-scale-mode: scale-and-crop; }
+.avtile--ember  { background-image: url("project://database/Assets/UI/Avatars/ember.png");  -unity-background-scale-mode: scale-and-crop; }
+.avtile--glass  { background-image: url("project://database/Assets/UI/Avatars/glass.png");  -unity-background-scale-mode: scale-and-crop; }
+.avtile--flora  { background-image: url("project://database/Assets/UI/Avatars/flora.png");  -unity-background-scale-mode: scale-and-crop; }
+.avtile--mono   { background-image: url("project://database/Assets/UI/Avatars/mono.png");   -unity-background-scale-mode: scale-and-crop; }
+.avtile--cobalt { background-image: url("project://database/Assets/UI/Avatars/cobalt.png"); -unity-background-scale-mode: scale-and-crop; }
+.avtile--rose   { background-image: url("project://database/Assets/UI/Avatars/rose.png");   -unity-background-scale-mode: scale-and-crop; }
+
+/* ---- Preview hero (Avatars page) ---- */
+.preview-hero--neon   { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
+.preview-hero--aurora { background-image: url("project://database/Assets/UI/Avatars/aurora.png"); -unity-background-scale-mode: scale-and-crop; }
+.preview-hero--ember  { background-image: url("project://database/Assets/UI/Avatars/ember.png");  -unity-background-scale-mode: scale-and-crop; }
+.preview-hero--glass  { background-image: url("project://database/Assets/UI/Avatars/glass.png");  -unity-background-scale-mode: scale-and-crop; }
+.preview-hero--flora  { background-image: url("project://database/Assets/UI/Avatars/flora.png");  -unity-background-scale-mode: scale-and-crop; }
+.preview-hero--mono   { background-image: url("project://database/Assets/UI/Avatars/mono.png");   -unity-background-scale-mode: scale-and-crop; }
+.preview-hero--cobalt { background-image: url("project://database/Assets/UI/Avatars/cobalt.png"); -unity-background-scale-mode: scale-and-crop; }
+.preview-hero--rose   { background-image: url("project://database/Assets/UI/Avatars/rose.png");   -unity-background-scale-mode: scale-and-crop; }
+
+/* ---- Halo glow: flat CSS fallback in MainView.uss is sufficient ---- */
+/* ---- Atmospheric backdrop: flat CSS fallback in MainView.uss is sufficient ---- */
+/* ---- Brand mark gradient: solid accent color in MainView.uss is sufficient ---- */
