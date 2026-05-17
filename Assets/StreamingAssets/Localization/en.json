@@ -1,0 +1,21 @@
+{
+  "app.title": "Neon Companion",
+  "tab.chat": "Chat",
+  "tab.settings": "Settings",
+  "tab.avatar": "Avatar",
+  "panel.chat.title": "Chat",
+  "panel.settings.title": "Settings",
+  "panel.avatar.title": "Avatar",
+  "chat.send": "Send",
+  "chat.new": "New Chat",
+  "chat.clear": "Clear",
+  "chat.placeholder": "Type a message...",
+  "settings.title": "Settings",
+  "settings.providers": "Providers",
+  "settings.language": "Language",
+  "avatar.title": "Avatar",
+  "common.loading": "Loading...",
+  "common.error": "Error",
+  "common.ok": "OK",
+  "common.cancel": "Cancel"
+}

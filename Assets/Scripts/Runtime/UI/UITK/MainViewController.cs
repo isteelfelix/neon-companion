@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using NeonCompanion.Runtime.Localization;
 
 namespace NeonCompanion.Runtime.UI.UITK
 {
@@ -32,6 +33,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsTab = root.Q<Button>("tab-settings");
             _avatarTab = root.Q<Button>("tab-avatar");
 
+            // Apply localization
+            _chatTab?.Localize("tab.chat");
+            _settingsTab?.Localize("tab.settings");
+            _avatarTab?.Localize("tab.avatar");
+
+            // Localize panel titles
+            LocalizePanelTitle(root, "chat-panel", "panel.chat.title");
+            LocalizePanelTitle(root, "settings-panel", "panel.settings.title");
+            LocalizePanelTitle(root, "avatar-panel", "panel.avatar.title");
+
             if (_chatTab != null)
             {
                 _chatTab.clicked += ShowChat;
@@ -48,6 +59,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             ShowChat();
+        }
+
+        private void LocalizePanelTitle(VisualElement root, string panelName, string key)
+        {
+            var panel = root.Q<VisualElement>(panelName);
+            var titleLabel = panel?.Q<Label>(className: "panel-title");
+            titleLabel?.Localize(key);
         }
 
         private void OnDisable()

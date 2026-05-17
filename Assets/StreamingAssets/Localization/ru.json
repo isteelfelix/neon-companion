@@ -1,0 +1,21 @@
+{
+  "app.title": "Neon Companion",
+  "tab.chat": "Чат",
+  "tab.settings": "Настройки",
+  "tab.avatar": "Аватар",
+  "panel.chat.title": "Чат",
+  "panel.settings.title": "Настройки",
+  "panel.avatar.title": "Аватар",
+  "chat.send": "Отправить",
+  "chat.new": "Новый чат",
+  "chat.clear": "Очистить",
+  "chat.placeholder": "Введите сообщение...",
+  "settings.title": "Настройки",
+  "settings.providers": "Провайдеры",
+  "settings.language": "Язык",
+  "avatar.title": "Аватар",
+  "common.loading": "Загрузка...",
+  "common.error": "Ошибка",
+  "common.ok": "ОК",
+  "common.cancel": "Отмена"
+}

@@ -3,6 +3,7 @@ using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Data.Storage;
+using NeonCompanion.Runtime.Localization;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Core
@@ -38,6 +39,12 @@ namespace NeonCompanion.Runtime.Core
             var providerManager = new ProviderManager(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
 
+            // Localization
+            var settingsData = settings.Load();
+            string language = settingsData?.language ?? "ru";
+            var localizationService = new JsonLocalizationService(language);
+            LocalizationExtensions.SetLocalizationService(localizationService);
+
             App = new CompanionApp(
                 services,
                 aiClient,
@@ -56,6 +63,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IAvatarService>(avatarService);
             services.Register<ProviderManager>(providerManager);
             services.Register<ChatService>(chatService);
+            services.Register<ILocalizationService>(localizationService);
 
             NeonLogger.Log("App bootstrap completed.");
         }
