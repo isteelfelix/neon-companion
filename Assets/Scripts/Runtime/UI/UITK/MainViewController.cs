@@ -130,17 +130,17 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void RegisterCallbacks()
         {
-            _navChat?.clicked += ShowChat;
-            _navAvatars?.clicked += ShowAvatars;
-            _navProviders?.clicked += ShowProviders;
-            _navHistory?.clicked += ShowHistory;
-            _navThemes?.clicked += ShowThemes;
-            _navSettings?.clicked += ShowSettings;
-            _sendButton?.clicked += OnSendClicked;
-            _summarizeButton?.clicked += OnSummarizeClicked;
-            _addProviderButton?.clicked += OnAddProviderClicked;
-            _saveProviderButton?.clicked += OnSaveProviderClicked;
-            _cancelEditButton?.clicked += OnCancelEditClicked;
+            RegisterClick(_navChat, ShowChat);
+            RegisterClick(_navAvatars, ShowAvatars);
+            RegisterClick(_navProviders, ShowProviders);
+            RegisterClick(_navHistory, ShowHistory);
+            RegisterClick(_navThemes, ShowThemes);
+            RegisterClick(_navSettings, ShowSettings);
+            RegisterClick(_sendButton, OnSendClicked);
+            RegisterClick(_summarizeButton, OnSummarizeClicked);
+            RegisterClick(_addProviderButton, OnAddProviderClicked);
+            RegisterClick(_saveProviderButton, OnSaveProviderClicked);
+            RegisterClick(_cancelEditButton, OnCancelEditClicked);
 
             if (_messageInput != null)
                 _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
@@ -148,20 +148,32 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void UnregisterCallbacks()
         {
-            _navChat?.clicked -= ShowChat;
-            _navAvatars?.clicked -= ShowAvatars;
-            _navProviders?.clicked -= ShowProviders;
-            _navHistory?.clicked -= ShowHistory;
-            _navThemes?.clicked -= ShowThemes;
-            _navSettings?.clicked -= ShowSettings;
-            _sendButton?.clicked -= OnSendClicked;
-            _summarizeButton?.clicked -= OnSummarizeClicked;
-            _addProviderButton?.clicked -= OnAddProviderClicked;
-            _saveProviderButton?.clicked -= OnSaveProviderClicked;
-            _cancelEditButton?.clicked -= OnCancelEditClicked;
+            UnregisterClick(_navChat, ShowChat);
+            UnregisterClick(_navAvatars, ShowAvatars);
+            UnregisterClick(_navProviders, ShowProviders);
+            UnregisterClick(_navHistory, ShowHistory);
+            UnregisterClick(_navThemes, ShowThemes);
+            UnregisterClick(_navSettings, ShowSettings);
+            UnregisterClick(_sendButton, OnSendClicked);
+            UnregisterClick(_summarizeButton, OnSummarizeClicked);
+            UnregisterClick(_addProviderButton, OnAddProviderClicked);
+            UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
+            UnregisterClick(_cancelEditButton, OnCancelEditClicked);
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
+        }
+
+        private static void RegisterClick(Button button, Action handler)
+        {
+            if (button != null)
+                button.clicked += handler;
+        }
+
+        private static void UnregisterClick(Button button, Action handler)
+        {
+            if (button != null)
+                button.clicked -= handler;
         }
 
         private void ShowChat()
@@ -308,7 +320,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             for (int i = 0; i < 120 && isActiveAndEnabled; i++)
             {
-                var bootstrap = UnityEngine.Object.FindFirstObjectByType<AppBootstrap>();
+                var bootstrap = UnityEngine.Object.FindAnyObjectByType<AppBootstrap>();
                 if (bootstrap?.App != null)
                 {
                     _app = bootstrap.App;
@@ -369,7 +381,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             container.Add(titleLabel);
             container.Add(metaLabel);
-            container.RegisterCallback<ClickEvent>(_ => _ = SwitchSessionAsync(session, container));
+            container.RegisterCallback<ClickEvent>(evt => { _ = SwitchSessionAsync(session, container); });
 
             return container;
         }

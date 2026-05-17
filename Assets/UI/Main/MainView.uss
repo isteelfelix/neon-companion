@@ -9,7 +9,6 @@
 .main-layout {
     flex-grow: 1;
     flex-direction: row;
-    gap: 12px;
 }
 
 /* ============ SIDEBARS ============ */
@@ -26,6 +25,7 @@
 
 .left-sidebar {
     width: 210px;
+    margin-right: 12px;
 }
 
 .right-sidebar {
@@ -93,6 +93,7 @@
     border-color: rgb(40, 44, 52);
     padding: 16px;
     flex-direction: column;
+    margin-right: 12px;
 }
 
 /* Top Bar */
@@ -109,13 +110,13 @@
     background-color: rgb(28, 30, 36);
     border-radius: 999px;
     padding: 4px 12px;
-    gap: 8px;
 }
 
 .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 4px;
+    margin-right: 8px;
 }
 
 .status-dot--green {
@@ -133,9 +134,12 @@
     background-color: rgb(28, 30, 36);
     border-radius: 999px;
     padding: 6px 14px;
-    gap: 8px;
     border-width: 1px;
     border-color: rgb(50, 55, 65);
+}
+
+.provider-btn > Label {
+    margin-right: 8px;
 }
 
 .model-label {
@@ -185,7 +189,6 @@
 
 .chat-messages {
     flex-direction: column;
-    gap: 8px;
 }
 
 .chat-message {
@@ -193,6 +196,7 @@
     padding: 9px 12px;
     border-radius: 10px;
     border-width: 1px;
+    margin-bottom: 8px;
 }
 
 .chat-message--user {
@@ -216,12 +220,12 @@
 .composer {
     flex-direction: row;
     align-items: center;
-    gap: 10px;
 }
 
 .composer__input {
     flex-grow: 1;
     height: 44px;
+    margin-right: 10px;
 }
 
 .composer__input > .unity-text-field__input {
@@ -297,8 +301,11 @@
 
 .provider-actions {
     flex-direction: row;
-    gap: 6px;
     margin-top: 8px;
+}
+
+.provider-actions > Button {
+    margin-right: 6px;
 }
 
 .provider-edit-panel {
@@ -315,7 +322,10 @@
 
 .provider-edit-actions {
     flex-direction: row;
-    gap: 8px;
+}
+
+.provider-edit-actions > Button {
+    margin-right: 8px;
 }
 
 /* ============ RIGHT SIDEBAR (SESSIONS) ============ */

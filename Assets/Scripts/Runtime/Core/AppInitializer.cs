@@ -8,7 +8,7 @@ namespace NeonCompanion.Runtime.Core
     {
         public static async Task<CompanionApp> InitializeAsync()
         {
-            var bootstrap = Object.FindFirstObjectByType<AppBootstrap>();
+            var bootstrap = Object.FindAnyObjectByType<AppBootstrap>();
             if (bootstrap == null)
             {
                 Debug.LogError("[NeonCompanion] AppBootstrap not found in scene!");
