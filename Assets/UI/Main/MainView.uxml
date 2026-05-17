@@ -3,20 +3,48 @@
 
     <ui:VisualElement name="app-root" class="app-root">
         <ui:VisualElement name="content-host" class="content-host">
+
             <ui:VisualElement name="chat-panel" class="panel panel--active">
-                <ui:Label text="Chat" class="panel-title" />
-                <ui:Label text="Здесь будет чат с агентом." class="panel-subtitle" />
+                <ui:VisualElement class="chat-header">
+                    <ui:VisualElement class="avatar-chip">
+                        <ui:Label text="N" class="avatar-chip__letter" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="chat-header__meta">
+                        <ui:Label text="Neon" class="chat-header__name" />
+                        <ui:Label text="online · gpt-4o-mini" class="chat-header__status" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:ScrollView class="chat-scroll">
+                    <ui:VisualElement class="bubble bubble--assistant">
+                        <ui:Label text="Привет. Чем сегодня займёмся?" class="bubble__text" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="bubble bubble--user">
+                        <ui:Label text="Помоги накидать UI для приложения." class="bubble__text" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="bubble bubble--assistant">
+                        <ui:Label text="Давай. Какой стиль ближе — спокойный или яркий?" class="bubble__text" />
+                    </ui:VisualElement>
+                </ui:ScrollView>
+
+                <ui:VisualElement class="composer">
+                    <ui:TextField name="input-message" class="composer__input" />
+                    <ui:Button name="send-btn" text="Send" class="btn btn--primary" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement name="settings-panel" class="panel">
                 <ui:Label text="Settings" class="panel-title" />
-                <ui:Label text="Здесь будут настройки провайдеров и приложения." class="panel-subtitle" />
+                <ui:Label text="Провайдеры и параметры приложения." class="panel-subtitle" />
             </ui:VisualElement>
 
             <ui:VisualElement name="avatar-panel" class="panel">
                 <ui:Label text="Avatar" class="panel-title" />
-                <ui:Label text="Здесь будет галерея аватаров." class="panel-subtitle" />
+                <ui:Label text="Галерея аватаров." class="panel-subtitle" />
             </ui:VisualElement>
+
         </ui:VisualElement>
 
         <ui:VisualElement name="tab-bar" class="tab-bar">

@@ -1,0 +1,47 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="StylePreview.uss" />
+
+    <ui:VisualElement class="preview-root">
+
+        <!-- A. Cyberpunk Neon -->
+        <ui:VisualElement class="card card--neon">
+            <ui:Label text="A. CYBERPUNK NEON" class="card-title card-title--neon" />
+            <ui:Label text="&gt; channel://companion" class="card-sub card-sub--neon" />
+            <ui:VisualElement class="row">
+                <ui:Button text="EXECUTE" class="btn btn--neon-primary" />
+                <ui:Button text="CANCEL" class="btn btn--neon-ghost" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- B. Glass / Aurora -->
+        <ui:VisualElement class="card card--aurora">
+            <ui:Label text="B. Glass / Aurora" class="card-title card-title--aurora" />
+            <ui:Label text="soft gradients, blurred panels" class="card-sub card-sub--aurora" />
+            <ui:VisualElement class="row">
+                <ui:Button text="Continue" class="btn btn--aurora-primary" />
+                <ui:Button text="Dismiss" class="btn btn--aurora-ghost" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- C. VN / Galgame -->
+        <ui:VisualElement class="card card--vn">
+            <ui:Label text="C. Visual Novel" class="card-title card-title--vn" />
+            <ui:Label text="«Привет. Чем сегодня займёмся?»" class="card-sub card-sub--vn" />
+            <ui:VisualElement class="row">
+                <ui:Button text="Ответить" class="btn btn--vn-primary" />
+                <ui:Button text="Пропустить" class="btn btn--vn-ghost" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- D. Calm Productivity -->
+        <ui:VisualElement class="card card--calm">
+            <ui:Label text="D. Calm Productivity" class="card-title card-title--calm" />
+            <ui:Label text="Linear-like, neutral, quiet" class="card-sub card-sub--calm" />
+            <ui:VisualElement class="row">
+                <ui:Button text="Send" class="btn btn--calm-primary" />
+                <ui:Button text="Cancel" class="btn btn--calm-ghost" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

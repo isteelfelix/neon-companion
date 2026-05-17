@@ -14,17 +14,22 @@ namespace NeonCompanion.Runtime.Data.Repositories
             _storage = storage;
         }
 
-        public List<ProviderConfig> GetAll()
+        public async Task<List<ProviderConfig>> GetAllAsync()
         {
-            var collection = _storage.Load<ProviderConfigCollection>(AppPaths.ProvidersFile);
-            return collection.items ?? new List<ProviderConfig>();
+            // Симуляция асинхронности для совместимости с Task API
+            return await Task.Run(() => {
+                var collection = _storage.Load<ProviderConfigCollection>(AppPaths.ProvidersFile);
+                return collection.items ?? new List<ProviderConfig>();
+            });
         }
 
-        public void SaveAll(List<ProviderConfig> providers)
+        public async Task SaveAllAsync(List<ProviderConfig> providers)
         {
-            _storage.Save(AppPaths.ProvidersFile, new ProviderConfigCollection
-            {
-                items = providers ?? new List<ProviderConfig>()
+            await Task.Run(() => {
+                _storage.Save(AppPaths.ProvidersFile, new ProviderConfigCollection
+                {
+                    items = providers ?? new List<ProviderConfig>()
+                });
             });
         }
     }

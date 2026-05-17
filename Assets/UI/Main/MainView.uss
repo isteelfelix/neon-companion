@@ -1,62 +1,176 @@
+/* ============ Calm Productivity theme ============ */
+
 .app-root {
     flex-grow: 1;
-    background-color: rgb(13, 18, 26);
+    background-color: rgb(16, 17, 21);
     padding: 16px;
 }
 
 .content-host {
     flex-grow: 1;
-    background-color: rgba(255, 255, 255, 0.03);
-    border-top-left-radius: 16px;
-    border-top-right-radius: 16px;
-    border-bottom-left-radius: 16px;
-    border-bottom-right-radius: 16px;
-    padding: 14px;
+    background-color: rgb(22, 24, 29);
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: rgb(40, 44, 52);
+    padding: 16px;
 }
 
+/* ---- panels ---- */
 .panel {
     display: none;
     flex-grow: 1;
 }
-
+.panel--active {
+    display: flex;
+}
 .panel-title {
-    font-size: 24px;
-    color: rgb(238, 242, 248);
+    font-size: 22px;
+    color: rgb(230, 232, 236);
     -unity-font-style: bold;
+    margin-bottom: 6px;
+}
+.panel-subtitle {
+    font-size: 14px;
+    color: rgb(130, 138, 150);
+}
+
+/* ---- chat header ---- */
+.chat-header {
+    flex-direction: row;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(34, 37, 44);
+    margin-bottom: 10px;
+}
+.avatar-chip {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    background-color: rgb(90, 120, 240);
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+}
+.avatar-chip__letter {
+    font-size: 16px;
+    color: rgb(245, 247, 255);
+    -unity-font-style: bold;
+}
+.chat-header__meta {
+    flex-direction: column;
+}
+.chat-header__name {
+    font-size: 15px;
+    color: rgb(230, 232, 236);
+    -unity-font-style: bold;
+}
+.chat-header__status {
+    font-size: 12px;
+    color: rgb(120, 128, 140);
+    margin-top: 2px;
+}
+
+/* ---- chat scroll & bubbles ---- */
+.chat-scroll {
+    flex-grow: 1;
+    margin-bottom: 10px;
+}
+.bubble {
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: 12px;
     margin-bottom: 8px;
 }
-
-.panel-subtitle {
-    font-size: 15px;
-    color: rgb(177, 188, 204);
+.bubble__text {
+    font-size: 14px;
+    white-space: normal;
+}
+.bubble--assistant {
+    background-color: rgb(30, 33, 40);
+    border-width: 1px;
+    border-color: rgb(40, 44, 52);
+    align-self: flex-start;
+}
+.bubble--assistant > .bubble__text {
+    color: rgb(220, 224, 232);
+}
+.bubble--user {
+    background-color: rgb(90, 120, 240);
+    align-self: flex-end;
+}
+.bubble--user > .bubble__text {
+    color: rgb(245, 247, 255);
 }
 
+/* ---- composer ---- */
+.composer {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 10px;
+    border-top-width: 1px;
+    border-top-color: rgb(34, 37, 44);
+}
+.composer__input {
+    flex-grow: 1;
+    margin-right: 10px;
+    height: 40px;
+    border-radius: 8px;
+}
+.composer__input > .unity-text-field__input {
+    background-color: rgb(28, 30, 36);
+    border-color: rgb(45, 49, 58);
+    border-width: 1px;
+    border-radius: 8px;
+    color: rgb(230, 232, 236);
+    padding: 0 12px;
+    font-size: 14px;
+}
+
+/* ---- buttons ---- */
+.btn {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 8px;
+    border-width: 1px;
+    font-size: 14px;
+    -unity-font-style: bold;
+}
+.btn--primary {
+    background-color: rgb(90, 120, 240);
+    color: rgb(245, 247, 255);
+    border-color: rgb(90, 120, 240);
+}
+.btn--primary:hover {
+    background-color: rgb(110, 138, 250);
+}
+
+/* ---- tab bar ---- */
 .tab-bar {
     margin-top: 12px;
-    height: 52px;
+    height: 48px;
     flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
 }
-
 .tab-btn {
     flex-grow: 1;
-    margin-right: 8px;
-    height: 44px;
-    border-top-left-radius: 10px;
-    border-top-right-radius: 10px;
-    border-bottom-left-radius: 10px;
-    border-bottom-right-radius: 10px;
-    background-color: rgb(36, 49, 68);
-    color: rgb(227, 233, 243);
-    font-size: 16px;
+    margin-right: 6px;
+    height: 40px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgb(40, 44, 52);
+    background-color: rgba(0, 0, 0, 0);
+    color: rgb(180, 188, 200);
+    font-size: 14px;
 }
-
+.tab-btn:hover {
+    background-color: rgb(28, 30, 36);
+    color: rgb(220, 224, 232);
+}
 .tab-btn--last {
     margin-right: 0;
 }
-
 .tab-btn--active {
-    background-color: rgb(65, 92, 129);
-    color: rgb(245, 249, 255);
+    background-color: rgb(28, 30, 36);
+    color: rgb(230, 232, 236);
+    border-color: rgb(90, 120, 240);
 }
