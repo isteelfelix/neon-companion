@@ -1,5 +1,6 @@
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Repositories;
 
 namespace NeonCompanion.Runtime.Core
@@ -31,5 +32,8 @@ namespace NeonCompanion.Runtime.Core
         public IAvatarRepository Avatars { get; }
         public IAppSettingsRepository Settings { get; }
         public IAvatarService AvatarService { get; }
+
+        public ChatService ChatService => Services.GetRequired<ChatService>();
+        public ProviderManager ProviderManager => Services.GetRequired<ProviderManager>();
     }
 }

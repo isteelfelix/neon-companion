@@ -9,6 +9,7 @@ namespace NeonCompanion.Runtime.Api.Models
         public string model;
         public float temperature = 0.7f;
         public int maxTokens = 512;
+        public string systemPrompt;
         public List<AiChatMessage> messages = new List<AiChatMessage>();
     }
 

@@ -1,5 +1,6 @@
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Data.Storage;
 using UnityEngine;
@@ -34,6 +35,8 @@ namespace NeonCompanion.Runtime.Core
             var settings = new AppSettingsRepository(storage);
             var aiClient = new OpenAiCompatibleClient();
             var avatarService = new AvatarService();
+            var providerManager = new ProviderManager(providers);
+            var chatService = new ChatService(aiClient, providerManager);
 
             App = new CompanionApp(
                 services,
@@ -51,6 +54,8 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IAppSettingsRepository>(settings);
             services.Register<IAiClient>(aiClient);
             services.Register<IAvatarService>(avatarService);
+            services.Register<ProviderManager>(providerManager);
+            services.Register<ChatService>(chatService);
 
             Debug.Log("[NeonCompanion] App bootstrap completed.");
         }
