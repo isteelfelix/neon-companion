@@ -13,7 +13,7 @@ namespace NeonCompanion.Runtime.Core
             if (string.IsNullOrWhiteSpace(provider.baseUrl))
                 throw new InvalidOperationException("Base URL is not configured.");
 
-            if (string.IsNullOrWhiteSpace(provider.model))
+            if (string.IsNullOrWhiteSpace(provider.defaultModel))
                 throw new InvalidOperationException("Model is not configured.");
 
             // API key can be empty for local models, so we don't require it

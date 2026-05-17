@@ -65,7 +65,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             {
                 var request = new AiChatRequest
                 {
-                    model = _provider.model,
+                    model = _provider.defaultModel,
                     temperature = Temperature,
                     maxTokens = MaxTokens,
                     systemPrompt = SystemPrompt,

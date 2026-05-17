@@ -69,7 +69,7 @@ namespace NeonCompanion.Runtime.Chat
                 _currentChatViewModel.Messages.Add(msg);
             }
 
-            NeonLogger.Log($"Switched to session {session.id}");
+            NeonLogger.Log($"Switched to session {session.sessionId}");
         }
 
         public async Task ClearCurrentSessionAsync()
@@ -94,7 +94,7 @@ namespace NeonCompanion.Runtime.Chat
             ApplyGenerationSettings();
 
             await StartNewSessionAsync();
-            NeonLogger.Log($"Switched to provider: {newProvider.name}");
+            NeonLogger.Log($"Switched to provider: {newProvider.displayName}");
         }
 
         public async Task StartNewSessionAsync()
@@ -107,8 +107,9 @@ namespace NeonCompanion.Runtime.Chat
 
             _currentSession = new ChatSession
             {
-                id = Guid.NewGuid().ToString(),
-                createdAt = DateTime.UtcNow,
+                sessionId = Guid.NewGuid().ToString(),
+                providerId = _currentProvider?.id,
+                updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 messages = new List<ChatMessage>()
             };
 

@@ -5,30 +5,29 @@
         <ui:VisualElement name="content-host" class="content-host">
 
             <ui:VisualElement name="chat-panel" class="panel panel--active">
-                <ui:VisualElement class="chat-header">
-                    <ui:VisualElement class="avatar-chip">
-                        <ui:Label text="N" class="avatar-chip__letter" />
-                    </ui:VisualElement>
-                    <ui:VisualElement class="chat-header__meta">
-                        <ui:Label text="Neon" class="chat-header__name" />
-                        <ui:Label text="online · gpt-4o-mini" class="chat-header__status" />
+
+                <!-- Top bar: name + actions -->
+                <ui:VisualElement class="topbar">
+                    <ui:Label text="Neon" class="topbar__name" />
+                    <ui:Label text="gpt-4o-mini" class="topbar__model" />
+                    <ui:VisualElement class="topbar__spacer" />
+                    <ui:Button text="History" class="icon-btn" />
+                </ui:VisualElement>
+
+                <!-- Stage: avatar is the hero -->
+                <ui:VisualElement class="stage">
+                    <ui:VisualElement class="stage__glow" />
+                    <ui:VisualElement class="stage__avatar">
+                        <ui:Label text="avatar" class="stage__placeholder" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <ui:ScrollView class="chat-scroll">
-                    <ui:VisualElement class="bubble bubble--assistant">
-                        <ui:Label text="Привет. Чем сегодня займёмся?" class="bubble__text" />
-                    </ui:VisualElement>
+                <!-- Last assistant line (like a subtitle / VN text) -->
+                <ui:VisualElement class="subtitle">
+                    <ui:Label text="Привет. Чем сегодня займёмся?" class="subtitle__text" />
+                </ui:VisualElement>
 
-                    <ui:VisualElement class="bubble bubble--user">
-                        <ui:Label text="Помоги накидать UI для приложения." class="bubble__text" />
-                    </ui:VisualElement>
-
-                    <ui:VisualElement class="bubble bubble--assistant">
-                        <ui:Label text="Давай. Какой стиль ближе — спокойный или яркий?" class="bubble__text" />
-                    </ui:VisualElement>
-                </ui:ScrollView>
-
+                <!-- Composer dock -->
                 <ui:VisualElement class="composer">
                     <ui:TextField name="input-message" class="composer__input" />
                     <ui:Button name="send-btn" text="Send" class="btn btn--primary" />

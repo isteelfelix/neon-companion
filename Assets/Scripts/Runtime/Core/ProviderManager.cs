@@ -26,13 +26,13 @@ namespace NeonCompanion.Runtime.Core
             var defaultProvider = new ProviderConfig
             {
                 id = "default",
-                name = "OpenAI",
+                displayName = "OpenAI",
                 baseUrl = "https://api.openai.com/v1",
-                model = "gpt-4o-mini",
+                defaultModel = "gpt-4o-mini",
                 apiKey = ""
             };
 
-            await _repository.SaveAsync(defaultProvider);
+            await _repository.SaveAllAsync(new List<ProviderConfig> { defaultProvider });
             return defaultProvider;
         }
 
@@ -43,12 +43,20 @@ namespace NeonCompanion.Runtime.Core
 
         public async Task SaveProviderAsync(ProviderConfig provider)
         {
-            await _repository.SaveAsync(provider);
+            var providers = await _repository.GetAllAsync();
+            var index = providers.FindIndex(p => p.id == provider.id);
+            if (index >= 0)
+                providers[index] = provider;
+            else
+                providers.Add(provider);
+            await _repository.SaveAllAsync(providers);
         }
 
         public async Task DeleteProviderAsync(string providerId)
         {
-            await _repository.DeleteAsync(providerId);
+            var providers = await _repository.GetAllAsync();
+            providers.RemoveAll(p => p.id == providerId);
+            await _repository.SaveAllAsync(providers);
         }
     }
 }

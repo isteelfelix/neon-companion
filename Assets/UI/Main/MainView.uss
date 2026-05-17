@@ -1,4 +1,4 @@
-/* ============ Calm Productivity theme ============ */
+/* ============ Calm Productivity — Avatar-first layout ============ */
 
 .app-root {
     flex-grow: 1;
@@ -34,104 +34,123 @@
     color: rgb(130, 138, 150);
 }
 
-/* ---- chat header ---- */
-.chat-header {
+/* ---- top bar ---- */
+.topbar {
     flex-direction: row;
     align-items: center;
-    padding-bottom: 12px;
+    padding-bottom: 10px;
     border-bottom-width: 1px;
     border-bottom-color: rgb(34, 37, 44);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
-.avatar-chip {
-    width: 36px;
-    height: 36px;
-    border-radius: 18px;
-    background-color: rgb(90, 120, 240);
-    align-items: center;
-    justify-content: center;
+.topbar__name {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(230, 232, 236);
     margin-right: 10px;
 }
-.avatar-chip__letter {
-    font-size: 16px;
-    color: rgb(245, 247, 255);
-    -unity-font-style: bold;
-}
-.chat-header__meta {
-    flex-direction: column;
-}
-.chat-header__name {
-    font-size: 15px;
-    color: rgb(230, 232, 236);
-    -unity-font-style: bold;
-}
-.chat-header__status {
+.topbar__model {
     font-size: 12px;
     color: rgb(120, 128, 140);
-    margin-top: 2px;
-}
-
-/* ---- chat scroll & bubbles ---- */
-.chat-scroll {
-    flex-grow: 1;
-    margin-bottom: 10px;
-}
-.bubble {
-    max-width: 78%;
-    padding: 10px 14px;
-    border-radius: 12px;
-    margin-bottom: 8px;
-}
-.bubble__text {
-    font-size: 14px;
-    white-space: normal;
-}
-.bubble--assistant {
-    background-color: rgb(30, 33, 40);
+    padding: 3px 8px;
+    background-color: rgb(28, 30, 36);
+    border-radius: 10px;
     border-width: 1px;
     border-color: rgb(40, 44, 52);
-    align-self: flex-start;
 }
-.bubble--assistant > .bubble__text {
+.topbar__spacer {
+    flex-grow: 1;
+}
+.icon-btn {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgb(40, 44, 52);
+    background-color: rgba(0, 0, 0, 0);
+    color: rgb(180, 188, 200);
+    font-size: 12px;
+}
+.icon-btn:hover {
+    background-color: rgb(28, 30, 36);
     color: rgb(220, 224, 232);
 }
-.bubble--user {
-    background-color: rgb(90, 120, 240);
-    align-self: flex-end;
+
+/* ---- stage (avatar hero) ---- */
+.stage {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    overflow: hidden;
 }
-.bubble--user > .bubble__text {
-    color: rgb(245, 247, 255);
+.stage__glow {
+    position: absolute;
+    width: 380px;
+    height: 380px;
+    border-radius: 190px;
+    background-color: rgba(90, 120, 240, 0.18);
+}
+.stage__avatar {
+    width: 260px;
+    height: 260px;
+    border-radius: 130px;
+    background-color: rgb(30, 33, 40);
+    border-width: 1px;
+    border-color: rgb(50, 55, 64);
+    align-items: center;
+    justify-content: center;
+}
+.stage__placeholder {
+    font-size: 14px;
+    color: rgb(90, 98, 110);
+    -unity-font-style: italic;
+}
+
+/* ---- subtitle (last assistant message) ---- */
+.subtitle {
+    min-height: 56px;
+    background-color: rgb(28, 30, 36);
+    border-width: 1px;
+    border-color: rgb(40, 44, 52);
+    border-radius: 10px;
+    border-left-width: 3px;
+    border-left-color: rgb(90, 120, 240);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+.subtitle__text {
+    font-size: 15px;
+    color: rgb(220, 224, 232);
+    white-space: normal;
 }
 
 /* ---- composer ---- */
 .composer {
     flex-direction: row;
     align-items: center;
-    padding-top: 10px;
-    border-top-width: 1px;
-    border-top-color: rgb(34, 37, 44);
 }
 .composer__input {
     flex-grow: 1;
     margin-right: 10px;
-    height: 40px;
-    border-radius: 8px;
+    height: 44px;
+    border-radius: 10px;
 }
 .composer__input > .unity-text-field__input {
     background-color: rgb(28, 30, 36);
     border-color: rgb(45, 49, 58);
     border-width: 1px;
-    border-radius: 8px;
+    border-radius: 10px;
     color: rgb(230, 232, 236);
-    padding: 0 12px;
+    padding: 0 14px;
     font-size: 14px;
 }
 
 /* ---- buttons ---- */
 .btn {
-    height: 40px;
-    padding: 0 18px;
-    border-radius: 8px;
+    height: 44px;
+    padding: 0 20px;
+    border-radius: 10px;
     border-width: 1px;
     font-size: 14px;
     -unity-font-style: bold;
