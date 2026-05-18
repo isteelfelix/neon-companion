@@ -106,6 +106,25 @@ namespace NeonCompanion.Runtime.Chat
             NeonLogger.Log($"Switched to provider: {newProvider.displayName}");
         }
 
+        public Task ApplyProviderConfigAsync(ProviderConfig updatedProvider)
+        {
+            if (updatedProvider == null || _currentProvider == null || _currentProvider.id != updatedProvider.id)
+                return Task.CompletedTask;
+
+            _currentProvider.displayName = updatedProvider.displayName;
+            _currentProvider.baseUrl = updatedProvider.baseUrl;
+            _currentProvider.apiKey = updatedProvider.apiKey;
+            _currentProvider.defaultModel = updatedProvider.defaultModel;
+            _currentProvider.temperature = updatedProvider.temperature;
+            _currentProvider.maxTokens = updatedProvider.maxTokens;
+            _currentProvider.isEnabled = updatedProvider.isEnabled;
+
+            SyncFromProvider(_currentProvider);
+            ApplyGenerationSettings();
+            SaveCurrentSession();
+            return Task.CompletedTask;
+        }
+
         public async Task StartNewSessionAsync()
         {
             if (_currentProvider == null)

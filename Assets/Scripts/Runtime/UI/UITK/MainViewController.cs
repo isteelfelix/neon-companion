@@ -147,6 +147,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private CompanionApp _app;
         private ChatService _chatService;
         private ProviderConfig _editingProvider;
+        private ProviderConfig _editingProviderSource;
+        private bool _cancelPending;
         private string _chatSubtitle = "0 сообщений · Neon";
         private bool _isBound;
         private bool _isSending;
@@ -424,6 +426,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ShowChat()
         {
+            if (!CanLeaveProviderEditor())
+                return;
+
             SetActiveNav(_navChat);
             SetTopbar("Дизайн системы рендеринга 2D", _chatSubtitle);
             ShowArea(_chatStage);
@@ -431,6 +436,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ShowAvatars()
         {
+            if (!CanLeaveProviderEditor())
+                return;
+
             SetActiveNav(_navAvatars);
             SetTopbar("Аватары", "8 образов · Neon");
             ShowArea(_avatarsArea);
@@ -438,6 +446,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ShowProviders()
         {
+            if (!CanLeaveProviderEditor())
+                return;
+
             SetActiveNav(_navProviders);
             SetTopbar("Провайдеры", "OpenAI-compatible endpoints");
             ShowArea(_providersArea);
@@ -446,6 +457,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ShowHistory()
         {
+            if (!CanLeaveProviderEditor())
+                return;
+
             SetActiveNav(_navHistory);
             SetTopbar("История", _chatSubtitle);
             ShowArea(_chatStage);
@@ -453,12 +467,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ShowThemes()
         {
+            if (!CanLeaveProviderEditor())
+                return;
+
             SetActiveNav(_navThemes);
             SetPlaceholder("Темы", "Палитры и формы аватара будут вынесены сюда следующим этапом.");
         }
 
         private void ShowSettings()
         {
+            if (!CanLeaveProviderEditor())
+                return;
+
             SetActiveNav(_navSettings);
             SetTopbar("Настройки", string.Empty);
             ShowArea(_settingsArea);
@@ -1186,13 +1206,26 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnAddProviderClicked()
         {
+            if (!CanLeaveProviderEditor())
+                return;
+
+            _cancelPending = false;
+            _editingProviderSource = null;
             _editingProvider = ProviderConfig.CreateDefault("New Provider", "https://api.openai.com/v1");
             ShowProviderEditPanel();
         }
 
         private void StartEditingProvider(ProviderConfig provider)
         {
-            _editingProvider = provider;
+            if (provider == null)
+                return;
+
+            if (!CanSwitchEditingProvider(provider))
+                return;
+
+            _cancelPending = false;
+            _editingProviderSource = provider;
+            _editingProvider = CloneProvider(provider);
             ShowProviderEditPanel();
         }
 
@@ -1206,18 +1239,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editorProviderName != null)
                 _editorProviderName.text = string.IsNullOrWhiteSpace(_editingProvider.displayName) ? "Provider" : _editingProvider.displayName;
             if (_editName != null)
-                _editName.value = _editingProvider.displayName ?? string.Empty;
+                _editName.SetValueWithoutNotify(_editingProvider.displayName ?? string.Empty);
             if (_editBaseUrl != null)
-                _editBaseUrl.value = _editingProvider.baseUrl ?? string.Empty;
+                _editBaseUrl.SetValueWithoutNotify(_editingProvider.baseUrl ?? string.Empty);
             if (_editApiKey != null)
-                _editApiKey.value = _editingProvider.apiKey ?? string.Empty;
+                _editApiKey.SetValueWithoutNotify(_editingProvider.apiKey ?? string.Empty);
             if (_editModel != null)
-                _editModel.value = _editingProvider.defaultModel ?? string.Empty;
+                _editModel.SetValueWithoutNotify(_editingProvider.defaultModel ?? string.Empty);
             if (_editTemperature != null)
-                _editTemperature.value = _editingProvider.temperature;
+                _editTemperature.SetValueWithoutNotify(_editingProvider.temperature);
             if (_editMaxTokens != null)
-                _editMaxTokens.value = _editingProvider.maxTokens.ToString();
+                _editMaxTokens.SetValueWithoutNotify(_editingProvider.maxTokens.ToString());
 
+            SetTestRow(null, string.Empty);
             _providerEditPanel.style.display = DisplayStyle.Flex;
         }
 
@@ -1237,19 +1271,27 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (app == null)
                     return;
 
-                _editingProvider.displayName = _editName?.value ?? _editingProvider.displayName;
-                _editingProvider.baseUrl = _editBaseUrl?.value ?? _editingProvider.baseUrl;
-                _editingProvider.apiKey = _editApiKey?.value ?? _editingProvider.apiKey;
-                _editingProvider.defaultModel = _editModel?.value ?? _editingProvider.defaultModel;
+                var draft = BuildProviderDraftFromEditor();
+                if (draft == null)
+                    return;
 
-                if (_editTemperature != null)
-                    _editingProvider.temperature = _editTemperature.value;
+                await app.ProviderManager.SaveProviderAsync(draft);
 
-                if (_editMaxTokens != null && int.TryParse(_editMaxTokens.value, out int maxTokens))
-                    _editingProvider.maxTokens = maxTokens;
+                var chat = await GetChatServiceAsync();
+                if (chat?.CurrentProvider?.id == draft.id)
+                {
+                    await chat.ApplyProviderConfigAsync(draft);
+                    SetProviderHeader(chat.CurrentProvider);
+                }
+                else if (_editingProviderSource?.id == draft.id)
+                {
+                    SetProviderHeader(draft);
+                }
 
-                await app.ProviderManager.SaveProviderAsync(_editingProvider);
-                SetProviderHeader(_editingProvider);
+                _cancelPending = false;
+                _editingProviderSource = draft;
+                _editingProvider = CloneProvider(draft);
+                ShowProviderEditPanel();
                 await RefreshProvidersListAsync();
             }
             catch (Exception ex)
@@ -1275,7 +1317,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_testProviderBtn != null) _testProviderBtn.SetEnabled(false);
                 SetTestRow(null, "Проверяем соединение…");
 
-                var result = await app.AiClient.TestConnectionAsync(_editingProvider);
+                var draft = BuildProviderDraftFromEditor();
+                if (draft == null)
+                {
+                    SetTestRow(false, "Не удалось собрать настройки провайдера.");
+                    return;
+                }
+
+                var result = await app.AiClient.TestConnectionAsync(draft);
                 SetTestRow(result.Success, result.Message);
             }
             catch (Exception ex)
@@ -1301,8 +1350,84 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnCancelEditClicked()
         {
+            if (HasUnsavedChanges() && !_cancelPending)
+            {
+                _cancelPending = true;
+                SetTestRow(false, "Изменения не сохранены. Нажми «Отмена» ещё раз, чтобы сбросить.");
+                return;
+            }
+
+            _cancelPending = false;
             _editingProvider = null;
+            _editingProviderSource = null;
             SetDisplay(_providerEditPanel, DisplayStyle.None);
+        }
+
+        // ---- Draft editing helpers ----
+
+        private static ProviderConfig CloneProvider(ProviderConfig source)
+        {
+            if (source == null) return null;
+            return new ProviderConfig
+            {
+                id           = source.id,
+                displayName  = source.displayName,
+                baseUrl      = source.baseUrl,
+                apiKey       = source.apiKey,
+                defaultModel = source.defaultModel,
+                temperature  = source.temperature,
+                maxTokens    = source.maxTokens,
+                isEnabled    = source.isEnabled
+            };
+        }
+
+        private ProviderConfig BuildProviderDraftFromEditor()
+        {
+            if (_editingProvider == null) return null;
+
+            var draft = CloneProvider(_editingProvider);
+            if (_editName != null)        draft.displayName  = _editName.value;
+            if (_editBaseUrl != null)     draft.baseUrl      = _editBaseUrl.value;
+            if (_editApiKey != null)      draft.apiKey       = _editApiKey.value;
+            if (_editModel != null)       draft.defaultModel = _editModel.value;
+            if (_editTemperature != null) draft.temperature  = _editTemperature.value;
+            if (_editMaxTokens != null && int.TryParse(_editMaxTokens.value, out int tokens))
+                draft.maxTokens = tokens;
+            return draft;
+        }
+
+        private bool HasUnsavedChanges()
+        {
+            if (_providerEditPanel?.style.display != DisplayStyle.Flex) return false;
+            if (_editingProvider == null) return false;
+
+            // New provider not yet saved — treat as dirty so navigation is blocked.
+            if (_editingProviderSource == null) return true;
+
+            var draft = BuildProviderDraftFromEditor();
+            if (draft == null) return false;
+
+            return draft.displayName  != _editingProviderSource.displayName
+                || draft.baseUrl      != _editingProviderSource.baseUrl
+                || draft.apiKey       != _editingProviderSource.apiKey
+                || draft.defaultModel != _editingProviderSource.defaultModel
+                || Math.Abs(draft.temperature - _editingProviderSource.temperature) > 0.001f
+                || draft.maxTokens    != _editingProviderSource.maxTokens;
+        }
+
+        private bool CanLeaveProviderEditor()
+        {
+            if (!HasUnsavedChanges()) return true;
+            SetTestRow(false, "Есть несохранённые изменения. Сначала сохрани или отмени.");
+            return false;
+        }
+
+        private bool CanSwitchEditingProvider(ProviderConfig target)
+        {
+            if (_editingProviderSource?.id == target?.id) return true;
+            if (!HasUnsavedChanges()) return true;
+            SetTestRow(false, "Есть несохранённые изменения. Сначала сохрани или отмени.");
+            return false;
         }
 
         private void DeleteProvider(ProviderConfig provider)
@@ -1324,7 +1449,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 await app.ProviderManager.DeleteProviderAsync(provider.id);
                 if (_editingProvider?.id == provider.id)
                 {
+                    _cancelPending = false;
                     _editingProvider = null;
+                    _editingProviderSource = null;
                     SetDisplay(_providerEditPanel, DisplayStyle.None);
                 }
 
