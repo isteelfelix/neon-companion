@@ -2,8 +2,11 @@
     <ui:Style src="../Theme/Tokens.uss" />
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="MainView.uss" />
-    <ui:Style src="MainView.Tints.uss" />
-    <ui:Style src="SettingsView.uss" />
+
+    <ui:Template name="ChatView"      src="../Chat/ChatView.uxml" />
+    <ui:Template name="ProvidersView" src="../Providers/ProvidersView.uxml" />
+    <ui:Template name="AvatarsView"   src="../Avatars/AvatarsView.uxml" />
+    <ui:Template name="SettingsView"  src="../Settings/SettingsView.uxml" />
 
     <ui:VisualElement name="app-root" class="app">
         <ui:VisualElement class="app__atmo" />
@@ -18,37 +21,49 @@
             </ui:VisualElement>
 
             <ui:Label text="Workspace" class="nav__group" />
-            <ui:VisualElement name="nav-chat" class="nav__item nav__item--active">
+            <ui:Button name="nav-chat" class="nav__item nav__item--active">
                 <ui:VisualElement class="nav__icon icon icon--chat" />
                 <ui:Label name="nav-chat-label" text="Чат" class="nav__label" />
                 <ui:Label name="nav-chat-count" text="0" class="nav__count" />
-            </ui:VisualElement>
-            <ui:VisualElement name="nav-avatars" class="nav__item">
+            </ui:Button>
+            <ui:Button name="nav-avatars" class="nav__item">
                 <ui:VisualElement class="nav__icon icon icon--user" />
                 <ui:Label name="nav-avatars-label" text="Аватары" class="nav__label" />
                 <ui:Label text="8" class="nav__count" />
-            </ui:VisualElement>
-            <ui:VisualElement name="nav-providers" class="nav__item">
+            </ui:Button>
+            <ui:Button name="nav-providers" class="nav__item">
                 <ui:VisualElement class="nav__icon icon icon--bolt" />
                 <ui:Label name="nav-providers-label" text="Провайдеры" class="nav__label" />
                 <ui:Label name="nav-providers-count" text="0" class="nav__count" />
-            </ui:VisualElement>
+            </ui:Button>
 
             <ui:Label text="Library" class="nav__group" />
-            <ui:VisualElement name="nav-history" class="nav__item">
+            <ui:Button name="nav-history" class="nav__item">
                 <ui:VisualElement class="nav__icon icon icon--history" />
                 <ui:Label name="nav-history-label" text="История" class="nav__label" />
-            </ui:VisualElement>
-            <ui:VisualElement name="nav-themes" class="nav__item">
+            </ui:Button>
+            <ui:Button name="nav-themes" class="nav__item">
                 <ui:VisualElement class="nav__icon icon icon--palette" />
                 <ui:Label name="nav-themes-label" text="Темы" class="nav__label" />
-            </ui:VisualElement>
-            <ui:VisualElement name="nav-settings" class="nav__item">
+            </ui:Button>
+            <ui:Button name="nav-settings" class="nav__item">
                 <ui:VisualElement class="nav__icon icon icon--settings" />
                 <ui:Label name="nav-settings-label" text="Настройки" class="nav__label" />
-            </ui:VisualElement>
+            </ui:Button>
 
-            <ui:VisualElement class="rail__spacer" />
+            <ui:VisualElement class="rail__divider" />
+            <ui:VisualElement class="rail__sessions-head">
+                <ui:Label text="Сессии" class="rail__sessions-label" />
+                <ui:Button name="history-search-btn" class="iconbtn icon icon--search" tooltip="Search sessions" />
+                <ui:Button name="new-session-btn" class="iconbtn icon icon--plus" tooltip="New chat" />
+            </ui:VisualElement>
+            <ui:VisualElement name="history-search-bar" class="history__searchbar is-hidden">
+                <ui:VisualElement class="icon icon--search history__searchbar-icon" />
+                <ui:TextField name="history-search-input" class="history__searchbar-input" placeholder="Поиск…" />
+                <ui:Button name="history-search-clear" class="iconbtn icon icon--dots history__searchbar-clear" tooltip="Clear" />
+            </ui:VisualElement>
+            <ui:ScrollView name="sessions-list" class="rail__sessions-list" />
+
             <ui:VisualElement class="rail__footer">
                 <ui:VisualElement class="dot--status" />
                 <ui:VisualElement class="rail__footer-text">
@@ -72,393 +87,15 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement name="chat-stage" class="stage">
-                <ui:VisualElement name="avatar-stage" class="avatar-stage">
-                    <ui:VisualElement class="statusrow">
-                        <ui:VisualElement class="statusrow__dot" />
-                        <ui:Label name="connection-status" text="connected · 14:23" class="statusrow__text" />
-                    </ui:VisualElement>
-
-                    <ui:VisualElement name="provider-tag" class="providertag">
-                        <ui:VisualElement class="provider__logo provider__logo--mini">
-                            <ui:Label name="provider-short" text="OAI" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="providertag__body">
-                            <ui:Label name="provider-name" text="OpenAI" class="providertag__name" />
-                            <ui:Label name="provider-model" text="gpt-4o-mini" class="providertag__model" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="icon icon--arrow providertag__arrow" />
-                    </ui:VisualElement>
-
-                    <ui:VisualElement class="avatar-stage__hero">
-                        <ui:VisualElement name="avatar-glow" class="halo" />
-                        <ui:VisualElement name="avatar-circle" class="avatar">
-                            <ui:VisualElement name="avatar-art" class="avatar__art avatar__art--neon" />
-                            <ui:VisualElement class="avatar__shade" />
-                            <ui:Label text="N" class="avatar__letter" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <ui:VisualElement class="dock">
-                        <ui:ScrollView name="messages-list" class="transcript" />
-
-                        <ui:VisualElement class="subtitle">
-                            <ui:Label name="subtitle-role" text="Neon" class="subtitle__role" />
-                            <ui:Label name="subtitle-body" text="Готова помочь. С чего сегодня начнём: настройка провайдера, аватары или продолжим прошлый разговор о шейдерах?" class="subtitle__body" />
-                            <ui:VisualElement name="typing-indicator" class="typing is-hidden">
-                                <ui:VisualElement class="typing__dot" />
-                                <ui:VisualElement class="typing__dot typing__dot--delay-1" />
-                                <ui:VisualElement class="typing__dot typing__dot--delay-2" />
-                            </ui:VisualElement>
-                            <ui:VisualElement class="subtitle__actions">
-                                <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Copy" />
-                                <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Regenerate" />
-                                <ui:Button name="listen-btn" class="iconbtn icon icon--headphones" tooltip="Listen" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="composer">
-                            <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Attach" />
-                            <ui:TextField name="message-input" class="composer__input" placeholder="Напиши Neon что-нибудь..." />
-                            <ui:VisualElement class="composer__hint">
-                                <ui:Label text="⌘" class="kbd" />
-                                <ui:Label text="↵" class="kbd" />
-                            </ui:VisualElement>
-                            <ui:Button name="send-button" text="Send" class="btn btn--primary composer__send" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
+            <ui:VisualElement name="content-host" class="content-host">
+                <ui:Instance template="ChatView"      name="chat-panel"      class="panel panel--active" />
+                <ui:Instance template="ProvidersView" name="providers-panel" class="panel" />
+                <ui:Instance template="AvatarsView"   name="avatars-panel"   class="panel" />
+                <ui:Instance template="SettingsView"  name="settings-panel"  class="panel" />
+                <ui:VisualElement name="placeholder-area" class="panel">
+                    <ui:Label name="placeholder-title" text="Раздел" class="page__title" />
+                    <ui:Label name="placeholder-body" text="Экран будет добавлен следующим этапом." class="page__subtitle" />
                 </ui:VisualElement>
-
-                <ui:VisualElement name="history-panel" class="history">
-                    <ui:VisualElement class="history__head">
-                        <ui:Label text="Сессии" class="history__title-label" />
-                        <ui:VisualElement class="history__actions">
-                            <ui:Button name="history-search-btn" class="iconbtn icon icon--search" tooltip="Search sessions" />
-                            <ui:Button name="new-session-btn" class="iconbtn icon icon--plus" tooltip="New chat" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement name="history-search-bar" class="history__searchbar is-hidden">
-                        <ui:VisualElement class="icon icon--search history__searchbar-icon" />
-                        <ui:TextField name="history-search-input" class="history__searchbar-input" placeholder="Поиск…" />
-                        <ui:Button name="history-search-clear" class="iconbtn icon icon--dots history__searchbar-clear" tooltip="Clear" />
-                    </ui:VisualElement>
-                    <ui:ScrollView name="sessions-list" class="history__list" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-
-            <ui:VisualElement name="providers-area" class="page providers-page">
-                <ui:VisualElement class="page__head">
-                    <ui:VisualElement class="page__head-copy">
-                        <ui:Label text="Провайдеры" class="page__title" />
-                        <ui:Label text="Подключи любой OpenAI-совместимый API и переключайся прямо из чата." class="page__subtitle" />
-                    </ui:VisualElement>
-                    <ui:VisualElement class="page__actions">
-                        <ui:Button name="import-provider-btn" text="Импорт" class="btn" />
-                        <ui:Button name="add-provider-btn" text="Добавить" class="btn btn--primary" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:VisualElement class="split">
-                    <ui:ScrollView name="providers-list" class="providers-list" />
-
-                    <ui:VisualElement name="provider-edit-panel" class="editor">
-                        <ui:VisualElement class="editor__header">
-                            <ui:VisualElement class="provider__logo provider__logo--editor">
-                                <ui:Label name="editor-provider-short" text="OAI" />
-                            </ui:VisualElement>
-                            <ui:VisualElement class="editor__header-copy">
-                                <ui:Label name="editor-provider-name" text="OpenAI" class="editor__title" />
-                                <ui:Label text="Конфигурация подключения" class="editor__sub" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="field">
-                            <ui:Label text="Name" class="label" />
-                            <ui:TextField name="edit-name" class="input" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="field">
-                            <ui:Label text="Base URL" class="label" />
-                            <ui:TextField name="edit-baseurl" class="input input--mono" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="field">
-                            <ui:Label text="API Key" class="label" />
-                            <ui:TextField name="edit-apikey" class="input input--mono" is-password-field="true" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="field">
-                            <ui:Label text="Default model" class="label" />
-                            <ui:TextField name="edit-model" class="input input--mono" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="field__row">
-                            <ui:VisualElement class="field field--half">
-                                <ui:Label text="Temperature" class="label" />
-                                <ui:Slider name="edit-temperature" low-value="0" high-value="2" value="0.7" class="input slider-input" />
-                            </ui:VisualElement>
-                            <ui:VisualElement class="field field--half">
-                                <ui:Label text="Max tokens" class="label" />
-                                <ui:TextField name="edit-maxtokens" class="input input--mono" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement name="test-row" class="testrow testrow--ok">
-                            <ui:VisualElement name="test-row-icon" class="icon icon--check testrow__icon" />
-                            <ui:Label name="test-row-label" text="Нажми Тест для проверки соединения" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="provider-edit-actions">
-                            <ui:Button name="test-provider-btn" text="Тест" class="btn" />
-                            <ui:Button name="save-provider-btn" text="Сохранить" class="btn btn--primary" />
-                            <ui:Button name="cancel-edit-btn" text="Отмена" class="btn btn--ghost" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-            </ui:VisualElement>
-
-            <ui:VisualElement name="avatars-area" class="page avatars-page">
-                <ui:VisualElement class="page__head">
-                    <ui:VisualElement class="page__head-copy">
-                        <ui:Label text="Аватары" class="page__title" />
-                        <ui:Label text="Визуальное представление агента. Можно выбрать готовый образ или загрузить свой PNG." class="page__subtitle" />
-                    </ui:VisualElement>
-                    <ui:VisualElement class="page__actions">
-                        <ui:Button name="avatar-open-folder-btn" text="Открыть папку" class="btn" />
-                        <ui:Button name="avatar-upload-btn" text="Загрузить" class="btn btn--primary" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:VisualElement class="filterrow">
-                    <ui:VisualElement class="filterchip filterchip--active"><ui:Label text="Все" /><ui:Label text="8" class="filterchip__count" /></ui:VisualElement>
-                    <ui:VisualElement class="filterchip"><ui:Label text="Стандартные" /><ui:Label text="1" class="filterchip__count" /></ui:VisualElement>
-                    <ui:VisualElement class="filterchip"><ui:Label text="Градиентные" /><ui:Label text="5" class="filterchip__count" /></ui:VisualElement>
-                    <ui:VisualElement class="filterchip"><ui:Label text="Минимал" /><ui:Label text="2" class="filterchip__count" /></ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:VisualElement class="avatar-split">
-                    <ui:VisualElement class="gallery">
-                        <ui:VisualElement name="avtile-neon" class="avtile avtile--selected avtile--neon"><ui:Label text="Neon" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-aurora" class="avtile avtile--aurora"><ui:Label text="Aurora" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-ember" class="avtile avtile--ember"><ui:Label text="Ember" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-glass" class="avtile avtile--glass"><ui:Label text="Glass" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-flora" class="avtile avtile--flora"><ui:Label text="Flora" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-mono" class="avtile avtile--mono"><ui:Label text="Mono" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-cobalt" class="avtile avtile--cobalt"><ui:Label text="Cobalt" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-rose" class="avtile avtile--rose"><ui:Label text="Rose" class="avtile__name" /><ui:VisualElement class="avtile__badge"><ui:VisualElement class="icon icon--check" /></ui:VisualElement></ui:VisualElement>
-                        <ui:VisualElement name="avtile-upload" class="avtile avtile--upload">
-                            <ui:VisualElement class="avtile__upload">
-                                <ui:VisualElement class="icon icon--upload" />
-                                <ui:Label text="drop PNG" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <ui:VisualElement class="previewcard">
-                        <ui:VisualElement name="preview-hero" class="preview-hero preview-hero--neon">
-                            <ui:Label name="preview-title" text="Neon" class="preview-hero__title" />
-                            <ui:Label name="preview-tag" text="default" class="preview-hero__tag" />
-                        </ui:VisualElement>
-                        <ui:Label text="Параметры" class="label" />
-                        <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label text="breathing · 5s" class="preview-row__value" /></ui:VisualElement>
-                        <ui:VisualElement class="preview-row"><ui:Label text="Halo" /><ui:Label text="indigo · 40%" class="preview-row__value" /></ui:VisualElement>
-                        <ui:VisualElement class="preview-row"><ui:Label text="Talking-pulse" /><ui:Label text="auto" class="preview-row__value" /></ui:VisualElement>
-                        <ui:Label text="Персона" class="label preview-persona-label" />
-                        <ui:Label name="preview-persona" text="Ты - Neon, спокойный AI-компаньон разработчика. Отвечай кратко и по делу, но дружелюбно." class="persona-box" />
-                        <ui:VisualElement class="preview-actions">
-                            <ui:Button name="preview-edit-persona-btn" text="Изменить" class="btn" />
-                            <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-            </ui:VisualElement>
-
-            <ui:VisualElement name="placeholder-area" class="page placeholder-page">
-                <ui:Label name="placeholder-title" text="Раздел" class="page__title" />
-                <ui:Label name="placeholder-body" text="Экран будет добавлен следующим этапом." class="page__subtitle" />
-            </ui:VisualElement>
-
-            <ui:VisualElement name="settings-area" class="page settings-page">
-                <ui:VisualElement class="page__head">
-                    <ui:VisualElement class="page__head-copy">
-                        <ui:Label text="Настройки" class="page__title" />
-                        <ui:Label text="Общие параметры приложения, данные и информация." class="page__subtitle" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:ScrollView class="settings-scroll">
-
-                    <!-- ===== General ===== -->
-                    <ui:VisualElement class="settings-card">
-                        <ui:VisualElement class="settings-card__head">
-                            <ui:VisualElement class="icon icon--globe settings-card__icon" />
-                            <ui:Label text="Общие" class="settings-card__title" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Язык" class="settings-row__name" />
-                                <ui:Label text="Язык интерфейса. Применяется сразу." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:DropdownField name="settings-language" choices="Русский,English" index="0" class="settings-dropdown" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Сохранять историю чатов" class="settings-row__name" />
-                                <ui:Label text="Локально, в JSON-файлах." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Toggle name="settings-save-history" class="settings-toggle" value="true" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Streaming ответов" class="settings-row__name" />
-                                <ui:Label text="Показывать ответ по мере поступления токенов." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Toggle name="settings-streaming" class="settings-toggle" value="true" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="System prompt персонажа" class="settings-row__name" />
-                                <ui:Label text="Использовать персону выбранного аватара." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Toggle name="settings-system-prompt" class="settings-toggle" value="true" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <!-- ===== Security ===== -->
-                    <ui:VisualElement class="settings-card">
-                        <ui:VisualElement class="settings-card__head">
-                            <ui:VisualElement class="icon icon--shield settings-card__icon" />
-                            <ui:Label text="Безопасность" class="settings-card__title" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Шифровать API-ключи" class="settings-row__name" />
-                                <ui:Label text="Хранить ключи в защищённом виде на устройстве." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Toggle name="settings-encrypt-keys" class="settings-toggle" value="false" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Скрывать ключи в логах" class="settings-row__name" />
-                                <ui:Label text="Маскировать значения при отладке." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Toggle name="settings-mask-logs" class="settings-toggle" value="true" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <!-- ===== Appearance ===== -->
-                    <ui:VisualElement class="settings-card">
-                        <ui:VisualElement class="settings-card__head">
-                            <ui:VisualElement class="icon icon--palette settings-card__icon" />
-                            <ui:Label text="Внешний вид" class="settings-card__title" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Форма аватара" class="settings-row__name" />
-                                <ui:Label text="Круг, квадрат или шестиугольник." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:VisualElement class="seg">
-                                <ui:Button name="shape-round" text="Круг" class="seg__btn seg__btn--active" />
-                                <ui:Button name="shape-square" text="Квадрат" class="seg__btn" />
-                                <ui:Button name="shape-hex" text="Hex" class="seg__btn" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Halo вокруг аватара" class="settings-row__name" />
-                                <ui:Label text="Мягкое неоновое свечение позади." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Toggle name="settings-show-halo" class="settings-toggle" value="true" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Анимация breathing" class="settings-row__name" />
-                                <ui:Label text="Лёгкое дыхание аватара." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Toggle name="settings-breathing" class="settings-toggle" value="true" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <!-- ===== Data ===== -->
-                    <ui:VisualElement class="settings-card">
-                        <ui:VisualElement class="settings-card__head">
-                            <ui:VisualElement class="icon icon--folder settings-card__icon" />
-                            <ui:Label text="Данные" class="settings-card__title" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Папка хранения" class="settings-row__name" />
-                                <ui:Label name="settings-storage-path" text="—" class="settings-row__sub settings-row__sub--mono" />
-                            </ui:VisualElement>
-                            <ui:Button name="settings-open-folder" text="Открыть" class="btn" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Экспорт чатов" class="settings-row__name" />
-                                <ui:Label text="Сохранить всю историю в JSON." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Button name="settings-export-btn" class="btn">
-                                <ui:VisualElement class="icon icon--download btn__icon" />
-                                <ui:Label text="Экспорт" />
-                            </ui:Button>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row settings-row--danger">
-                            <ui:VisualElement class="settings-row__copy">
-                                <ui:Label text="Очистить все данные" class="settings-row__name" />
-                                <ui:Label text="Удалить сессии, провайдеров и настройки. Действие необратимо." class="settings-row__sub" />
-                            </ui:VisualElement>
-                            <ui:Button name="settings-clear-btn" class="btn btn--danger">
-                                <ui:VisualElement class="icon icon--trash btn__icon" />
-                                <ui:Label text="Очистить" />
-                            </ui:Button>
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <!-- ===== About ===== -->
-                    <ui:VisualElement class="settings-card">
-                        <ui:VisualElement class="settings-card__head">
-                            <ui:VisualElement class="icon icon--info settings-card__icon" />
-                            <ui:Label text="О приложении" class="settings-card__title" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row settings-row--compact">
-                            <ui:Label text="Версия" class="settings-row__name" />
-                            <ui:Label name="settings-version" text="0.1.0" class="settings-row__value-mono" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="settings-row settings-row--compact">
-                            <ui:Label text="Лицензия" class="settings-row__name" />
-                            <ui:Label text="MIT" class="settings-row__value-mono" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="settings-row settings-row--compact">
-                            <ui:Label text="Шрифты" class="settings-row__name" />
-                            <ui:Label text="Geist · SIL OFL" class="settings-row__value-mono" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="settings-row settings-actions-row">
-                            <ui:Button name="settings-github-btn" class="btn">
-                                <ui:VisualElement class="icon icon--external btn__icon" />
-                                <ui:Label text="GitHub" />
-                            </ui:Button>
-                            <ui:Button name="settings-docs-btn" class="btn">
-                                <ui:VisualElement class="icon icon--external btn__icon" />
-                                <ui:Label text="Документация" />
-                            </ui:Button>
-                            <ui:Button name="settings-donate-btn" class="btn btn--primary">
-                                <ui:VisualElement class="icon icon--heart btn__icon" />
-                                <ui:Label text="Поддержать" />
-                            </ui:Button>
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-
-                </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

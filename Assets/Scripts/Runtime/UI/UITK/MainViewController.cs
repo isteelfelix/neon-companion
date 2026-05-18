@@ -40,11 +40,19 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private VisualElement _root;
 
-        private VisualElement _chatStage;
-        private VisualElement _providersArea;
-        private VisualElement _avatarsArea;
+        private VisualElement _chatPanel;
+        private VisualElement _providersPanel;
+        private VisualElement _avatarsPanel;
         private VisualElement _placeholderArea;
-        private VisualElement _settingsArea;
+        private VisualElement _settingsPanel;
+        private VisualElement _composer;
+        private VisualElement _resizeHandle;
+        private VisualElement _avatarPanel;
+        private bool _isResizing;
+        private float _resizeStartX;
+        private float _resizeStartWidth;
+        private const float MinAvatarWidth = 180f;
+        private const float MaxAvatarWidth = 520f;
         private VisualElement _topbarSep;
         private VisualElement _typingIndicator;
 
@@ -201,11 +209,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navChatCount = root.Q<Label>("nav-chat-count");
             _navProvidersCount = root.Q<Label>("nav-providers-count");
 
-            _chatStage = root.Q<VisualElement>("chat-stage");
-            _providersArea = root.Q<VisualElement>("providers-area");
-            _avatarsArea = root.Q<VisualElement>("avatars-area");
+            _chatPanel = root.Q<VisualElement>("chat-panel");
+            _providersPanel = root.Q<VisualElement>("providers-panel");
+            _avatarsPanel = root.Q<VisualElement>("avatars-panel");
             _placeholderArea = root.Q<VisualElement>("placeholder-area");
-            _settingsArea = root.Q<VisualElement>("settings-area");
+            _settingsPanel = root.Q<VisualElement>("settings-panel");
+            _composer = root.Q<VisualElement>("composer");
+            _resizeHandle = root.Q<VisualElement>("resize-handle");
+            _avatarPanel  = root.Q<VisualElement>("avatar-panel");
             _topbarSep = root.Q<VisualElement>("topbar-sep");
             _typingIndicator = root.Q<VisualElement>("typing-indicator");
 
@@ -356,7 +367,18 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarUploadTile.RegisterCallback<ClickEvent>(_ => OnAvatarUploadClicked());
 
             if (_messageInput != null)
+            {
                 _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
+                _messageInput.RegisterCallback<FocusEvent>(_ => _composer?.AddToClassList("composer--focused"));
+                _messageInput.RegisterCallback<BlurEvent>(_ => _composer?.RemoveFromClassList("composer--focused"));
+            }
+
+            if (_resizeHandle != null)
+            {
+                _resizeHandle.RegisterCallback<PointerDownEvent>(OnResizePointerDown);
+                _resizeHandle.RegisterCallback<PointerMoveEvent>(OnResizePointerMove);
+                _resizeHandle.RegisterCallback<PointerUpEvent>(OnResizePointerUp);
+            }
 
             RegisterSettingsCallbacks();
             RegisterAvatarGalleryCallbacks();
@@ -387,6 +409,13 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
+
+            if (_resizeHandle != null)
+            {
+                _resizeHandle.UnregisterCallback<PointerDownEvent>(OnResizePointerDown);
+                _resizeHandle.UnregisterCallback<PointerMoveEvent>(OnResizePointerMove);
+                _resizeHandle.UnregisterCallback<PointerUpEvent>(OnResizePointerUp);
+            }
 
             _typingSchedule?.Pause();
             _breathSchedule?.Pause();
@@ -431,7 +460,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetActiveNav(_navChat);
             SetTopbar("Дизайн системы рендеринга 2D", _chatSubtitle);
-            ShowArea(_chatStage);
+            ShowArea(_chatPanel);
         }
 
         private void ShowAvatars()
@@ -441,7 +470,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetActiveNav(_navAvatars);
             SetTopbar("Аватары", "8 образов · Neon");
-            ShowArea(_avatarsArea);
+            ShowArea(_avatarsPanel);
         }
 
         private void ShowProviders()
@@ -451,7 +480,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetActiveNav(_navProviders);
             SetTopbar("Провайдеры", "OpenAI-compatible endpoints");
-            ShowArea(_providersArea);
+            ShowArea(_providersPanel);
             _ = RefreshProvidersListAsync();
         }
 
@@ -462,7 +491,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetActiveNav(_navHistory);
             SetTopbar("История", _chatSubtitle);
-            ShowArea(_chatStage);
+            ShowArea(_chatPanel);
         }
 
         private void ShowThemes()
@@ -481,7 +510,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetActiveNav(_navSettings);
             SetTopbar("Настройки", string.Empty);
-            ShowArea(_settingsArea);
+            ShowArea(_settingsPanel);
         }
 
         private void SetPlaceholder(string title, string body)
@@ -496,11 +525,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ShowArea(VisualElement visible)
         {
-            SetDisplay(_chatStage, visible == _chatStage ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_providersArea, visible == _providersArea ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_avatarsArea, visible == _avatarsArea ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_chatPanel, visible == _chatPanel ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_providersPanel, visible == _providersPanel ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_avatarsPanel, visible == _avatarsPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_placeholderArea, visible == _placeholderArea ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_settingsArea, visible == _settingsArea ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_settingsPanel, visible == _settingsPanel ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
         private void SetTopbar(string title, string subtitle)
@@ -1590,11 +1619,24 @@ namespace NeonCompanion.Runtime.UI.UITK
             actions.Add(editButton);
             actions.Add(deleteButton);
 
+            var toggle = new VisualElement();
+            toggle.AddToClassList("toggle");
+            if (isActive) toggle.AddToClassList("toggle--on");
+            var knob = new VisualElement();
+            knob.AddToClassList("toggle__knob");
+            toggle.Add(knob);
+            toggle.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                SwitchProvider(provider);
+            });
+
             container.Add(logo);
             container.Add(body);
             container.Add(modelLabel);
             container.Add(meta);
             container.Add(actions);
+            container.Add(toggle);
 
             return container;
         }
@@ -2250,6 +2292,41 @@ namespace NeonCompanion.Runtime.UI.UITK
 #else
             Application.OpenURL("file://" + dir);
 #endif
+        }
+
+        // ============================================================
+        // Resize handle — drag left edge of avatar panel to resize
+        // ============================================================
+
+        private void OnResizePointerDown(PointerDownEvent evt)
+        {
+            if (evt.button != 0) return;
+            _isResizing = true;
+            _resizeStartX = evt.position.x;
+            _resizeStartWidth = _avatarPanel?.resolvedStyle.width ?? 320f;
+            _resizeHandle.CapturePointer(evt.pointerId);
+            _resizeHandle?.AddToClassList("resize-handle--active");
+            evt.StopPropagation();
+        }
+
+        private void OnResizePointerMove(PointerMoveEvent evt)
+        {
+            if (!_isResizing) return;
+            float delta = _resizeStartX - evt.position.x;
+            float newWidth = Mathf.Clamp(_resizeStartWidth + delta, MinAvatarWidth, MaxAvatarWidth);
+            if (_avatarPanel != null)
+                _avatarPanel.style.width = newWidth;
+            evt.StopPropagation();
+        }
+
+        private void OnResizePointerUp(PointerUpEvent evt)
+        {
+            if (!_isResizing) return;
+            _isResizing = false;
+            _resizeHandle?.RemoveFromClassList("resize-handle--active");
+            if (_resizeHandle != null && _resizeHandle.HasPointerCapture(evt.pointerId))
+                _resizeHandle.ReleasePointer(evt.pointerId);
+            evt.StopPropagation();
         }
     }
 }

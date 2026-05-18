@@ -1,0 +1,259 @@
+/* ============================================================
+   AvatarsView — gallery + preview card
+   ============================================================ */
+
+.avatars-page {
+    flex-grow: 1;
+    flex-direction: column;
+    padding: 28px 36px 36px;
+    overflow: hidden;
+}
+
+/* ---- Filter row ---- */
+
+.filterrow {
+    min-height: 30px;
+    flex-direction: row;
+    margin-bottom: 18px;
+}
+
+.filterchip {
+    height: 28px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 12px;
+    border-radius: 999px;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    color: var(--text-2);
+    margin-right: 6px;
+    /* Button reset */
+    -unity-font-style: normal;
+}
+
+.filterchip Label {
+    font-size: 12px;
+}
+
+.filterchip--active {
+    background-color: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+
+.filterchip__count {
+    font-size: 10px;
+    color: var(--text-3);
+    background-color: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    padding: 1px 5px;
+    margin-left: 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+/* ---- Split layout ---- */
+
+.avatar-split {
+    flex-grow: 1;
+    flex-direction: row;
+    min-height: 0;
+}
+
+/* ---- Gallery grid ---- */
+
+.gallery {
+    flex-grow: 1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    margin-right: 22px;
+}
+
+/* ============== Avatar tile ============== */
+
+.avtile {
+    width: 23%;
+    height: 168px;
+    min-width: 130px;
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: var(--line-1);
+    background-color: var(--bg-1);
+    margin-right: 14px;
+    margin-bottom: 14px;
+    padding: 12px;
+    justify-content: flex-end;
+    overflow: hidden;
+    position: relative;
+    transition-property: border-color, scale;
+    transition-duration: 0.15s;
+}
+
+.avtile:hover {
+    scale: 1.02;
+}
+
+.avtile--selected {
+    border-color: var(--accent);
+    border-width: 2px;
+}
+
+/* ---- Tile color variants ---- */
+.avtile--neon   { background-color: #4f45d8; }
+.avtile--aurora { background-color: #3faec0; }
+.avtile--ember  { background-color: #c84c2c; }
+.avtile--glass  { background-color: #2d3240; }
+.avtile--flora  { background-color: #32835c; }
+.avtile--mono   { background-color: #9aa2b3; }
+.avtile--cobalt { background-color: #304bd0; }
+.avtile--rose   { background-color: #bf507c; }
+
+/* ---- Vignette overlay (hidden — USS has no gradient support) ---- */
+
+.avtile__vignette {
+    display: none;
+}
+
+/* ---- Tile name ---- */
+
+.avtile__name {
+    position: absolute;
+    left: 10px;
+    bottom: 9px;
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 12px;
+    -unity-font-style: bold;
+    background-color: rgba(0, 0, 0, 0.38);
+    border-radius: 6px;
+    padding: 2px 7px;
+}
+
+/* ---- Selection badge ---- */
+
+.avtile__badge {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background-color: var(--accent);
+    align-items: center;
+    justify-content: center;
+}
+
+.avtile--selected .avtile__badge {
+    display: flex;
+}
+
+.avtile__badge .icon {
+    width: 12px;
+    height: 12px;
+    -unity-background-image-tint-color: white;
+}
+
+/* ---- Upload tile ---- */
+
+.avtile--upload {
+    background-color: var(--bg-1);
+    padding: 6px;
+}
+
+.avtile__upload {
+    flex-grow: 1;
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+}
+
+.avtile__upload .icon {
+    width: 22px;
+    height: 22px;
+    margin-bottom: 8px;
+}
+
+.avtile__upload Label {
+    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+/* ============== Preview card ============== */
+
+.previewcard {
+    width: 320px;
+    flex-shrink: 0;
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-1);
+    border-radius: 14px;
+    padding: 20px;
+    flex-direction: column;
+}
+
+.preview-hero {
+    height: 280px;
+    border-radius: 10px;
+    background-color: #4f45d8;
+    margin-bottom: 16px;
+    justify-content: flex-end;
+    padding: 14px;
+}
+
+.preview-hero__title {
+    color: var(--text-0);
+    font-size: 18px;
+    -unity-font-style: bold;
+}
+
+.preview-hero__tag {
+    color: var(--text-2);
+    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.preview-row {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.preview-row Label {
+    font-size: 12px;
+    color: var(--text-3);
+}
+
+.preview-row__value {
+    color: var(--text-1);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.preview-persona-label {
+    margin-top: 10px;
+}
+
+.persona-box {
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    padding: 12px;
+    color: var(--text-2);
+    font-size: 11px;
+    white-space: normal;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.preview-actions {
+    flex-direction: row;
+    margin-top: 14px;
+}
+
+.preview-actions > Button {
+    flex-grow: 1;
+    margin-right: 8px;
+}

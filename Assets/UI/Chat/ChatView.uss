@@ -1,0 +1,543 @@
+/* ============================================================
+   ChatView — sessions left | chat center | avatar right
+   ============================================================ */
+
+.stage {
+    flex-grow: 1;
+    flex-direction: row;
+    min-height: 0;
+}
+
+/* ============== LEFT: Sessions history ============== */
+
+.history {
+    width: 260px;
+    flex-shrink: 0;
+    background-color: var(--bg-1);
+    border-right-width: 1px;
+    border-right-color: var(--line-1);
+    flex-direction: column;
+}
+
+.history__head {
+    height: 57px;
+    padding: 14px 16px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+}
+
+.history__title-label {
+    flex-grow: 1;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--text-0);
+}
+
+.history__actions {
+    flex-direction: row;
+}
+
+.history__actions > Button {
+    margin-left: 4px;
+}
+
+.history__list {
+    flex-grow: 1;
+    padding: 8px;
+}
+
+.history__searchbar {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 8px 6px;
+    padding: 4px 8px;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+}
+
+.history__searchbar-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin-right: 6px;
+}
+
+.history__searchbar-input {
+    flex-grow: 1;
+    height: 28px;
+}
+
+.history__searchbar-input > .unity-text-field__input,
+.history__searchbar-input > .unity-base-text-field__input {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    color: var(--text-0);
+    font-size: 12px;
+    padding: 0 2px;
+}
+
+.history__searchbar-clear {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    padding: 4px;
+    flex-shrink: 0;
+}
+
+.history__group {
+    font-size: 10px;
+    color: var(--text-4);
+    letter-spacing: 1px;
+    padding: 14px 12px 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.history__item {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    margin-bottom: 2px;
+}
+
+.history__item:hover {
+    background-color: var(--bg-2);
+}
+
+.history__item--active {
+    background-color: var(--bg-3);
+    border-color: var(--line-2);
+}
+
+.history__title {
+    font-size: 13px;
+    color: var(--text-1);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history__meta {
+    font-size: 10px;
+    color: var(--text-3);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+/* ============== CENTER: Chat main ============== */
+
+.chat-main {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    padding: 18px 28px 22px;
+}
+
+/* ---- Transcript ---- */
+
+.transcript {
+    flex-grow: 1;
+    min-height: 0;
+    margin-bottom: 14px;
+    padding: 2px 8px 2px 0;
+}
+
+.transcript__empty {
+    min-height: 108px;
+    justify-content: center;
+    padding: 18px;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+}
+
+.transcript__empty-title {
+    color: var(--text-0);
+    font-size: 13px;
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.transcript__empty-body {
+    color: var(--text-3);
+    font-size: 12px;
+    white-space: normal;
+}
+
+.transcript__row {
+    flex-direction: row;
+    margin-bottom: 10px;
+}
+
+.transcript__row--user      { justify-content: flex-end; }
+.transcript__row--assistant,
+.transcript__row--system    { justify-content: flex-start; }
+
+.transcript__bubble {
+    max-width: 76%;
+    min-width: 120px;
+    padding: 10px 12px;
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    background-color: var(--bg-2);
+}
+
+.transcript__bubble--user {
+    background-color: var(--accent-soft);
+    border-color: rgba(124, 122, 237, 0.38);
+}
+
+.transcript__bubble--system {
+    border-color: rgba(239, 171, 86, 0.30);
+    background-color: rgba(239, 171, 86, 0.08);
+}
+
+.transcript__meta {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.transcript__role {
+    flex-grow: 1;
+    color: var(--text-2);
+    font-size: 10px;
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+}
+
+.transcript__time {
+    color: var(--text-4);
+    font-size: 10px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.transcript__body {
+    color: var(--text-0);
+    font-size: 13px;
+    white-space: normal;
+}
+
+/* ---- Subtitle (last AI message) ---- */
+
+.subtitle {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: flex-start;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-left-width: 2px;
+    border-color: var(--line-2);
+    border-left-color: var(--accent);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+
+.subtitle__role {
+    color: var(--accent);
+    font-size: 10px;
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+    margin-right: 12px;
+}
+
+.subtitle__body {
+    flex-grow: 1;
+    min-width: 0;
+    color: var(--text-0);
+    font-size: 14px;
+    white-space: normal;
+}
+
+.subtitle__actions {
+    flex-direction: row;
+    margin-left: 10px;
+}
+
+.subtitle__actions > Button {
+    margin-left: 4px;
+}
+
+.typing {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    height: 24px;
+}
+
+.typing__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background-color: var(--accent);
+    margin-right: 4px;
+}
+
+.typing__dot--delay-1 { background-color: var(--accent-2); }
+.typing__dot--delay-2 { background-color: var(--accent-text); }
+
+/* ---- Composer ---- */
+
+.composer {
+    min-height: 54px;
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 14px;
+    padding: 8px 8px 8px 14px;
+    transition-property: border-color;
+    transition-duration: 0.15s;
+}
+
+.composer--focused {
+    border-color: var(--accent);
+}
+
+.composer__input {
+    flex-grow: 1;
+    height: 36px;
+    margin-left: 8px;
+    margin-right: 10px;
+}
+
+.composer__input > .unity-text-field__input,
+.composer__input > .unity-base-text-field__input {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    color: var(--text-0);
+    font-size: 14px;
+    padding: 0 4px;
+}
+
+.composer__hint {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 8px;
+}
+
+.composer__hint > Label {
+    margin-left: 4px;
+}
+
+.composer__send {
+    height: 36px;
+}
+
+/* ---- Resize handle ---- */
+
+.resize-handle {
+    width: 5px;
+    flex-shrink: 0;
+    background-color: rgba(0, 0, 0, 0);
+    transition-property: background-color;
+    transition-duration: 0.15s;
+}
+
+.resize-handle:hover {
+    background-color: rgba(124, 122, 237, 0.22);
+}
+
+.resize-handle--active {
+    background-color: rgba(124, 122, 237, 0.40);
+}
+
+/* ============== RIGHT: Avatar panel ============== */
+
+.avatar-panel {
+    width: 320px;
+    flex-shrink: 0;
+    flex-direction: column;
+    border-left-width: 1px;
+    border-left-color: var(--line-1);
+    position: relative;
+    overflow: hidden;
+}
+
+/* ---- Avatar panel header ---- */
+
+.avatar-panel__head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+}
+
+/* ---- Status badge ---- */
+
+.statusrow {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(11, 12, 16, 0.70);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 999px;
+    padding: 5px 10px 5px 7px;
+}
+
+.statusrow__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background-color: var(--ok);
+    margin-right: 8px;
+}
+
+.statusrow__text {
+    font-size: 11px;
+    color: var(--text-2);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+/* ---- Provider tag ---- */
+
+.providertag {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(11, 12, 16, 0.70);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    padding: 7px 12px;
+    margin: 0;
+    transition-property: border-color;
+    transition-duration: 0.12s;
+}
+
+.providertag:hover {
+    border-color: var(--line-3);
+}
+
+.provider__logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background-color: var(--bg-3);
+    border-width: 1px;
+    border-color: var(--line-2);
+    align-items: center;
+    justify-content: center;
+}
+
+.provider__logo Label {
+    color: var(--text-1);
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+}
+
+.provider__logo--mini {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    margin-right: 8px;
+}
+
+.provider__logo--mini Label {
+    font-size: 9px;
+}
+
+.provider__logo--editor {
+    width: 44px;
+    height: 44px;
+    margin-right: 12px;
+}
+
+.providertag__body {
+    flex-direction: column;
+    margin-right: 8px;
+}
+
+.providertag__name {
+    font-size: 12px;
+    color: var(--text-1);
+    -unity-font-style: bold;
+}
+
+.providertag__model {
+    font-size: 11px;
+    color: var(--text-3);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.providertag__arrow {
+    width: 14px;
+    height: 14px;
+}
+
+/* ---- Avatar hero ---- */
+
+.avatar-stage__hero {
+    flex-grow: 1;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 24px;
+}
+
+.halo {
+    position: absolute;
+    width: 380px;
+    height: 380px;
+    border-radius: 999px;
+    background-color: rgba(124, 122, 237, 0.16);
+    opacity: 0.6;
+}
+
+.avatar {
+    width: 240px;
+    height: 240px;
+    border-radius: 999px;
+    background-color: var(--bg-3);
+    border-width: 1px;
+    border-color: var(--line-2);
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.avatar--square { border-radius: 20px; }
+.avatar--hex    { border-radius: 38px; }
+
+.avatar__art {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.avatar__art--neon { background-color: #4f45d8; }
+
+.avatar__shade {
+    position: absolute;
+    left: 36px;
+    top: 36px;
+    width: 168px;
+    height: 168px;
+    border-radius: 999px;
+    background-color: rgba(11, 12, 16, 0.18);
+}
+
+.avatar__letter {
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 56px;
+    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+}

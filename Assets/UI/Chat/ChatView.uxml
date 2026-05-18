@@ -1,0 +1,72 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="../Theme/Tokens.uss" />
+    <ui:Style src="../Theme/Components.uss" />
+    <ui:Style src="ChatView.uss" />
+    <ui:Style src="../Main/MainView.Tints.uss" />
+
+    <ui:VisualElement name="chat-stage" class="stage">
+
+        <!-- CENTER: Messages + composer -->
+        <ui:VisualElement class="chat-main">
+            <ui:ScrollView name="messages-list" class="transcript" />
+
+            <ui:VisualElement name="composer-wrap" class="subtitle">
+                <ui:Label name="subtitle-role" text="Neon" class="subtitle__role" />
+                <ui:Label name="subtitle-body" text="Готова помочь. С чего сегодня начнём: настройка провайдера, аватары или продолжим прошлый разговор о шейдерах?" class="subtitle__body" />
+                <ui:VisualElement name="typing-indicator" class="typing is-hidden">
+                    <ui:VisualElement class="typing__dot" />
+                    <ui:VisualElement class="typing__dot typing__dot--delay-1" />
+                    <ui:VisualElement class="typing__dot typing__dot--delay-2" />
+                </ui:VisualElement>
+                <ui:VisualElement class="subtitle__actions">
+                    <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Copy" />
+                    <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Regenerate" />
+                    <ui:Button name="listen-btn" class="iconbtn icon icon--headphones" tooltip="Listen" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="composer" class="composer">
+                <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Attach" />
+                <ui:TextField name="message-input" class="composer__input" placeholder="Напиши Neon что-нибудь..." />
+                <ui:VisualElement class="composer__hint">
+                    <ui:Label text="⌘" class="kbd" />
+                    <ui:Label text="↵" class="kbd" />
+                </ui:VisualElement>
+                <ui:Button name="send-button" text="Send" class="btn btn--primary composer__send" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Drag-to-resize handle -->
+        <ui:VisualElement name="resize-handle" class="resize-handle" />
+
+        <!-- RIGHT: Avatar panel -->
+        <ui:VisualElement name="avatar-panel" class="avatar-panel">
+            <ui:VisualElement class="avatar-panel__head">
+                <ui:VisualElement class="statusrow">
+                    <ui:VisualElement class="statusrow__dot" />
+                    <ui:Label name="connection-status" text="connected · 14:23" class="statusrow__text" />
+                </ui:VisualElement>
+                <ui:Button name="provider-tag" class="providertag">
+                    <ui:VisualElement class="provider__logo provider__logo--mini">
+                        <ui:Label name="provider-short" text="OAI" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="providertag__body">
+                        <ui:Label name="provider-name" text="OpenAI" class="providertag__name" />
+                        <ui:Label name="provider-model" text="gpt-4o-mini" class="providertag__model" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="icon icon--arrow providertag__arrow" />
+                </ui:Button>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="avatar-stage__hero">
+                <ui:VisualElement name="avatar-glow" class="halo" />
+                <ui:VisualElement name="avatar-circle" class="avatar">
+                    <ui:VisualElement name="avatar-art" class="avatar__art avatar__art--neon" />
+                    <ui:VisualElement class="avatar__shade" />
+                    <ui:Label text="N" class="avatar__letter" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

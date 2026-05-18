@@ -1,0 +1,256 @@
+/* ============================================================
+   SettingsView — general settings page
+   ============================================================ */
+
+.settings-page {
+    flex-grow: 1;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 28px 36px 0 36px;
+}
+
+.settings-scroll {
+    flex-grow: 1;
+    padding-bottom: 36px;
+}
+
+/* ---- Card ---- */
+
+.settings-card {
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-1);
+    border-radius: 14px;
+    padding: 16px 20px 8px 20px;
+    margin-bottom: 14px;
+}
+
+.settings-card__head {
+    flex-direction: row;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    margin-bottom: 8px;
+}
+
+.settings-card__icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 10px;
+    -unity-background-image-tint-color: var(--accent);
+}
+
+.settings-card__title {
+    font-size: 14px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    color: var(--text-0);
+}
+
+/* ---- Row ---- */
+
+.settings-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+}
+
+.settings-row__copy {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: column;
+    margin-right: 16px;
+}
+
+.settings-row__name {
+    font-size: 13px;
+    color: var(--text-0);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
+    margin-bottom: 3px;
+}
+
+.settings-row__sub {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: normal;
+}
+
+.settings-row__sub--mono {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.settings-row__value-mono {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 12px;
+    color: var(--text-2);
+}
+
+.settings-row--compact {
+    padding: 6px 0;
+}
+
+.settings-row--danger .settings-row__name {
+    color: var(--danger);
+}
+
+/* ---- Dropdown ---- */
+
+.settings-dropdown {
+    min-width: 160px;
+}
+
+.settings-dropdown > .unity-base-popup-field__input {
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    padding: 0 12px;
+    color: var(--text-1);
+    font-size: 13px;
+    height: 32px;
+}
+
+.settings-dropdown > .unity-base-popup-field__input:hover {
+    border-color: var(--line-3);
+}
+
+.settings-dropdown .unity-base-popup-field__text {
+    color: var(--text-1);
+    font-size: 13px;
+}
+
+.settings-dropdown .unity-base-popup-field__arrow {
+    -unity-background-image-tint-color: var(--text-3);
+}
+
+/* ---- Toggle (Unity native, restyled as pill) ---- */
+
+.settings-toggle {
+    margin: 0;
+}
+
+.settings-toggle > .unity-toggle__input {
+    width: 36px;
+    height: 20px;
+    border-radius: 999px;
+    background-color: var(--bg-4);
+    border-width: 1px;
+    border-color: var(--line-2);
+    padding: 0;
+    justify-content: flex-start;
+    transition-property: background-color, border-color;
+    transition-duration: 0.15s;
+}
+
+.settings-toggle > .unity-toggle__input > .unity-toggle__checkmark {
+    width: 14px;
+    height: 14px;
+    margin: 2px;
+    border-radius: 999px;
+    background-color: var(--text-2);
+    background-image: none;
+    border-width: 0;
+    transition-property: translate, background-color;
+    transition-duration: 0.18s;
+}
+
+.settings-toggle:checked > .unity-toggle__input {
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+.settings-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
+    background-color: rgb(255, 255, 255);
+    translate: 16px 0;
+}
+
+.settings-toggle .unity-toggle__text {
+    display: none;
+}
+
+/* ---- Segmented control (avatar shape) ---- */
+
+.seg {
+    flex-direction: row;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    padding: 2px;
+}
+
+.seg__btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-2);
+    font-size: 12px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
+    margin: 0;
+    transition-property: background-color, color;
+    transition-duration: 0.12s;
+}
+
+.seg__btn:hover {
+    color: var(--text-0);
+}
+
+.seg__btn--active {
+    background-color: var(--bg-3);
+    color: var(--text-0);
+}
+
+/* ---- Danger button ---- */
+
+.btn--danger {
+    background-color: rgba(226, 112, 71, 0.12);
+    border-color: rgba(226, 112, 71, 0.4);
+    color: var(--danger);
+}
+
+.btn--danger:hover {
+    background-color: rgba(226, 112, 71, 0.2);
+    border-color: var(--danger);
+}
+
+/* ---- Button with icon ---- */
+
+.btn__icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    -unity-background-image-tint-color: var(--text-1);
+}
+
+.btn--danger .btn__icon {
+    -unity-background-image-tint-color: var(--danger);
+}
+
+/* ---- About actions row ---- */
+
+.settings-actions-row {
+    border-bottom-width: 0;
+    padding-top: 14px;
+    justify-content: flex-start;
+}
+
+.settings-actions-row > Button {
+    margin-right: 8px;
+}
+
+/* ---- Page-specific icons ---- */
+
+.icon--globe    { background-image: url("project://database/Assets/UI/Icons/globe.svg"); }
+.icon--shield   { background-image: url("project://database/Assets/UI/Icons/shield.svg"); }
+.icon--folder   { background-image: url("project://database/Assets/UI/Icons/folder.svg"); }
+.icon--trash    { background-image: url("project://database/Assets/UI/Icons/trash.svg"); }
+.icon--info     { background-image: url("project://database/Assets/UI/Icons/info.svg"); }
+.icon--external { background-image: url("project://database/Assets/UI/Icons/external.svg"); }
+.icon--download { background-image: url("project://database/Assets/UI/Icons/download.svg"); }
+.icon--heart    { background-image: url("project://database/Assets/UI/Icons/heart.svg"); }
+.icon--palette  { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }

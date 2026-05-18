@@ -1,4 +1,7 @@
-/* ============== Neon Companion - UI Toolkit handoff implementation ============== */
+/* ============================================================
+   MainView — app shell: rail, topbar, content host
+   Page-specific styles live in each view's own .uss file.
+   ============================================================ */
 
 .app {
     flex-grow: 1;
@@ -11,11 +14,12 @@
 
 .app__atmo {
     position: absolute;
-    left: 380px;
-    top: 48px;
+    left: 232px;
+    top: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(124, 122, 237, 0.04);
+    background-image: url("project://database/Assets/UI/Avatars/atmo.png");
+    -unity-background-scale-mode: stretch-to-fill;
 }
 
 .is-hidden {
@@ -35,24 +39,24 @@
     -unity-background-image-tint-color: var(--accent);
 }
 
-.icon--arrow { background-image: url("project://database/Assets/UI/Icons/arrow.svg"); }
-.icon--attach { background-image: url("project://database/Assets/UI/Icons/attach.svg"); }
-.icon--bolt { background-image: url("project://database/Assets/UI/Icons/bolt.svg"); }
-.icon--chat { background-image: url("project://database/Assets/UI/Icons/chat.svg"); }
-.icon--check { background-image: url("project://database/Assets/UI/Icons/check.svg"); }
-.icon--copy { background-image: url("project://database/Assets/UI/Icons/copy.svg"); }
-.icon--dots { background-image: url("project://database/Assets/UI/Icons/dots.svg"); }
+.icon--arrow      { background-image: url("project://database/Assets/UI/Icons/arrow.svg"); }
+.icon--attach     { background-image: url("project://database/Assets/UI/Icons/attach.svg"); }
+.icon--bolt       { background-image: url("project://database/Assets/UI/Icons/bolt.svg"); }
+.icon--chat       { background-image: url("project://database/Assets/UI/Icons/chat.svg"); }
+.icon--check      { background-image: url("project://database/Assets/UI/Icons/check.svg"); }
+.icon--copy       { background-image: url("project://database/Assets/UI/Icons/copy.svg"); }
+.icon--dots       { background-image: url("project://database/Assets/UI/Icons/dots.svg"); }
 .icon--headphones { background-image: url("project://database/Assets/UI/Icons/headphones.svg"); }
-.icon--history { background-image: url("project://database/Assets/UI/Icons/history.svg"); }
-.icon--palette { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
-.icon--plus { background-image: url("project://database/Assets/UI/Icons/plus.svg"); }
-.icon--refresh { background-image: url("project://database/Assets/UI/Icons/refresh.svg"); }
-.icon--search { background-image: url("project://database/Assets/UI/Icons/search.svg"); }
-.icon--send { background-image: url("project://database/Assets/UI/Icons/send.svg"); }
-.icon--settings { background-image: url("project://database/Assets/UI/Icons/settings.svg"); }
-.icon--sparkle { background-image: url("project://database/Assets/UI/Icons/sparkle.svg"); }
-.icon--upload { background-image: url("project://database/Assets/UI/Icons/upload.svg"); }
-.icon--user { background-image: url("project://database/Assets/UI/Icons/user.svg"); }
+.icon--history    { background-image: url("project://database/Assets/UI/Icons/history.svg"); }
+.icon--palette    { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
+.icon--plus       { background-image: url("project://database/Assets/UI/Icons/plus.svg"); }
+.icon--refresh    { background-image: url("project://database/Assets/UI/Icons/refresh.svg"); }
+.icon--search     { background-image: url("project://database/Assets/UI/Icons/search.svg"); }
+.icon--send       { background-image: url("project://database/Assets/UI/Icons/send.svg"); }
+.icon--settings   { background-image: url("project://database/Assets/UI/Icons/settings.svg"); }
+.icon--sparkle    { background-image: url("project://database/Assets/UI/Icons/sparkle.svg"); }
+.icon--upload     { background-image: url("project://database/Assets/UI/Icons/upload.svg"); }
+.icon--user       { background-image: url("project://database/Assets/UI/Icons/user.svg"); }
 
 /* ============== Rail ============== */
 
@@ -130,6 +134,9 @@
     border-color: rgba(0, 0, 0, 0);
     color: var(--text-2);
     margin-bottom: 2px;
+    background-color: rgba(0, 0, 0, 0);
+    /* Button reset */
+    -unity-font-style: normal;
 }
 
 .nav__item:hover {
@@ -168,7 +175,7 @@
 }
 
 .rail__spacer {
-    flex-grow: 1;
+    display: none;
 }
 
 .rail__footer {
@@ -274,517 +281,33 @@
     -unity-background-image-tint-color: var(--text-0);
 }
 
-/* ============== Chat stage ============== */
+/* ============== Content host + panels ============== */
 
-.stage {
-    flex-grow: 1;
-    flex-direction: row;
-    min-height: 0;
-}
-
-.avatar-stage {
+.content-host {
     flex-grow: 1;
     flex-direction: column;
     min-height: 0;
-    position: relative;
     overflow: hidden;
 }
 
-.avatar-stage__hero {
+.panel {
+    display: none;
     flex-grow: 1;
+    flex-direction: column;
     min-height: 0;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    padding: 24px;
-}
-
-.halo {
-    position: absolute;
-    width: 520px;
-    height: 520px;
-    border-radius: 999px;
-    background-color: rgba(124, 122, 237, 0.16);
-}
-
-.avatar {
-    width: 280px;
-    height: 280px;
-    border-radius: 999px;
-    background-color: var(--bg-3);
-    border-width: 1px;
-    border-color: var(--line-2);
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
 }
 
-.avatar__art {
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
+.panel--active {
+    display: flex;
 }
 
-.avatar__art--neon {
-    background-color: #4f45d8;
-}
-
-.avatar__shade {
-    position: absolute;
-    left: 42px;
-    top: 42px;
-    width: 196px;
-    height: 196px;
-    border-radius: 999px;
-    background-color: rgba(11, 12, 16, 0.18);
-}
-
-.avatar__letter {
-    color: rgba(255, 255, 255, 0.88);
-    font-size: 64px;
-    -unity-font-style: bold;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
-}
-
-.statusrow {
-    position: absolute;
-    top: 26px;
-    left: 26px;
-    flex-direction: row;
-    align-items: center;
-    background-color: rgba(11, 12, 16, 0.70);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 999px;
-    padding: 5px 10px 5px 7px;
-}
-
-.statusrow__dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background-color: var(--ok);
-    margin-right: 8px;
-}
-
-.statusrow__text {
-    font-size: 11px;
-    color: var(--text-2);
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.providertag {
-    position: absolute;
-    top: 26px;
-    right: 26px;
-    flex-direction: row;
-    align-items: center;
-    background-color: rgba(11, 12, 16, 0.70);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    padding: 7px 12px;
-}
-
-.providertag:hover {
-    border-color: var(--line-3);
-}
-
-.provider__logo {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background-color: var(--bg-3);
-    border-width: 1px;
-    border-color: var(--line-2);
-    align-items: center;
-    justify-content: center;
-}
-
-.provider__logo Label {
-    color: var(--text-1);
-    font-size: 11px;
-    -unity-font-style: bold;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
-}
-
-.provider__logo--mini {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    margin-right: 8px;
-}
-
-.provider__logo--mini Label {
-    font-size: 9px;
-}
-
-.provider__logo--editor {
-    width: 44px;
-    height: 44px;
-    margin-right: 12px;
-}
-
-.providertag__body {
-    flex-direction: column;
-    margin-right: 8px;
-}
-
-.providertag__name {
-    font-size: 12px;
-    color: var(--text-1);
-    -unity-font-style: bold;
-}
-
-.providertag__model {
-    font-size: 11px;
-    color: var(--text-3);
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.providertag__arrow {
-    width: 14px;
-    height: 14px;
-}
-
-.dock {
-    padding: 18px 28px 22px;
-    border-top-width: 1px;
-    border-top-color: var(--line-1);
-    background-color: rgba(16, 18, 24, 0.90);
-}
-
-.transcript {
-    height: 230px;
-    min-height: 120px;
-    margin-bottom: 14px;
-    padding: 2px 8px 2px 0;
-}
-
-.transcript__empty {
-    min-height: 108px;
-    justify-content: center;
-    padding: 18px;
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-}
-
-.transcript__empty-title {
-    color: var(--text-0);
-    font-size: 13px;
-    -unity-font-style: bold;
-    margin-bottom: 4px;
-}
-
-.transcript__empty-body {
-    color: var(--text-3);
-    font-size: 12px;
-    white-space: normal;
-}
-
-.transcript__row {
-    flex-direction: row;
-    margin-bottom: 10px;
-}
-
-.transcript__row--user {
-    justify-content: flex-end;
-}
-
-.transcript__row--assistant,
-.transcript__row--system {
-    justify-content: flex-start;
-}
-
-.transcript__bubble {
-    max-width: 76%;
-    min-width: 120px;
-    padding: 10px 12px;
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    background-color: var(--bg-2);
-}
-
-.transcript__bubble--user {
-    background-color: var(--accent-soft);
-    border-color: rgba(124, 122, 237, 0.38);
-}
-
-.transcript__bubble--system {
-    border-color: rgba(239, 171, 86, 0.30);
-    background-color: rgba(239, 171, 86, 0.08);
-}
-
-.transcript__meta {
-    flex-direction: row;
-    align-items: center;
-    margin-bottom: 5px;
-}
-
-.transcript__role {
-    flex-grow: 1;
-    color: var(--text-2);
-    font-size: 10px;
-    letter-spacing: 1px;
-    -unity-font-style: bold;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
-}
-
-.transcript__time {
-    color: var(--text-4);
-    font-size: 10px;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.transcript__body {
-    color: var(--text-0);
-    font-size: 13px;
-    white-space: normal;
-}
-
-.subtitle {
-    min-height: 54px;
-    flex-direction: row;
-    align-items: flex-start;
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-left-width: 2px;
-    border-color: var(--line-2);
-    border-left-color: var(--accent);
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-bottom: 14px;
-}
-
-.subtitle__role {
-    color: var(--accent);
-    font-size: 10px;
-    letter-spacing: 1px;
-    -unity-font-style: bold;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
-    margin-right: 12px;
-}
-
-.subtitle__body {
-    flex-grow: 1;
-    color: var(--text-0);
-    font-size: 14px;
-    white-space: normal;
-}
-
-.subtitle__actions {
-    flex-direction: row;
-    margin-left: 10px;
-}
-
-.subtitle__actions > Button {
-    margin-left: 4px;
-}
-
-.typing {
-    flex-direction: row;
-    align-items: center;
-    flex-grow: 1;
-    height: 24px;
-}
-
-.typing__dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background-color: var(--accent);
-    margin-right: 4px;
-}
-
-.typing__dot--delay-1 {
-    background-color: var(--accent-2);
-}
-
-.typing__dot--delay-2 {
-    background-color: var(--accent-text);
-}
-
-.composer {
-    min-height: 54px;
-    flex-direction: row;
-    align-items: center;
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 14px;
-    padding: 8px 8px 8px 14px;
-}
-
-.composer__input {
-    flex-grow: 1;
-    height: 36px;
-    margin-left: 8px;
-    margin-right: 10px;
-}
-
-.composer__input > .unity-text-field__input,
-.composer__input > .unity-base-text-field__input {
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 0;
-    color: var(--text-0);
-    font-size: 14px;
-    padding: 0 4px;
-}
-
-.composer__hint {
-    flex-direction: row;
-    align-items: center;
-    margin-right: 8px;
-}
-
-.composer__hint > Label {
-    margin-left: 4px;
-}
-
-.composer__send {
-    height: 36px;
-}
-
-/* ============== History ============== */
-
-.history {
-    width: 320px;
-    flex-shrink: 0;
-    background-color: var(--bg-1);
-    border-left-width: 1px;
-    border-left-color: var(--line-1);
-    flex-direction: column;
-}
-
-.history__head {
-    height: 57px;
-    padding: 14px 16px;
-    flex-direction: row;
-    align-items: center;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--line-1);
-}
-
-.history__title-label {
-    flex-grow: 1;
-    font-size: 13px;
-    -unity-font-style: bold;
-    color: var(--text-0);
-}
-
-.history__actions {
-    flex-direction: row;
-}
-
-.history__actions > Button {
-    margin-left: 4px;
-}
-
-.history__list {
-    flex-grow: 1;
-    padding: 8px;
-}
-
-.history__searchbar {
-    flex-direction: row;
-    align-items: center;
-    margin: 0 8px 6px;
-    padding: 4px 8px;
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-}
-
-.history__searchbar-icon {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    margin-right: 6px;
-}
-
-.history__searchbar-input {
-    flex-grow: 1;
-    height: 28px;
-}
-
-.history__searchbar-input > .unity-text-field__input,
-.history__searchbar-input > .unity-base-text-field__input {
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 0;
-    color: var(--text-0);
-    font-size: 12px;
-    padding: 0 2px;
-}
-
-.history__searchbar-clear {
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    min-height: 22px;
-    padding: 4px;
-    flex-shrink: 0;
-}
-
-.history__group {
-    font-size: 10px;
-    color: var(--text-4);
-    letter-spacing: 1px;
-    padding: 14px 12px 6px;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.history__item {
-    padding: 10px 12px;
-    border-radius: 10px;
-    border-width: 1px;
-    border-color: rgba(0, 0, 0, 0);
-    margin-bottom: 2px;
-}
-
-.history__item:hover {
-    background-color: var(--bg-2);
-}
-
-.history__item--active {
-    background-color: var(--bg-3);
-    border-color: var(--line-2);
-}
-
-.history__title {
-    font-size: 13px;
-    color: var(--text-1);
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.history__meta {
-    font-size: 10px;
-    color: var(--text-3);
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-/* ============== Pages ============== */
+/* ============== Shared page layout ============== */
 
 .page {
     flex-grow: 1;
     flex-direction: column;
-    padding: 28px 36px 36px;
     overflow: hidden;
-}
-
-.providers-page,
-.avatars-page,
-.placeholder-page,
-.settings-page {
-    display: none;
 }
 
 .page__head {
@@ -821,416 +344,41 @@
     margin-left: 8px;
 }
 
-.split {
-    flex-grow: 1;
-    min-height: 0;
-    flex-direction: row;
+/* ---- Rail sessions ---- */
+
+.rail__divider {
+    height: 1px;
+    background-color: var(--line-1);
+    margin: 8px 0 4px;
+    flex-shrink: 0;
 }
 
-/* ============== Providers ============== */
-
-.providers-list {
-    flex-grow: 1;
-    margin-right: 22px;
-}
-
-.provider {
-    min-height: 74px;
+.rail__sessions-head {
     flex-direction: row;
     align-items: center;
-    padding: 16px 18px;
-    background-color: var(--bg-1);
-    border-width: 1px;
-    border-color: var(--line-1);
-    border-radius: 14px;
-    margin-bottom: 10px;
+    padding: 6px 10px 2px;
+    flex-shrink: 0;
 }
 
-.provider:hover {
-    border-color: var(--line-2);
-}
-
-.provider--active {
-    border-color: var(--accent);
-    background-color: rgba(124, 122, 237, 0.10);
-}
-
-.provider__body {
+.rail__sessions-label {
     flex-grow: 1;
-    flex-direction: column;
-    margin-left: 16px;
-    min-width: 0;
-}
-
-.provider__name-row {
-    flex-direction: row;
-    align-items: center;
-}
-
-.provider__name {
-    font-size: 14px;
-    color: var(--text-0);
-    -unity-font-style: bold;
-    margin-right: 8px;
-}
-
-.provider__url {
-    font-size: 11px;
-    color: var(--text-3);
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.provider__model {
-    max-width: 245px;
-    margin-left: 12px;
-}
-
-.provider__meta {
-    width: 70px;
-    flex-direction: column;
-    align-items: flex-end;
-    margin-left: 12px;
-}
-
-.provider__meta-label {
-    font-size: 9px;
+    font-size: 10px;
     color: var(--text-4);
     letter-spacing: 1px;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.provider__meta-value {
-    font-size: 11px;
-    color: var(--text-2);
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.provider__actions {
-    flex-direction: row;
-    margin-left: 12px;
-}
-
-.provider__actions > Button {
-    margin-left: 6px;
-}
-
-.editor {
-    width: 380px;
-    flex-shrink: 0;
-    background-color: var(--bg-1);
-    border-width: 1px;
-    border-color: var(--line-1);
-    border-radius: 14px;
-    padding: 20px;
-    flex-direction: column;
-}
-
-.editor__header {
-    flex-direction: row;
-    align-items: center;
-    margin-bottom: 14px;
-}
-
-.editor__header-copy {
-    flex-direction: column;
-}
-
-.editor__title {
-    font-size: 14px;
     -unity-font-style: bold;
-    color: var(--text-0);
-    margin-bottom: 4px;
-}
-
-.editor__sub {
-    font-size: 12px;
-    color: var(--text-3);
-}
-
-.field {
-    flex-direction: column;
-    margin-bottom: 14px;
-}
-
-.field__row {
-    flex-direction: row;
-    margin-bottom: 14px;
-}
-
-.field--half {
-    flex-grow: 1;
-    margin-bottom: 0;
-    margin-right: 10px;
-}
-
-.slider-input {
-    height: 36px;
-}
-
-.testrow {
-    min-height: 42px;
-    flex-direction: row;
-    align-items: center;
-    padding: 10px 12px;
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    background-color: var(--bg-2);
-    margin-bottom: 14px;
-}
-
-.testrow--ok {
-    color: var(--ok);
-    border-color: rgba(77, 203, 133, 0.30);
-    background-color: rgba(77, 203, 133, 0.06);
-}
-
-.testrow--error {
-    color: var(--danger);
-    border-color: rgba(239, 86, 86, 0.30);
-    background-color: rgba(239, 86, 86, 0.06);
-}
-
-.testrow--error .testrow__icon {
-    -unity-background-image-tint-color: var(--danger);
-}
-
-.testrow__icon {
-    width: 14px;
-    height: 14px;
-    margin-right: 10px;
-    -unity-background-image-tint-color: var(--ok);
-}
-
-.provider-edit-actions {
-    flex-direction: row;
-}
-
-.provider-edit-actions > Button {
-    flex-grow: 1;
-    margin-right: 8px;
-}
-
-/* ============== Avatar gallery ============== */
-
-.filterrow {
-    min-height: 30px;
-    flex-direction: row;
-    margin-bottom: 18px;
-}
-
-.filterchip {
-    height: 28px;
-    flex-direction: row;
-    align-items: center;
-    padding: 0 12px;
-    border-radius: 999px;
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    color: var(--text-2);
-    margin-right: 6px;
-}
-
-.filterchip Label {
-    font-size: 12px;
-}
-
-.filterchip--active {
-    background-color: var(--accent-soft);
-    border-color: var(--accent);
-    color: var(--accent-text);
-}
-
-.filterchip__count {
-    font-size: 10px;
-    color: var(--text-3);
-    background-color: rgba(255, 255, 255, 0.04);
-    border-radius: 6px;
-    padding: 1px 5px;
-    margin-left: 6px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
-.avatar-split {
+.rail__sessions-list {
     flex-grow: 1;
-    flex-direction: row;
     min-height: 0;
+    padding: 2px 4px;
 }
 
-.gallery {
-    flex-grow: 1;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-content: flex-start;
-    margin-right: 22px;
-}
-
-.avtile {
-    width: 23%;
-    height: 168px;
-    min-width: 130px;
-    border-radius: 14px;
-    border-width: 1px;
-    border-color: var(--line-1);
-    background-color: var(--bg-1);
-    margin-right: 14px;
-    margin-bottom: 14px;
-    padding: 12px;
-    justify-content: flex-end;
-    overflow: hidden;
-}
-
-.avtile--selected {
-    border-color: var(--accent);
-}
-
-/* avatar shape variants */
-.avatar--square { border-radius: 20px; }
-.avatar--hex    { border-radius: 38px; }
-
-.avtile--neon { background-color: #4f45d8; }
-.avtile--aurora { background-color: #3faec0; }
-.avtile--ember { background-color: #c84c2c; }
-.avtile--glass { background-color: #2d3240; }
-.avtile--flora { background-color: #32835c; }
-.avtile--mono { background-color: #9aa2b3; }
-.avtile--cobalt { background-color: #304bd0; }
-.avtile--rose { background-color: #bf507c; }
-
-.avtile__name {
-    color: var(--text-0);
-    font-size: 13px;
-    -unity-font-style: bold;
-}
-
-.avtile__badge {
-    display: none;
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 24px;
-    height: 24px;
-    border-radius: 999px;
-    background-color: var(--accent);
-    align-items: center;
-    justify-content: center;
-}
-
-.avtile--selected .avtile__badge {
-    display: flex;
-}
-
-.avtile__badge .icon {
-    width: 12px;
-    height: 12px;
-    -unity-background-image-tint-color: white;
-}
-
-.avtile--upload {
-    background-color: var(--bg-1);
-    padding: 6px;
-}
-
-.avtile__upload {
-    flex-grow: 1;
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-3);
-}
-
-.avtile__upload .icon {
-    width: 22px;
-    height: 22px;
-    margin-bottom: 8px;
-}
-
-.avtile__upload Label {
-    font-size: 11px;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.previewcard {
-    width: 320px;
-    flex-shrink: 0;
-    background-color: var(--bg-1);
-    border-width: 1px;
-    border-color: var(--line-1);
-    border-radius: 14px;
-    padding: 20px;
-    flex-direction: column;
-}
-
-.preview-hero {
-    height: 280px;
-    border-radius: 10px;
-    background-color: #4f45d8;
-    margin-bottom: 16px;
-    justify-content: flex-end;
-    padding: 14px;
-}
-
-.preview-hero__title {
-    color: var(--text-0);
-    font-size: 18px;
-    -unity-font-style: bold;
-}
-
-.preview-hero__tag {
-    color: var(--text-2);
-    font-size: 11px;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.preview-row {
-    flex-direction: row;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-
-.preview-row Label {
-    font-size: 12px;
-    color: var(--text-3);
-}
-
-.preview-row__value {
-    color: var(--text-1);
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.preview-persona-label {
-    margin-top: 10px;
-}
-
-.persona-box {
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    padding: 12px;
-    color: var(--text-2);
-    font-size: 11px;
-    white-space: normal;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.preview-actions {
-    flex-direction: row;
-    margin-top: 14px;
-}
-
-.preview-actions > Button {
-    flex-grow: 1;
-    margin-right: 8px;
-}
+/* ---- Placeholder page ---- */
 
 .placeholder-page {
     align-items: flex-start;
     justify-content: flex-start;
+    padding: 28px 36px 36px;
 }

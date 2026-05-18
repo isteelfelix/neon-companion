@@ -1,0 +1,138 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="../Theme/Tokens.uss" />
+    <ui:Style src="../Theme/Components.uss" />
+    <ui:Style src="AvatarsView.uss" />
+    <ui:Style src="../Main/MainView.Tints.uss" />
+
+    <ui:VisualElement name="avatars-area" class="page avatars-page">
+
+        <ui:VisualElement class="page__head">
+            <ui:VisualElement class="page__head-copy">
+                <ui:Label text="Аватары" class="page__title" />
+                <ui:Label text="Визуальное представление агента. Можно выбрать готовый образ или загрузить свой PNG." class="page__subtitle" />
+            </ui:VisualElement>
+            <ui:VisualElement class="page__actions">
+                <ui:Button name="avatar-open-folder-btn" text="Открыть папку" class="btn" />
+                <ui:Button name="avatar-upload-btn" text="Загрузить" class="btn btn--primary" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="filterrow">
+            <ui:Button class="filterchip filterchip--active">
+                <ui:Label text="Все" />
+                <ui:Label text="8" class="filterchip__count" />
+            </ui:Button>
+            <ui:Button class="filterchip">
+                <ui:Label text="Стандартные" />
+                <ui:Label text="1" class="filterchip__count" />
+            </ui:Button>
+            <ui:Button class="filterchip">
+                <ui:Label text="Градиентные" />
+                <ui:Label text="5" class="filterchip__count" />
+            </ui:Button>
+            <ui:Button class="filterchip">
+                <ui:Label text="Минимал" />
+                <ui:Label text="2" class="filterchip__count" />
+            </ui:Button>
+            <ui:Button class="filterchip">
+                <ui:Label text="Свои" />
+                <ui:Label text="0" class="filterchip__count" />
+            </ui:Button>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="avatar-split">
+            <ui:VisualElement class="gallery">
+
+                <ui:VisualElement name="avtile-neon" class="avtile avtile--selected avtile--neon">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Neon" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-aurora" class="avtile avtile--aurora">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Aurora" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-ember" class="avtile avtile--ember">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Ember" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-glass" class="avtile avtile--glass">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Glass" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-flora" class="avtile avtile--flora">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Flora" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-mono" class="avtile avtile--mono">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Mono" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-cobalt" class="avtile avtile--cobalt">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Cobalt" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-rose" class="avtile avtile--rose">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="Rose" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avtile-upload" class="avtile avtile--upload">
+                    <ui:VisualElement class="avtile__upload">
+                        <ui:VisualElement class="icon icon--upload" />
+                        <ui:Label text="drop PNG" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+
+            <ui:VisualElement class="previewcard">
+                <ui:VisualElement name="preview-hero" class="preview-hero preview-hero--neon">
+                    <ui:Label name="preview-title" text="Neon" class="preview-hero__title" />
+                    <ui:Label name="preview-tag" text="default" class="preview-hero__tag" />
+                </ui:VisualElement>
+                <ui:Label text="Параметры" class="label" />
+                <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label text="breathing · 5s" class="preview-row__value" /></ui:VisualElement>
+                <ui:VisualElement class="preview-row"><ui:Label text="Halo" /><ui:Label text="indigo · 40%" class="preview-row__value" /></ui:VisualElement>
+                <ui:VisualElement class="preview-row"><ui:Label text="Talking-pulse" /><ui:Label text="auto" class="preview-row__value" /></ui:VisualElement>
+                <ui:Label text="Персона" class="label preview-persona-label" />
+                <ui:Label name="preview-persona" text="Ты — Neon, спокойный AI-компаньон разработчика. Отвечай кратко и по делу, но дружелюбно." class="persona-box" />
+                <ui:VisualElement class="preview-actions">
+                    <ui:Button name="preview-edit-persona-btn" text="Изменить" class="btn" />
+                    <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

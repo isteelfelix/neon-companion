@@ -1,0 +1,297 @@
+/* ============================================================
+   ProvidersView — list + editor
+   ============================================================ */
+
+.providers-page {
+    flex-grow: 1;
+    flex-direction: column;
+    padding: 28px 36px 36px;
+    overflow: hidden;
+}
+
+.page__head {
+    min-height: 64px;
+    flex-direction: row;
+    align-items: flex-end;
+    margin-bottom: 28px;
+}
+
+.page__head-copy {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.page__title {
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: var(--text-0);
+    margin-bottom: 4px;
+}
+
+.page__subtitle {
+    font-size: 13px;
+    color: var(--text-3);
+    white-space: normal;
+}
+
+.page__actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.page__actions > Button {
+    margin-left: 8px;
+}
+
+/* ---- Split layout ---- */
+
+.split {
+    flex-grow: 1;
+    min-height: 0;
+    flex-direction: row;
+}
+
+.providers-list {
+    flex-grow: 1;
+    margin-right: 22px;
+}
+
+/* ============== Provider row ============== */
+
+.provider {
+    min-height: 74px;
+    flex-direction: row;
+    align-items: center;
+    padding: 16px 18px;
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-1);
+    border-radius: 14px;
+    margin-bottom: 10px;
+    transition-property: border-color, background-color;
+    transition-duration: 0.12s;
+}
+
+.provider:hover {
+    border-color: var(--line-2);
+}
+
+.provider--active {
+    border-color: var(--accent);
+    background-color: rgba(124, 122, 237, 0.10);
+}
+
+/* Colored logo for the active provider */
+.provider--active .provider__logo {
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+.provider--active .provider__logo Label {
+    color: rgb(255, 255, 255);
+}
+
+.provider__body {
+    flex-grow: 1;
+    flex-direction: column;
+    margin-left: 16px;
+    min-width: 0;
+}
+
+.provider__name-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.provider__name {
+    font-size: 14px;
+    color: var(--text-0);
+    -unity-font-style: bold;
+    margin-right: 8px;
+}
+
+.provider__url {
+    font-size: 11px;
+    color: var(--text-3);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.provider__model {
+    max-width: 245px;
+    margin-left: 12px;
+}
+
+.provider__meta {
+    width: 70px;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-left: 12px;
+}
+
+.provider__meta-label {
+    font-size: 9px;
+    color: var(--text-4);
+    letter-spacing: 1px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.provider__meta-value {
+    font-size: 11px;
+    color: var(--text-2);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.provider__actions {
+    flex-direction: row;
+    margin-left: 12px;
+}
+
+.provider__actions > Button {
+    margin-left: 6px;
+}
+
+/* ============== Editor (right column) ============== */
+
+.editor {
+    width: 380px;
+    flex-shrink: 0;
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-1);
+    border-radius: 14px;
+    padding: 20px;
+    flex-direction: column;
+}
+
+.editor__header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.editor__header-copy {
+    flex-direction: column;
+}
+
+.editor__title {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: var(--text-0);
+    margin-bottom: 4px;
+}
+
+.editor__sub {
+    font-size: 12px;
+    color: var(--text-3);
+}
+
+.field {
+    flex-direction: column;
+    margin-bottom: 14px;
+}
+
+.field__row {
+    flex-direction: row;
+    margin-bottom: 14px;
+}
+
+.field--half {
+    flex-grow: 1;
+    margin-bottom: 0;
+    margin-right: 10px;
+}
+
+.slider-input {
+    height: 36px;
+}
+
+/* ---- Slider numeric input (show-input-field) ---- */
+.slider-input .unity-base-slider__text-field {
+    min-width: 52px;
+    max-width: 52px;
+    margin-left: 8px;
+}
+
+.slider-input .unity-base-slider__text-field > .unity-text-field__input,
+.slider-input .unity-base-slider__text-field > .unity-base-text-field__input {
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 8px;
+    color: var(--text-1);
+    font-size: 12px;
+    height: 28px;
+    padding: 0 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.slider-input .unity-base-slider__text-field > .unity-text-field__input:focus,
+.slider-input .unity-base-slider__text-field > .unity-base-text-field__input:focus {
+    border-color: var(--accent);
+}
+
+/* ---- Slider track/thumb ---- */
+.slider-input .unity-base-slider__tracker {
+    background-color: var(--bg-3);
+    border-radius: 2px;
+    border-width: 0;
+    height: 4px;
+}
+
+.slider-input .unity-base-slider__dragger {
+    background-color: var(--accent);
+    border-width: 0;
+    border-radius: 7px;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+}
+
+/* ---- Test row ---- */
+
+.testrow {
+    min-height: 42px;
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 12px;
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    background-color: var(--bg-2);
+    margin-bottom: 14px;
+}
+
+.testrow--ok {
+    color: var(--ok);
+    border-color: rgba(77, 203, 133, 0.30);
+    background-color: rgba(77, 203, 133, 0.06);
+}
+
+.testrow--error {
+    color: var(--danger);
+    border-color: rgba(239, 86, 86, 0.30);
+    background-color: rgba(239, 86, 86, 0.06);
+}
+
+.testrow--error .testrow__icon {
+    -unity-background-image-tint-color: var(--danger);
+}
+
+.testrow__icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 10px;
+    -unity-background-image-tint-color: var(--ok);
+}
+
+.provider-edit-actions {
+    flex-direction: row;
+}
+
+.provider-edit-actions > Button {
+    flex-grow: 1;
+    margin-right: 8px;
+}
