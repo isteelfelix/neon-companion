@@ -1,0 +1,4 @@
+﻿<Solution>
+  <Project Path="NeonCompanion.Runtime.csproj" />
+  <Project Path="NeonCompanion.Editor.csproj" />
+</Solution>
