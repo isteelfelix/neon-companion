@@ -106,6 +106,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Button _sendButton;
         private Button _summarizeButton;
+        private Button _searchButton;
+        private Button _moreButton;
         private Button _newSessionButton;
         private Button _settingsOpenFolderBtn;
         private Button _settingsExportBtn;
@@ -129,6 +131,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _importProviderButton;
         private Button _copyButton;
         private Button _regenerateButton;
+        private Button _listenButton;
+        private Button _attachButton;
         private Button _avatarUploadBtn;
         private Button _avatarOpenFolderBtn;
         private VisualElement _avatarUploadTile;
@@ -221,6 +225,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _messageInput = root.Q<TextField>("message-input");
             _sendButton = root.Q<Button>("send-button");
             _summarizeButton = root.Q<Button>("summarize-btn");
+            _searchButton = root.Q<Button>("search-btn");
+            _moreButton = root.Q<Button>("more-btn");
             _newSessionButton = root.Q<Button>("new-session-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
             _sessionsList = root.Q<ScrollView>("sessions-list");
@@ -236,6 +242,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _cancelEditButton     = root.Q<Button>("cancel-edit-btn");
             _copyButton       = root.Q<Button>("copy-btn");
             _regenerateButton = root.Q<Button>("refresh-btn");
+            _listenButton = root.Q<Button>("listen-btn");
+            _attachButton = root.Q<Button>("attach-btn");
             _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
             _avatarOpenFolderBtn  = root.Q<Button>("avatar-open-folder-btn");
             _avatarUploadTile     = root.Q<VisualElement>("avtile-upload");
@@ -321,6 +329,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             RegisterClick(_sendButton, OnSendClicked);
             RegisterClick(_summarizeButton, OnSummarizeClicked);
+            RegisterClick(_searchButton, OnSearchClicked);
+            RegisterClick(_moreButton, OnMoreClicked);
             RegisterClick(_newSessionButton, OnNewSessionClicked);
             RegisterClick(_historySearchBtn, OnHistorySearchToggled);
             RegisterClick(_historySearchClear, OnHistorySearchCleared);
@@ -336,6 +346,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_testProviderBtn, OnTestProviderClicked);
             RegisterClick(_copyButton, OnCopyLastMessageClicked);
             RegisterClick(_regenerateButton, OnRegenerateClicked);
+            RegisterClick(_listenButton, OnListenClicked);
+            RegisterClick(_attachButton, OnAttachClicked);
             RegisterClick(_avatarUploadBtn, OnAvatarUploadClicked);
             RegisterClick(_avatarOpenFolderBtn, OnAvatarOpenFolderClicked);
             if (_avatarUploadTile != null)
@@ -362,10 +374,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             UnregisterClick(_sendButton, OnSendClicked);
             UnregisterClick(_summarizeButton, OnSummarizeClicked);
+            UnregisterClick(_searchButton, OnSearchClicked);
+            UnregisterClick(_moreButton, OnMoreClicked);
             UnregisterClick(_newSessionButton, OnNewSessionClicked);
             UnregisterClick(_addProviderButton, OnAddProviderClicked);
             UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
+            UnregisterClick(_listenButton, OnListenClicked);
+            UnregisterClick(_attachButton, OnAttachClicked);
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
@@ -589,7 +605,117 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnSummarizeClicked()
         {
-            AddSystemMessage("Summarize is not implemented yet.");
+            _ = SummarizeCurrentConversationAsync();
+        }
+
+        private async Task SummarizeCurrentConversationAsync()
+        {
+            try
+            {
+                var chat = await GetChatServiceAsync();
+                if (chat == null)
+                {
+                    AddSystemMessage("Приложение не инициализировано.");
+                    return;
+                }
+
+                string summary = await chat.SummarizeCurrentConversationAsync();
+                AddSystemMessage(summary);
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"[Ошибка] {ex.Message}");
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void OnSearchClicked()
+        {
+            _ = SearchSessionsFromComposerAsync();
+        }
+
+        private async Task SearchSessionsFromComposerAsync()
+        {
+            try
+            {
+                _sessionSearchQuery = _messageInput?.value?.Trim() ?? string.Empty;
+                if (_historySearchInput != null)
+                    _historySearchInput.SetValueWithoutNotify(_sessionSearchQuery);
+
+                var chat = await GetChatServiceAsync();
+                if (chat == null)
+                    return;
+
+                var allSessions = await chat.GetAllSessionsAsync();
+                if (_isBound)
+                    RenderSessionList(allSessions);
+
+                ShowHistory();
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"[Ошибка поиска] {ex.Message}");
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void OnMoreClicked()
+        {
+            ShowSettings();
+        }
+
+        private void OnListenClicked()
+        {
+            var messages = _chatService?.CurrentChatViewModel?.Messages;
+            if (messages == null || messages.Count == 0)
+            {
+                AddSystemMessage("Нет ответа ассистента для копирования.");
+                return;
+            }
+
+            for (int i = messages.Count - 1; i >= 0; i--)
+            {
+                var msg = messages[i];
+                if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
+                {
+                    GUIUtility.systemCopyBuffer = msg.content;
+                    AddSystemMessage("Последний ответ ассистента скопирован в буфер обмена.");
+                    return;
+                }
+            }
+
+            AddSystemMessage("Нет ответа ассистента для копирования.");
+        }
+
+        private void OnAttachClicked()
+        {
+            _ = AttachImageTokenAsync();
+        }
+
+        private async Task AttachImageTokenAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null || _messageInput == null) return;
+
+                var filePicker = app.Services.GetRequired<IFilePickerService>();
+                string path = await filePicker.PickImagePathAsync();
+                if (string.IsNullOrEmpty(path)) return;
+
+                string fileName = System.IO.Path.GetFileName(path);
+                string token = $"[attachment: {fileName}]";
+                string current = _messageInput.value ?? string.Empty;
+                _messageInput.value = string.IsNullOrWhiteSpace(current)
+                    ? token
+                    : $"{current.TrimEnd()} {token}";
+                _messageInput.Focus();
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"[Ошибка вложения] {ex.Message}");
+                NeonLogger.LogError(ex.ToString());
+            }
         }
 
         private void OnNewSessionClicked()

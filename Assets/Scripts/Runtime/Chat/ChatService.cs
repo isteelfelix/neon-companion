@@ -152,6 +152,59 @@ namespace NeonCompanion.Runtime.Chat
             SaveCurrentSession();
         }
 
+        public async Task<string> SummarizeCurrentConversationAsync(int maxMessages = 12)
+        {
+            if (_currentChatViewModel == null)
+                await GetOrCreateChatAsync();
+
+            var sourceMessages = _currentChatViewModel?.Messages;
+            if (sourceMessages == null || sourceMessages.Count == 0)
+                return "Пока нет сообщений для краткого пересказа.";
+
+            var provider = _currentProvider ?? await _providerManager.GetActiveProviderAsync();
+            if (provider == null)
+                return "Провайдер не настроен.";
+
+            var requestMessages = new List<AiChatMessage>();
+            int start = Math.Max(0, sourceMessages.Count - Math.Max(1, maxMessages));
+            for (int i = start; i < sourceMessages.Count; i++)
+            {
+                var message = sourceMessages[i];
+                if (message == null || string.IsNullOrWhiteSpace(message.role) || string.IsNullOrWhiteSpace(message.content))
+                    continue;
+
+                requestMessages.Add(new AiChatMessage
+                {
+                    role = message.role,
+                    content = message.content
+                });
+            }
+
+            if (requestMessages.Count == 0)
+                return "Пока нет сообщений для краткого пересказа.";
+
+            requestMessages.Add(new AiChatMessage
+            {
+                role = "user",
+                content = "Сделай короткое резюме диалога на русском языке (2-4 предложения)."
+            });
+
+            var request = new AiChatRequest
+            {
+                model = provider.defaultModel,
+                temperature = 0.2f,
+                maxTokens = 140,
+                systemPrompt = "Ты помощник, который кратко и точно суммирует переписку на русском языке.",
+                messages = requestMessages
+            };
+
+            var response = await _aiClient.SendMessageAsync(provider, request);
+            var summary = response?.content?.Trim();
+            return string.IsNullOrWhiteSpace(summary)
+                ? "Не удалось получить резюме."
+                : summary;
+        }
+
         private void SyncFromProvider(ProviderConfig provider)
         {
             if (provider == null) return;
