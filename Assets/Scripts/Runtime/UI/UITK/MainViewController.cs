@@ -101,6 +101,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _streamingLabel;
         private Button _previewApplyBtn;
         private Button _previewEditPersonaBtn;
+        private Button _previewResetPersonaBtn;
         private Button _previewDeleteAvatarBtn;
         private VisualElement _galleryContainer;
         private Label _navAvatarsCount;
@@ -379,6 +380,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewPersona = root.Q<Label>("preview-persona");
             _previewApplyBtn      = root.Q<Button>("preview-apply-btn");
             _previewEditPersonaBtn = root.Q<Button>("preview-edit-persona-btn");
+            _previewResetPersonaBtn = root.Q<Button>("preview-reset-persona-btn");
             _previewDeleteAvatarBtn = root.Q<Button>("preview-delete-avatar-btn");
             _previewPersonaLabel  = root.Q<Label>("preview-persona-label");
             _previewActionsRow    = root.Q<VisualElement>("preview-actions-row");
@@ -479,6 +481,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterAvatarGalleryCallbacks();
             RegisterClick(_previewApplyBtn, OnPreviewApplyClicked);
             RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
+            RegisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
             RegisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
             RegisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             RegisterClick(_personaCancelBtn, OnPersonaCancelClicked);
@@ -516,6 +519,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_testProviderBtn, OnTestProviderClicked);
             UnregisterClick(_listenButton, OnListenClicked);
             UnregisterClick(_attachButton, OnAttachClicked);
+            UnregisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
             UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
             UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             UnregisterClick(_personaCancelBtn, OnPersonaCancelClicked);
@@ -2141,7 +2145,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OpenPersonaEditor()
         {
-            string current = AvatarPersonaText(_activeAvatarId);
+            string current = PersonaEditorText(_activeAvatarId);
             if (_personaEditField != null) _personaEditField.value = current;
             SetDisplay(_previewPersonaLabel, DisplayStyle.None);
             SetDisplay(_previewPersona, DisplayStyle.None);
@@ -2161,6 +2165,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnPersonaCancelClicked() => ClosePersonaEditor();
 
         private void OnPersonaSaveClicked() => _ = SavePersonaAsync();
+
+        private void OnPreviewResetPersonaClicked() => _ = ResetPersonaOverrideAsync();
 
         private void OnPreviewDeleteAvatarClicked() => _ = DeleteSelectedAvatarAsync();
 
@@ -2328,7 +2334,72 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void UpdateAvatarActionButtons(string avatarId)
         {
             bool isCustom = GetCustomProfile(avatarId) != null;
+            bool hasOverride = HasPersonaOverride(avatarId);
+            SetDisplay(_previewResetPersonaBtn, hasOverride ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_previewDeleteAvatarBtn, isCustom ? DisplayStyle.Flex : DisplayStyle.None);
+        }
+
+        private bool HasPersonaOverride(string avatarId)
+        {
+            var stored = GetStoredProfile(avatarId);
+            return stored != null && !string.IsNullOrWhiteSpace(stored.systemPrompt);
+        }
+
+        private string PersonaEditorText(string avatarId)
+        {
+            var stored = GetStoredProfile(avatarId);
+            if (stored != null && !string.IsNullOrWhiteSpace(stored.systemPrompt))
+                return stored.systemPrompt;
+
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.PersonaRu;
+
+            return string.Empty;
+        }
+
+        private async Task ResetPersonaOverrideAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var profiles = app.Avatars.GetAll();
+                var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
+                if (profile == null || string.IsNullOrWhiteSpace(profile.systemPrompt))
+                {
+                    UpdateAvatarActionButtons(_activeAvatarId);
+                    return;
+                }
+
+                bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                if (isBuiltIn)
+                {
+                    profiles.RemoveAll(a => a.id == _activeAvatarId && a.isBuiltIn);
+                }
+                else
+                {
+                    profile.systemPrompt = string.Empty;
+                }
+
+                app.Avatars.SaveAll(profiles);
+                UpdateAvatarProfileCaches(profiles);
+
+                if (_previewPersona != null)
+                    _previewPersona.text = AvatarPersonaText(_activeAvatarId);
+                UpdateAvatarActionButtons(_activeAvatarId);
+
+                if (_chatService != null)
+                {
+                    var s = app.Settings.Load() ?? new AppSettings();
+                    string prompt = app.AvatarService.GetSystemPrompt(_activeAvatarId, profiles);
+                    _chatService.SystemPrompt = s.useSystemPrompt ? prompt : null;
+                }
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
         }
 
         private string AvatarStyleTag(string avatarId)
@@ -2347,6 +2418,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
                 return meta.PersonaRu;
+
+            if (GetCustomProfile(avatarId) != null)
+                return "Персона не задана. Нажми «Изменить», чтобы добавить описание и системный prompt.";
 
             return BuiltInAvatarMetaById["neon"].PersonaRu;
         }

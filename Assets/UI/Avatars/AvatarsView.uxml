@@ -129,6 +129,7 @@
                 <ui:Label name="preview-persona" text="Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу." class="persona-box" />
                 <ui:VisualElement name="preview-actions-row" class="preview-actions">
                     <ui:Button name="preview-edit-persona-btn" text="Изменить" class="btn" />
+                    <ui:Button name="preview-reset-persona-btn" text="Сбросить персону" class="btn" />
                     <ui:Button name="preview-delete-avatar-btn" text="Удалить" class="btn btn--danger" />
                     <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary is-last" />
                 </ui:VisualElement>
