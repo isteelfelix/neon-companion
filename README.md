@@ -86,3 +86,8 @@ This repository is source-available: you may use it, modify it, fork it, and sel
 ## Author
 
 Maintained by iSteelFelix with contributions from the community.
+
+## Credits
+
+- **iSteelFelix** — creator, owner, product direction, engineering
+- **Neon** — AI companion, in-repo contributor, co-builder of `neon-companion`
