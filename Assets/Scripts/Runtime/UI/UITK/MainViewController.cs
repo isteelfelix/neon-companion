@@ -746,7 +746,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка] {ex.Message}");
+                AddSystemMessage($"Не удалось отправить сообщение: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -807,7 +807,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка] {ex.Message}");
+                AddSystemMessage($"Не удалось получить сводку: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -837,7 +837,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка поиска] {ex.Message}");
+                AddSystemMessage($"Не удалось выполнить поиск: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -852,7 +852,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var messages = _chatService?.CurrentChatViewModel?.Messages;
             if (messages == null || messages.Count == 0)
             {
-                AddSystemMessage("Нет ответа ассистента для прослушивания.");
+                AddSystemMessage("Нет ответа ассистента для копирования.");
                 return;
             }
 
@@ -862,12 +862,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
                 {
                     GUIUtility.systemCopyBuffer = msg.content;
-                    AddSystemMessage("TTS ещё не подключён. Пока что последний ответ скопирован в буфер обмена.");
+                    AddSystemMessage("Последний ответ скопирован в буфер обмена.");
                     return;
                 }
             }
 
-            AddSystemMessage("Нет ответа ассистента для прослушивания.");
+            AddSystemMessage("Нет ответа ассистента для копирования.");
         }
 
         private void OnAttachClicked()
@@ -896,7 +896,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка вложения] {ex.Message}");
+                AddSystemMessage($"Не удалось добавить токен вложения: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2246,7 +2246,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка удаления] {ex.Message}");
+                AddSystemMessage($"Не удалось удалить аватар: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2923,7 +2923,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка] {ex.Message}");
+                AddSystemMessage($"Не удалось пересоздать ответ: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2967,7 +2967,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка импорта] {ex.Message}");
+                AddSystemMessage($"Не удалось импортировать провайдеров: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -3022,7 +3022,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка загрузки] {ex.Message}");
+                AddSystemMessage($"Не удалось загрузить аватар: {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }

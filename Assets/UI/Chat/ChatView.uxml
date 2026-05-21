@@ -21,13 +21,13 @@
                 <ui:VisualElement class="subtitle__actions">
                     <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Копировать" />
                     <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Пересоздать" />
-                    <ui:Button name="listen-btn" class="iconbtn icon icon--headphones" tooltip="Озвучить" />
+                    <ui:Button name="listen-btn" class="iconbtn icon icon--copy" tooltip="Копировать последний ответ" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement name="composer" class="composer">
-                <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Прикрепить" />
-                <ui:TextField name="message-input" class="composer__input" placeholder="Напиши Neon что-нибудь..." />
+                <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить токен вложения" />
+                <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." />
                 <ui:VisualElement class="composer__hint">
                     <ui:Label text="⌘" class="kbd" />
                     <ui:Label text="↵" class="kbd" />
@@ -44,15 +44,15 @@
             <ui:VisualElement class="avatar-panel__head">
                 <ui:VisualElement class="statusrow">
                     <ui:VisualElement class="statusrow__dot" />
-                    <ui:Label name="connection-status" text="подключено" class="statusrow__text" />
+                    <ui:Label name="connection-status" text="статус не определён" class="statusrow__text" />
                 </ui:VisualElement>
                 <ui:Button name="provider-tag" class="providertag">
                     <ui:VisualElement class="provider__logo provider__logo--mini">
-                        <ui:Label name="provider-short" text="OAI" />
+                        <ui:Label name="provider-short" text="—" />
                     </ui:VisualElement>
                     <ui:VisualElement class="providertag__body">
-                        <ui:Label name="provider-name" text="OpenAI" class="providertag__name" />
-                        <ui:Label name="provider-model" text="gpt-4o-mini" class="providertag__model" />
+                        <ui:Label name="provider-name" text="провайдер" class="providertag__name" />
+                        <ui:Label name="provider-model" text="модель" class="providertag__model" />
                     </ui:VisualElement>
                     <ui:VisualElement class="icon icon--arrow providertag__arrow" />
                 </ui:Button>
