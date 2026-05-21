@@ -18,6 +18,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const string ActiveNavClass = "nav__item--active";
         private const string ActiveSessionClass = "history__item--active";
         private const string ActiveProviderClass = "provider--active";
+        private const string ActiveAvatarFilterClass = "filterchip--active";
 
         private readonly List<VisualElement> _navItems = new List<VisualElement>();
         private readonly List<VisualElement> _sessionItems = new List<VisualElement>();
@@ -78,7 +79,19 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
             { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
+        private static readonly Dictionary<string, BuiltInAvatarMeta> BuiltInAvatarMetaById = new Dictionary<string, BuiltInAvatarMeta>
+        {
+            ["neon"] = new BuiltInAvatarMeta("Неон", "стандартный", "Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу.", AvatarFilter.Standard),
+            ["aurora"] = new BuiltInAvatarMeta("Аврора", "прохладный · градиент", "Аврора — спокойная и аналитичная. Объясняет ясно и сначала обдумывает ответ.", AvatarFilter.Gradient),
+            ["ember"] = new BuiltInAvatarMeta("Эмбер", "тёплый · градиент", "Эмбер — тёплая и эмпатичная. Улавливает настроение и отвечает бережно.", AvatarFilter.Gradient),
+            ["glass"] = new BuiltInAvatarMeta("Гласс", "минимал · тёмный", "Гласс — энергичная и смелая. Любит сложные задачи и быстрый темп.", AvatarFilter.Minimal),
+            ["flora"] = new BuiltInAvatarMeta("Флора", "природный · градиент", "Флора — вдумчивая и спокойная. Даёт нюансированные и сбалансированные ответы.", AvatarFilter.Gradient),
+            ["mono"] = new BuiltInAvatarMeta("Моно", "минимал · монохром", "Моно — точная и эффективная. Ценит корректность и краткость.", AvatarFilter.Minimal),
+            ["cobalt"] = new BuiltInAvatarMeta("Кобальт", "смелый · градиент", "Кобальт — креативная и изобретательная. Любит исследовать идеи и связи.", AvatarFilter.Gradient),
+            ["rose"] = new BuiltInAvatarMeta("Роуз", "мягкий · градиент", "Роуз — обаятельная и общительная. Делает диалог более личным.", AvatarFilter.Gradient)
+        };
         private string _activeAvatarId = "neon";
+        private AvatarFilter _activeAvatarFilter = AvatarFilter.All;
         private VisualElement _avatarArt;
         private VisualElement _avatarCircle;
         private VisualElement _previewHero;
@@ -100,6 +113,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly Dictionary<string, VisualElement> _customAvatarTiles = new Dictionary<string, VisualElement>();
         private readonly Dictionary<string, Texture2D> _customTextures = new Dictionary<string, Texture2D>();
         private List<AvatarProfile> _cachedCustomProfiles = new List<AvatarProfile>();
+        private Button _avatarFilterAllBtn;
+        private Button _avatarFilterStandardBtn;
+        private Button _avatarFilterGradientBtn;
+        private Button _avatarFilterMinimalBtn;
+        private Button _avatarFilterCustomBtn;
+        private Label _avatarFilterAllCount;
+        private Label _avatarFilterStandardCount;
+        private Label _avatarFilterGradientCount;
+        private Label _avatarFilterMinimalCount;
+        private Label _avatarFilterCustomCount;
 
         // ===== Typing animation =====
         private VisualElement _typingDot1;
@@ -362,6 +385,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             _personaEditField     = root.Q<TextField>("persona-edit-field");
             _personaSaveBtn       = root.Q<Button>("persona-save-btn");
             _personaCancelBtn     = root.Q<Button>("persona-cancel-btn");
+            _avatarFilterAllBtn = root.Q<Button>("avatar-filter-all-btn");
+            _avatarFilterStandardBtn = root.Q<Button>("avatar-filter-standard-btn");
+            _avatarFilterGradientBtn = root.Q<Button>("avatar-filter-gradient-btn");
+            _avatarFilterMinimalBtn = root.Q<Button>("avatar-filter-minimal-btn");
+            _avatarFilterCustomBtn = root.Q<Button>("avatar-filter-custom-btn");
+            _avatarFilterAllCount = root.Q<Label>("avatar-filter-all-count");
+            _avatarFilterStandardCount = root.Q<Label>("avatar-filter-standard-count");
+            _avatarFilterGradientCount = root.Q<Label>("avatar-filter-gradient-count");
+            _avatarFilterMinimalCount = root.Q<Label>("avatar-filter-minimal-count");
+            _avatarFilterCustomCount = root.Q<Label>("avatar-filter-custom-count");
             SetDisplay(_personaEditorPanel, DisplayStyle.None);
             SetDisplay(_previewDeleteAvatarBtn, DisplayStyle.None);
 
@@ -448,6 +481,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
             RegisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             RegisterClick(_personaCancelBtn, OnPersonaCancelClicked);
+            RegisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
+            RegisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
+            RegisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
+            RegisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
+            RegisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
         }
 
         private void UnregisterCallbacks()
@@ -480,6 +518,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
             UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             UnregisterClick(_personaCancelBtn, OnPersonaCancelClicked);
+            UnregisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
+            UnregisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
+            UnregisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
+            UnregisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
+            UnregisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
@@ -1903,6 +1946,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetAvatarShape(s.avatarShape ?? "round", save: false);
                 ApplyHaloVisibility(s.showHalo);
                 RefreshCustomAvatarGallery(app);
+                RefreshBuiltInAvatarTileLabels();
+                ApplyAvatarFilter();
                 ApplyAvatarArt(_activeAvatarId);
                 SyncGallerySelection(_activeAvatarId);
                 ApplyBreathingAnimation(s.breathingAnimation);
@@ -2027,6 +2072,18 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (tile != null)
                     tile.RegisterCallback<ClickEvent>(_ => SelectAvatar(capturedId));
             }
+        }
+
+        private void OnAvatarFilterAllClicked() => SetAvatarFilter(AvatarFilter.All);
+        private void OnAvatarFilterStandardClicked() => SetAvatarFilter(AvatarFilter.Standard);
+        private void OnAvatarFilterGradientClicked() => SetAvatarFilter(AvatarFilter.Gradient);
+        private void OnAvatarFilterMinimalClicked() => SetAvatarFilter(AvatarFilter.Minimal);
+        private void OnAvatarFilterCustomClicked() => SetAvatarFilter(AvatarFilter.Custom);
+
+        private void SetAvatarFilter(AvatarFilter filter)
+        {
+            _activeAvatarFilter = filter;
+            ApplyAvatarFilter();
         }
 
         private void SelectAvatar(string avatarId)
@@ -2265,18 +2322,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private string AvatarStyleTag(string avatarId)
         {
-            switch (avatarId)
-            {
-                case "aurora": return "прохладный · градиент";
-                case "ember":  return "тёплый · насыщенный";
-                case "glass":  return "минимал · тёмный";
-                case "flora":  return "природный · зелёный";
-                case "mono":   return "монохром";
-                case "cobalt": return "смелый · синий";
-                case "rose":   return "мягкий · розовый";
-                case "neon":   return "базовый";
-                default:        return "пользовательский";
-            }
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.StyleTagRu;
+
+            return "пользовательский";
         }
 
         private string AvatarPersonaText(string avatarId)
@@ -2285,17 +2334,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (custom != null && !string.IsNullOrWhiteSpace(custom.systemPrompt))
                 return custom.systemPrompt;
 
-            switch (avatarId)
-            {
-                case "aurora": return "Aurora — спокойная и аналитичная. Объясняет ясно и сначала обдумывает ответ.";
-                case "ember":  return "Ember — тёплая и эмпатичная. Улавливает настроение и отвечает бережно.";
-                case "glass":  return "Glass — энергичная и смелая. Всегда готова к сложным задачам.";
-                case "flora":  return "Flora — мудрая и вдумчивая. Даёт нюансированные и сбалансированные ответы.";
-                case "mono":   return "Mono — точная и эффективная. Ценит корректность и краткость.";
-                case "cobalt": return "Cobalt — креативная и изобретательная. Любит исследовать идеи и связи.";
-                case "rose":   return "Rose — обаятельная и общительная. Делает диалог более личным.";
-                default:        return "Neon — полезная и остроумная. Отвечает по делу, с лёгкой игривостью.";
-            }
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.PersonaRu;
+
+            return BuiltInAvatarMetaById["neon"].PersonaRu;
         }
 
         private string AvatarDisplayName(string avatarId)
@@ -2304,17 +2346,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (custom != null && !string.IsNullOrWhiteSpace(custom.name))
                 return custom.name;
 
-            switch (avatarId)
-            {
-                case "aurora": return "Aurora";
-                case "ember":  return "Ember";
-                case "glass":  return "Glass";
-                case "flora":  return "Flora";
-                case "mono":   return "Mono";
-                case "cobalt": return "Cobalt";
-                case "rose":   return "Rose";
-                default:        return "Neon";
-            }
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.DisplayNameRu;
+            return BuiltInAvatarMetaById["neon"].DisplayNameRu;
         }
 
         private void RefreshCustomAvatarGallery(CompanionApp app)
@@ -2350,6 +2384,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             int total = BuiltInAvatarIds.Length + _cachedCustomProfiles.Count;
             if (_navAvatarsCount != null)
                 _navAvatarsCount.text = total.ToString();
+
+            RefreshBuiltInAvatarTileLabels();
+            ApplyAvatarFilter();
         }
 
         private VisualElement CreateCustomAvatarTile(AvatarProfile profile)
@@ -2391,6 +2428,114 @@ namespace NeonCompanion.Runtime.UI.UITK
             return _cachedCustomProfiles?.FirstOrDefault(a => a.id == avatarId);
         }
 
+        private void RefreshBuiltInAvatarTileLabels()
+        {
+            if (_root == null) return;
+            foreach (var id in BuiltInAvatarIds)
+            {
+                var tile = _root.Q<VisualElement>($"avtile-{id}");
+                var nameLabel = tile?.Q<Label>(className: "avtile__name");
+                if (nameLabel != null)
+                    nameLabel.text = AvatarDisplayName(id);
+            }
+        }
+
+        private void ApplyAvatarFilter()
+        {
+            UpdateAvatarFilterChipState();
+            UpdateAvatarFilterCounts();
+
+            if (_root == null)
+                return;
+
+            foreach (var id in BuiltInAvatarIds)
+            {
+                var tile = _root.Q<VisualElement>($"avtile-{id}");
+                if (tile != null)
+                    SetDisplay(tile, MatchesFilter(id) ? DisplayStyle.Flex : DisplayStyle.None);
+            }
+
+            foreach (var kvp in _customAvatarTiles)
+                SetDisplay(kvp.Value, MatchesFilter(kvp.Key) ? DisplayStyle.Flex : DisplayStyle.None);
+
+            if (_avatarUploadTile != null)
+                SetDisplay(_avatarUploadTile, _activeAvatarFilter == AvatarFilter.All || _activeAvatarFilter == AvatarFilter.Custom
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None);
+
+            if (!MatchesFilter(_activeAvatarId))
+            {
+                var fallback = GetFirstAvatarForActiveFilter();
+                if (!string.IsNullOrEmpty(fallback))
+                    SelectAvatar(fallback);
+            }
+        }
+
+        private void UpdateAvatarFilterChipState()
+        {
+            SetFilterChipActive(_avatarFilterAllBtn, _activeAvatarFilter == AvatarFilter.All);
+            SetFilterChipActive(_avatarFilterStandardBtn, _activeAvatarFilter == AvatarFilter.Standard);
+            SetFilterChipActive(_avatarFilterGradientBtn, _activeAvatarFilter == AvatarFilter.Gradient);
+            SetFilterChipActive(_avatarFilterMinimalBtn, _activeAvatarFilter == AvatarFilter.Minimal);
+            SetFilterChipActive(_avatarFilterCustomBtn, _activeAvatarFilter == AvatarFilter.Custom);
+        }
+
+        private static void SetFilterChipActive(Button button, bool active)
+        {
+            button?.EnableInClassList(ActiveAvatarFilterClass, active);
+        }
+
+        private void UpdateAvatarFilterCounts()
+        {
+            int totalBuiltIn = BuiltInAvatarIds.Length;
+            int customCount = _cachedCustomProfiles?.Count ?? 0;
+            int standardCount = BuiltInAvatarIds.Count(id => GetBuiltInFilter(id) == AvatarFilter.Standard);
+            int gradientCount = BuiltInAvatarIds.Count(id => GetBuiltInFilter(id) == AvatarFilter.Gradient);
+            int minimalCount = BuiltInAvatarIds.Count(id => GetBuiltInFilter(id) == AvatarFilter.Minimal);
+
+            SetCountLabel(_avatarFilterAllCount, totalBuiltIn + customCount);
+            SetCountLabel(_avatarFilterStandardCount, standardCount);
+            SetCountLabel(_avatarFilterGradientCount, gradientCount);
+            SetCountLabel(_avatarFilterMinimalCount, minimalCount);
+            SetCountLabel(_avatarFilterCustomCount, customCount);
+        }
+
+        private static void SetCountLabel(Label label, int value)
+        {
+            if (label != null)
+                label.text = value.ToString();
+        }
+
+        private bool MatchesFilter(string avatarId)
+        {
+            if (_activeAvatarFilter == AvatarFilter.All)
+                return true;
+
+            if (GetCustomProfile(avatarId) != null)
+                return _activeAvatarFilter == AvatarFilter.Custom;
+
+            return GetBuiltInFilter(avatarId) == _activeAvatarFilter;
+        }
+
+        private static AvatarFilter GetBuiltInFilter(string avatarId)
+        {
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.Filter;
+            return AvatarFilter.Standard;
+        }
+
+        private string GetFirstAvatarForActiveFilter()
+        {
+            foreach (var id in BuiltInAvatarIds)
+            {
+                if (MatchesFilter(id))
+                    return id;
+            }
+
+            var custom = _cachedCustomProfiles?.FirstOrDefault();
+            return custom?.id;
+        }
+
         private Texture2D GetOrLoadTexture(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -2429,6 +2574,31 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             System.IO.File.Delete(path);
+        }
+
+        private enum AvatarFilter
+        {
+            All,
+            Standard,
+            Gradient,
+            Minimal,
+            Custom
+        }
+
+        private readonly struct BuiltInAvatarMeta
+        {
+            public BuiltInAvatarMeta(string displayNameRu, string styleTagRu, string personaRu, AvatarFilter filter)
+            {
+                DisplayNameRu = displayNameRu;
+                StyleTagRu = styleTagRu;
+                PersonaRu = personaRu;
+                Filter = filter;
+            }
+
+            public string DisplayNameRu { get; }
+            public string StyleTagRu { get; }
+            public string PersonaRu { get; }
+            public AvatarFilter Filter { get; }
         }
 
         private static Texture2D LoadTextureFromFile(string path)
