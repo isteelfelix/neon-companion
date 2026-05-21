@@ -2431,20 +2431,20 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (hasOverride)
             {
-                _previewPersonaStateBadge.text = "Локальная персона";
-                _previewPersonaStateHelp.text = "Используется сохранённый локально prompt для этого аватара.";
+                _previewPersonaStateBadge.text = "Локальные инструкции";
+                _previewPersonaStateHelp.text = "Сейчас используется сохранённый локально system prompt для этого аватара.";
                 return;
             }
 
             if (isCustom)
             {
-                _previewPersonaStateBadge.text = "Персона не задана";
-                _previewPersonaStateHelp.text = "Для этого пользовательского аватара системный prompt сейчас не применяется.";
+                _previewPersonaStateBadge.text = "Инструкции не заданы";
+                _previewPersonaStateHelp.text = "Для этого пользовательского аватара system prompt сейчас не применяется.";
                 return;
             }
 
-            _previewPersonaStateBadge.text = "Встроенная персона";
-            _previewPersonaStateHelp.text = "Используется встроенная персона по умолчанию.";
+            _previewPersonaStateBadge.text = "Встроенные инструкции";
+            _previewPersonaStateHelp.text = "Сейчас используются встроенные инструкции по умолчанию.";
         }
 
         private string AvatarPersonaText(string avatarId)
@@ -2457,7 +2457,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return meta.PersonaRu;
 
             if (GetCustomProfile(avatarId) != null)
-                return "Персона не задана. Нажми «Изменить», чтобы добавить описание и системный prompt.";
+                return "Инструкции не заданы. Нажми «Изменить», чтобы добавить текст для system prompt.";
 
             return BuiltInAvatarMetaById["neon"].PersonaRu;
         }
