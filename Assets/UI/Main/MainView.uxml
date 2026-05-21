@@ -6,6 +6,7 @@
     <ui:Template name="ChatView"      src="../Chat/ChatView.uxml" />
     <ui:Template name="ProvidersView" src="../Providers/ProvidersView.uxml" />
     <ui:Template name="AvatarsView"   src="../Avatars/AvatarsView.uxml" />
+    <ui:Template name="ThemesView"    src="../Themes/ThemesView.uxml" />
     <ui:Template name="SettingsView"  src="../Settings/SettingsView.uxml" />
 
     <ui:VisualElement name="app-root" class="app">
@@ -91,6 +92,7 @@
                 <ui:Instance template="ChatView"      name="chat-panel"      class="panel panel--active" />
                 <ui:Instance template="ProvidersView" name="providers-panel" class="panel" />
                 <ui:Instance template="AvatarsView"   name="avatars-panel"   class="panel" />
+                <ui:Instance template="ThemesView"    name="themes-panel"    class="panel" />
                 <ui:Instance template="SettingsView"  name="settings-panel"  class="panel" />
                 <ui:VisualElement name="placeholder-area" class="panel">
                     <ui:Label name="placeholder-title" text="Раздел" class="page__title" />

@@ -44,6 +44,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _chatPanel;
         private VisualElement _providersPanel;
         private VisualElement _avatarsPanel;
+        private VisualElement _themesPanel;
         private VisualElement _placeholderArea;
         private VisualElement _settingsPanel;
         private VisualElement _composer;
@@ -109,6 +110,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ===== Breathing animation =====
         private IVisualElementScheduledItem _breathSchedule;
         private long _breathStartMs;
+        private IVisualElementScheduledItem _clearDataConfirmResetSchedule;
 
         private Label _topbarTitle;
         private Label _topbarSubtitle;
@@ -133,6 +135,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _settingsOpenFolderBtn;
         private Button _settingsExportBtn;
         private Button _settingsClearBtn;
+        private Label _settingsClearBtnText;
+        private Button _settingsGithubBtn;
+        private Button _settingsDocsBtn;
+        private Button _settingsDonateBtn;
         private Button _testProviderBtn;
         private VisualElement _testRow;
         private Label _testRowLabel;
@@ -170,6 +176,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ProviderConfig _editingProvider;
         private ProviderConfig _editingProviderSource;
         private bool _cancelPending;
+        private bool _clearDataConfirmPending;
+        private long _clearDataConfirmExpiresAtMs;
         private string _chatSubtitle = "0 сообщений · Neon";
         private bool _isBound;
         private bool _isSending;
@@ -190,6 +198,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnDisable()
         {
             UnregisterCallbacks();
+            _clearDataConfirmResetSchedule?.Pause();
+            _clearDataConfirmResetSchedule = null;
             foreach (var tex in _customTextures.Values)
                 if (tex != null) UnityEngine.Object.Destroy(tex);
             _customTextures.Clear();
@@ -228,6 +238,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _chatPanel = root.Q<VisualElement>("chat-panel");
             _providersPanel = root.Q<VisualElement>("providers-panel");
             _avatarsPanel = root.Q<VisualElement>("avatars-panel");
+            _themesPanel = root.Q<VisualElement>("themes-panel");
             _placeholderArea = root.Q<VisualElement>("placeholder-area");
             _settingsPanel = root.Q<VisualElement>("settings-panel");
             _composer = root.Q<VisualElement>("composer");
@@ -297,6 +308,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
             _settingsExportBtn     = root.Q<Button>("settings-export-btn");
             _settingsClearBtn      = root.Q<Button>("settings-clear-btn");
+            _settingsClearBtnText  = _settingsClearBtn?.Q<Label>();
+            _settingsGithubBtn     = root.Q<Button>("settings-github-btn");
+            _settingsDocsBtn       = root.Q<Button>("settings-docs-btn");
+            _settingsDonateBtn     = root.Q<Button>("settings-donate-btn");
+            _settingsDonateBtn?.SetEnabled(false);
             _testProviderBtn = root.Q<Button>("test-provider-btn");
             _testRow         = root.Q<VisualElement>("test-row");
             _testRowLabel    = root.Q<Label>("test-row-label");
@@ -347,6 +363,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetDisplay(_providerEditPanel, DisplayStyle.None);
             SetSending(false);
+            UpdateClearDataButtonState();
             _ = LoadSettingsAsync();
             _isBound = true;
         }
@@ -383,6 +400,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
             RegisterClick(_settingsExportBtn, OnExportChatsClicked);
             RegisterClick(_settingsClearBtn, OnClearDataClicked);
+            RegisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
+            RegisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
+            RegisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
             RegisterClick(_testProviderBtn, OnTestProviderClicked);
             RegisterClick(_copyButton, OnCopyLastMessageClicked);
             RegisterClick(_regenerateButton, OnRegenerateClicked);
@@ -434,6 +454,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_addProviderButton, OnAddProviderClicked);
             UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
+            UnregisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
+            UnregisterClick(_settingsExportBtn, OnExportChatsClicked);
+            UnregisterClick(_settingsClearBtn, OnClearDataClicked);
+            UnregisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
+            UnregisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
+            UnregisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
+            UnregisterClick(_testProviderBtn, OnTestProviderClicked);
             UnregisterClick(_listenButton, OnListenClicked);
             UnregisterClick(_attachButton, OnAttachClicked);
             UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
@@ -534,7 +561,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navThemes);
-            SetPlaceholder("Темы", "Палитры и формы аватара будут вынесены сюда следующим этапом.");
+            SetTopbar("Темы", "Форма, halo и breathing для аватара");
+            ShowArea(_themesPanel);
         }
 
         private void ShowSettings()
@@ -562,6 +590,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_chatPanel, visible == _chatPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_providersPanel, visible == _providersPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_avatarsPanel, visible == _avatarsPanel ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_themesPanel, visible == _themesPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_placeholderArea, visible == _placeholderArea ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_settingsPanel, visible == _settingsPanel ? DisplayStyle.Flex : DisplayStyle.None);
         }
@@ -752,7 +781,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var messages = _chatService?.CurrentChatViewModel?.Messages;
             if (messages == null || messages.Count == 0)
             {
-                AddSystemMessage("Нет ответа ассистента для копирования.");
+                AddSystemMessage("Нет ответа ассистента для прослушивания.");
                 return;
             }
 
@@ -762,12 +791,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
                 {
                     GUIUtility.systemCopyBuffer = msg.content;
-                    AddSystemMessage("Последний ответ ассистента скопирован в буфер обмена.");
+                    AddSystemMessage("TTS ещё не подключён. Пока что последний ответ скопирован в буфер обмена.");
                     return;
                 }
             }
 
-            AddSystemMessage("Нет ответа ассистента для копирования.");
+            AddSystemMessage("Нет ответа ассистента для прослушивания.");
         }
 
         private void OnAttachClicked()
@@ -2358,20 +2387,53 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnOpenFolderClicked()
         {
+            OpenPath(Application.persistentDataPath);
+        }
+
+        private static void OpenPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
 #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            System.Diagnostics.Process.Start("explorer.exe", Application.persistentDataPath.Replace('/', '\\'));
+            System.Diagnostics.Process.Start("explorer.exe", path.Replace('/', '\\'));
 #elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-            System.Diagnostics.Process.Start("open", Application.persistentDataPath);
+            System.Diagnostics.Process.Start("open", path);
 #elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
-            System.Diagnostics.Process.Start("xdg-open", Application.persistentDataPath);
+            System.Diagnostics.Process.Start("xdg-open", path);
 #else
-            Application.OpenURL("file://" + Application.persistentDataPath);
+            Application.OpenURL("file://" + path);
 #endif
         }
 
         private void OnExportChatsClicked()
         {
             _ = ExportChatsAsync();
+        }
+
+        private void OnSettingsGitHubClicked()
+        {
+            OpenExternalUrl("https://github.com/isteelfelix/neon-companion");
+            AddSystemMessage("Открыт GitHub репозитория.");
+        }
+
+        private void OnSettingsDocsClicked()
+        {
+            OpenExternalUrl("https://github.com/isteelfelix/neon-companion/tree/main/docs");
+            AddSystemMessage("Открыта папка docs.");
+        }
+
+        private void OnSettingsDonateClicked()
+        {
+            AddSystemMessage("Ссылка для поддержки пока не настроена.");
+        }
+
+        private static void OpenExternalUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return;
+
+            Application.OpenURL(url);
         }
 
         private async Task ExportChatsAsync()
@@ -2388,6 +2450,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_subtitleBody != null)
                     _subtitleBody.text = $"Экспортировано: {System.IO.Path.GetFileName(path)}";
+
+                AddSystemMessage($"Чаты экспортированы в {System.IO.Path.GetFileName(path)}.");
+                OpenPath(path);
             }
             catch (Exception ex)
             {
@@ -2397,13 +2462,66 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnClearDataClicked()
         {
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (!_clearDataConfirmPending || nowMs > _clearDataConfirmExpiresAtMs)
+            {
+                _clearDataConfirmPending = true;
+                _clearDataConfirmExpiresAtMs = nowMs + 7000;
+                ArmClearDataConfirmationReset();
+                UpdateClearDataButtonState();
+                AddSystemMessage("Нажми «Подтвердить» ещё раз в течение 7 секунд, чтобы удалить все данные.");
+                return;
+            }
+
+            ResetClearDataConfirmation();
             _ = ClearAllDataAsync();
+        }
+
+        private void ResetClearDataConfirmation()
+        {
+            _clearDataConfirmResetSchedule?.Pause();
+            _clearDataConfirmResetSchedule = null;
+            _clearDataConfirmPending = false;
+            _clearDataConfirmExpiresAtMs = 0;
+            UpdateClearDataButtonState();
+        }
+
+        private void ArmClearDataConfirmationReset()
+        {
+            _clearDataConfirmResetSchedule?.Pause();
+            if (_settingsClearBtn == null)
+                return;
+
+            _clearDataConfirmResetSchedule = _settingsClearBtn.schedule
+                .Execute(() =>
+                {
+                    _clearDataConfirmResetSchedule = null;
+                    ResetClearDataConfirmation();
+                })
+                .StartingIn(7000);
+        }
+
+        private void UpdateClearDataButtonState()
+        {
+            if (_clearDataConfirmPending && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > _clearDataConfirmExpiresAtMs)
+            {
+                _clearDataConfirmPending = false;
+                _clearDataConfirmExpiresAtMs = 0;
+            }
+
+            bool armed = _clearDataConfirmPending;
+
+            if (_settingsClearBtnText != null)
+                _settingsClearBtnText.text = armed ? "Подтвердить" : "Очистить";
+
+            _settingsClearBtn?.EnableInClassList("btn--danger-armed", armed);
         }
 
         private async Task ClearAllDataAsync()
         {
             try
             {
+                ResetClearDataConfirmation();
                 var app = await GetAppAsync();
                 if (app == null) return;
 
@@ -2430,6 +2548,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
+                ResetClearDataConfirmation();
                 NeonLogger.LogError(ex.ToString());
             }
         }

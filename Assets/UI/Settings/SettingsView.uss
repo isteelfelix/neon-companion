@@ -171,40 +171,6 @@
     display: none;
 }
 
-/* ---- Segmented control (avatar shape) ---- */
-
-.seg {
-    flex-direction: row;
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    padding: 2px;
-}
-
-.seg__btn {
-    height: 28px;
-    padding: 0 12px;
-    border-radius: 8px;
-    border-width: 0;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--text-2);
-    font-size: 12px;
-    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
-    margin: 0;
-    transition-property: background-color, color;
-    transition-duration: 0.12s;
-}
-
-.seg__btn:hover {
-    color: var(--text-0);
-}
-
-.seg__btn--active {
-    background-color: var(--bg-3);
-    color: var(--text-0);
-}
-
 /* ---- Danger button ---- */
 
 .btn--danger {
@@ -218,6 +184,29 @@
     border-color: var(--danger);
 }
 
+.btn--danger-armed {
+    background-color: var(--danger);
+    border-color: var(--danger);
+    color: rgb(255, 255, 255);
+}
+
+.btn--danger-armed:hover {
+    background-color: rgba(226, 112, 71, 0.88);
+    border-color: rgba(226, 112, 71, 0.88);
+}
+
+.btn--muted {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: var(--line-1);
+    color: var(--text-3);
+}
+
+.btn--muted:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: var(--line-1);
+    color: var(--text-3);
+}
+
 /* ---- Button with icon ---- */
 
 .btn__icon {
@@ -229,6 +218,14 @@
 
 .btn--danger .btn__icon {
     -unity-background-image-tint-color: var(--danger);
+}
+
+.btn--danger-armed .btn__icon {
+    -unity-background-image-tint-color: rgb(255, 255, 255);
+}
+
+.btn--muted .btn__icon {
+    -unity-background-image-tint-color: var(--text-3);
 }
 
 /* ---- About actions row ---- */
@@ -253,4 +250,3 @@
 .icon--external { background-image: url("project://database/Assets/UI/Icons/external.svg"); }
 .icon--download { background-image: url("project://database/Assets/UI/Icons/download.svg"); }
 .icon--heart    { background-image: url("project://database/Assets/UI/Icons/heart.svg"); }
-.icon--palette  { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
