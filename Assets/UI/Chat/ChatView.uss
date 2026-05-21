@@ -529,6 +529,7 @@
     top: 0;
     right: 0;
     bottom: 0;
+    -unity-background-scale-mode: scale-and-crop;
 }
 
 .avatar__art--neon { background-color: #4f45d8; }

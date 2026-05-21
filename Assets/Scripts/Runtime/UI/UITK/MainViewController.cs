@@ -2287,7 +2287,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
                     _avatarArt.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
-                    if (tex != null) _avatarArt.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
                 }
                 else
                 {
@@ -2304,7 +2303,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
                     _previewHero.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
-                    if (tex != null) _previewHero.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
                     _previewHero.style.backgroundColor = new StyleColor(new Color(0.18f, 0.18f, 0.22f));
                 }
                 else
@@ -2410,7 +2408,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (texture != null)
             {
                 tile.style.backgroundImage = new StyleBackground(texture);
-                tile.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
             }
             else
             {
