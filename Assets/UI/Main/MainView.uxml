@@ -68,8 +68,8 @@
             <ui:VisualElement class="rail__footer">
                 <ui:VisualElement class="dot--status" />
                 <ui:VisualElement class="rail__footer-text">
-                    <ui:Label name="rail-provider-name" text="OpenAI" class="rail__footer-provider" />
-                    <ui:Label name="rail-provider-model" text="gpt-4o-mini" class="rail__footer-model" />
+                    <ui:Label name="rail-provider-name" text="Провайдер не выбран" class="rail__footer-provider" />
+                    <ui:Label name="rail-provider-model" text="Модель не выбрана" class="rail__footer-model" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -77,9 +77,9 @@
         <ui:VisualElement name="main" class="main">
             <ui:VisualElement class="topbar">
                 <ui:VisualElement class="topbar__left">
-                    <ui:Label name="topbar-title" text="Дизайн системы рендеринга 2D" class="topbar__title" />
+                    <ui:Label name="topbar-title" text="Новый чат" class="topbar__title" />
                     <ui:VisualElement name="topbar-sep" class="topbar__sep" />
-                    <ui:Label name="topbar-subtitle" text="0 сообщений · Neon" class="topbar__subtitle" />
+                    <ui:Label name="topbar-subtitle" text="" class="topbar__subtitle" />
                 </ui:VisualElement>
                 <ui:VisualElement class="topbar__right">
                     <ui:Button name="summarize-btn" text="Резюме" class="btn btn--ghost" />
@@ -95,8 +95,8 @@
                 <ui:Instance template="ThemesView"    name="themes-panel"    class="panel" />
                 <ui:Instance template="SettingsView"  name="settings-panel"  class="panel" />
                 <ui:VisualElement name="placeholder-area" class="panel">
-                    <ui:Label name="placeholder-title" text="Раздел" class="page__title" />
-                    <ui:Label name="placeholder-body" text="Экран будет добавлен следующим этапом." class="page__subtitle" />
+                    <ui:Label name="placeholder-title" text="Раздел недоступен" class="page__title" />
+                    <ui:Label name="placeholder-body" text="Содержимое для этого раздела сейчас не отображается." class="page__subtitle" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

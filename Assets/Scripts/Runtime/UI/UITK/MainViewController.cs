@@ -208,7 +208,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _cancelPending;
         private bool _clearDataConfirmPending;
         private long _clearDataConfirmExpiresAtMs;
-        private string _chatSubtitle = "0 сообщений · Neon";
+        private string _chatSubtitle = "0 сообщений";
         private string _currentSessionId = string.Empty;
         private string _currentSessionTitle = string.Empty;
         private bool _isBound;
