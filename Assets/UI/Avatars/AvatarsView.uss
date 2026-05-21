@@ -236,6 +236,29 @@
     margin-top: 10px;
 }
 
+.persona-state {
+    margin-top: 10px;
+    margin-bottom: 2px;
+}
+
+.persona-state__badge {
+    align-self: flex-start;
+    font-size: 10px;
+    color: var(--accent-text);
+    background-color: var(--accent-soft);
+    border-width: 1px;
+    border-color: var(--accent);
+    border-radius: 999px;
+    padding: 2px 8px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Medium.ttf");
+}
+
+.persona-state__help {
+    margin-top: 6px;
+    color: var(--text-3);
+    font-size: 11px;
+}
+
 .persona-box {
     background-color: var(--bg-2);
     border-width: 1px;

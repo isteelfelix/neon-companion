@@ -125,6 +125,10 @@
                 <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label text="дыхание · 5с" class="preview-row__value" /></ui:VisualElement>
                 <ui:VisualElement class="preview-row"><ui:Label text="Ореол" /><ui:Label text="индиго · 40%" class="preview-row__value" /></ui:VisualElement>
                 <ui:VisualElement class="preview-row"><ui:Label text="Пульс речи" /><ui:Label text="авто" class="preview-row__value" /></ui:VisualElement>
+                <ui:VisualElement name="preview-persona-state-row" class="persona-state">
+                    <ui:Label name="preview-persona-state-badge" text="Статус персоны" class="persona-state__badge" />
+                    <ui:Label name="preview-persona-state-help" text="Описание поведения видно ниже." class="persona-state__help" />
+                </ui:VisualElement>
                 <ui:Label name="preview-persona-label" text="Персона" class="label preview-persona-label" />
                 <ui:Label name="preview-persona" text="Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу." class="persona-box" />
                 <ui:VisualElement name="preview-actions-row" class="preview-actions">

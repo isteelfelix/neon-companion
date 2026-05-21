@@ -98,6 +98,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _previewTitle;
         private Label _previewTag;
         private Label _previewPersona;
+        private Label _previewPersonaStateBadge;
+        private Label _previewPersonaStateHelp;
+        private VisualElement _previewPersonaStateRow;
         private Label _streamingLabel;
         private Button _previewApplyBtn;
         private Button _previewEditPersonaBtn;
@@ -378,6 +381,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewTitle   = root.Q<Label>("preview-title");
             _previewTag     = root.Q<Label>("preview-tag");
             _previewPersona = root.Q<Label>("preview-persona");
+            _previewPersonaStateBadge = root.Q<Label>("preview-persona-state-badge");
+            _previewPersonaStateHelp = root.Q<Label>("preview-persona-state-help");
+            _previewPersonaStateRow = root.Q<VisualElement>("preview-persona-state-row");
             _previewApplyBtn      = root.Q<Button>("preview-apply-btn");
             _previewEditPersonaBtn = root.Q<Button>("preview-edit-persona-btn");
             _previewResetPersonaBtn = root.Q<Button>("preview-reset-persona-btn");
@@ -2147,6 +2153,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             string current = PersonaEditorText(_activeAvatarId);
             if (_personaEditField != null) _personaEditField.value = current;
+            SetDisplay(_previewPersonaStateRow, DisplayStyle.None);
             SetDisplay(_previewPersonaLabel, DisplayStyle.None);
             SetDisplay(_previewPersona, DisplayStyle.None);
             SetDisplay(_previewActionsRow, DisplayStyle.None);
@@ -2156,6 +2163,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void ClosePersonaEditor()
         {
             SetDisplay(_personaEditorPanel, DisplayStyle.None);
+            SetDisplay(_previewPersonaStateRow, DisplayStyle.Flex);
             SetDisplay(_previewPersonaLabel, DisplayStyle.Flex);
             SetDisplay(_previewPersona, DisplayStyle.Flex);
             SetDisplay(_previewActionsRow, DisplayStyle.Flex);
@@ -2202,6 +2210,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_previewPersona != null)
                     _previewPersona.text = AvatarPersonaText(_activeAvatarId);
+                UpdatePersonaStateUi(_activeAvatarId);
 
                 if (_chatService != null)
                 {
@@ -2327,6 +2336,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _previewTag.text = AvatarStyleTag(avatarId);
             if (_previewPersona != null)
                 _previewPersona.text = AvatarPersonaText(avatarId);
+            UpdatePersonaStateUi(avatarId);
 
             UpdateAvatarActionButtons(avatarId);
         }
@@ -2387,6 +2397,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_previewPersona != null)
                     _previewPersona.text = AvatarPersonaText(_activeAvatarId);
+                UpdatePersonaStateUi(_activeAvatarId);
                 UpdateAvatarActionButtons(_activeAvatarId);
 
                 if (_chatService != null)
@@ -2408,6 +2419,32 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return meta.StyleTagRu;
 
             return "пользовательский";
+        }
+
+        private void UpdatePersonaStateUi(string avatarId)
+        {
+            if (_previewPersonaStateBadge == null || _previewPersonaStateHelp == null)
+                return;
+
+            bool isCustom = GetCustomProfile(avatarId) != null;
+            bool hasOverride = HasPersonaOverride(avatarId);
+
+            if (hasOverride)
+            {
+                _previewPersonaStateBadge.text = "Локальная персона";
+                _previewPersonaStateHelp.text = "Используется сохранённый локально prompt для этого аватара.";
+                return;
+            }
+
+            if (isCustom)
+            {
+                _previewPersonaStateBadge.text = "Персона не задана";
+                _previewPersonaStateHelp.text = "Для этого пользовательского аватара системный prompt сейчас не применяется.";
+                return;
+            }
+
+            _previewPersonaStateBadge.text = "Встроенная персона";
+            _previewPersonaStateHelp.text = "Используется встроенная персона по умолчанию.";
         }
 
         private string AvatarPersonaText(string avatarId)
