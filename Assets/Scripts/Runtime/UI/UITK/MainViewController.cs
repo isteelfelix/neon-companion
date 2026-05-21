@@ -185,6 +185,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _clearDataConfirmPending;
         private long _clearDataConfirmExpiresAtMs;
         private string _chatSubtitle = "0 сообщений · Neon";
+        private string _currentSessionId = string.Empty;
+        private string _currentSessionTitle = string.Empty;
         private bool _isBound;
         private bool _isSending;
 
@@ -529,7 +531,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navChat);
-            SetTopbar("Дизайн системы рендеринга 2D", _chatSubtitle);
+            SetTopbar(GetChatTitle(), _chatSubtitle);
             ShowArea(_chatPanel);
         }
 
@@ -550,7 +552,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navProviders);
-            SetTopbar("Провайдеры", "OpenAI-compatible endpoints");
+            SetTopbar("Провайдеры", "OpenAI-совместимые провайдеры");
             ShowArea(_providersPanel);
             _ = RefreshProvidersListAsync();
         }
@@ -561,8 +563,22 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navHistory);
-            SetTopbar("История", _chatSubtitle);
+            SetTopbar(GetChatTitle(), _chatSubtitle);
             ShowArea(_chatPanel);
+        }
+
+        private string GetChatTitle()
+        {
+            return !string.IsNullOrWhiteSpace(_currentSessionTitle) ? _currentSessionTitle : "Новый чат";
+        }
+
+        private string GetProviderStatusText()
+        {
+            var provider = _chatService?.CurrentProvider;
+            if (provider == null) return "нет провайдера";
+            if (!string.IsNullOrWhiteSpace(provider.defaultModel))
+                return $"{provider.displayName ?? "API"} · {provider.defaultModel}";
+            return provider.displayName ?? "настроен";
         }
 
         private void ShowThemes()
@@ -716,7 +732,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _sendButton.SetEnabled(!isSending);
 
             if (_connectionStatus != null)
-                _connectionStatus.text = isSending ? "generating · live" : "connected · 14:23";
+                _connectionStatus.text = isSending ? "генерация…" : GetProviderStatusText();
 
             SetDisplay(_typingIndicator, isSending ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_subtitleBody, isSending ? DisplayStyle.None : DisplayStyle.Flex);
@@ -854,6 +870,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
 
                 await chat.StartNewSessionAsync();
+                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+                _currentSessionTitle = string.Empty;
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 ShowChat();
@@ -901,7 +919,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_sendButton != null)
                 _sendButton.SetEnabled(false);
             if (_connectionStatus != null)
-                _connectionStatus.text = "no provider";
+                _connectionStatus.text = "нет провайдера";
         }
 
         private async Task<CompanionApp> GetAppAsync()
@@ -940,6 +958,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _chatService.SaveChatHistory = settingsSnap.saveChatHistory;
 
             await _chatService.GetOrCreateChatAsync();
+            if (string.IsNullOrEmpty(_currentSessionId))
+                _currentSessionId = _chatService.CurrentSessionId ?? string.Empty;
             return _chatService;
         }
 
@@ -952,16 +972,32 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!_isBound)
                 return;
 
+            // Sync session identity from service if not yet captured (covers refresh/init)
+            if (string.IsNullOrEmpty(_currentSessionId))
+                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+
+            // Sync display title from the actual current session (covers reload/refresh case)
+            if (!string.IsNullOrEmpty(_currentSessionId))
+            {
+                var active = allSessions.Find(s => s.sessionId == _currentSessionId);
+                if (active != null)
+                {
+                    _currentSessionTitle = string.IsNullOrWhiteSpace(active.title) || active.title == "New chat"
+                        ? string.Empty
+                        : active.title;
+                }
+                else
+                {
+                    _currentSessionId = string.Empty;
+                    _currentSessionTitle = string.Empty;
+                }
+            }
+
             if (_navChatCount != null)
                 _navChatCount.text = allSessions.Count.ToString();
 
-            // Sync topbar title with current (first/most-recent) session title
-            if (allSessions.Count > 0 && _topbarTitle != null)
-            {
-                string sessionTitle = allSessions[0].title;
-                if (!string.IsNullOrWhiteSpace(sessionTitle) && sessionTitle != "New chat")
-                    _topbarTitle.text = sessionTitle;
-            }
+            if (_topbarTitle != null)
+                _topbarTitle.text = GetChatTitle();
 
             RenderSessionList(allSessions);
         }
@@ -996,10 +1032,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             for (int i = 0; i < sessions.Count; i++)
             {
-                var item = CreateSessionItem(sessions[i], i == 0 && string.IsNullOrWhiteSpace(_sessionSearchQuery));
+                bool isActive = IsActiveSession(sessions[i], i);
+                var item = CreateSessionItem(sessions[i], isActive);
                 _sessionsList.Add(item);
                 _sessionItems.Add(item);
             }
+        }
+
+        private bool IsActiveSession(ChatSession session, int index)
+        {
+            if (!string.IsNullOrEmpty(_currentSessionId))
+                return session.sessionId == _currentSessionId;
+            return index == 0;
         }
 
         // ---- History search ----
@@ -1044,11 +1088,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             container.AddToClassList("history__item");
             container.EnableInClassList(ActiveSessionClass, isActive);
 
-            var titleLabel = new Label(string.IsNullOrWhiteSpace(session.title) ? "New chat" : session.title);
+            var titleLabel = new Label(string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
+                ? "Новый чат"
+                : session.title);
             titleLabel.AddToClassList("history__title");
 
             int count = session.messages?.Count ?? 0;
-            var metaLabel = new Label($"neon · {count} msg");
+            var metaLabel = new Label(MessageCountText(count));
             metaLabel.AddToClassList("history__meta");
 
             container.Add(titleLabel);
@@ -1067,6 +1113,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
 
                 await chat.SwitchToSessionAsync(session);
+                _currentSessionId = session.sessionId;
+                _currentSessionTitle = string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
+                    ? string.Empty
+                    : session.title;
                 SetActiveSession(item);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 ShowChat();
@@ -1339,7 +1389,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editorProviderShort != null)
                 _editorProviderShort.text = BuildProviderShort(_editingProvider);
             if (_editorProviderName != null)
-                _editorProviderName.text = string.IsNullOrWhiteSpace(_editingProvider.displayName) ? "Provider" : _editingProvider.displayName;
+                _editorProviderName.text = string.IsNullOrWhiteSpace(_editingProvider.displayName) ? "—" : _editingProvider.displayName;
             if (_editName != null)
                 _editName.SetValueWithoutNotify(_editingProvider.displayName ?? string.Empty);
             if (_editBaseUrl != null)
@@ -1579,6 +1629,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
 
                 await chat.SwitchProviderAsync(provider);
+                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+                _currentSessionTitle = string.Empty;
                 SetProviderHeader(provider);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
@@ -1601,7 +1653,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var app = await GetAppAsync();
             if (!_isBound || app == null)
             {
-                _providersList.Add(new Label("ProviderManager is not ready."));
+                _providersList.Add(new Label("Менеджер провайдеров не готов."));
                 return;
             }
 
@@ -1720,8 +1772,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             string shortName = BuildProviderShort(provider);
-            string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? "Provider" : provider.displayName;
-            string model = string.IsNullOrWhiteSpace(provider.defaultModel) ? "model" : provider.defaultModel;
+            string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? "—" : provider.displayName;
+            string model = string.IsNullOrWhiteSpace(provider.defaultModel) ? string.Empty : provider.defaultModel;
 
             if (_providerShort != null)
                 _providerShort.text = shortName;
@@ -2579,9 +2631,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // Reset settings
                 app.Settings.Save(new AppSettings());
 
-                // Reset service cache so next call reinitialises
+                // Reset service cache and session identity so next call reinitialises
                 _app = null;
                 _chatService = null;
+                _currentSessionId = string.Empty;
+                _currentSessionTitle = string.Empty;
 
                 RenderMessages(null);
                 SetNoProviderState();

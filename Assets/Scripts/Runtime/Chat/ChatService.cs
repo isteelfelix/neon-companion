@@ -28,6 +28,7 @@ namespace NeonCompanion.Runtime.Chat
 
         public ProviderConfig CurrentProvider => _currentProvider;
         public ChatViewModel CurrentChatViewModel => _currentChatViewModel;
+        public string CurrentSessionId => _currentSession?.sessionId;
 
         public ChatService(
             IAiClient aiClient,
