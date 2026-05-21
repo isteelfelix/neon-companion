@@ -746,7 +746,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось отправить сообщение: {ex.Message}");
+                AddSystemMessage("Не удалось отправить сообщение. Попробуй ещё раз.");
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -807,7 +807,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось получить сводку: {ex.Message}");
+                AddSystemMessage("Не удалось получить сводку диалога. Попробуй позже.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -837,7 +837,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось выполнить поиск: {ex.Message}");
+                AddSystemMessage("Не удалось выполнить поиск по чатам. Попробуй ещё раз.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -896,7 +896,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось добавить токен вложения: {ex.Message}");
+                AddSystemMessage("Не удалось добавить вложение к сообщению.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -1526,7 +1526,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                SetTestRow(false, ex.Message);
+                SetTestRow(false, "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа.");
+                NeonLogger.LogError(ex.ToString());
             }
             finally
             {
@@ -2246,7 +2247,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось удалить аватар: {ex.Message}");
+                AddSystemMessage("Не удалось удалить аватар.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2923,7 +2924,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось пересоздать ответ: {ex.Message}");
+                AddSystemMessage("Не удалось пересоздать последний ответ.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2967,7 +2968,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось импортировать провайдеров: {ex.Message}");
+                AddSystemMessage("Не удалось импортировать провайдеров из файла.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -3022,7 +3023,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"Не удалось загрузить аватар: {ex.Message}");
+                AddSystemMessage("Не удалось загрузить аватар.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
