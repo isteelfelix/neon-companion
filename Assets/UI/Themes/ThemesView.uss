@@ -99,13 +99,16 @@
 .themes-preview__avatar {
     width: 86px;
     height: 86px;
-    border-radius: 26px;
+    border-radius: 999px;
     align-items: center;
     justify-content: center;
     background-color: var(--accent);
     border-width: 1px;
     border-color: rgba(255, 255, 255, 0.14);
 }
+
+.themes-preview__avatar--square { border-radius: 8px; }
+.themes-preview__avatar--hex    { border-radius: 14px; }
 
 .themes-preview__letter {
     color: white;

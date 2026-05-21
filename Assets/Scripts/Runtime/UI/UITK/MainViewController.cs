@@ -112,6 +112,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         private long _breathStartMs;
         private IVisualElementScheduledItem _clearDataConfirmResetSchedule;
 
+        // ===== Themes preview =====
+        private VisualElement _themesPreviewHalo;
+        private VisualElement _themesPreviewAvatar;
+        private long _themesBreathStartMs;
+        private IVisualElementScheduledItem _themesBreathSchedule;
+
         private Label _topbarTitle;
         private Label _topbarSubtitle;
         private Label _placeholderTitle;
@@ -200,6 +206,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterCallbacks();
             _clearDataConfirmResetSchedule?.Pause();
             _clearDataConfirmResetSchedule = null;
+            _themesBreathSchedule?.Pause();
+            _themesBreathSchedule = null;
             foreach (var tex in _customTextures.Values)
                 if (tex != null) UnityEngine.Object.Destroy(tex);
             _customTextures.Clear();
@@ -336,6 +344,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarArt    = root.Q<VisualElement>("avatar-art");
             _avatarCircle = root.Q<VisualElement>("avatar-circle");
             _previewHero  = root.Q<VisualElement>("preview-hero");
+            _themesPreviewHalo   = root.Q<VisualElement>("themes-preview-halo");
+            _themesPreviewAvatar = root.Q<VisualElement>("themes-preview-avatar");
             _previewTitle   = root.Q<Label>("preview-title");
             _previewTag     = root.Q<Label>("preview-tag");
             _previewPersona = root.Q<Label>("preview-persona");
@@ -1871,6 +1881,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarCircle.EnableInClassList("avatar--hex",    shape == "hex");
             }
 
+            if (_themesPreviewAvatar != null)
+            {
+                _themesPreviewAvatar.EnableInClassList("themes-preview__avatar--square", shape == "square");
+                _themesPreviewAvatar.EnableInClassList("themes-preview__avatar--hex",    shape == "hex");
+            }
+
             if (save) SaveSettings();
         }
 
@@ -1878,12 +1894,39 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             var halo = _root?.Q<VisualElement>("avatar-glow");
             SetDisplay(halo, visible ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_themesPreviewHalo, visible ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
         private void ApplyBreathingAnimation(bool enabled)
         {
             if (enabled) StartBreathing();
             else StopBreathing();
+            ApplyThemesPreviewBreathing(enabled);
+        }
+
+        private void ApplyThemesPreviewBreathing(bool enabled)
+        {
+            _themesBreathSchedule?.Pause();
+            _themesBreathSchedule = null;
+
+            if (_themesPreviewAvatar == null) return;
+
+            if (!enabled)
+            {
+                _themesPreviewAvatar.style.scale = new StyleScale(new Scale(new Vector3(1f, 1f, 1f)));
+                return;
+            }
+
+            _themesBreathStartMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _themesBreathSchedule = _themesPreviewAvatar.schedule.Execute(TickThemesBreath).Every(33);
+        }
+
+        private void TickThemesBreath()
+        {
+            if (_themesPreviewAvatar == null) return;
+            float elapsed = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _themesBreathStartMs) / 1000f;
+            float s = 1f + 0.015f * (float)Math.Sin(elapsed * (2f * (float)Math.PI / 5f));
+            _themesPreviewAvatar.style.scale = new StyleScale(new Scale(new Vector3(s, s, 1f)));
         }
 
         // ============================================================
