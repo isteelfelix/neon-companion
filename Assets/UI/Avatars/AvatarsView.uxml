@@ -110,7 +110,7 @@
                 <ui:VisualElement name="avtile-upload" class="avtile avtile--upload">
                     <ui:VisualElement class="avtile__upload">
                         <ui:VisualElement class="icon icon--upload" />
-                        <ui:Label text="drop PNG" />
+                        <ui:Label text="перетащи PNG" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -119,12 +119,12 @@
             <ui:VisualElement class="previewcard">
                 <ui:VisualElement name="preview-hero" class="preview-hero preview-hero--neon">
                     <ui:Label name="preview-title" text="Neon" class="preview-hero__title" />
-                    <ui:Label name="preview-tag" text="default" class="preview-hero__tag" />
+                    <ui:Label name="preview-tag" text="базовый" class="preview-hero__tag" />
                 </ui:VisualElement>
                 <ui:Label text="Параметры" class="label" />
-                <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label text="breathing · 5s" class="preview-row__value" /></ui:VisualElement>
-                <ui:VisualElement class="preview-row"><ui:Label text="Halo" /><ui:Label text="indigo · 40%" class="preview-row__value" /></ui:VisualElement>
-                <ui:VisualElement class="preview-row"><ui:Label text="Talking-pulse" /><ui:Label text="auto" class="preview-row__value" /></ui:VisualElement>
+                <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label text="дыхание · 5с" class="preview-row__value" /></ui:VisualElement>
+                <ui:VisualElement class="preview-row"><ui:Label text="Ореол" /><ui:Label text="индиго · 40%" class="preview-row__value" /></ui:VisualElement>
+                <ui:VisualElement class="preview-row"><ui:Label text="Пульс речи" /><ui:Label text="авто" class="preview-row__value" /></ui:VisualElement>
                 <ui:Label name="preview-persona-label" text="Персона" class="label preview-persona-label" />
                 <ui:Label name="preview-persona" text="Ты — Neon, спокойный AI-компаньон разработчика. Отвечай кратко и по делу, но дружелюбно." class="persona-box" />
                 <ui:VisualElement name="preview-actions-row" class="preview-actions">

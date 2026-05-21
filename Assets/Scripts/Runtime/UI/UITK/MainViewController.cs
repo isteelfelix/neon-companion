@@ -67,6 +67,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Toggle _settingsMaskLogs;
         private Label _settingsStoragePath;
         private Label _settingsVersion;
+        private Label _brandVersion;
         private Button _shapeRound;
         private Button _shapeSquare;
         private Button _shapeHex;
@@ -336,6 +337,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsMaskLogs    = root.Q<Toggle>("settings-mask-logs");
             _settingsStoragePath = root.Q<Label>("settings-storage-path");
             _settingsVersion     = root.Q<Label>("settings-version");
+            _brandVersion       = root.Q<Label>("brand-version");
             _shapeRound  = root.Q<Button>("shape-round");
             _shapeSquare = root.Q<Button>("shape-square");
             _shapeHex    = root.Q<Button>("shape-hex");
@@ -587,7 +589,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navThemes);
-            SetTopbar("Темы", "Форма, halo и breathing для аватара");
+            SetTopbar("Темы", "Форма, ореол и дыхание для аватара");
             ShowArea(_themesPanel);
         }
 
@@ -676,7 +678,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var chat = await GetChatServiceAsync();
                 if (chat == null)
                 {
-                    AddSystemMessage("Application is not initialized.");
+                    AddSystemMessage("Приложение не инициализировано.");
                     return;
                 }
 
@@ -701,7 +703,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Error] {ex.Message}");
+                AddSystemMessage($"[Ошибка] {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -1363,7 +1365,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _cancelPending = false;
             _editingProviderSource = null;
-            _editingProvider = ProviderConfig.CreateDefault("New Provider", "https://api.openai.com/v1");
+            _editingProvider = ProviderConfig.CreateDefault("Новый провайдер", "https://api.openai.com/v1");
             ShowProviderEditPanel();
         }
 
@@ -1663,7 +1665,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (providers.Count == 0)
             {
-                _providersList.Add(new Label("No providers configured."));
+                _providersList.Add(new Label("Провайдеры не настроены."));
                 return;
             }
 
@@ -1701,13 +1703,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             var nameRow = new VisualElement();
             nameRow.AddToClassList("provider__name-row");
 
-            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? "Provider" : provider.displayName);
+            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? "Провайдер" : provider.displayName);
             nameLabel.AddToClassList("provider__name");
             nameRow.Add(nameLabel);
 
             if (isActive)
             {
-                var chip = new Label("active");
+                var chip = new Label("активен");
                 chip.AddToClassList("chip");
                 chip.AddToClassList("chip--accent");
                 nameRow.Add(chip);
@@ -1725,18 +1727,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var meta = new VisualElement();
             meta.AddToClassList("provider__meta");
-            var metaLabel = new Label("Latency");
+            var metaLabel = new Label("Источник");
             metaLabel.AddToClassList("provider__meta-label");
-            var metaValue = new Label(provider.baseUrl != null && provider.baseUrl.Contains("localhost") ? "52 ms" : "local");
+            var metaValue = new Label(BuildProviderLocationText(provider));
             metaValue.AddToClassList("provider__meta-value");
             meta.Add(metaLabel);
             meta.Add(metaValue);
 
             var actions = new VisualElement();
             actions.AddToClassList("provider__actions");
-            var useButton = new Button(() => SwitchProvider(provider)) { text = "Use" };
-            var editButton = new Button(() => StartEditingProvider(provider)) { text = "Edit" };
-            var deleteButton = new Button(() => DeleteProvider(provider)) { text = "Delete" };
+            var useButton = new Button(() => SwitchProvider(provider)) { text = "Использовать" };
+            var editButton = new Button(() => StartEditingProvider(provider)) { text = "Изменить" };
+            var deleteButton = new Button(() => DeleteProvider(provider)) { text = "Удалить" };
             useButton.AddToClassList("btn");
             editButton.AddToClassList("btn");
             deleteButton.AddToClassList("btn");
@@ -1813,6 +1815,34 @@ namespace NeonCompanion.Runtime.UI.UITK
             return string.IsNullOrEmpty(compact) ? "API" : compact;
         }
 
+        private static string BuildProviderLocationText(ProviderConfig provider)
+        {
+            string baseUrl = provider?.baseUrl;
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                return "неизвестно";
+
+            if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+            {
+                string host = uri.Host;
+                if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "локально";
+                }
+
+                return "удалённо";
+            }
+
+            if (baseUrl.IndexOf("localhost", StringComparison.OrdinalIgnoreCase) >= 0
+                || baseUrl.IndexOf("127.0.0.1", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "локально";
+            }
+
+            return "удалённо";
+        }
+
         // ============================================================
         // Settings page
         // ============================================================
@@ -1867,6 +1897,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_settingsVersion != null)
                     _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
+                if (_brandVersion != null)
+                    _brandVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
 
                 SetAvatarShape(s.avatarShape ?? "round", save: false);
                 ApplyHaloVisibility(s.showHalo);
@@ -2235,15 +2267,15 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             switch (avatarId)
             {
-                case "aurora": return "cool · gradient";
-                case "ember":  return "warm · vivid";
-                case "glass":  return "minimal · dark";
-                case "flora":  return "natural · green";
-                case "mono":   return "monochrome";
-                case "cobalt": return "bold · blue";
-                case "rose":   return "soft · pink";
-                case "neon":   return "default";
-                default:        return "custom";
+                case "aurora": return "прохладный · градиент";
+                case "ember":  return "тёплый · насыщенный";
+                case "glass":  return "минимал · тёмный";
+                case "flora":  return "природный · зелёный";
+                case "mono":   return "монохром";
+                case "cobalt": return "смелый · синий";
+                case "rose":   return "мягкий · розовый";
+                case "neon":   return "базовый";
+                default:        return "пользовательский";
             }
         }
 
@@ -2255,14 +2287,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             switch (avatarId)
             {
-                case "aurora": return "Aurora — calm and analytical. Explains clearly and thinks before responding.";
-                case "ember":  return "Ember — warm and empathetic. Understands feelings and responds with care.";
-                case "glass":  return "Glass — energetic and bold. Always ready to take on any challenge.";
-                case "flora":  return "Flora — wise and thoughtful. Gives nuanced, balanced perspectives.";
-                case "mono":   return "Mono — precise and efficient. Values accuracy and brevity above all.";
-                case "cobalt": return "Cobalt — creative and imaginative. Loves exploring ideas and connections.";
-                case "rose":   return "Rose — charming and sociable. Makes every interaction feel personal.";
-                default:        return "Neon — helpful and witty. Direct, clever, and a bit playful.";
+                case "aurora": return "Aurora — спокойная и аналитичная. Объясняет ясно и сначала обдумывает ответ.";
+                case "ember":  return "Ember — тёплая и эмпатичная. Улавливает настроение и отвечает бережно.";
+                case "glass":  return "Glass — энергичная и смелая. Всегда готова к сложным задачам.";
+                case "flora":  return "Flora — мудрая и вдумчивая. Даёт нюансированные и сбалансированные ответы.";
+                case "mono":   return "Mono — точная и эффективная. Ценит корректность и краткость.";
+                case "cobalt": return "Cobalt — креативная и изобретательная. Любит исследовать идеи и связи.";
+                case "rose":   return "Rose — обаятельная и общительная. Делает диалог более личным.";
+                default:        return "Neon — полезная и остроумная. Отвечает по делу, с лёгкой игривостью.";
             }
         }
 
@@ -2721,7 +2753,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Error] {ex.Message}");
+                AddSystemMessage($"[Ошибка] {ex.Message}");
                 NeonLogger.LogError(ex.ToString());
             }
         }

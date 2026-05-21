@@ -19,20 +19,20 @@
                     <ui:VisualElement class="typing__dot typing__dot--delay-2" />
                 </ui:VisualElement>
                 <ui:VisualElement class="subtitle__actions">
-                    <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Copy" />
-                    <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Regenerate" />
-                    <ui:Button name="listen-btn" class="iconbtn icon icon--headphones" tooltip="Listen" />
+                    <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Копировать" />
+                    <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Пересоздать" />
+                    <ui:Button name="listen-btn" class="iconbtn icon icon--headphones" tooltip="Озвучить" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement name="composer" class="composer">
-                <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Attach" />
+                <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Прикрепить" />
                 <ui:TextField name="message-input" class="composer__input" placeholder="Напиши Neon что-нибудь..." />
                 <ui:VisualElement class="composer__hint">
                     <ui:Label text="⌘" class="kbd" />
                     <ui:Label text="↵" class="kbd" />
                 </ui:VisualElement>
-                <ui:Button name="send-button" text="Send" class="btn btn--primary composer__send" />
+                <ui:Button name="send-button" text="Отправить" class="btn btn--primary composer__send" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -44,7 +44,7 @@
             <ui:VisualElement class="avatar-panel__head">
                 <ui:VisualElement class="statusrow">
                     <ui:VisualElement class="statusrow__dot" />
-                    <ui:Label name="connection-status" text="connected · 14:23" class="statusrow__text" />
+                    <ui:Label name="connection-status" text="подключено" class="statusrow__text" />
                 </ui:VisualElement>
                 <ui:Button name="provider-tag" class="providertag">
                     <ui:VisualElement class="provider__logo provider__logo--mini">

@@ -18,10 +18,10 @@
                     <ui:Label text="N" class="brand__mark-text" />
                 </ui:VisualElement>
                 <ui:Label text="Neon" class="brand__name" />
-                <ui:Label text="v0.1" class="brand__tag" />
+                <ui:Label name="brand-version" text="0.1.0" class="brand__tag" />
             </ui:VisualElement>
 
-            <ui:Label text="Workspace" class="nav__group" />
+            <ui:Label text="Рабочее пространство" class="nav__group" />
             <ui:Button name="nav-chat" class="nav__item nav__item--active">
                 <ui:VisualElement class="nav__icon icon icon--chat" />
                 <ui:Label name="nav-chat-label" text="Чат" class="nav__label" />
@@ -38,7 +38,7 @@
                 <ui:Label name="nav-providers-count" text="0" class="nav__count" />
             </ui:Button>
 
-            <ui:Label text="Library" class="nav__group" />
+            <ui:Label text="Библиотека" class="nav__group" />
             <ui:Button name="nav-history" class="nav__item">
                 <ui:VisualElement class="nav__icon icon icon--history" />
                 <ui:Label name="nav-history-label" text="История" class="nav__label" />
@@ -55,13 +55,13 @@
             <ui:VisualElement class="rail__divider" />
             <ui:VisualElement class="rail__sessions-head">
                 <ui:Label text="Сессии" class="rail__sessions-label" />
-                <ui:Button name="history-search-btn" class="iconbtn icon icon--search" tooltip="Search sessions" />
-                <ui:Button name="new-session-btn" class="iconbtn icon icon--plus" tooltip="New chat" />
+                <ui:Button name="history-search-btn" class="iconbtn icon icon--search" tooltip="Поиск сессий" />
+                <ui:Button name="new-session-btn" class="iconbtn icon icon--plus" tooltip="Новый чат" />
             </ui:VisualElement>
             <ui:VisualElement name="history-search-bar" class="history__searchbar is-hidden">
                 <ui:VisualElement class="icon icon--search history__searchbar-icon" />
                 <ui:TextField name="history-search-input" class="history__searchbar-input" placeholder="Поиск…" />
-                <ui:Button name="history-search-clear" class="iconbtn icon icon--dots history__searchbar-clear" tooltip="Clear" />
+                <ui:Button name="history-search-clear" class="iconbtn icon icon--dots history__searchbar-clear" tooltip="Очистить" />
             </ui:VisualElement>
             <ui:ScrollView name="sessions-list" class="rail__sessions-list" />
 
@@ -82,9 +82,9 @@
                     <ui:Label name="topbar-subtitle" text="0 сообщений · Neon" class="topbar__subtitle" />
                 </ui:VisualElement>
                 <ui:VisualElement class="topbar__right">
-                    <ui:Button name="summarize-btn" text="Summarize" class="btn btn--ghost" />
-                    <ui:Button name="search-btn" class="iconbtn icon icon--search" tooltip="Search" />
-                    <ui:Button name="more-btn" class="iconbtn icon icon--dots" tooltip="More" />
+                    <ui:Button name="summarize-btn" text="Резюме" class="btn btn--ghost" />
+                    <ui:Button name="search-btn" class="iconbtn icon icon--search" tooltip="Поиск" />
+                    <ui:Button name="more-btn" class="iconbtn icon icon--dots" tooltip="Ещё" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
