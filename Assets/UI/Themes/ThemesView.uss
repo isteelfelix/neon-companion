@@ -126,7 +126,7 @@
     border-bottom-color: var(--line-1);
 }
 
-.themes-row:last-child {
+.themes-row.is-last {
     border-bottom-width: 0;
     padding-bottom: 0;
 }

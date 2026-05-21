@@ -130,13 +130,13 @@
                 <ui:VisualElement name="preview-actions-row" class="preview-actions">
                     <ui:Button name="preview-edit-persona-btn" text="Изменить" class="btn" />
                     <ui:Button name="preview-delete-avatar-btn" text="Удалить" class="btn btn--danger" />
-                    <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary" />
+                    <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary is-last" />
                 </ui:VisualElement>
                 <ui:VisualElement name="persona-editor-panel" class="persona-editor">
                     <ui:TextField name="persona-edit-field" multiline="true" class="persona-edit-field" />
                     <ui:VisualElement class="preview-actions">
                         <ui:Button name="persona-save-btn" text="Сохранить" class="btn btn--primary" />
-                        <ui:Button name="persona-cancel-btn" text="Отмена" class="btn" />
+                        <ui:Button name="persona-cancel-btn" text="Отмена" class="btn is-last" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

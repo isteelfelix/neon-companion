@@ -232,7 +232,9 @@
 .subtitle {
     flex-shrink: 0;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: flex-start;
+    min-width: 0;
     background-color: var(--bg-2);
     border-width: 1px;
     border-left-width: 2px;
@@ -244,6 +246,7 @@
 }
 
 .subtitle__role {
+    flex-shrink: 0;
     color: var(--accent);
     font-size: 10px;
     letter-spacing: 1px;
@@ -254,6 +257,8 @@
 
 .subtitle__body {
     flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
     min-width: 0;
     color: var(--text-0);
     font-size: 14px;
@@ -262,7 +267,10 @@
 
 .subtitle__actions {
     flex-direction: row;
-    margin-left: 10px;
+    flex-shrink: 0;
+    margin-left: auto;
+    justify-content: flex-end;
+    margin-top: 4px;
 }
 
 .subtitle__actions > Button {

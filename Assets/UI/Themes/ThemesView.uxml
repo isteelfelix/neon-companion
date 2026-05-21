@@ -53,7 +53,7 @@
                     <ui:Toggle name="settings-show-halo" class="themes-toggle" value="true" />
                 </ui:VisualElement>
 
-                <ui:VisualElement class="themes-row">
+                <ui:VisualElement class="themes-row is-last">
                     <ui:VisualElement class="themes-row__copy">
                         <ui:Label text="Анимация breathing" class="themes-row__name" />
                         <ui:Label text="Лёгкая пульсация аватара в idle-состоянии." class="themes-row__sub" />

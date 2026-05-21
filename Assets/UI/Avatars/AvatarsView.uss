@@ -258,7 +258,7 @@
     margin-right: 8px;
 }
 
-.preview-actions > Button:last-child {
+.preview-actions > Button.is-last {
     margin-right: 0;
 }
 
