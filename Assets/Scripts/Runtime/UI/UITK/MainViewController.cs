@@ -113,6 +113,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly Dictionary<string, VisualElement> _customAvatarTiles = new Dictionary<string, VisualElement>();
         private readonly Dictionary<string, Texture2D> _customTextures = new Dictionary<string, Texture2D>();
         private List<AvatarProfile> _cachedCustomProfiles = new List<AvatarProfile>();
+        private readonly Dictionary<string, AvatarProfile> _cachedProfilesById = new Dictionary<string, AvatarProfile>();
         private Button _avatarFilterAllBtn;
         private Button _avatarFilterStandardBtn;
         private Button _avatarFilterGradientBtn;
@@ -2135,17 +2136,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnPreviewEditPersonaClicked()
         {
-            if (Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0)
-            {
-                AddSystemMessage("Встроенные аватары нельзя редактировать.");
-                return;
-            }
             OpenPersonaEditor();
         }
 
         private void OpenPersonaEditor()
         {
-            string current = GetCustomProfile(_activeAvatarId)?.systemPrompt ?? string.Empty;
+            string current = AvatarPersonaText(_activeAvatarId);
             if (_personaEditField != null) _personaEditField.value = current;
             SetDisplay(_previewPersonaLabel, DisplayStyle.None);
             SetDisplay(_previewPersona, DisplayStyle.None);
@@ -2178,11 +2174,25 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string newPrompt = _personaEditField?.value?.Trim() ?? string.Empty;
                 var profiles = app.Avatars.GetAll();
                 var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
-                if (profile == null) return;
+                if (profile == null)
+                {
+                    bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                    if (!isBuiltIn) return;
+
+                    profile = new AvatarProfile
+                    {
+                        id = _activeAvatarId,
+                        isBuiltIn = true,
+                        name = string.Empty,
+                        imagePath = string.Empty,
+                        systemPrompt = string.Empty
+                    };
+                    profiles.Add(profile);
+                }
 
                 profile.systemPrompt = newPrompt;
                 app.Avatars.SaveAll(profiles);
-                _cachedCustomProfiles = profiles.Where(a => a != null && !a.isBuiltIn).ToList();
+                UpdateAvatarProfileCaches(profiles);
 
                 if (_previewPersona != null)
                     _previewPersona.text = AvatarPersonaText(_activeAvatarId);
@@ -2226,7 +2236,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 profiles.RemoveAll(a => a.id == removedAvatarId);
                 app.Avatars.SaveAll(profiles);
 
-                _cachedCustomProfiles = profiles.Where(a => a != null && !a.isBuiltIn).ToList();
+                UpdateAvatarProfileCaches(profiles);
                 ReleaseCustomTexture(imagePath);
                 DeleteCustomAvatarFileIfUnused(imagePath, profiles);
 
@@ -2331,9 +2341,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private string AvatarPersonaText(string avatarId)
         {
-            var custom = GetCustomProfile(avatarId);
-            if (custom != null && !string.IsNullOrWhiteSpace(custom.systemPrompt))
-                return custom.systemPrompt;
+            var stored = GetStoredProfile(avatarId);
+            if (stored != null && !string.IsNullOrWhiteSpace(stored.systemPrompt))
+                return stored.systemPrompt;
 
             if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
                 return meta.PersonaRu;
@@ -2361,7 +2371,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _galleryContainer.Remove(tile);
 
             _customAvatarTiles.Clear();
-            _cachedCustomProfiles = app.Avatars.GetAll().Where(a => a != null && !a.isBuiltIn).ToList();
+            UpdateAvatarProfileCaches(app.Avatars.GetAll());
 
             foreach (var profile in _cachedCustomProfiles)
             {
@@ -2427,6 +2437,34 @@ namespace NeonCompanion.Runtime.UI.UITK
         private AvatarProfile GetCustomProfile(string avatarId)
         {
             return _cachedCustomProfiles?.FirstOrDefault(a => a.id == avatarId);
+        }
+
+        private AvatarProfile GetStoredProfile(string avatarId)
+        {
+            if (string.IsNullOrWhiteSpace(avatarId))
+                return null;
+
+            return _cachedProfilesById.TryGetValue(avatarId, out var profile) ? profile : null;
+        }
+
+        private void UpdateAvatarProfileCaches(List<AvatarProfile> profiles)
+        {
+            _cachedProfilesById.Clear();
+            if (profiles == null)
+            {
+                _cachedCustomProfiles = new List<AvatarProfile>();
+                return;
+            }
+
+            foreach (var profile in profiles)
+            {
+                if (profile == null || string.IsNullOrWhiteSpace(profile.id))
+                    continue;
+
+                _cachedProfilesById[profile.id] = profile;
+            }
+
+            _cachedCustomProfiles = profiles.Where(a => a != null && !a.isBuiltIn).ToList();
         }
 
         private void RefreshBuiltInAvatarTileLabels()
