@@ -1,21 +1,27 @@
-MIT License
+Neon Companion Source-Available License v1.0
 
 Copyright (c) 2026 iSteelFelix
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to use, copy,
+modify, merge, and distribute the Software, provided that all copies preserve
+this license and the copyright notice.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+You may self-host the Software and use it for personal, educational,
+experimental, and other non-commercial purposes.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+You may not:
+
+- sell the Software or any derivative work as a product;
+- offer the Software or any derivative work as a paid hosted service;
+- sublicense the Software for commercial resale;
+- use the project name, logo, or branding to imply endorsement or official
+  affiliation without permission.
+
+Voluntary donations that do not grant access, hosting, features, or other paid
+commercial rights are permitted and are not considered resale under this
+license.
+
+The Software is provided "AS IS", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement.

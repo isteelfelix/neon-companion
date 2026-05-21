@@ -125,11 +125,19 @@
                 <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label text="breathing · 5s" class="preview-row__value" /></ui:VisualElement>
                 <ui:VisualElement class="preview-row"><ui:Label text="Halo" /><ui:Label text="indigo · 40%" class="preview-row__value" /></ui:VisualElement>
                 <ui:VisualElement class="preview-row"><ui:Label text="Talking-pulse" /><ui:Label text="auto" class="preview-row__value" /></ui:VisualElement>
-                <ui:Label text="Персона" class="label preview-persona-label" />
+                <ui:Label name="preview-persona-label" text="Персона" class="label preview-persona-label" />
                 <ui:Label name="preview-persona" text="Ты — Neon, спокойный AI-компаньон разработчика. Отвечай кратко и по делу, но дружелюбно." class="persona-box" />
-                <ui:VisualElement class="preview-actions">
+                <ui:VisualElement name="preview-actions-row" class="preview-actions">
                     <ui:Button name="preview-edit-persona-btn" text="Изменить" class="btn" />
+                    <ui:Button name="preview-delete-avatar-btn" text="Удалить" class="btn btn--danger" />
                     <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary" />
+                </ui:VisualElement>
+                <ui:VisualElement name="persona-editor-panel" class="persona-editor">
+                    <ui:TextField name="persona-edit-field" multiline="true" class="persona-edit-field" />
+                    <ui:VisualElement class="preview-actions">
+                        <ui:Button name="persona-save-btn" text="Сохранить" class="btn btn--primary" />
+                        <ui:Button name="persona-cancel-btn" text="Отмена" class="btn" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -165,7 +165,7 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Лицензия" class="settings-row__name" />
-                    <ui:Label text="MIT" class="settings-row__value-mono" />
+                    <ui:Label text="Source-available" class="settings-row__value-mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Шрифты" class="settings-row__name" />

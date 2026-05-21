@@ -257,3 +257,31 @@
     flex-grow: 1;
     margin-right: 8px;
 }
+
+.preview-actions > Button:last-child {
+    margin-right: 0;
+}
+
+.persona-editor {
+    flex-direction: column;
+    margin-top: 10px;
+}
+
+.persona-edit-field {
+    height: 96px;
+    margin-bottom: 10px;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+}
+
+.persona-edit-field > #unity-text-input {
+    background-color: transparent;
+    border-width: 0;
+    padding: 12px;
+    color: var(--text-2);
+    font-size: 11px;
+    white-space: normal;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}

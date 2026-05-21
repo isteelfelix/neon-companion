@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
@@ -85,6 +86,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _streamingLabel;
         private Button _previewApplyBtn;
         private Button _previewEditPersonaBtn;
+        private Button _previewDeleteAvatarBtn;
+        private VisualElement _galleryContainer;
+        private Label _navAvatarsCount;
+        private Label _previewPersonaLabel;
+        private VisualElement _previewActionsRow;
+        private VisualElement _personaEditorPanel;
+        private TextField _personaEditField;
+        private Button _personaSaveBtn;
+        private Button _personaCancelBtn;
+        private readonly Dictionary<string, VisualElement> _customAvatarTiles = new Dictionary<string, VisualElement>();
+        private readonly Dictionary<string, Texture2D> _customTextures = new Dictionary<string, Texture2D>();
+        private List<AvatarProfile> _cachedCustomProfiles = new List<AvatarProfile>();
 
         // ===== Typing animation =====
         private VisualElement _typingDot1;
@@ -177,6 +190,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnDisable()
         {
             UnregisterCallbacks();
+            foreach (var tex in _customTextures.Values)
+                if (tex != null) UnityEngine.Object.Destroy(tex);
+            _customTextures.Clear();
             _isBound = false;
         }
 
@@ -260,6 +276,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
             _avatarOpenFolderBtn  = root.Q<Button>("avatar-open-folder-btn");
             _avatarUploadTile     = root.Q<VisualElement>("avtile-upload");
+            _galleryContainer     = _avatarsPanel?.Q<VisualElement>(className: "gallery");
+            _navAvatarsCount      = _navAvatars?.Q<Label>(className: "nav__count");
             _providerEditPanel = root.Q<VisualElement>("provider-edit-panel");
             _editName = root.Q<TextField>("edit-name");
             _editBaseUrl = root.Q<TextField>("edit-baseurl");
@@ -307,6 +325,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewPersona = root.Q<Label>("preview-persona");
             _previewApplyBtn      = root.Q<Button>("preview-apply-btn");
             _previewEditPersonaBtn = root.Q<Button>("preview-edit-persona-btn");
+            _previewDeleteAvatarBtn = root.Q<Button>("preview-delete-avatar-btn");
+            _previewPersonaLabel  = root.Q<Label>("preview-persona-label");
+            _previewActionsRow    = root.Q<VisualElement>("preview-actions-row");
+            _personaEditorPanel   = root.Q<VisualElement>("persona-editor-panel");
+            _personaEditField     = root.Q<TextField>("persona-edit-field");
+            _personaSaveBtn       = root.Q<Button>("persona-save-btn");
+            _personaCancelBtn     = root.Q<Button>("persona-cancel-btn");
+            SetDisplay(_personaEditorPanel, DisplayStyle.None);
+            SetDisplay(_previewDeleteAvatarBtn, DisplayStyle.None);
 
             // Typing dots
             var typingEl = root.Q<VisualElement>("typing-indicator");
@@ -384,6 +411,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterAvatarGalleryCallbacks();
             RegisterClick(_previewApplyBtn, OnPreviewApplyClicked);
             RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
+            RegisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
+            RegisterClick(_personaSaveBtn, OnPersonaSaveClicked);
+            RegisterClick(_personaCancelBtn, OnPersonaCancelClicked);
         }
 
         private void UnregisterCallbacks()
@@ -406,6 +436,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
             UnregisterClick(_listenButton, OnListenClicked);
             UnregisterClick(_attachButton, OnAttachClicked);
+            UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
+            UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
+            UnregisterClick(_personaCancelBtn, OnPersonaCancelClicked);
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
@@ -469,7 +502,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navAvatars);
-            SetTopbar("Аватары", "8 образов · Neon");
+            int total = BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0);
+            SetTopbar("Аватары", $"{total} образов · {AvatarDisplayName(_activeAvatarId)}");
             ShowArea(_avatarsPanel);
         }
 
@@ -1745,6 +1779,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 SetAvatarShape(s.avatarShape ?? "round", save: false);
                 ApplyHaloVisibility(s.showHalo);
+                RefreshCustomAvatarGallery(app);
                 ApplyAvatarArt(_activeAvatarId);
                 SyncGallerySelection(_activeAvatarId);
                 ApplyBreathingAnimation(s.breathingAnimation);
@@ -1841,6 +1876,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void SelectAvatar(string avatarId)
         {
             if (_activeAvatarId == avatarId) return;
+            ClosePersonaEditor();
             _activeAvatarId = avatarId;
             SyncGallerySelection(avatarId);
             ApplyAvatarArt(avatarId);
@@ -1885,8 +1921,121 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnPreviewEditPersonaClicked()
         {
-            // Placeholder — persona editing UI not implemented yet
-            AddSystemMessage("Редактирование персоны будет добавлено в следующем обновлении.");
+            if (Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0)
+            {
+                AddSystemMessage("Встроенные аватары нельзя редактировать.");
+                return;
+            }
+            OpenPersonaEditor();
+        }
+
+        private void OpenPersonaEditor()
+        {
+            string current = GetCustomProfile(_activeAvatarId)?.systemPrompt ?? string.Empty;
+            if (_personaEditField != null) _personaEditField.value = current;
+            SetDisplay(_previewPersonaLabel, DisplayStyle.None);
+            SetDisplay(_previewPersona, DisplayStyle.None);
+            SetDisplay(_previewActionsRow, DisplayStyle.None);
+            SetDisplay(_personaEditorPanel, DisplayStyle.Flex);
+        }
+
+        private void ClosePersonaEditor()
+        {
+            SetDisplay(_personaEditorPanel, DisplayStyle.None);
+            SetDisplay(_previewPersonaLabel, DisplayStyle.Flex);
+            SetDisplay(_previewPersona, DisplayStyle.Flex);
+            SetDisplay(_previewActionsRow, DisplayStyle.Flex);
+            UpdateAvatarActionButtons(_activeAvatarId);
+        }
+
+        private void OnPersonaCancelClicked() => ClosePersonaEditor();
+
+        private void OnPersonaSaveClicked() => _ = SavePersonaAsync();
+
+        private void OnPreviewDeleteAvatarClicked() => _ = DeleteSelectedAvatarAsync();
+
+        private async Task SavePersonaAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                string newPrompt = _personaEditField?.value?.Trim() ?? string.Empty;
+                var profiles = app.Avatars.GetAll();
+                var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
+                if (profile == null) return;
+
+                profile.systemPrompt = newPrompt;
+                app.Avatars.SaveAll(profiles);
+                _cachedCustomProfiles = profiles.Where(a => a != null && !a.isBuiltIn).ToList();
+
+                if (_previewPersona != null)
+                    _previewPersona.text = AvatarPersonaText(_activeAvatarId);
+
+                if (_chatService != null)
+                {
+                    var s = app.Settings.Load() ?? new AppSettings();
+                    string prompt = app.AvatarService.GetSystemPrompt(_activeAvatarId, profiles);
+                    _chatService.SystemPrompt = s.useSystemPrompt ? prompt : null;
+                }
+
+                ClosePersonaEditor();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private async Task DeleteSelectedAvatarAsync()
+        {
+            if (Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0)
+            {
+                AddSystemMessage("Встроенные аватары нельзя удалить.");
+                return;
+            }
+
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var profiles = app.Avatars.GetAll();
+                var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId && !a.isBuiltIn);
+                if (profile == null) return;
+
+                string removedAvatarId = profile.id;
+                string removedName = string.IsNullOrWhiteSpace(profile.name) ? removedAvatarId : profile.name;
+                string imagePath = profile.imagePath;
+
+                profiles.RemoveAll(a => a.id == removedAvatarId);
+                app.Avatars.SaveAll(profiles);
+
+                _cachedCustomProfiles = profiles.Where(a => a != null && !a.isBuiltIn).ToList();
+                ReleaseCustomTexture(imagePath);
+                DeleteCustomAvatarFileIfUnused(imagePath, profiles);
+
+                ClosePersonaEditor();
+                RefreshCustomAvatarGallery(app);
+
+                _activeAvatarId = string.Empty;
+                SelectAvatar("neon");
+
+                if (_chatService != null)
+                {
+                    var s = app.Settings.Load() ?? new AppSettings();
+                    string prompt = app.AvatarService.GetSystemPrompt(_activeAvatarId, profiles);
+                    _chatService.SystemPrompt = s.useSystemPrompt ? prompt : null;
+                }
+
+                AddSystemMessage($"Аватар «{removedName}» удалён.");
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"[Ошибка удаления] {ex.Message}");
+                NeonLogger.LogError(ex.ToString());
+            }
         }
 
         private void SyncGallerySelection(string avatarId)
@@ -1897,20 +2046,48 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var tile = _root.Q<VisualElement>($"avtile-{id}");
                 tile?.EnableInClassList("avtile--selected", id == avatarId);
             }
+            foreach (var kvp in _customAvatarTiles)
+                kvp.Value.EnableInClassList("avtile--selected", kvp.Key == avatarId);
         }
 
         private void ApplyAvatarArt(string avatarId)
         {
+            bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, avatarId) >= 0;
+
             if (_avatarArt != null)
             {
                 foreach (var id in BuiltInAvatarIds)
-                    _avatarArt.EnableInClassList($"avatar__art--{id}", id == avatarId);
+                    _avatarArt.EnableInClassList($"avatar__art--{id}", isBuiltIn && id == avatarId);
+
+                if (!isBuiltIn)
+                {
+                    var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
+                    _avatarArt.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
+                    if (tex != null) _avatarArt.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                }
+                else
+                {
+                    _avatarArt.style.backgroundImage = StyleKeyword.Null;
+                }
             }
 
             if (_previewHero != null)
             {
                 foreach (var id in BuiltInAvatarIds)
-                    _previewHero.EnableInClassList($"preview-hero--{id}", id == avatarId);
+                    _previewHero.EnableInClassList($"preview-hero--{id}", isBuiltIn && id == avatarId);
+
+                if (!isBuiltIn)
+                {
+                    var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
+                    _previewHero.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
+                    if (tex != null) _previewHero.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+                    _previewHero.style.backgroundColor = new StyleColor(new Color(0.18f, 0.18f, 0.22f));
+                }
+                else
+                {
+                    _previewHero.style.backgroundImage = StyleKeyword.Null;
+                    _previewHero.style.backgroundColor = StyleKeyword.Null;
+                }
             }
 
             string name = AvatarDisplayName(avatarId);
@@ -1920,9 +2097,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _previewTag.text = AvatarStyleTag(avatarId);
             if (_previewPersona != null)
                 _previewPersona.text = AvatarPersonaText(avatarId);
+
+            UpdateAvatarActionButtons(avatarId);
         }
 
-        private static string AvatarStyleTag(string avatarId)
+        private void UpdateAvatarActionButtons(string avatarId)
+        {
+            bool isCustom = GetCustomProfile(avatarId) != null;
+            SetDisplay(_previewDeleteAvatarBtn, isCustom ? DisplayStyle.Flex : DisplayStyle.None);
+        }
+
+        private string AvatarStyleTag(string avatarId)
         {
             switch (avatarId)
             {
@@ -1933,12 +2118,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 case "mono":   return "monochrome";
                 case "cobalt": return "bold · blue";
                 case "rose":   return "soft · pink";
-                default:       return "default";
+                case "neon":   return "default";
+                default:        return "custom";
             }
         }
 
-        private static string AvatarPersonaText(string avatarId)
+        private string AvatarPersonaText(string avatarId)
         {
+            var custom = GetCustomProfile(avatarId);
+            if (custom != null && !string.IsNullOrWhiteSpace(custom.systemPrompt))
+                return custom.systemPrompt;
+
             switch (avatarId)
             {
                 case "aurora": return "Aurora — calm and analytical. Explains clearly and thinks before responding.";
@@ -1948,12 +2138,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                 case "mono":   return "Mono — precise and efficient. Values accuracy and brevity above all.";
                 case "cobalt": return "Cobalt — creative and imaginative. Loves exploring ideas and connections.";
                 case "rose":   return "Rose — charming and sociable. Makes every interaction feel personal.";
-                default:       return "Neon — helpful and witty. Direct, clever, and a bit playful.";
+                default:        return "Neon — helpful and witty. Direct, clever, and a bit playful.";
             }
         }
 
-        private static string AvatarDisplayName(string avatarId)
+        private string AvatarDisplayName(string avatarId)
         {
+            var custom = GetCustomProfile(avatarId);
+            if (custom != null && !string.IsNullOrWhiteSpace(custom.name))
+                return custom.name;
+
             switch (avatarId)
             {
                 case "aurora": return "Aurora";
@@ -1963,8 +2157,136 @@ namespace NeonCompanion.Runtime.UI.UITK
                 case "mono":   return "Mono";
                 case "cobalt": return "Cobalt";
                 case "rose":   return "Rose";
-                default:       return "Neon";
+                default:        return "Neon";
             }
+        }
+
+        private void RefreshCustomAvatarGallery(CompanionApp app)
+        {
+            if (_galleryContainer == null || app == null)
+                return;
+
+            foreach (var tile in _customAvatarTiles.Values)
+                _galleryContainer.Remove(tile);
+
+            _customAvatarTiles.Clear();
+            _cachedCustomProfiles = app.Avatars.GetAll().Where(a => a != null && !a.isBuiltIn).ToList();
+
+            foreach (var profile in _cachedCustomProfiles)
+            {
+                var tile = CreateCustomAvatarTile(profile);
+                if (_avatarUploadTile != null)
+                {
+                    int uploadIndex = _galleryContainer.IndexOf(_avatarUploadTile);
+                    if (uploadIndex >= 0)
+                        _galleryContainer.Insert(uploadIndex, tile);
+                    else
+                        _galleryContainer.Add(tile);
+                }
+                else
+                {
+                    _galleryContainer.Add(tile);
+                }
+
+                _customAvatarTiles[profile.id] = tile;
+            }
+
+            int total = BuiltInAvatarIds.Length + _cachedCustomProfiles.Count;
+            if (_navAvatarsCount != null)
+                _navAvatarsCount.text = total.ToString();
+        }
+
+        private VisualElement CreateCustomAvatarTile(AvatarProfile profile)
+        {
+            var tile = new VisualElement();
+            tile.name = $"avtile-{profile.id}";
+            tile.AddToClassList("avtile");
+
+            var texture = GetOrLoadTexture(profile.imagePath);
+            if (texture != null)
+            {
+                tile.style.backgroundImage = new StyleBackground(texture);
+                tile.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
+            }
+            else
+            {
+                tile.style.backgroundColor = new StyleColor(new Color(0.25f, 0.25f, 0.30f));
+            }
+
+            var nameLabel = new Label(string.IsNullOrWhiteSpace(profile.name) ? profile.id : profile.name);
+            nameLabel.AddToClassList("avtile__name");
+            tile.Add(nameLabel);
+
+            var badge = new VisualElement();
+            badge.AddToClassList("avtile__badge");
+            var checkIcon = new VisualElement();
+            checkIcon.AddToClassList("icon");
+            checkIcon.AddToClassList("icon--check");
+            badge.Add(checkIcon);
+            tile.Add(badge);
+
+            string capturedId = profile.id;
+            tile.RegisterCallback<ClickEvent>(_ => SelectAvatar(capturedId));
+            return tile;
+        }
+
+        private AvatarProfile GetCustomProfile(string avatarId)
+        {
+            return _cachedCustomProfiles?.FirstOrDefault(a => a.id == avatarId);
+        }
+
+        private Texture2D GetOrLoadTexture(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            if (_customTextures.TryGetValue(path, out var cached))
+                return cached;
+
+            var texture = LoadTextureFromFile(path);
+            if (texture != null)
+                _customTextures[path] = texture;
+
+            return texture;
+        }
+
+        private void ReleaseCustomTexture(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            if (_customTextures.TryGetValue(path, out var texture))
+            {
+                if (texture != null)
+                    UnityEngine.Object.Destroy(texture);
+                _customTextures.Remove(path);
+            }
+        }
+
+        private static void DeleteCustomAvatarFileIfUnused(string path, List<AvatarProfile> profiles)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            bool isStillReferenced = profiles.Any(a => a != null && !a.isBuiltIn && string.Equals(a.imagePath, path, StringComparison.OrdinalIgnoreCase));
+            if (isStillReferenced || !System.IO.File.Exists(path))
+                return;
+
+            System.IO.File.Delete(path);
+        }
+
+        private static Texture2D LoadTextureFromFile(string path)
+        {
+            if (!System.IO.File.Exists(path))
+                return null;
+
+            var bytes = System.IO.File.ReadAllBytes(path);
+            var texture = new Texture2D(2, 2);
+            if (texture.LoadImage(bytes))
+                return texture;
+
+            UnityEngine.Object.Destroy(texture);
+            return null;
         }
 
         // ============================================================
@@ -2271,6 +2593,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (existing >= 0) all[existing] = profile;
                 else all.Add(profile);
                 app.Avatars.SaveAll(all);
+
+                RefreshCustomAvatarGallery(app);
+
+                // Auto-select the uploaded avatar (force re-selection even if same ID)
+                if (_activeAvatarId == profile.id) _activeAvatarId = string.Empty;
+                SelectAvatar(profile.id);
 
                 AddSystemMessage($"Аватар «{fileName}» загружен.");
             }
