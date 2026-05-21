@@ -43,6 +43,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _root;
 
         private VisualElement _chatPanel;
+        private VisualElement _historyPanel;
         private VisualElement _providersPanel;
         private VisualElement _avatarsPanel;
         private VisualElement _themesPanel;
@@ -180,10 +181,17 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextField _messageInput;
         private ScrollView _messagesList;
         private ScrollView _sessionsList;
+        private ScrollView _historySessionsList;
+        private Label _historyState;
         private VisualElement _historySearchBar;
         private TextField _historySearchInput;
         private Button _historySearchBtn;
         private Button _historySearchClear;
+        private VisualElement _historyPanelSearchBar;
+        private TextField _historyPanelSearchInput;
+        private Button _historyPanelSearchBtn;
+        private Button _historyPanelSearchClear;
+        private Button _historyPanelNewSessionButton;
         private string _sessionSearchQuery = string.Empty;
 
         private ScrollView _providersList;
@@ -275,6 +283,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navProvidersCount = root.Q<Label>("nav-providers-count");
 
             _chatPanel = root.Q<VisualElement>("chat-panel");
+            _historyPanel = root.Q<VisualElement>("history-panel");
             _providersPanel = root.Q<VisualElement>("providers-panel");
             _avatarsPanel = root.Q<VisualElement>("avatars-panel");
             _themesPanel = root.Q<VisualElement>("themes-panel");
@@ -309,10 +318,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             _newSessionButton = root.Q<Button>("new-session-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
             _sessionsList = root.Q<ScrollView>("sessions-list");
+            _historySessionsList = root.Q<ScrollView>("history-panel-sessions-list");
+            _historyState = root.Q<Label>("history-panel-state");
             _historySearchBar   = root.Q<VisualElement>("history-search-bar");
             _historySearchInput = root.Q<TextField>("history-search-input");
             _historySearchBtn   = root.Q<Button>("history-search-btn");
             _historySearchClear = root.Q<Button>("history-search-clear");
+            _historyPanelSearchBar = root.Q<VisualElement>("history-panel-search-bar");
+            _historyPanelSearchInput = root.Q<TextField>("history-panel-search-input");
+            _historyPanelSearchBtn = root.Q<Button>("history-panel-search-btn");
+            _historyPanelSearchClear = root.Q<Button>("history-panel-search-clear");
+            _historyPanelNewSessionButton = root.Q<Button>("history-panel-new-session-btn");
 
             _providersList = root.Q<ScrollView>("providers-list");
             _addProviderButton    = root.Q<Button>("add-provider-btn");
@@ -445,10 +461,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_searchButton, OnSearchClicked);
             RegisterClick(_moreButton, OnMoreClicked);
             RegisterClick(_newSessionButton, OnNewSessionClicked);
+            RegisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
             RegisterClick(_historySearchBtn, OnHistorySearchToggled);
             RegisterClick(_historySearchClear, OnHistorySearchCleared);
+            RegisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
+            RegisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
             if (_historySearchInput != null)
                 _historySearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
+            if (_historyPanelSearchInput != null)
+                _historyPanelSearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
             RegisterClick(_addProviderButton, OnAddProviderClicked);
             RegisterClick(_importProviderButton, OnImportProviderClicked);
             RegisterClick(_saveProviderButton, OnSaveProviderClicked);
@@ -513,6 +534,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_searchButton, OnSearchClicked);
             UnregisterClick(_moreButton, OnMoreClicked);
             UnregisterClick(_newSessionButton, OnNewSessionClicked);
+            UnregisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
+            UnregisterClick(_historySearchBtn, OnHistorySearchToggled);
+            UnregisterClick(_historySearchClear, OnHistorySearchCleared);
+            UnregisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
+            UnregisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
             UnregisterClick(_addProviderButton, OnAddProviderClicked);
             UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
@@ -619,8 +645,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navHistory);
-            SetTopbar(GetChatTitle(), _chatSubtitle);
-            ShowArea(_chatPanel);
+            SetTopbar("История чатов", string.IsNullOrWhiteSpace(_sessionSearchQuery) ? "Сохранённые сессии" : $"Поиск: {_sessionSearchQuery}");
+            ShowArea(_historyPanel);
+            _ = RefreshSessionsFromCacheAsync();
         }
 
         private string GetChatTitle()
@@ -670,6 +697,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void ShowArea(VisualElement visible)
         {
             SetDisplay(_chatPanel, visible == _chatPanel ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_historyPanel, visible == _historyPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_providersPanel, visible == _providersPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_avatarsPanel, visible == _avatarsPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_themesPanel, visible == _themesPanel ? DisplayStyle.Flex : DisplayStyle.None);
@@ -835,6 +863,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _sessionSearchQuery = _messageInput?.value?.Trim() ?? string.Empty;
                 if (_historySearchInput != null)
                     _historySearchInput.SetValueWithoutNotify(_sessionSearchQuery);
+                if (_historyPanelSearchInput != null)
+                    _historyPanelSearchInput.SetValueWithoutNotify(_sessionSearchQuery);
 
                 var chat = await GetChatServiceAsync();
                 if (chat == null)
@@ -1021,9 +1051,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task LoadSessionsAsync(ChatService chat)
         {
-            if (_sessionsList == null)
+            if (_sessionsList == null && _historySessionsList == null)
                 return;
 
+            ShowHistoryState("Загрузка истории…", isError: false);
             var allSessions = await chat.GetAllSessionsAsync();
             if (!_isBound)
                 return;
@@ -1052,7 +1083,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_navChatCount != null)
                 _navChatCount.text = allSessions.Count.ToString();
 
-            if (_topbarTitle != null)
+            if (_topbarTitle != null && _chatPanel != null && _chatPanel.style.display != DisplayStyle.None)
                 _topbarTitle.text = GetChatTitle();
 
             RenderSessionList(allSessions);
@@ -1060,9 +1091,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void RenderSessionList(List<ChatSession> allSessions)
         {
-            if (_sessionsList == null) return;
+            if (_sessionsList == null && _historySessionsList == null) return;
 
-            _sessionsList.Clear();
+            _sessionsList?.Clear();
+            _historySessionsList?.Clear();
             _sessionItems.Clear();
 
             var sessions = string.IsNullOrWhiteSpace(_sessionSearchQuery)
@@ -1070,28 +1102,37 @@ namespace NeonCompanion.Runtime.UI.UITK
                 : allSessions.FindAll(s =>
                     (s.title ?? string.Empty).IndexOf(_sessionSearchQuery, StringComparison.OrdinalIgnoreCase) >= 0);
 
-            var groupLabel = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                ? "Недавние"
-                : $"Результаты: {sessions.Count}");
-            groupLabel.AddToClassList("history__group");
-            _sessionsList.Add(groupLabel);
+            AddSessionHeader(_sessionsList, sessions.Count);
+            AddSessionHeader(_historySessionsList, sessions.Count);
 
             if (sessions.Count == 0)
             {
-                var empty = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                    ? "Пока нет сессий"
-                    : "Ничего не найдено");
-                empty.AddToClassList("history__meta");
-                _sessionsList.Add(empty);
+                string emptyText = string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                    ? "Сохранённых сессий пока нет."
+                    : "По этому запросу ничего не найдено.";
+                var railEmpty = new Label(emptyText);
+                railEmpty.AddToClassList("history__meta");
+                _sessionsList?.Add(railEmpty);
+
+                var historyEmpty = new Label(emptyText);
+                historyEmpty.AddToClassList("history__meta");
+                _historySessionsList?.Add(historyEmpty);
+                ShowHistoryState(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                    ? "История пуста. Начните чат, чтобы появилась первая сессия."
+                    : "Попробуйте изменить поисковый запрос.", isError: false);
                 return;
             }
 
+            ShowHistoryState(string.Empty, isError: false);
             for (int i = 0; i < sessions.Count; i++)
             {
                 bool isActive = IsActiveSession(sessions[i], i);
-                var item = CreateSessionItem(sessions[i], isActive);
-                _sessionsList.Add(item);
-                _sessionItems.Add(item);
+                var railItem = CreateSessionItem(sessions[i], isActive);
+                var historyItem = CreateSessionItem(sessions[i], isActive);
+                _sessionsList?.Add(railItem);
+                _historySessionsList?.Add(historyItem);
+                _sessionItems.Add(railItem);
+                _sessionItems.Add(historyItem);
             }
         }
 
@@ -1106,11 +1147,13 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnHistorySearchToggled()
         {
-            if (_historySearchBar == null) return;
-            bool isVisible = _historySearchBar.style.display == DisplayStyle.Flex;
+            bool railVisible = _historySearchBar != null && _historySearchBar.style.display == DisplayStyle.Flex;
+            bool panelVisible = _historyPanelSearchBar != null && _historyPanelSearchBar.style.display == DisplayStyle.Flex;
+            bool isVisible = railVisible || panelVisible;
             SetDisplay(_historySearchBar, isVisible ? DisplayStyle.None : DisplayStyle.Flex);
-            if (!isVisible && _historySearchInput != null)
-                _historySearchInput.Focus();
+            SetDisplay(_historyPanelSearchBar, isVisible ? DisplayStyle.None : DisplayStyle.Flex);
+            if (!isVisible)
+                (_historyPanelSearchInput ?? _historySearchInput)?.Focus();
             if (isVisible)
                 OnHistorySearchCleared();
         }
@@ -1120,13 +1163,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sessionSearchQuery = string.Empty;
             if (_historySearchInput != null)
                 _historySearchInput.SetValueWithoutNotify(string.Empty);
+            if (_historyPanelSearchInput != null)
+                _historyPanelSearchInput.SetValueWithoutNotify(string.Empty);
             SetDisplay(_historySearchBar, DisplayStyle.None);
+            SetDisplay(_historyPanelSearchBar, DisplayStyle.None);
             _ = RefreshSessionsFromCacheAsync();
         }
 
         private void OnHistorySearchChanged(ChangeEvent<string> evt)
         {
             _sessionSearchQuery = evt.newValue ?? string.Empty;
+            if (_historySearchInput != null && _historySearchInput != evt.target)
+                _historySearchInput.SetValueWithoutNotify(_sessionSearchQuery);
+            if (_historyPanelSearchInput != null && _historyPanelSearchInput != evt.target)
+                _historyPanelSearchInput.SetValueWithoutNotify(_sessionSearchQuery);
             _ = RefreshSessionsFromCacheAsync();
         }
 
@@ -1134,8 +1184,38 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             var chat = await GetChatServiceAsync();
             if (chat == null) return;
-            var allSessions = await chat.GetAllSessionsAsync();
-            if (_isBound) RenderSessionList(allSessions);
+            try
+            {
+                ShowHistoryState("Загрузка истории…", isError: false);
+                var allSessions = await chat.GetAllSessionsAsync();
+                if (_isBound) RenderSessionList(allSessions);
+            }
+            catch (Exception ex)
+            {
+                ShowHistoryState("Не удалось загрузить историю чатов.", isError: true);
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private void AddSessionHeader(ScrollView target, int sessionsCount)
+        {
+            if (target == null) return;
+            var groupLabel = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                ? "Недавние"
+                : $"Результаты: {sessionsCount}");
+            groupLabel.AddToClassList("history__group");
+            target.Add(groupLabel);
+        }
+
+        private void ShowHistoryState(string message, bool isError)
+        {
+            if (_historyState == null)
+                return;
+
+            _historyState.text = message ?? string.Empty;
+            bool hasMessage = !string.IsNullOrWhiteSpace(_historyState.text);
+            SetDisplay(_historyState, hasMessage ? DisplayStyle.Flex : DisplayStyle.None);
+            _historyState.EnableInClassList("history-panel__state--error", hasMessage && isError);
         }
 
         private VisualElement CreateSessionItem(ChatSession session, bool isActive)
@@ -1173,20 +1253,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _currentSessionTitle = string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
                     ? string.Empty
                     : session.title;
-                SetActiveSession(item);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
+                await LoadSessionsAsync(chat);
                 ShowChat();
             }
             catch (Exception ex)
             {
                 NeonLogger.LogError(ex.ToString());
             }
-        }
-
-        private void SetActiveSession(VisualElement selected)
-        {
-            foreach (var item in _sessionItems)
-                item.EnableInClassList(ActiveSessionClass, item == selected);
         }
 
         private void RenderMessages(IReadOnlyList<ChatMessage> messages)
@@ -2989,6 +3063,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RenderMessages(null);
                 SetNoProviderState();
                 if (_sessionsList != null) _sessionsList.Clear();
+                if (_historySessionsList != null) _historySessionsList.Clear();
+                ShowHistoryState("История пуста. Начните чат, чтобы появилась первая сессия.", isError: false);
                 if (_navChatCount != null) _navChatCount.text = "0";
                 if (_navProvidersCount != null) _navProvidersCount.text = "0";
             }
