@@ -334,6 +334,7 @@
 
 .composer__input {
     flex-grow: 1;
+    min-width: 0;
     height: 36px;
     margin-left: 8px;
     margin-right: 10px;
