@@ -48,7 +48,15 @@ namespace NeonCompanion.Runtime.Core
             if (settingsData != null && settingsData.useSystemPrompt)
             {
                 var avatarProfiles = avatars.GetAll();
-                var systemPrompt = avatarService.GetSystemPrompt(settingsData.activeAvatarId, avatarProfiles);
+                string activeAvatarId = settingsData.activeAvatarId;
+                bool knownAvatar = !string.IsNullOrWhiteSpace(activeAvatarId) &&
+                                   (System.Array.IndexOf(new[] { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" }, activeAvatarId) >= 0 ||
+                                    avatarProfiles.Exists(a => a != null && a.id == activeAvatarId));
+
+                if (!knownAvatar)
+                    activeAvatarId = "neon";
+
+                var systemPrompt = avatarService.GetSystemPrompt(activeAvatarId, avatarProfiles);
                 if (!string.IsNullOrEmpty(systemPrompt))
                     chatService.SystemPrompt = systemPrompt;
             }

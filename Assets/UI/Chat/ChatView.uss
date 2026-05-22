@@ -105,6 +105,14 @@
     margin-bottom: 2px;
 }
 
+.history__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
 .history__item:hover {
     background-color: var(--bg-2);
 }
@@ -117,10 +125,21 @@
 .history__title {
     font-size: 13px;
     color: var(--text-1);
-    margin-bottom: 4px;
+    flex-grow: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.history__provider {
+    font-size: 10px;
+    color: var(--accent-2);
+    background-color: var(--accent-soft);
+    border-radius: 999px;
+    padding: 2px 8px;
+    -unity-font-style: bold;
+    flex-shrink: 0;
 }
 
 .history__meta {
