@@ -1276,8 +1276,25 @@ namespace NeonCompanion.Runtime.UI.UITK
             var metaLabel = new Label(MessageCountText(count));
             metaLabel.AddToClassList("history__meta");
 
+            var deleteBtn = new Button { text = "\u00d7" };
+            deleteBtn.AddToClassList("history__delete-btn");
+            bool deletePending = false;
+            deleteBtn.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                if (!deletePending)
+                {
+                    deletePending = true;
+                    deleteBtn.text = "\u2713";
+                    deleteBtn.AddToClassList("history__delete-btn--confirm");
+                    return;
+                }
+                _ = DeleteSessionAndRefreshAsync(session.sessionId);
+            });
+
             headerRow.Add(titleLabel);
             headerRow.Add(providerLabel);
+            headerRow.Add(deleteBtn);
 
             container.Add(headerRow);
             container.Add(metaLabel);
@@ -1325,6 +1342,30 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 ShowChat();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private async Task DeleteSessionAndRefreshAsync(string sessionId)
+        {
+            try
+            {
+                var chat = await GetChatServiceAsync();
+                if (chat == null) return;
+
+                await chat.DeleteSessionAsync(sessionId);
+
+                if (_currentSessionId == sessionId)
+                {
+                    _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+                    _currentSessionTitle = string.Empty;
+                    RenderMessages(chat.CurrentChatViewModel?.Messages);
+                }
+
+                await LoadSessionsAsync(chat);
             }
             catch (Exception ex)
             {

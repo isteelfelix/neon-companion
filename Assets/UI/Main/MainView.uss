@@ -494,3 +494,33 @@
     color: var(--text-3);
     font-size: 12px;
 }
+
+/* Session delete button */
+.history__delete-btn {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 14px;
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.history__item:hover .history__delete-btn {
+    display: flex;
+}
+
+.history__delete-btn:hover,
+.history__delete-btn--confirm {
+    background-color: rgba(239, 100, 100, 0.15);
+    border-color: rgba(239, 100, 100, 0.30);
+    color: #ef6464;
+}

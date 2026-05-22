@@ -569,3 +569,33 @@
     -unity-font-style: bold;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
 }
+
+/* Session delete button */
+.history__delete-btn {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 13px;
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.history__item:hover .history__delete-btn {
+    display: flex;
+}
+
+.history__delete-btn:hover,
+.history__delete-btn--confirm {
+    background-color: rgba(239, 100, 100, 0.15);
+    border-color: rgba(239, 100, 100, 0.30);
+    color: #ef6464;
+}

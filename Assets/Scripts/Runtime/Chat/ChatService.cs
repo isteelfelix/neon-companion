@@ -60,6 +60,29 @@ namespace NeonCompanion.Runtime.Chat
             return await Task.FromResult(GetSortedSessions());
         }
 
+        public async Task DeleteSessionAsync(string sessionId)
+        {
+            if (string.IsNullOrWhiteSpace(sessionId))
+                return;
+
+            var sessions = _sessionRepository.GetAll();
+            var index = sessions.FindIndex(s => s.sessionId == sessionId);
+            if (index < 0)
+                return;
+
+            sessions.RemoveAt(index);
+            _sessionRepository.SaveAll(sessions);
+
+            if (_currentSession?.sessionId == sessionId)
+            {
+                var remaining = GetSortedSessions();
+                if (remaining.Count > 0)
+                    await SwitchToSessionAsync(remaining[0]);
+                else
+                    await StartNewSessionAsync();
+            }
+        }
+
         public async Task SwitchToSessionAsync(ChatSession session, string preferredProviderId = null)
         {
             if (session == null) return;
