@@ -28,6 +28,7 @@ namespace NeonCompanion.Runtime.Chat
 
         public ProviderConfig CurrentProvider => _currentProvider;
         public ChatViewModel CurrentChatViewModel => _currentChatViewModel;
+        public string CurrentSessionId => _currentSession?.sessionId;
 
         public ChatService(
             IAiClient aiClient,
@@ -39,17 +40,17 @@ namespace NeonCompanion.Runtime.Chat
             _sessionRepository = sessionRepository;
         }
 
-        public async Task<ChatViewModel> GetOrCreateChatAsync()
+        public async Task<ChatViewModel> GetOrCreateChatAsync(string preferredProviderId = null)
         {
             if (_currentChatViewModel != null)
                 return _currentChatViewModel;
 
-            _currentProvider = await _providerManager.GetActiveProviderAsync();
+            _currentProvider = await ResolveProviderAsync(preferredProviderId);
             SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             ApplyGenerationSettings();
 
-            await LoadLatestSessionAsync();
+            await LoadLatestSessionAsync(preferredProviderId);
             NeonLogger.Log("Chat session ready.");
             return _currentChatViewModel;
         }
@@ -59,12 +60,48 @@ namespace NeonCompanion.Runtime.Chat
             return await Task.FromResult(GetSortedSessions());
         }
 
-        public async Task SwitchToSessionAsync(ChatSession session)
+        public async Task DeleteSessionAsync(string sessionId)
+        {
+            if (string.IsNullOrWhiteSpace(sessionId))
+                return;
+
+            var sessions = _sessionRepository.GetAll();
+            var index = sessions.FindIndex(s => s.sessionId == sessionId);
+            if (index < 0)
+                return;
+
+            sessions.RemoveAt(index);
+            _sessionRepository.SaveAll(sessions);
+
+            if (_currentSession?.sessionId == sessionId)
+            {
+                var remaining = GetSortedSessions();
+                if (remaining.Count > 0)
+                    await SwitchToSessionAsync(remaining[0]);
+                else
+                    await StartNewSessionAsync();
+            }
+        }
+
+        public async Task SwitchToSessionAsync(ChatSession session, string preferredProviderId = null)
         {
             if (session == null) return;
 
             _currentSession = session;
-            _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider ?? await _providerManager.GetActiveProviderAsync());
+
+            var sessionProvider = await TryGetProviderByIdAsync(session.providerId);
+            var preferredProvider = sessionProvider == null
+                ? await TryGetProviderByIdAsync(preferredProviderId)
+                : null;
+
+            _currentProvider = sessionProvider
+                ?? preferredProvider
+                ?? _currentProvider
+                ?? await _providerManager.GetActiveProviderAsync();
+
+            SyncFromProvider(_currentProvider);
+
+            _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             ApplyGenerationSettings();
 
             _currentChatViewModel.Messages.Clear();
@@ -128,7 +165,7 @@ namespace NeonCompanion.Runtime.Chat
         public async Task StartNewSessionAsync()
         {
             if (_currentProvider == null)
-                _currentProvider = await _providerManager.GetActiveProviderAsync();
+                _currentProvider = await ResolveProviderAsync();
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             ApplyGenerationSettings();
@@ -240,21 +277,37 @@ namespace NeonCompanion.Runtime.Chat
             _currentChatViewModel.SystemPrompt = SystemPrompt;
         }
 
-        private async Task LoadLatestSessionAsync()
+        private async Task LoadLatestSessionAsync(string preferredProviderId = null)
         {
             var sessions = GetSortedSessions();
             if (sessions.Count > 0)
             {
-                _currentSession = sessions[0];
-                foreach (var msg in _currentSession.messages ?? new List<ChatMessage>())
-                {
-                    _currentChatViewModel.Messages.Add(msg);
-                }
+                await SwitchToSessionAsync(sessions[0], preferredProviderId);
             }
             else
             {
                 await StartNewSessionAsync();
             }
+        }
+
+        private async Task<ProviderConfig> ResolveProviderAsync(string providerId = null)
+        {
+            if (!string.IsNullOrWhiteSpace(providerId))
+            {
+                var provider = await _providerManager.GetProviderByIdAsync(providerId);
+                if (provider != null)
+                    return provider;
+            }
+
+            return await _providerManager.GetActiveProviderAsync();
+        }
+
+        private async Task<ProviderConfig> TryGetProviderByIdAsync(string providerId)
+        {
+            if (string.IsNullOrWhiteSpace(providerId))
+                return null;
+
+            return await _providerManager.GetProviderByIdAsync(providerId);
         }
 
         private void SaveCurrentSession()

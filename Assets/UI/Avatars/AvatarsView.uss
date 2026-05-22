@@ -86,6 +86,7 @@
     justify-content: flex-end;
     overflow: hidden;
     position: relative;
+    -unity-background-scale-mode: scale-and-crop;
     transition-property: border-color, scale;
     transition-duration: 0.15s;
 }
@@ -199,6 +200,7 @@
     height: 280px;
     border-radius: 10px;
     background-color: #4f45d8;
+    -unity-background-scale-mode: scale-and-crop;
     margin-bottom: 16px;
     justify-content: flex-end;
     padding: 14px;
@@ -236,6 +238,29 @@
     margin-top: 10px;
 }
 
+.persona-state {
+    margin-top: 10px;
+    margin-bottom: 2px;
+}
+
+.persona-state__badge {
+    align-self: flex-start;
+    font-size: 10px;
+    color: var(--accent-text);
+    background-color: var(--accent-soft);
+    border-width: 1px;
+    border-color: var(--accent);
+    border-radius: 999px;
+    padding: 2px 8px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Medium.ttf");
+}
+
+.persona-state__help {
+    margin-top: 6px;
+    color: var(--text-3);
+    font-size: 11px;
+}
+
 .persona-box {
     background-color: var(--bg-2);
     border-width: 1px;
@@ -256,4 +281,32 @@
 .preview-actions > Button {
     flex-grow: 1;
     margin-right: 8px;
+}
+
+.preview-actions > Button.is-last {
+    margin-right: 0;
+}
+
+.persona-editor {
+    flex-direction: column;
+    margin-top: 10px;
+}
+
+.persona-edit-field {
+    height: 96px;
+    margin-bottom: 10px;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+}
+
+.persona-edit-field > #unity-text-input {
+    background-color: transparent;
+    border-width: 0;
+    padding: 12px;
+    color: var(--text-2);
+    font-size: 11px;
+    white-space: normal;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }

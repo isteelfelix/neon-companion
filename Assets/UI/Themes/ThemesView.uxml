@@ -1,0 +1,74 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="../Theme/Tokens.uss" />
+    <ui:Style src="../Theme/Components.uss" />
+    <ui:Style src="ThemesView.uss" />
+
+    <ui:VisualElement name="themes-area" class="page themes-page">
+        <ui:VisualElement class="page__head">
+            <ui:VisualElement class="page__head-copy">
+                <ui:Label text="Темы" class="page__title" />
+                <ui:Label text="Форма и поведение аватара в интерфейсе. Без смены персоны — только визуальный режим." class="page__subtitle" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:ScrollView class="themes-scroll">
+            <ui:VisualElement class="themes-card themes-card--hero">
+                <ui:VisualElement class="themes-hero">
+                    <ui:VisualElement class="themes-hero__copy">
+                        <ui:Label text="Визуальная подача Neon" class="themes-hero__title" />
+                        <ui:Label text="Собери внешний вид аватара: форма, halo и breathing. Изменения применяются сразу и сохраняются локально." class="themes-hero__subtitle" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="themes-preview">
+                        <ui:VisualElement name="themes-preview-halo" class="themes-preview__halo" />
+                        <ui:VisualElement name="themes-preview-avatar" class="themes-preview__avatar">
+                            <ui:Label text="N" class="themes-preview__letter" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="themes-card">
+                <ui:VisualElement class="themes-card__head">
+                    <ui:VisualElement class="icon icon--palette themes-card__icon" />
+                    <ui:Label text="Форма и анимация" class="themes-card__title" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="themes-row">
+                    <ui:VisualElement class="themes-row__copy">
+                        <ui:Label text="Форма аватара" class="themes-row__name" />
+                        <ui:Label text="Выбери базовую геометрию для портрета справа в чате." class="themes-row__sub" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="seg">
+                        <ui:Button name="shape-round" text="Круг" class="seg__btn seg__btn--active" />
+                        <ui:Button name="shape-square" text="Квадрат" class="seg__btn" />
+                        <ui:Button name="shape-hex" text="Hex" class="seg__btn" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="themes-row">
+                    <ui:VisualElement class="themes-row__copy">
+                        <ui:Label text="Halo вокруг аватара" class="themes-row__name" />
+                        <ui:Label text="Неоновое свечение за портретом. Добавляет глубину, но не перегружает сцену." class="themes-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-show-halo" class="themes-toggle" value="true" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="themes-row is-last">
+                    <ui:VisualElement class="themes-row__copy">
+                        <ui:Label text="Анимация breathing" class="themes-row__name" />
+                        <ui:Label text="Лёгкая пульсация аватара в idle-состоянии." class="themes-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-breathing" class="themes-toggle" value="true" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="themes-card themes-card--notes">
+                <ui:VisualElement class="themes-card__head">
+                    <ui:VisualElement class="icon icon--sparkle themes-card__icon" />
+                    <ui:Label text="Что дальше" class="themes-card__title" />
+                </ui:VisualElement>
+                <ui:Label text="Следующим большим куском сюда можно вынести палитры, реактивные состояния и дополнительные пресеты отображения." class="themes-note" />
+            </ui:VisualElement>
+        </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

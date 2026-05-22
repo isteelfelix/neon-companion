@@ -27,32 +27,37 @@
                     <ui:VisualElement class="editor__header-copy">
                         <ui:Label name="editor-provider-name" text="OpenAI" class="editor__title" />
                         <ui:Label text="Конфигурация подключения" class="editor__sub" />
+                        <ui:Label name="editor-provider-status" text="Новый черновик" class="editor__status editor__status--draft" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
                 <ui:VisualElement class="field">
-                    <ui:Label text="Name" class="label" />
+                    <ui:Label text="Название" class="label" />
                     <ui:TextField name="edit-name" class="input" />
                 </ui:VisualElement>
                 <ui:VisualElement class="field">
-                    <ui:Label text="Base URL" class="label" />
+                    <ui:Label text="Базовый URL" class="label" />
                     <ui:TextField name="edit-baseurl" class="input input--mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="field">
-                    <ui:Label text="API Key" class="label" />
+                    <ui:Label text="API-ключ" class="label" />
                     <ui:TextField name="edit-apikey" class="input input--mono" is-password-field="true" />
                 </ui:VisualElement>
                 <ui:VisualElement class="field">
-                    <ui:Label text="Default model" class="label" />
+                    <ui:Label text="Модель по умолчанию" class="label" />
+                    <ui:DropdownField name="edit-model-preset" class="input" />
+                </ui:VisualElement>
+                <ui:VisualElement name="edit-model-custom-wrap" class="field" style="display: none;">
+                    <ui:Label text="ID модели (вручную)" class="label" />
                     <ui:TextField name="edit-model" class="input input--mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="field__row">
                     <ui:VisualElement class="field field--half">
-                        <ui:Label text="Temperature" class="label" />
+                        <ui:Label text="Температура" class="label" />
                         <ui:Slider name="edit-temperature" low-value="0" high-value="2" value="0.7" show-input-field="true" class="input slider-input" />
                     </ui:VisualElement>
                     <ui:VisualElement class="field field--half">
-                        <ui:Label text="Max tokens" class="label" />
+                        <ui:Label text="Макс. токенов" class="label" />
                         <ui:TextField name="edit-maxtokens" class="input input--mono" />
                     </ui:VisualElement>
                 </ui:VisualElement>

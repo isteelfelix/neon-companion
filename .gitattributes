@@ -1,10 +1,10 @@
 # Unity .gitattributes Template
 # Source: https://github.com/gitattributes/gitattributes/blob/master/Unity.gitattributes
 # Last synced: 2026-02-04
-# License: MIT
+# Upstream template source: gitattributes/gitattributes Unity template
 #
-# This template is maintained from the gitattributes/gitattributes repository
-# and distributed under MIT License.
+# This file is copied from an upstream template; check the upstream repository
+# for its current license and update this note if the source changes.
 
 # Define macros (only works in top-level gitattributes files)
 [attr]lfs               filter=lfs diff=lfs merge=lfs -text

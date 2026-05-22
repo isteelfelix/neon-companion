@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
@@ -17,6 +19,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const string ActiveNavClass = "nav__item--active";
         private const string ActiveSessionClass = "history__item--active";
         private const string ActiveProviderClass = "provider--active";
+        private const string EditingProviderClass = "provider--editing";
+        private const string ActiveAvatarFilterClass = "filterchip--active";
+        private const string CustomModelPresetValue = "Custom / manual";
 
         private readonly List<VisualElement> _navItems = new List<VisualElement>();
         private readonly List<VisualElement> _sessionItems = new List<VisualElement>();
@@ -41,8 +46,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _root;
 
         private VisualElement _chatPanel;
+        private VisualElement _historyPanel;
         private VisualElement _providersPanel;
         private VisualElement _avatarsPanel;
+        private VisualElement _themesPanel;
         private VisualElement _placeholderArea;
         private VisualElement _settingsPanel;
         private VisualElement _composer;
@@ -65,6 +72,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Toggle _settingsMaskLogs;
         private Label _settingsStoragePath;
         private Label _settingsVersion;
+        private Label _brandVersion;
         private Button _shapeRound;
         private Button _shapeSquare;
         private Button _shapeHex;
@@ -75,16 +83,55 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
             { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
+        private static readonly Dictionary<string, BuiltInAvatarMeta> BuiltInAvatarMetaById = new Dictionary<string, BuiltInAvatarMeta>
+        {
+            ["neon"] = new BuiltInAvatarMeta("Неон", "стандартный", "Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу.", AvatarFilter.Standard),
+            ["aurora"] = new BuiltInAvatarMeta("Аврора", "прохладный · градиент", "Аврора — спокойная и аналитичная. Объясняет ясно и сначала обдумывает ответ.", AvatarFilter.Gradient),
+            ["ember"] = new BuiltInAvatarMeta("Эмбер", "тёплый · градиент", "Эмбер — тёплая и эмпатичная. Улавливает настроение и отвечает бережно.", AvatarFilter.Gradient),
+            ["glass"] = new BuiltInAvatarMeta("Гласс", "минимал · тёмный", "Гласс — энергичная и смелая. Любит сложные задачи и быстрый темп.", AvatarFilter.Minimal),
+            ["flora"] = new BuiltInAvatarMeta("Флора", "природный · градиент", "Флора — вдумчивая и спокойная. Даёт нюансированные и сбалансированные ответы.", AvatarFilter.Gradient),
+            ["mono"] = new BuiltInAvatarMeta("Моно", "минимал · монохром", "Моно — точная и эффективная. Ценит корректность и краткость.", AvatarFilter.Minimal),
+            ["cobalt"] = new BuiltInAvatarMeta("Кобальт", "смелый · градиент", "Кобальт — креативная и изобретательная. Любит исследовать идеи и связи.", AvatarFilter.Gradient),
+            ["rose"] = new BuiltInAvatarMeta("Роуз", "мягкий · градиент", "Роуз — обаятельная и общительная. Делает диалог более личным.", AvatarFilter.Gradient)
+        };
         private string _activeAvatarId = "neon";
+        private AvatarFilter _activeAvatarFilter = AvatarFilter.All;
         private VisualElement _avatarArt;
         private VisualElement _avatarCircle;
         private VisualElement _previewHero;
         private Label _previewTitle;
         private Label _previewTag;
         private Label _previewPersona;
+        private Label _previewPersonaStateBadge;
+        private Label _previewPersonaStateHelp;
+        private VisualElement _previewPersonaStateRow;
         private Label _streamingLabel;
         private Button _previewApplyBtn;
         private Button _previewEditPersonaBtn;
+        private Button _previewResetPersonaBtn;
+        private Button _previewDeleteAvatarBtn;
+        private VisualElement _galleryContainer;
+        private Label _navAvatarsCount;
+        private Label _previewPersonaLabel;
+        private VisualElement _previewActionsRow;
+        private VisualElement _personaEditorPanel;
+        private TextField _personaEditField;
+        private Button _personaSaveBtn;
+        private Button _personaCancelBtn;
+        private readonly Dictionary<string, VisualElement> _customAvatarTiles = new Dictionary<string, VisualElement>();
+        private readonly Dictionary<string, Texture2D> _customTextures = new Dictionary<string, Texture2D>();
+        private List<AvatarProfile> _cachedCustomProfiles = new List<AvatarProfile>();
+        private readonly Dictionary<string, AvatarProfile> _cachedProfilesById = new Dictionary<string, AvatarProfile>();
+        private Button _avatarFilterAllBtn;
+        private Button _avatarFilterStandardBtn;
+        private Button _avatarFilterGradientBtn;
+        private Button _avatarFilterMinimalBtn;
+        private Button _avatarFilterCustomBtn;
+        private Label _avatarFilterAllCount;
+        private Label _avatarFilterStandardCount;
+        private Label _avatarFilterGradientCount;
+        private Label _avatarFilterMinimalCount;
+        private Label _avatarFilterCustomCount;
 
         // ===== Typing animation =====
         private VisualElement _typingDot1;
@@ -96,6 +143,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ===== Breathing animation =====
         private IVisualElementScheduledItem _breathSchedule;
         private long _breathStartMs;
+        private IVisualElementScheduledItem _clearDataConfirmResetSchedule;
+
+        // ===== Themes preview =====
+        private VisualElement _themesPreviewHalo;
+        private VisualElement _themesPreviewAvatar;
+        private long _themesBreathStartMs;
+        private IVisualElementScheduledItem _themesBreathSchedule;
 
         private Label _topbarTitle;
         private Label _topbarSubtitle;
@@ -111,6 +165,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _railProviderModel;
         private Label _editorProviderShort;
         private Label _editorProviderName;
+        private Label _editorProviderStatus;
 
         private Button _sendButton;
         private Button _summarizeButton;
@@ -120,16 +175,27 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _settingsOpenFolderBtn;
         private Button _settingsExportBtn;
         private Button _settingsClearBtn;
+        private Label _settingsClearBtnText;
+        private Button _settingsGithubBtn;
+        private Button _settingsDocsBtn;
+        private Button _settingsDonateBtn;
         private Button _testProviderBtn;
         private VisualElement _testRow;
         private Label _testRowLabel;
         private TextField _messageInput;
         private ScrollView _messagesList;
         private ScrollView _sessionsList;
+        private ScrollView _historySessionsList;
+        private Label _historyState;
         private VisualElement _historySearchBar;
         private TextField _historySearchInput;
         private Button _historySearchBtn;
         private Button _historySearchClear;
+        private VisualElement _historyPanelSearchBar;
+        private TextField _historyPanelSearchInput;
+        private Button _historyPanelSearchBtn;
+        private Button _historyPanelSearchClear;
+        private Button _historyPanelNewSessionButton;
         private string _sessionSearchQuery = string.Empty;
 
         private ScrollView _providersList;
@@ -148,16 +214,26 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextField _editBaseUrl;
         private TextField _editApiKey;
         private TextField _editModel;
+        private DropdownField _editModelPreset;
+        private VisualElement _editModelCustomWrap;
         private TextField _editMaxTokens;
         private Slider _editTemperature;
         private VisualElement _providerEditPanel;
+        private readonly Dictionary<string, string> _modelPresetByLabel = new Dictionary<string, string>();
+        private bool _syncingModelPresetUi;
+        private string _lastCustomModel = string.Empty;
+        private bool _editModelUsesCustomMode;
 
         private CompanionApp _app;
         private ChatService _chatService;
         private ProviderConfig _editingProvider;
         private ProviderConfig _editingProviderSource;
         private bool _cancelPending;
-        private string _chatSubtitle = "0 сообщений · Neon";
+        private bool _clearDataConfirmPending;
+        private long _clearDataConfirmExpiresAtMs;
+        private string _chatSubtitle = "0 сообщений";
+        private string _currentSessionId = string.Empty;
+        private string _currentSessionTitle = string.Empty;
         private bool _isBound;
         private bool _isSending;
 
@@ -177,6 +253,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnDisable()
         {
             UnregisterCallbacks();
+            _clearDataConfirmResetSchedule?.Pause();
+            _clearDataConfirmResetSchedule = null;
+            _themesBreathSchedule?.Pause();
+            _themesBreathSchedule = null;
+            foreach (var tex in _customTextures.Values)
+                if (tex != null) UnityEngine.Object.Destroy(tex);
+            _customTextures.Clear();
             _isBound = false;
         }
 
@@ -210,8 +293,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navProvidersCount = root.Q<Label>("nav-providers-count");
 
             _chatPanel = root.Q<VisualElement>("chat-panel");
+            _historyPanel = root.Q<VisualElement>("history-panel");
             _providersPanel = root.Q<VisualElement>("providers-panel");
             _avatarsPanel = root.Q<VisualElement>("avatars-panel");
+            _themesPanel = root.Q<VisualElement>("themes-panel");
             _placeholderArea = root.Q<VisualElement>("placeholder-area");
             _settingsPanel = root.Q<VisualElement>("settings-panel");
             _composer = root.Q<VisualElement>("composer");
@@ -234,6 +319,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _railProviderModel = root.Q<Label>("rail-provider-model");
             _editorProviderShort = root.Q<Label>("editor-provider-short");
             _editorProviderName = root.Q<Label>("editor-provider-name");
+            _editorProviderStatus = root.Q<Label>("editor-provider-status");
 
             _messageInput = root.Q<TextField>("message-input");
             _sendButton = root.Q<Button>("send-button");
@@ -243,10 +329,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             _newSessionButton = root.Q<Button>("new-session-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
             _sessionsList = root.Q<ScrollView>("sessions-list");
+            _historySessionsList = root.Q<ScrollView>("history-panel-sessions-list");
+            _historyState = root.Q<Label>("history-panel-state");
             _historySearchBar   = root.Q<VisualElement>("history-search-bar");
             _historySearchInput = root.Q<TextField>("history-search-input");
             _historySearchBtn   = root.Q<Button>("history-search-btn");
             _historySearchClear = root.Q<Button>("history-search-clear");
+            _historyPanelSearchBar = root.Q<VisualElement>("history-panel-search-bar");
+            _historyPanelSearchInput = root.Q<TextField>("history-panel-search-input");
+            _historyPanelSearchBtn = root.Q<Button>("history-panel-search-btn");
+            _historyPanelSearchClear = root.Q<Button>("history-panel-search-clear");
+            _historyPanelNewSessionButton = root.Q<Button>("history-panel-new-session-btn");
 
             _providersList = root.Q<ScrollView>("providers-list");
             _addProviderButton    = root.Q<Button>("add-provider-btn");
@@ -260,11 +353,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
             _avatarOpenFolderBtn  = root.Q<Button>("avatar-open-folder-btn");
             _avatarUploadTile     = root.Q<VisualElement>("avtile-upload");
+            _galleryContainer     = _avatarsPanel?.Q<VisualElement>(className: "gallery");
+            _navAvatarsCount      = _navAvatars?.Q<Label>(className: "nav__count");
             _providerEditPanel = root.Q<VisualElement>("provider-edit-panel");
             _editName = root.Q<TextField>("edit-name");
             _editBaseUrl = root.Q<TextField>("edit-baseurl");
             _editApiKey = root.Q<TextField>("edit-apikey");
             _editModel = root.Q<TextField>("edit-model");
+            _editModelPreset = root.Q<DropdownField>("edit-model-preset");
+            _editModelCustomWrap = root.Q<VisualElement>("edit-model-custom-wrap");
             _editMaxTokens = root.Q<TextField>("edit-maxtokens");
             _editTemperature = root.Q<Slider>("edit-temperature");
 
@@ -279,6 +376,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
             _settingsExportBtn     = root.Q<Button>("settings-export-btn");
             _settingsClearBtn      = root.Q<Button>("settings-clear-btn");
+            _settingsClearBtnText  = _settingsClearBtn?.Q<Label>();
+            _settingsGithubBtn     = root.Q<Button>("settings-github-btn");
+            _settingsDocsBtn       = root.Q<Button>("settings-docs-btn");
+            _settingsDonateBtn     = root.Q<Button>("settings-donate-btn");
+            _settingsDonateBtn?.SetEnabled(false);
             _testProviderBtn = root.Q<Button>("test-provider-btn");
             _testRow         = root.Q<VisualElement>("test-row");
             _testRowLabel    = root.Q<Label>("test-row-label");
@@ -292,6 +394,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsMaskLogs    = root.Q<Toggle>("settings-mask-logs");
             _settingsStoragePath = root.Q<Label>("settings-storage-path");
             _settingsVersion     = root.Q<Label>("settings-version");
+            _brandVersion       = root.Q<Label>("brand-version");
             _shapeRound  = root.Q<Button>("shape-round");
             _shapeSquare = root.Q<Button>("shape-square");
             _shapeHex    = root.Q<Button>("shape-hex");
@@ -302,11 +405,36 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarArt    = root.Q<VisualElement>("avatar-art");
             _avatarCircle = root.Q<VisualElement>("avatar-circle");
             _previewHero  = root.Q<VisualElement>("preview-hero");
+            _themesPreviewHalo   = root.Q<VisualElement>("themes-preview-halo");
+            _themesPreviewAvatar = root.Q<VisualElement>("themes-preview-avatar");
             _previewTitle   = root.Q<Label>("preview-title");
             _previewTag     = root.Q<Label>("preview-tag");
             _previewPersona = root.Q<Label>("preview-persona");
+            _previewPersonaStateBadge = root.Q<Label>("preview-persona-state-badge");
+            _previewPersonaStateHelp = root.Q<Label>("preview-persona-state-help");
+            _previewPersonaStateRow = root.Q<VisualElement>("preview-persona-state-row");
             _previewApplyBtn      = root.Q<Button>("preview-apply-btn");
             _previewEditPersonaBtn = root.Q<Button>("preview-edit-persona-btn");
+            _previewResetPersonaBtn = root.Q<Button>("preview-reset-persona-btn");
+            _previewDeleteAvatarBtn = root.Q<Button>("preview-delete-avatar-btn");
+            _previewPersonaLabel  = root.Q<Label>("preview-persona-label");
+            _previewActionsRow    = root.Q<VisualElement>("preview-actions-row");
+            _personaEditorPanel   = root.Q<VisualElement>("persona-editor-panel");
+            _personaEditField     = root.Q<TextField>("persona-edit-field");
+            _personaSaveBtn       = root.Q<Button>("persona-save-btn");
+            _personaCancelBtn     = root.Q<Button>("persona-cancel-btn");
+            _avatarFilterAllBtn = root.Q<Button>("avatar-filter-all-btn");
+            _avatarFilterStandardBtn = root.Q<Button>("avatar-filter-standard-btn");
+            _avatarFilterGradientBtn = root.Q<Button>("avatar-filter-gradient-btn");
+            _avatarFilterMinimalBtn = root.Q<Button>("avatar-filter-minimal-btn");
+            _avatarFilterCustomBtn = root.Q<Button>("avatar-filter-custom-btn");
+            _avatarFilterAllCount = root.Q<Label>("avatar-filter-all-count");
+            _avatarFilterStandardCount = root.Q<Label>("avatar-filter-standard-count");
+            _avatarFilterGradientCount = root.Q<Label>("avatar-filter-gradient-count");
+            _avatarFilterMinimalCount = root.Q<Label>("avatar-filter-minimal-count");
+            _avatarFilterCustomCount = root.Q<Label>("avatar-filter-custom-count");
+            SetDisplay(_personaEditorPanel, DisplayStyle.None);
+            SetDisplay(_previewDeleteAvatarBtn, DisplayStyle.None);
 
             // Typing dots
             var typingEl = root.Q<VisualElement>("typing-indicator");
@@ -320,6 +448,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetDisplay(_providerEditPanel, DisplayStyle.None);
             SetSending(false);
+            UpdateClearDataButtonState();
             _ = LoadSettingsAsync();
             _isBound = true;
         }
@@ -345,10 +474,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_searchButton, OnSearchClicked);
             RegisterClick(_moreButton, OnMoreClicked);
             RegisterClick(_newSessionButton, OnNewSessionClicked);
+            RegisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
             RegisterClick(_historySearchBtn, OnHistorySearchToggled);
             RegisterClick(_historySearchClear, OnHistorySearchCleared);
+            RegisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
+            RegisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
             if (_historySearchInput != null)
                 _historySearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
+            if (_historyPanelSearchInput != null)
+                _historyPanelSearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
             RegisterClick(_addProviderButton, OnAddProviderClicked);
             RegisterClick(_importProviderButton, OnImportProviderClicked);
             RegisterClick(_saveProviderButton, OnSaveProviderClicked);
@@ -356,6 +490,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
             RegisterClick(_settingsExportBtn, OnExportChatsClicked);
             RegisterClick(_settingsClearBtn, OnClearDataClicked);
+            RegisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
+            RegisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
+            RegisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
             RegisterClick(_testProviderBtn, OnTestProviderClicked);
             RegisterClick(_copyButton, OnCopyLastMessageClicked);
             RegisterClick(_regenerateButton, OnRegenerateClicked);
@@ -365,6 +502,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_avatarOpenFolderBtn, OnAvatarOpenFolderClicked);
             if (_avatarUploadTile != null)
                 _avatarUploadTile.RegisterCallback<ClickEvent>(_ => OnAvatarUploadClicked());
+            if (_editModelPreset != null)
+                _editModelPreset.RegisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
+            if (_editName != null)
+                _editName.RegisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+            if (_editBaseUrl != null)
+                _editBaseUrl.RegisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+            if (_editModel != null)
+                _editModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
 
             if (_messageInput != null)
             {
@@ -384,6 +529,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterAvatarGalleryCallbacks();
             RegisterClick(_previewApplyBtn, OnPreviewApplyClicked);
             RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
+            RegisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
+            RegisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
+            RegisterClick(_personaSaveBtn, OnPersonaSaveClicked);
+            RegisterClick(_personaCancelBtn, OnPersonaCancelClicked);
+            RegisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
+            RegisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
+            RegisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
+            RegisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
+            RegisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
         }
 
         private void UnregisterCallbacks()
@@ -401,11 +555,40 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_searchButton, OnSearchClicked);
             UnregisterClick(_moreButton, OnMoreClicked);
             UnregisterClick(_newSessionButton, OnNewSessionClicked);
+            UnregisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
+            UnregisterClick(_historySearchBtn, OnHistorySearchToggled);
+            UnregisterClick(_historySearchClear, OnHistorySearchCleared);
+            UnregisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
+            UnregisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
             UnregisterClick(_addProviderButton, OnAddProviderClicked);
             UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
+            UnregisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
+            UnregisterClick(_settingsExportBtn, OnExportChatsClicked);
+            UnregisterClick(_settingsClearBtn, OnClearDataClicked);
+            UnregisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
+            UnregisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
+            UnregisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
+            UnregisterClick(_testProviderBtn, OnTestProviderClicked);
             UnregisterClick(_listenButton, OnListenClicked);
             UnregisterClick(_attachButton, OnAttachClicked);
+            UnregisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
+            UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
+            UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
+            UnregisterClick(_personaCancelBtn, OnPersonaCancelClicked);
+            UnregisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
+            UnregisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
+            UnregisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
+            UnregisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
+            UnregisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
+            if (_editModelPreset != null)
+                _editModelPreset.UnregisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
+            if (_editName != null)
+                _editName.UnregisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+            if (_editBaseUrl != null)
+                _editBaseUrl.UnregisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+            if (_editModel != null)
+                _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
@@ -459,7 +642,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navChat);
-            SetTopbar("Дизайн системы рендеринга 2D", _chatSubtitle);
+            SetTopbar(GetChatTitle(), _chatSubtitle);
             ShowArea(_chatPanel);
         }
 
@@ -469,7 +652,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navAvatars);
-            SetTopbar("Аватары", "8 образов · Neon");
+            int total = BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0);
+            SetTopbar("Аватары", $"{total} образов · {AvatarDisplayName(_activeAvatarId)}");
             ShowArea(_avatarsPanel);
         }
 
@@ -479,7 +663,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navProviders);
-            SetTopbar("Провайдеры", "OpenAI-compatible endpoints");
+            SetTopbar("Провайдеры", "OpenAI-совместимые провайдеры");
             ShowArea(_providersPanel);
             _ = RefreshProvidersListAsync();
         }
@@ -490,8 +674,23 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navHistory);
-            SetTopbar("История", _chatSubtitle);
-            ShowArea(_chatPanel);
+            SetTopbar("История чатов", string.IsNullOrWhiteSpace(_sessionSearchQuery) ? "Сохранённые сессии" : $"Поиск: {_sessionSearchQuery}");
+            ShowArea(_historyPanel);
+            _ = RefreshSessionsFromCacheAsync();
+        }
+
+        private string GetChatTitle()
+        {
+            return !string.IsNullOrWhiteSpace(_currentSessionTitle) ? _currentSessionTitle : "Новый чат";
+        }
+
+        private string GetProviderStatusText()
+        {
+            var provider = _chatService?.CurrentProvider;
+            if (provider == null) return "нет провайдера";
+            if (!string.IsNullOrWhiteSpace(provider.defaultModel))
+                return $"{provider.displayName ?? "API"} · {provider.defaultModel}";
+            return provider.displayName ?? "настроен";
         }
 
         private void ShowThemes()
@@ -500,7 +699,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navThemes);
-            SetPlaceholder("Темы", "Палитры и формы аватара будут вынесены сюда следующим этапом.");
+            SetTopbar("Темы", "Форма, ореол и дыхание для аватара");
+            ShowArea(_themesPanel);
         }
 
         private void ShowSettings()
@@ -526,8 +726,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void ShowArea(VisualElement visible)
         {
             SetDisplay(_chatPanel, visible == _chatPanel ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_historyPanel, visible == _historyPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_providersPanel, visible == _providersPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_avatarsPanel, visible == _avatarsPanel ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_themesPanel, visible == _themesPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_placeholderArea, visible == _placeholderArea ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_settingsPanel, visible == _settingsPanel ? DisplayStyle.Flex : DisplayStyle.None);
         }
@@ -587,7 +789,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var chat = await GetChatServiceAsync();
                 if (chat == null)
                 {
-                    AddSystemMessage("Application is not initialized.");
+                    AddSystemMessage("Приложение не инициализировано.");
                     return;
                 }
 
@@ -612,7 +814,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Error] {ex.Message}");
+                AddSystemMessage("Не удалось отправить сообщение. Попробуй ещё раз.");
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -643,7 +845,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _sendButton.SetEnabled(!isSending);
 
             if (_connectionStatus != null)
-                _connectionStatus.text = isSending ? "generating · live" : "connected · 14:23";
+                _connectionStatus.text = isSending ? "генерация…" : GetProviderStatusText();
 
             SetDisplay(_typingIndicator, isSending ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_subtitleBody, isSending ? DisplayStyle.None : DisplayStyle.Flex);
@@ -673,7 +875,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка] {ex.Message}");
+                AddSystemMessage("Не удалось получить сводку диалога. Попробуй позже.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -690,20 +892,24 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _sessionSearchQuery = _messageInput?.value?.Trim() ?? string.Empty;
                 if (_historySearchInput != null)
                     _historySearchInput.SetValueWithoutNotify(_sessionSearchQuery);
+                if (_historyPanelSearchInput != null)
+                    _historyPanelSearchInput.SetValueWithoutNotify(_sessionSearchQuery);
 
                 var chat = await GetChatServiceAsync();
                 if (chat == null)
                     return;
 
                 var allSessions = await chat.GetAllSessionsAsync();
+                var app = await GetAppAsync();
+                var providers = app != null ? await app.ProviderManager.GetAllProvidersAsync() : new List<ProviderConfig>();
                 if (_isBound)
-                    RenderSessionList(allSessions);
+                    RenderSessionList(allSessions, providers);
 
                 ShowHistory();
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка поиска] {ex.Message}");
+                AddSystemMessage("Не удалось выполнить поиск по чатам. Попробуй ещё раз.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -728,7 +934,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
                 {
                     GUIUtility.systemCopyBuffer = msg.content;
-                    AddSystemMessage("Последний ответ ассистента скопирован в буфер обмена.");
+                    AddSystemMessage("Последний ответ скопирован в буфер обмена.");
                     return;
                 }
             }
@@ -762,7 +968,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка вложения] {ex.Message}");
+                AddSystemMessage("Не удалось добавить вложение к сообщению.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -781,6 +987,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
 
                 await chat.StartNewSessionAsync();
+                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+                _currentSessionTitle = string.Empty;
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 ShowChat();
@@ -828,7 +1036,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_sendButton != null)
                 _sendButton.SetEnabled(false);
             if (_connectionStatus != null)
-                _connectionStatus.text = "no provider";
+                _connectionStatus.text = "нет провайдера";
         }
 
         private async Task<CompanionApp> GetAppAsync()
@@ -866,38 +1074,62 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (settingsSnap != null)
                 _chatService.SaveChatHistory = settingsSnap.saveChatHistory;
 
-            await _chatService.GetOrCreateChatAsync();
+            await _chatService.GetOrCreateChatAsync(settingsSnap?.activeProviderId);
+            if (string.IsNullOrEmpty(_currentSessionId))
+                _currentSessionId = _chatService.CurrentSessionId ?? string.Empty;
             return _chatService;
         }
 
         private async Task LoadSessionsAsync(ChatService chat)
         {
-            if (_sessionsList == null)
+            if (_sessionsList == null && _historySessionsList == null)
                 return;
 
+            ShowHistoryState("Загрузка истории…", isError: false);
             var allSessions = await chat.GetAllSessionsAsync();
+            var providers = new List<ProviderConfig>();
+            var app = await GetAppAsync();
+            if (app != null)
+                providers = await app.ProviderManager.GetAllProvidersAsync();
             if (!_isBound)
                 return;
+
+            // Sync session identity from service if not yet captured (covers refresh/init)
+            if (string.IsNullOrEmpty(_currentSessionId))
+                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+
+            // Sync display title from the actual current session (covers reload/refresh case)
+            if (!string.IsNullOrEmpty(_currentSessionId))
+            {
+                var active = allSessions.Find(s => s.sessionId == _currentSessionId);
+                if (active != null)
+                {
+                    _currentSessionTitle = string.IsNullOrWhiteSpace(active.title) || active.title == "New chat"
+                        ? string.Empty
+                        : active.title;
+                }
+                else
+                {
+                    _currentSessionId = string.Empty;
+                    _currentSessionTitle = string.Empty;
+                }
+            }
 
             if (_navChatCount != null)
                 _navChatCount.text = allSessions.Count.ToString();
 
-            // Sync topbar title with current (first/most-recent) session title
-            if (allSessions.Count > 0 && _topbarTitle != null)
-            {
-                string sessionTitle = allSessions[0].title;
-                if (!string.IsNullOrWhiteSpace(sessionTitle) && sessionTitle != "New chat")
-                    _topbarTitle.text = sessionTitle;
-            }
+            if (_topbarTitle != null && _chatPanel != null && _chatPanel.style.display != DisplayStyle.None)
+                _topbarTitle.text = GetChatTitle();
 
-            RenderSessionList(allSessions);
+            RenderSessionList(allSessions, providers);
         }
 
-        private void RenderSessionList(List<ChatSession> allSessions)
+        private void RenderSessionList(List<ChatSession> allSessions, List<ProviderConfig> providers)
         {
-            if (_sessionsList == null) return;
+            if (_sessionsList == null && _historySessionsList == null) return;
 
-            _sessionsList.Clear();
+            _sessionsList?.Clear();
+            _historySessionsList?.Clear();
             _sessionItems.Clear();
 
             var sessions = string.IsNullOrWhiteSpace(_sessionSearchQuery)
@@ -905,39 +1137,58 @@ namespace NeonCompanion.Runtime.UI.UITK
                 : allSessions.FindAll(s =>
                     (s.title ?? string.Empty).IndexOf(_sessionSearchQuery, StringComparison.OrdinalIgnoreCase) >= 0);
 
-            var groupLabel = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                ? "Недавние"
-                : $"Результаты: {sessions.Count}");
-            groupLabel.AddToClassList("history__group");
-            _sessionsList.Add(groupLabel);
+            AddSessionHeader(_sessionsList, sessions.Count);
+            AddSessionHeader(_historySessionsList, sessions.Count);
 
             if (sessions.Count == 0)
             {
-                var empty = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                    ? "Пока нет сессий"
-                    : "Ничего не найдено");
-                empty.AddToClassList("history__meta");
-                _sessionsList.Add(empty);
+                string emptyText = string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                    ? "Сохранённых сессий пока нет."
+                    : "По этому запросу ничего не найдено.";
+                var railEmpty = new Label(emptyText);
+                railEmpty.AddToClassList("history__meta");
+                _sessionsList?.Add(railEmpty);
+
+                var historyEmpty = new Label(emptyText);
+                historyEmpty.AddToClassList("history__meta");
+                _historySessionsList?.Add(historyEmpty);
+                ShowHistoryState(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                    ? "История пуста. Начните чат, чтобы появилась первая сессия."
+                    : "Попробуйте изменить поисковый запрос.", isError: false);
                 return;
             }
 
+            ShowHistoryState(string.Empty, isError: false);
             for (int i = 0; i < sessions.Count; i++)
             {
-                var item = CreateSessionItem(sessions[i], i == 0 && string.IsNullOrWhiteSpace(_sessionSearchQuery));
-                _sessionsList.Add(item);
-                _sessionItems.Add(item);
+                bool isActive = IsActiveSession(sessions[i], i);
+                var railItem = CreateSessionItem(sessions[i], isActive, providers);
+                var historyItem = CreateSessionItem(sessions[i], isActive, providers);
+                _sessionsList?.Add(railItem);
+                _historySessionsList?.Add(historyItem);
+                _sessionItems.Add(railItem);
+                _sessionItems.Add(historyItem);
             }
+        }
+
+        private bool IsActiveSession(ChatSession session, int index)
+        {
+            if (!string.IsNullOrEmpty(_currentSessionId))
+                return session.sessionId == _currentSessionId;
+            return index == 0;
         }
 
         // ---- History search ----
 
         private void OnHistorySearchToggled()
         {
-            if (_historySearchBar == null) return;
-            bool isVisible = _historySearchBar.style.display == DisplayStyle.Flex;
+            bool railVisible = _historySearchBar != null && _historySearchBar.style.display == DisplayStyle.Flex;
+            bool panelVisible = _historyPanelSearchBar != null && _historyPanelSearchBar.style.display == DisplayStyle.Flex;
+            bool isVisible = railVisible || panelVisible;
             SetDisplay(_historySearchBar, isVisible ? DisplayStyle.None : DisplayStyle.Flex);
-            if (!isVisible && _historySearchInput != null)
-                _historySearchInput.Focus();
+            SetDisplay(_historyPanelSearchBar, isVisible ? DisplayStyle.None : DisplayStyle.Flex);
+            if (!isVisible)
+                (_historyPanelSearchInput ?? _historySearchInput)?.Focus();
             if (isVisible)
                 OnHistorySearchCleared();
         }
@@ -947,13 +1198,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sessionSearchQuery = string.Empty;
             if (_historySearchInput != null)
                 _historySearchInput.SetValueWithoutNotify(string.Empty);
+            if (_historyPanelSearchInput != null)
+                _historyPanelSearchInput.SetValueWithoutNotify(string.Empty);
             SetDisplay(_historySearchBar, DisplayStyle.None);
+            SetDisplay(_historyPanelSearchBar, DisplayStyle.None);
             _ = RefreshSessionsFromCacheAsync();
         }
 
         private void OnHistorySearchChanged(ChangeEvent<string> evt)
         {
             _sessionSearchQuery = evt.newValue ?? string.Empty;
+            if (_historySearchInput != null && _historySearchInput != evt.target)
+                _historySearchInput.SetValueWithoutNotify(_sessionSearchQuery);
+            if (_historyPanelSearchInput != null && _historyPanelSearchInput != evt.target)
+                _historyPanelSearchInput.SetValueWithoutNotify(_sessionSearchQuery);
             _ = RefreshSessionsFromCacheAsync();
         }
 
@@ -961,28 +1219,111 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             var chat = await GetChatServiceAsync();
             if (chat == null) return;
-            var allSessions = await chat.GetAllSessionsAsync();
-            if (_isBound) RenderSessionList(allSessions);
+            try
+            {
+                ShowHistoryState("Загрузка истории…", isError: false);
+                var allSessions = await chat.GetAllSessionsAsync();
+                var app = await GetAppAsync();
+                var providers = app != null ? await app.ProviderManager.GetAllProvidersAsync() : new List<ProviderConfig>();
+                if (_isBound) RenderSessionList(allSessions, providers);
+            }
+            catch (Exception ex)
+            {
+                ShowHistoryState("Не удалось загрузить историю чатов.", isError: true);
+                NeonLogger.LogError(ex.ToString());
+            }
         }
 
-        private VisualElement CreateSessionItem(ChatSession session, bool isActive)
+        private void AddSessionHeader(ScrollView target, int sessionsCount)
+        {
+            if (target == null) return;
+            var groupLabel = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                ? "Недавние"
+                : $"Результаты: {sessionsCount}");
+            groupLabel.AddToClassList("history__group");
+            target.Add(groupLabel);
+        }
+
+        private void ShowHistoryState(string message, bool isError)
+        {
+            if (_historyState == null)
+                return;
+
+            _historyState.text = message ?? string.Empty;
+            bool hasMessage = !string.IsNullOrWhiteSpace(_historyState.text);
+            SetDisplay(_historyState, hasMessage ? DisplayStyle.Flex : DisplayStyle.None);
+            _historyState.EnableInClassList("history-panel__state--error", hasMessage && isError);
+        }
+
+        private VisualElement CreateSessionItem(ChatSession session, bool isActive, List<ProviderConfig> providers)
         {
             var container = new VisualElement();
             container.AddToClassList("history__item");
             container.EnableInClassList(ActiveSessionClass, isActive);
 
-            var titleLabel = new Label(string.IsNullOrWhiteSpace(session.title) ? "New chat" : session.title);
+            var headerRow = new VisualElement();
+            headerRow.AddToClassList("history__row");
+
+            var titleLabel = new Label(string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
+                ? "Новый чат"
+                : session.title);
             titleLabel.AddToClassList("history__title");
 
+            var providerLabel = new Label(BuildSessionProviderLabel(session, providers));
+            providerLabel.AddToClassList("history__provider");
+
             int count = session.messages?.Count ?? 0;
-            var metaLabel = new Label($"neon · {count} msg");
+            var metaLabel = new Label(MessageCountText(count));
             metaLabel.AddToClassList("history__meta");
 
-            container.Add(titleLabel);
+            var deleteBtn = new Button { text = "\u00d7" };
+            deleteBtn.AddToClassList("history__delete-btn");
+            bool deletePending = false;
+            deleteBtn.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                if (!deletePending)
+                {
+                    deletePending = true;
+                    deleteBtn.text = "\u2713";
+                    deleteBtn.AddToClassList("history__delete-btn--confirm");
+                    return;
+                }
+                _ = DeleteSessionAndRefreshAsync(session.sessionId);
+            });
+
+            headerRow.Add(titleLabel);
+            headerRow.Add(providerLabel);
+            headerRow.Add(deleteBtn);
+
+            container.Add(headerRow);
             container.Add(metaLabel);
             container.RegisterCallback<ClickEvent>(evt => { _ = SwitchSessionAsync(session, container); });
 
             return container;
+        }
+
+        private static string BuildSessionProviderLabel(ChatSession session, List<ProviderConfig> providers)
+        {
+            if (session == null)
+                return "Провайдер: —";
+
+            if (string.IsNullOrWhiteSpace(session.providerId))
+                return "Провайдер: default";
+
+            var provider = providers?.Find(p => p != null && p.id == session.providerId);
+            if (provider != null && !string.IsNullOrWhiteSpace(provider.displayName))
+                return $"Провайдер: {provider.displayName}";
+
+            return $"Провайдер: {ShortProviderId(session.providerId)}";
+        }
+
+        private static string ShortProviderId(string providerId)
+        {
+            if (string.IsNullOrWhiteSpace(providerId))
+                return "—";
+
+            return providerId.Length <= 8 ? providerId : providerId.Substring(0, 8);
         }
 
         private async Task SwitchSessionAsync(ChatSession session, VisualElement item)
@@ -994,8 +1335,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
 
                 await chat.SwitchToSessionAsync(session);
-                SetActiveSession(item);
+                _currentSessionId = session.sessionId;
+                _currentSessionTitle = string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
+                    ? string.Empty
+                    : session.title;
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
+                await LoadSessionsAsync(chat);
                 ShowChat();
             }
             catch (Exception ex)
@@ -1004,10 +1349,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private void SetActiveSession(VisualElement selected)
+        private async Task DeleteSessionAndRefreshAsync(string sessionId)
         {
-            foreach (var item in _sessionItems)
-                item.EnableInClassList(ActiveSessionClass, item == selected);
+            try
+            {
+                var chat = await GetChatServiceAsync();
+                if (chat == null) return;
+
+                await chat.DeleteSessionAsync(sessionId);
+
+                if (_currentSessionId == sessionId)
+                {
+                    _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+                    _currentSessionTitle = string.Empty;
+                    RenderMessages(chat.CurrentChatViewModel?.Messages);
+                }
+
+                await LoadSessionsAsync(chat);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
         }
 
         private void RenderMessages(IReadOnlyList<ChatMessage> messages)
@@ -1240,7 +1603,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _cancelPending = false;
             _editingProviderSource = null;
-            _editingProvider = ProviderConfig.CreateDefault("New Provider", "https://api.openai.com/v1");
+            _editingProvider = ProviderConfig.CreateDefault("Новый провайдер", "https://api.openai.com/v1");
+            _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
+            _editModelUsesCustomMode = false;
             ShowProviderEditPanel();
         }
 
@@ -1255,6 +1620,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _cancelPending = false;
             _editingProviderSource = provider;
             _editingProvider = CloneProvider(provider);
+            _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
+            _editModelUsesCustomMode = false;
             ShowProviderEditPanel();
         }
 
@@ -1266,7 +1633,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editorProviderShort != null)
                 _editorProviderShort.text = BuildProviderShort(_editingProvider);
             if (_editorProviderName != null)
-                _editorProviderName.text = string.IsNullOrWhiteSpace(_editingProvider.displayName) ? "Provider" : _editingProvider.displayName;
+                _editorProviderName.text = string.IsNullOrWhiteSpace(_editingProvider.displayName) ? "—" : _editingProvider.displayName;
+            UpdateEditorStatus();
             if (_editName != null)
                 _editName.SetValueWithoutNotify(_editingProvider.displayName ?? string.Empty);
             if (_editBaseUrl != null)
@@ -1275,6 +1643,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editApiKey.SetValueWithoutNotify(_editingProvider.apiKey ?? string.Empty);
             if (_editModel != null)
                 _editModel.SetValueWithoutNotify(_editingProvider.defaultModel ?? string.Empty);
+            SyncModelPresetUi(_editingProvider.defaultModel ?? string.Empty);
             if (_editTemperature != null)
                 _editTemperature.SetValueWithoutNotify(_editingProvider.temperature);
             if (_editMaxTokens != null)
@@ -1282,6 +1651,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetTestRow(null, string.Empty);
             _providerEditPanel.style.display = DisplayStyle.Flex;
+            _ = RefreshProvidersListAsync();
         }
 
         private void OnSaveProviderClicked()
@@ -1316,6 +1686,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     SetProviderHeader(draft);
                 }
+
+                UpdateEditorStatus();
 
                 _cancelPending = false;
                 _editingProviderSource = draft;
@@ -1358,7 +1730,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                SetTestRow(false, ex.Message);
+                SetTestRow(false, "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа.");
+                NeonLogger.LogError(ex.ToString());
             }
             finally
             {
@@ -1390,6 +1763,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editingProvider = null;
             _editingProviderSource = null;
             SetDisplay(_providerEditPanel, DisplayStyle.None);
+            _ = RefreshProvidersListAsync();
         }
 
         // ---- Draft editing helpers ----
@@ -1418,7 +1792,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editName != null)        draft.displayName  = _editName.value;
             if (_editBaseUrl != null)     draft.baseUrl      = _editBaseUrl.value;
             if (_editApiKey != null)      draft.apiKey       = _editApiKey.value;
-            if (_editModel != null)       draft.defaultModel = _editModel.value;
+            draft.defaultModel = GetCurrentModelValue();
             if (_editTemperature != null) draft.temperature  = _editTemperature.value;
             if (_editMaxTokens != null && int.TryParse(_editMaxTokens.value, out int tokens))
                 draft.maxTokens = tokens;
@@ -1459,6 +1833,162 @@ namespace NeonCompanion.Runtime.UI.UITK
             return false;
         }
 
+        private void OnProviderEditorIdentityChanged(ChangeEvent<string> _)
+        {
+            if (_syncingModelPresetUi)
+                return;
+
+            if (_editorProviderName != null)
+                _editorProviderName.text = string.IsNullOrWhiteSpace(_editName?.value) ? "—" : _editName.value;
+
+            SyncModelPresetUi(GetCurrentModelValue());
+        }
+
+        private void OnManualModelChanged(ChangeEvent<string> evt)
+        {
+            if (_syncingModelPresetUi)
+                return;
+
+            if (string.Equals(_editModelPreset?.value, CustomModelPresetValue, StringComparison.Ordinal))
+                _lastCustomModel = evt?.newValue ?? string.Empty;
+        }
+
+        private void OnModelPresetChanged(ChangeEvent<string> evt)
+        {
+            if (_syncingModelPresetUi)
+                return;
+
+            if (evt == null)
+                return;
+
+            string selectedLabel = evt.newValue ?? string.Empty;
+            bool isCustom = string.Equals(selectedLabel, CustomModelPresetValue, StringComparison.Ordinal);
+            SetDisplay(_editModelCustomWrap, isCustom ? DisplayStyle.Flex : DisplayStyle.None);
+
+            if (isCustom)
+            {
+                if (_editModel != null)
+                    _editModel.SetValueWithoutNotify(_lastCustomModel ?? string.Empty);
+                _editModelUsesCustomMode = true;
+                return;
+            }
+
+            _editModelUsesCustomMode = false;
+            if (_modelPresetByLabel.TryGetValue(selectedLabel, out string modelId) && _editModel != null)
+                _editModel.SetValueWithoutNotify(modelId ?? string.Empty);
+        }
+
+        private string GetCurrentModelValue()
+        {
+            if (string.Equals(_editModelPreset?.value, CustomModelPresetValue, StringComparison.Ordinal))
+                return _editModel?.value ?? string.Empty;
+
+            string selected = _editModelPreset?.value ?? string.Empty;
+            if (_modelPresetByLabel.TryGetValue(selected, out string presetModel))
+                return presetModel ?? string.Empty;
+
+            return _editModel?.value ?? string.Empty;
+        }
+
+        private void SyncModelPresetUi(string currentModel)
+        {
+            if (_editModelPreset == null)
+                return;
+
+            string nameHint = _editName?.value ?? _editingProvider?.displayName ?? _editingProviderSource?.displayName ?? string.Empty;
+            string baseUrlHint = _editBaseUrl?.value ?? _editingProvider?.baseUrl ?? _editingProviderSource?.baseUrl ?? string.Empty;
+            var presets = BuildModelPresets(nameHint, baseUrlHint);
+            bool preserveCustomMode = _editModelUsesCustomMode;
+
+            _syncingModelPresetUi = true;
+            _modelPresetByLabel.Clear();
+            var choices = new List<string>(presets.Count + 1);
+            foreach (var preset in presets)
+            {
+                _modelPresetByLabel[preset.Label] = preset.ModelId;
+                choices.Add(preset.Label);
+            }
+            choices.Add(CustomModelPresetValue);
+            _editModelPreset.choices = choices;
+
+            string targetChoice = CustomModelPresetValue;
+            if (!preserveCustomMode)
+            {
+                for (int i = 0; i < presets.Count; i++)
+                {
+                    if (string.Equals(presets[i].ModelId, currentModel, StringComparison.Ordinal))
+                    {
+                        targetChoice = presets[i].Label;
+                        break;
+                    }
+                }
+            }
+
+            if (targetChoice == CustomModelPresetValue)
+                _lastCustomModel = currentModel ?? string.Empty;
+
+            _editModelPreset.SetValueWithoutNotify(targetChoice);
+            bool showCustom = string.Equals(targetChoice, CustomModelPresetValue, StringComparison.Ordinal);
+            _editModelUsesCustomMode = showCustom;
+            SetDisplay(_editModelCustomWrap, showCustom ? DisplayStyle.Flex : DisplayStyle.None);
+            if (_editModel != null)
+                _editModel.SetValueWithoutNotify(showCustom ? (_lastCustomModel ?? string.Empty) : (currentModel ?? string.Empty));
+            _syncingModelPresetUi = false;
+        }
+
+        private void UpdateEditorStatus()
+        {
+            if (_editorProviderStatus == null)
+                return;
+
+            if (_editingProviderSource == null)
+            {
+                _editorProviderStatus.text = "Новый черновик";
+                _editorProviderStatus.EnableInClassList("editor__status--active", false);
+                _editorProviderStatus.EnableInClassList("editor__status--inactive", false);
+                _editorProviderStatus.EnableInClassList("editor__status--draft", true);
+                return;
+            }
+
+            bool isActive = string.Equals(_chatService?.CurrentProvider?.id, _editingProviderSource.id, StringComparison.Ordinal);
+            _editorProviderStatus.text = isActive
+                ? "В редакторе: активный провайдер"
+                : "В редакторе: неактивный провайдер";
+            _editorProviderStatus.EnableInClassList("editor__status--active", isActive);
+            _editorProviderStatus.EnableInClassList("editor__status--inactive", !isActive);
+            _editorProviderStatus.EnableInClassList("editor__status--draft", false);
+        }
+
+        private readonly struct ModelPreset
+        {
+            public readonly string Label;
+            public readonly string ModelId;
+
+            public ModelPreset(string label, string modelId)
+            {
+                Label = label;
+                ModelId = modelId;
+            }
+        }
+
+        private static List<ModelPreset> BuildModelPresets(string nameHint, string baseUrlHint)
+        {
+            string hint = $"{nameHint} {baseUrlHint}".ToLowerInvariant();
+            if (hint.Contains("anthropic"))
+                return new List<ModelPreset> { new ModelPreset("Claude Sonnet 4.5", "claude-sonnet-4-5"), new ModelPreset("Claude 3.7 Sonnet", "claude-3-7-sonnet-latest"), new ModelPreset("Claude 3.5 Haiku", "claude-3-5-haiku-latest") };
+            if (hint.Contains("gemini") || hint.Contains("googleapis.com"))
+                return new List<ModelPreset> { new ModelPreset("Gemini 2.5 Pro", "gemini-2.5-pro"), new ModelPreset("Gemini 2.5 Flash", "gemini-2.5-flash"), new ModelPreset("Gemini 2.0 Flash", "gemini-2.0-flash") };
+            if (hint.Contains("x.ai") || hint.Contains("grok") || hint.Contains("xai"))
+                return new List<ModelPreset> { new ModelPreset("Grok 3", "grok-3"), new ModelPreset("Grok 3 Mini", "grok-3-mini"), new ModelPreset("Grok 2", "grok-2-latest") };
+            if (hint.Contains("openrouter"))
+                return new List<ModelPreset> { new ModelPreset("OpenAI GPT-4.1", "openai/gpt-4.1"), new ModelPreset("Anthropic Sonnet 4.5", "anthropic/claude-sonnet-4-5"), new ModelPreset("Google Gemini 2.5 Pro", "google/gemini-2.5-pro") };
+            if (hint.Contains("localhost") || hint.Contains("127.0.0.1") || hint.Contains("ollama"))
+                return new List<ModelPreset> { new ModelPreset("Llama 3.1 8B (Ollama)", "llama3.1:8b"), new ModelPreset("Qwen 2.5 7B (Ollama)", "qwen2.5:7b"), new ModelPreset("Mistral 7B (Ollama)", "mistral:7b") };
+            if (hint.Contains("openai"))
+                return new List<ModelPreset> { new ModelPreset("GPT-4.1", "gpt-4.1"), new ModelPreset("GPT-4o", "gpt-4o"), new ModelPreset("GPT-4o mini", "gpt-4o-mini") };
+            return new List<ModelPreset> { new ModelPreset("GPT-4.1", "gpt-4.1"), new ModelPreset("Claude Sonnet 4.5", "claude-sonnet-4-5"), new ModelPreset("Gemini 2.5 Flash", "gemini-2.5-flash") };
+        }
+
         private void DeleteProvider(ProviderConfig provider)
         {
             _ = DeleteProviderAsync(provider);
@@ -1475,13 +2005,31 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (app == null)
                     return;
 
+                var deletedCurrent = string.Equals(_chatService?.CurrentProvider?.id, provider.id, StringComparison.Ordinal);
                 await app.ProviderManager.DeleteProviderAsync(provider.id);
+
                 if (_editingProvider?.id == provider.id)
                 {
                     _cancelPending = false;
                     _editingProvider = null;
                     _editingProviderSource = null;
                     SetDisplay(_providerEditPanel, DisplayStyle.None);
+                }
+
+                if (deletedCurrent)
+                {
+                    // ProviderManager materializes a default provider if the repository became empty.
+                    var fallbackProvider = await app.ProviderManager.GetActiveProviderAsync();
+                    await SwitchProviderAsync(fallbackProvider);
+                    return;
+                }
+
+                var settings = app.Settings.Load() ?? new AppSettings();
+                if (string.Equals(settings.activeProviderId, provider.id, StringComparison.Ordinal))
+                {
+                    var fallbackProvider = await app.ProviderManager.GetActiveProviderAsync();
+                    settings.activeProviderId = fallbackProvider?.id ?? settings.activeProviderId;
+                    app.Settings.Save(settings);
                 }
 
                 await RefreshProvidersListAsync();
@@ -1506,7 +2054,23 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
 
                 await chat.SwitchProviderAsync(provider);
+
+                var app = await GetAppAsync();
+                if (app != null)
+                {
+                    var s = app.Settings.Load() ?? new AppSettings();
+                    s.activeProviderId = chat.CurrentProvider?.id ?? provider?.id ?? s.activeProviderId;
+                    app.Settings.Save(s);
+                }
+                else
+                {
+                    await SaveSettingsAsync();
+                }
+
+                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
+                _currentSessionTitle = string.Empty;
                 SetProviderHeader(provider);
+                UpdateEditorStatus();
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 await RefreshProvidersListAsync();
@@ -1528,7 +2092,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var app = await GetAppAsync();
             if (!_isBound || app == null)
             {
-                _providersList.Add(new Label("ProviderManager is not ready."));
+                _providersList.Add(new Label("Менеджер провайдеров не готов."));
                 return;
             }
 
@@ -1538,7 +2102,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (providers.Count == 0)
             {
-                _providersList.Add(new Label("No providers configured."));
+                _providersList.Add(new Label("Провайдеры не настроены."));
                 return;
             }
 
@@ -1564,6 +2128,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             var container = new VisualElement();
             container.AddToClassList("provider");
             container.EnableInClassList(ActiveProviderClass, isActive);
+            bool isEditing = _editingProviderSource != null && _editingProviderSource.id == provider.id;
+            container.EnableInClassList(EditingProviderClass, isEditing);
             container.RegisterCallback<ClickEvent>(evt => StartEditingProvider(provider));
 
             var logo = new VisualElement();
@@ -1576,15 +2142,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             var nameRow = new VisualElement();
             nameRow.AddToClassList("provider__name-row");
 
-            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? "Provider" : provider.displayName);
+            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? "Провайдер" : provider.displayName);
             nameLabel.AddToClassList("provider__name");
             nameRow.Add(nameLabel);
 
             if (isActive)
             {
-                var chip = new Label("active");
+                var chip = new Label("активен");
                 chip.AddToClassList("chip");
                 chip.AddToClassList("chip--accent");
+                nameRow.Add(chip);
+            }
+            if (isEditing)
+            {
+                var chip = new Label("в редакторе");
+                chip.AddToClassList("chip");
                 nameRow.Add(chip);
             }
 
@@ -1600,18 +2172,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var meta = new VisualElement();
             meta.AddToClassList("provider__meta");
-            var metaLabel = new Label("Latency");
+            var metaLabel = new Label("Источник");
             metaLabel.AddToClassList("provider__meta-label");
-            var metaValue = new Label(provider.baseUrl != null && provider.baseUrl.Contains("localhost") ? "52 ms" : "local");
+            var metaValue = new Label(BuildProviderLocationText(provider));
             metaValue.AddToClassList("provider__meta-value");
             meta.Add(metaLabel);
             meta.Add(metaValue);
 
             var actions = new VisualElement();
             actions.AddToClassList("provider__actions");
-            var useButton = new Button(() => SwitchProvider(provider)) { text = "Use" };
-            var editButton = new Button(() => StartEditingProvider(provider)) { text = "Edit" };
-            var deleteButton = new Button(() => DeleteProvider(provider)) { text = "Delete" };
+            var useButton = new Button(() => SwitchProvider(provider)) { text = "Использовать" };
+            var editButton = new Button(() => StartEditingProvider(provider)) { text = "Изменить" };
+            var deleteButton = new Button(() => DeleteProvider(provider)) { text = "Удалить" };
             useButton.AddToClassList("btn");
             editButton.AddToClassList("btn");
             deleteButton.AddToClassList("btn");
@@ -1647,8 +2219,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             string shortName = BuildProviderShort(provider);
-            string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? "Provider" : provider.displayName;
-            string model = string.IsNullOrWhiteSpace(provider.defaultModel) ? "model" : provider.defaultModel;
+            string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? "—" : provider.displayName;
+            string model = string.IsNullOrWhiteSpace(provider.defaultModel) ? string.Empty : provider.defaultModel;
 
             if (_providerShort != null)
                 _providerShort.text = shortName;
@@ -1688,6 +2260,34 @@ namespace NeonCompanion.Runtime.UI.UITK
             return string.IsNullOrEmpty(compact) ? "API" : compact;
         }
 
+        private static string BuildProviderLocationText(ProviderConfig provider)
+        {
+            string baseUrl = provider?.baseUrl;
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                return "неизвестно";
+
+            if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+            {
+                string host = uri.Host;
+                if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "локально";
+                }
+
+                return "удалённо";
+            }
+
+            if (baseUrl.IndexOf("localhost", StringComparison.OrdinalIgnoreCase) >= 0
+                || baseUrl.IndexOf("127.0.0.1", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "локально";
+            }
+
+            return "удалённо";
+        }
+
         // ============================================================
         // Settings page
         // ============================================================
@@ -1724,7 +2324,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (!_isBound || app == null) return;
 
                 var s = app.Settings.Load() ?? new AppSettings();
-                _activeAvatarId = string.IsNullOrEmpty(s.activeAvatarId) ? "neon" : s.activeAvatarId;
+                var availableAvatars = app.Avatars.GetAll();
+                string resolvedAvatarId = string.IsNullOrEmpty(s.activeAvatarId) ? "neon" : s.activeAvatarId;
+                bool knownAvatar = Array.IndexOf(BuiltInAvatarIds, resolvedAvatarId) >= 0 ||
+                                   availableAvatars.Any(a => a != null && a.id == resolvedAvatarId);
+                if (!knownAvatar)
+                    resolvedAvatarId = "neon";
+
+                _activeAvatarId = resolvedAvatarId;
 
                 _settingsHistory?.SetValueWithoutNotify(s.saveChatHistory);
                 _settingsStreaming?.SetValueWithoutNotify(s.streaming);
@@ -1742,12 +2349,25 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_settingsVersion != null)
                     _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
+                if (_brandVersion != null)
+                    _brandVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
 
                 SetAvatarShape(s.avatarShape ?? "round", save: false);
                 ApplyHaloVisibility(s.showHalo);
+                RefreshCustomAvatarGallery(app);
+                RefreshBuiltInAvatarTileLabels();
+                ApplyAvatarFilter();
                 ApplyAvatarArt(_activeAvatarId);
                 SyncGallerySelection(_activeAvatarId);
                 ApplyBreathingAnimation(s.breathingAnimation);
+
+                if (!string.Equals(s.activeAvatarId, _activeAvatarId, StringComparison.Ordinal))
+                {
+                    s.activeAvatarId = _activeAvatarId;
+                    app.Settings.Save(s);
+                }
+
+                await SyncActiveAvatarSystemPromptAsync(app, s);
             }
             catch (Exception ex)
             {
@@ -1780,17 +2400,35 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 s.avatarShape    = _avatarShape;
                 s.activeAvatarId = _activeAvatarId;
+                s.activeProviderId = _chatService?.CurrentProvider?.id ?? s.activeProviderId;
 
                 app.Settings.Save(s);
 
                 // Propagate runtime flags to services immediately
                 if (_chatService != null)
                     _chatService.SaveChatHistory = s.saveChatHistory;
+
+                await SyncActiveAvatarSystemPromptAsync(app, s);
             }
             catch (Exception ex)
             {
                 NeonLogger.LogError(ex.ToString());
             }
+        }
+
+        private async Task SyncActiveAvatarSystemPromptAsync(CompanionApp app = null, AppSettings settings = null)
+        {
+            if (_chatService == null)
+                return;
+
+            app ??= await GetAppAsync();
+            if (app == null)
+                return;
+
+            settings ??= app.Settings.Load() ?? new AppSettings();
+            var avatarProfiles = app.Avatars.GetAll();
+            string prompt = app.AvatarService.GetSystemPrompt(_activeAvatarId, avatarProfiles);
+            _chatService.SystemPrompt = settings.useSystemPrompt ? prompt : null;
         }
 
         private void SetAvatarShape(string shape, bool save = true)
@@ -1807,6 +2445,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarCircle.EnableInClassList("avatar--hex",    shape == "hex");
             }
 
+            if (_themesPreviewAvatar != null)
+            {
+                _themesPreviewAvatar.EnableInClassList("themes-preview__avatar--square", shape == "square");
+                _themesPreviewAvatar.EnableInClassList("themes-preview__avatar--hex",    shape == "hex");
+            }
+
             if (save) SaveSettings();
         }
 
@@ -1814,12 +2458,39 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             var halo = _root?.Q<VisualElement>("avatar-glow");
             SetDisplay(halo, visible ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_themesPreviewHalo, visible ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
         private void ApplyBreathingAnimation(bool enabled)
         {
             if (enabled) StartBreathing();
             else StopBreathing();
+            ApplyThemesPreviewBreathing(enabled);
+        }
+
+        private void ApplyThemesPreviewBreathing(bool enabled)
+        {
+            _themesBreathSchedule?.Pause();
+            _themesBreathSchedule = null;
+
+            if (_themesPreviewAvatar == null) return;
+
+            if (!enabled)
+            {
+                _themesPreviewAvatar.style.scale = new StyleScale(new Scale(new Vector3(1f, 1f, 1f)));
+                return;
+            }
+
+            _themesBreathStartMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _themesBreathSchedule = _themesPreviewAvatar.schedule.Execute(TickThemesBreath).Every(33);
+        }
+
+        private void TickThemesBreath()
+        {
+            if (_themesPreviewAvatar == null) return;
+            float elapsed = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _themesBreathStartMs) / 1000f;
+            float s = 1f + 0.015f * (float)Math.Sin(elapsed * (2f * (float)Math.PI / 5f));
+            _themesPreviewAvatar.style.scale = new StyleScale(new Scale(new Vector3(s, s, 1f)));
         }
 
         // ============================================================
@@ -1838,9 +2509,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        private void OnAvatarFilterAllClicked() => SetAvatarFilter(AvatarFilter.All);
+        private void OnAvatarFilterStandardClicked() => SetAvatarFilter(AvatarFilter.Standard);
+        private void OnAvatarFilterGradientClicked() => SetAvatarFilter(AvatarFilter.Gradient);
+        private void OnAvatarFilterMinimalClicked() => SetAvatarFilter(AvatarFilter.Minimal);
+        private void OnAvatarFilterCustomClicked() => SetAvatarFilter(AvatarFilter.Custom);
+
+        private void SetAvatarFilter(AvatarFilter filter)
+        {
+            _activeAvatarFilter = filter;
+            ApplyAvatarFilter();
+        }
+
         private void SelectAvatar(string avatarId)
         {
             if (_activeAvatarId == avatarId) return;
+            ClosePersonaEditor();
             _activeAvatarId = avatarId;
             SyncGallerySelection(avatarId);
             ApplyAvatarArt(avatarId);
@@ -1865,14 +2549,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await GetAppAsync();
                 if (app == null) return;
 
-                // Update system prompt on the running chat service
-                if (_chatService != null)
-                {
-                    var avatarProfiles = app.Avatars.GetAll();
-                    string prompt = app.AvatarService.GetSystemPrompt(_activeAvatarId, avatarProfiles);
-                    var s = app.Settings.Load() ?? new AppSettings();
-                    _chatService.SystemPrompt = s.useSystemPrompt ? prompt : null;
-                }
+                await SyncActiveAvatarSystemPromptAsync(app);
 
                 SaveSettings();
                 ShowChat();
@@ -1885,8 +2562,125 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnPreviewEditPersonaClicked()
         {
-            // Placeholder — persona editing UI not implemented yet
-            AddSystemMessage("Редактирование персоны будет добавлено в следующем обновлении.");
+            OpenPersonaEditor();
+        }
+
+        private void OpenPersonaEditor()
+        {
+            string current = PersonaEditorText(_activeAvatarId);
+            if (_personaEditField != null) _personaEditField.value = current;
+            SetDisplay(_previewPersonaStateRow, DisplayStyle.None);
+            SetDisplay(_previewPersonaLabel, DisplayStyle.None);
+            SetDisplay(_previewPersona, DisplayStyle.None);
+            SetDisplay(_previewActionsRow, DisplayStyle.None);
+            SetDisplay(_personaEditorPanel, DisplayStyle.Flex);
+        }
+
+        private void ClosePersonaEditor()
+        {
+            SetDisplay(_personaEditorPanel, DisplayStyle.None);
+            SetDisplay(_previewPersonaStateRow, DisplayStyle.Flex);
+            SetDisplay(_previewPersonaLabel, DisplayStyle.Flex);
+            SetDisplay(_previewPersona, DisplayStyle.Flex);
+            SetDisplay(_previewActionsRow, DisplayStyle.Flex);
+            UpdateAvatarActionButtons(_activeAvatarId);
+        }
+
+        private void OnPersonaCancelClicked() => ClosePersonaEditor();
+
+        private void OnPersonaSaveClicked() => _ = SavePersonaAsync();
+
+        private void OnPreviewResetPersonaClicked() => _ = ResetPersonaOverrideAsync();
+
+        private void OnPreviewDeleteAvatarClicked() => _ = DeleteSelectedAvatarAsync();
+
+        private async Task SavePersonaAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                string newPrompt = _personaEditField?.value?.Trim() ?? string.Empty;
+                var profiles = app.Avatars.GetAll();
+                var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
+                if (profile == null)
+                {
+                    bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                    if (!isBuiltIn) return;
+
+                    profile = new AvatarProfile
+                    {
+                        id = _activeAvatarId,
+                        isBuiltIn = true,
+                        name = string.Empty,
+                        imagePath = string.Empty,
+                        systemPrompt = string.Empty
+                    };
+                    profiles.Add(profile);
+                }
+
+                profile.systemPrompt = newPrompt;
+                app.Avatars.SaveAll(profiles);
+                UpdateAvatarProfileCaches(profiles);
+
+                if (_previewPersona != null)
+                    _previewPersona.text = AvatarPersonaText(_activeAvatarId);
+                UpdatePersonaStateUi(_activeAvatarId);
+
+                await SyncActiveAvatarSystemPromptAsync(app);
+
+                ClosePersonaEditor();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private async Task DeleteSelectedAvatarAsync()
+        {
+            if (Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0)
+            {
+                AddSystemMessage("Встроенные аватары нельзя удалить.");
+                return;
+            }
+
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var profiles = app.Avatars.GetAll();
+                var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId && !a.isBuiltIn);
+                if (profile == null) return;
+
+                string removedAvatarId = profile.id;
+                string removedName = string.IsNullOrWhiteSpace(profile.name) ? removedAvatarId : profile.name;
+                string imagePath = profile.imagePath;
+
+                profiles.RemoveAll(a => a.id == removedAvatarId);
+                app.Avatars.SaveAll(profiles);
+
+                UpdateAvatarProfileCaches(profiles);
+                ReleaseCustomTexture(imagePath);
+                DeleteCustomAvatarFileIfUnused(imagePath, profiles);
+
+                ClosePersonaEditor();
+                RefreshCustomAvatarGallery(app);
+
+                _activeAvatarId = string.Empty;
+                SelectAvatar("neon");
+
+                await SyncActiveAvatarSystemPromptAsync(app);
+
+                AddSystemMessage($"Аватар «{removedName}» удалён.");
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage("Не удалось удалить аватар.");
+                NeonLogger.LogError(ex.ToString());
+            }
         }
 
         private void SyncGallerySelection(string avatarId)
@@ -1897,20 +2691,46 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var tile = _root.Q<VisualElement>($"avtile-{id}");
                 tile?.EnableInClassList("avtile--selected", id == avatarId);
             }
+            foreach (var kvp in _customAvatarTiles)
+                kvp.Value.EnableInClassList("avtile--selected", kvp.Key == avatarId);
         }
 
         private void ApplyAvatarArt(string avatarId)
         {
+            bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, avatarId) >= 0;
+
             if (_avatarArt != null)
             {
                 foreach (var id in BuiltInAvatarIds)
-                    _avatarArt.EnableInClassList($"avatar__art--{id}", id == avatarId);
+                    _avatarArt.EnableInClassList($"avatar__art--{id}", isBuiltIn && id == avatarId);
+
+                if (!isBuiltIn)
+                {
+                    var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
+                    _avatarArt.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
+                }
+                else
+                {
+                    _avatarArt.style.backgroundImage = StyleKeyword.Null;
+                }
             }
 
             if (_previewHero != null)
             {
                 foreach (var id in BuiltInAvatarIds)
-                    _previewHero.EnableInClassList($"preview-hero--{id}", id == avatarId);
+                    _previewHero.EnableInClassList($"preview-hero--{id}", isBuiltIn && id == avatarId);
+
+                if (!isBuiltIn)
+                {
+                    var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
+                    _previewHero.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
+                    _previewHero.style.backgroundColor = new StyleColor(new Color(0.18f, 0.18f, 0.22f));
+                }
+                else
+                {
+                    _previewHero.style.backgroundImage = StyleKeyword.Null;
+                    _previewHero.style.backgroundColor = StyleKeyword.Null;
+                }
             }
 
             string name = AvatarDisplayName(avatarId);
@@ -1920,51 +2740,427 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _previewTag.text = AvatarStyleTag(avatarId);
             if (_previewPersona != null)
                 _previewPersona.text = AvatarPersonaText(avatarId);
+            UpdatePersonaStateUi(avatarId);
+
+            UpdateAvatarActionButtons(avatarId);
         }
 
-        private static string AvatarStyleTag(string avatarId)
+        private void UpdateAvatarActionButtons(string avatarId)
         {
-            switch (avatarId)
+            bool isCustom = GetCustomProfile(avatarId) != null;
+            bool hasOverride = HasPersonaOverride(avatarId);
+            SetDisplay(_previewResetPersonaBtn, hasOverride ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_previewDeleteAvatarBtn, isCustom ? DisplayStyle.Flex : DisplayStyle.None);
+        }
+
+        private bool HasPersonaOverride(string avatarId)
+        {
+            var stored = GetStoredProfile(avatarId);
+            return stored != null && !string.IsNullOrWhiteSpace(stored.systemPrompt);
+        }
+
+        private string PersonaEditorText(string avatarId)
+        {
+            var stored = GetStoredProfile(avatarId);
+            if (stored != null && !string.IsNullOrWhiteSpace(stored.systemPrompt))
+                return stored.systemPrompt;
+
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.PersonaRu;
+
+            return string.Empty;
+        }
+
+        private async Task ResetPersonaOverrideAsync()
+        {
+            try
             {
-                case "aurora": return "cool · gradient";
-                case "ember":  return "warm · vivid";
-                case "glass":  return "minimal · dark";
-                case "flora":  return "natural · green";
-                case "mono":   return "monochrome";
-                case "cobalt": return "bold · blue";
-                case "rose":   return "soft · pink";
-                default:       return "default";
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var profiles = app.Avatars.GetAll();
+                var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
+                if (profile == null || string.IsNullOrWhiteSpace(profile.systemPrompt))
+                {
+                    UpdateAvatarActionButtons(_activeAvatarId);
+                    return;
+                }
+
+                bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                if (isBuiltIn)
+                {
+                    profiles.RemoveAll(a => a.id == _activeAvatarId && a.isBuiltIn);
+                }
+                else
+                {
+                    profile.systemPrompt = string.Empty;
+                }
+
+                app.Avatars.SaveAll(profiles);
+                UpdateAvatarProfileCaches(profiles);
+
+                if (_previewPersona != null)
+                    _previewPersona.text = AvatarPersonaText(_activeAvatarId);
+                UpdatePersonaStateUi(_activeAvatarId);
+                UpdateAvatarActionButtons(_activeAvatarId);
+
+                await SyncActiveAvatarSystemPromptAsync(app);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
             }
         }
 
-        private static string AvatarPersonaText(string avatarId)
+        private string AvatarStyleTag(string avatarId)
         {
-            switch (avatarId)
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.StyleTagRu;
+
+            return "пользовательский";
+        }
+
+        private void UpdatePersonaStateUi(string avatarId)
+        {
+            if (_previewPersonaStateBadge == null || _previewPersonaStateHelp == null)
+                return;
+
+            bool isCustom = GetCustomProfile(avatarId) != null;
+            bool hasOverride = HasPersonaOverride(avatarId);
+
+            if (hasOverride)
             {
-                case "aurora": return "Aurora — calm and analytical. Explains clearly and thinks before responding.";
-                case "ember":  return "Ember — warm and empathetic. Understands feelings and responds with care.";
-                case "glass":  return "Glass — energetic and bold. Always ready to take on any challenge.";
-                case "flora":  return "Flora — wise and thoughtful. Gives nuanced, balanced perspectives.";
-                case "mono":   return "Mono — precise and efficient. Values accuracy and brevity above all.";
-                case "cobalt": return "Cobalt — creative and imaginative. Loves exploring ideas and connections.";
-                case "rose":   return "Rose — charming and sociable. Makes every interaction feel personal.";
-                default:       return "Neon — helpful and witty. Direct, clever, and a bit playful.";
+                _previewPersonaStateBadge.text = "Локальные инструкции";
+                _previewPersonaStateHelp.text = "Сейчас используется сохранённый локально system prompt для этого аватара.";
+                return;
+            }
+
+            if (isCustom)
+            {
+                _previewPersonaStateBadge.text = "Инструкции не заданы";
+                _previewPersonaStateHelp.text = "Для этого пользовательского аватара system prompt сейчас не применяется.";
+                return;
+            }
+
+            _previewPersonaStateBadge.text = "Встроенные инструкции";
+            _previewPersonaStateHelp.text = "Сейчас используются встроенные инструкции по умолчанию.";
+        }
+
+        private string AvatarPersonaText(string avatarId)
+        {
+            var stored = GetStoredProfile(avatarId);
+            if (stored != null && !string.IsNullOrWhiteSpace(stored.systemPrompt))
+                return stored.systemPrompt;
+
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.PersonaRu;
+
+            if (GetCustomProfile(avatarId) != null)
+                return "Инструкции не заданы. Нажми «Изменить», чтобы добавить текст для system prompt.";
+
+            return BuiltInAvatarMetaById["neon"].PersonaRu;
+        }
+
+        private string AvatarDisplayName(string avatarId)
+        {
+            var custom = GetCustomProfile(avatarId);
+            if (custom != null && !string.IsNullOrWhiteSpace(custom.name))
+                return custom.name;
+
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.DisplayNameRu;
+            return BuiltInAvatarMetaById["neon"].DisplayNameRu;
+        }
+
+        private void RefreshCustomAvatarGallery(CompanionApp app)
+        {
+            if (_galleryContainer == null || app == null)
+                return;
+
+            foreach (var tile in _customAvatarTiles.Values)
+                _galleryContainer.Remove(tile);
+
+            _customAvatarTiles.Clear();
+            UpdateAvatarProfileCaches(app.Avatars.GetAll());
+
+            foreach (var profile in _cachedCustomProfiles)
+            {
+                var tile = CreateCustomAvatarTile(profile);
+                if (_avatarUploadTile != null)
+                {
+                    int uploadIndex = _galleryContainer.IndexOf(_avatarUploadTile);
+                    if (uploadIndex >= 0)
+                        _galleryContainer.Insert(uploadIndex, tile);
+                    else
+                        _galleryContainer.Add(tile);
+                }
+                else
+                {
+                    _galleryContainer.Add(tile);
+                }
+
+                _customAvatarTiles[profile.id] = tile;
+            }
+
+            int total = BuiltInAvatarIds.Length + _cachedCustomProfiles.Count;
+            if (_navAvatarsCount != null)
+                _navAvatarsCount.text = total.ToString();
+
+            RefreshBuiltInAvatarTileLabels();
+            ApplyAvatarFilter();
+        }
+
+        private VisualElement CreateCustomAvatarTile(AvatarProfile profile)
+        {
+            var tile = new VisualElement();
+            tile.name = $"avtile-{profile.id}";
+            tile.AddToClassList("avtile");
+
+            var texture = GetOrLoadTexture(profile.imagePath);
+            if (texture != null)
+            {
+                tile.style.backgroundImage = new StyleBackground(texture);
+            }
+            else
+            {
+                tile.style.backgroundColor = new StyleColor(new Color(0.25f, 0.25f, 0.30f));
+            }
+
+            var nameLabel = new Label(string.IsNullOrWhiteSpace(profile.name) ? profile.id : profile.name);
+            nameLabel.AddToClassList("avtile__name");
+            tile.Add(nameLabel);
+
+            var badge = new VisualElement();
+            badge.AddToClassList("avtile__badge");
+            var checkIcon = new VisualElement();
+            checkIcon.AddToClassList("icon");
+            checkIcon.AddToClassList("icon--check");
+            badge.Add(checkIcon);
+            tile.Add(badge);
+
+            string capturedId = profile.id;
+            tile.RegisterCallback<ClickEvent>(_ => SelectAvatar(capturedId));
+            return tile;
+        }
+
+        private AvatarProfile GetCustomProfile(string avatarId)
+        {
+            return _cachedCustomProfiles?.FirstOrDefault(a => a.id == avatarId);
+        }
+
+        private AvatarProfile GetStoredProfile(string avatarId)
+        {
+            if (string.IsNullOrWhiteSpace(avatarId))
+                return null;
+
+            return _cachedProfilesById.TryGetValue(avatarId, out var profile) ? profile : null;
+        }
+
+        private void UpdateAvatarProfileCaches(List<AvatarProfile> profiles)
+        {
+            _cachedProfilesById.Clear();
+            if (profiles == null)
+            {
+                _cachedCustomProfiles = new List<AvatarProfile>();
+                return;
+            }
+
+            foreach (var profile in profiles)
+            {
+                if (profile == null || string.IsNullOrWhiteSpace(profile.id))
+                    continue;
+
+                _cachedProfilesById[profile.id] = profile;
+            }
+
+            _cachedCustomProfiles = profiles.Where(a => a != null && !a.isBuiltIn).ToList();
+        }
+
+        private void RefreshBuiltInAvatarTileLabels()
+        {
+            if (_root == null) return;
+            foreach (var id in BuiltInAvatarIds)
+            {
+                var tile = _root.Q<VisualElement>($"avtile-{id}");
+                var nameLabel = tile?.Q<Label>(className: "avtile__name");
+                if (nameLabel != null)
+                    nameLabel.text = AvatarDisplayName(id);
             }
         }
 
-        private static string AvatarDisplayName(string avatarId)
+        private void ApplyAvatarFilter()
         {
-            switch (avatarId)
+            UpdateAvatarFilterChipState();
+            UpdateAvatarFilterCounts();
+
+            if (_root == null)
+                return;
+
+            foreach (var id in BuiltInAvatarIds)
             {
-                case "aurora": return "Aurora";
-                case "ember":  return "Ember";
-                case "glass":  return "Glass";
-                case "flora":  return "Flora";
-                case "mono":   return "Mono";
-                case "cobalt": return "Cobalt";
-                case "rose":   return "Rose";
-                default:       return "Neon";
+                var tile = _root.Q<VisualElement>($"avtile-{id}");
+                if (tile != null)
+                    SetDisplay(tile, MatchesFilter(id) ? DisplayStyle.Flex : DisplayStyle.None);
             }
+
+            foreach (var kvp in _customAvatarTiles)
+                SetDisplay(kvp.Value, MatchesFilter(kvp.Key) ? DisplayStyle.Flex : DisplayStyle.None);
+
+            if (_avatarUploadTile != null)
+                SetDisplay(_avatarUploadTile, _activeAvatarFilter == AvatarFilter.All || _activeAvatarFilter == AvatarFilter.Custom
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None);
+
+            if (!MatchesFilter(_activeAvatarId))
+            {
+                var fallback = GetFirstAvatarForActiveFilter();
+                if (!string.IsNullOrEmpty(fallback))
+                    SelectAvatar(fallback);
+            }
+        }
+
+        private void UpdateAvatarFilterChipState()
+        {
+            SetFilterChipActive(_avatarFilterAllBtn, _activeAvatarFilter == AvatarFilter.All);
+            SetFilterChipActive(_avatarFilterStandardBtn, _activeAvatarFilter == AvatarFilter.Standard);
+            SetFilterChipActive(_avatarFilterGradientBtn, _activeAvatarFilter == AvatarFilter.Gradient);
+            SetFilterChipActive(_avatarFilterMinimalBtn, _activeAvatarFilter == AvatarFilter.Minimal);
+            SetFilterChipActive(_avatarFilterCustomBtn, _activeAvatarFilter == AvatarFilter.Custom);
+        }
+
+        private static void SetFilterChipActive(Button button, bool active)
+        {
+            button?.EnableInClassList(ActiveAvatarFilterClass, active);
+        }
+
+        private void UpdateAvatarFilterCounts()
+        {
+            int totalBuiltIn = BuiltInAvatarIds.Length;
+            int customCount = _cachedCustomProfiles?.Count ?? 0;
+            int standardCount = BuiltInAvatarIds.Count(id => GetBuiltInFilter(id) == AvatarFilter.Standard);
+            int gradientCount = BuiltInAvatarIds.Count(id => GetBuiltInFilter(id) == AvatarFilter.Gradient);
+            int minimalCount = BuiltInAvatarIds.Count(id => GetBuiltInFilter(id) == AvatarFilter.Minimal);
+
+            SetCountLabel(_avatarFilterAllCount, totalBuiltIn + customCount);
+            SetCountLabel(_avatarFilterStandardCount, standardCount);
+            SetCountLabel(_avatarFilterGradientCount, gradientCount);
+            SetCountLabel(_avatarFilterMinimalCount, minimalCount);
+            SetCountLabel(_avatarFilterCustomCount, customCount);
+        }
+
+        private static void SetCountLabel(Label label, int value)
+        {
+            if (label != null)
+                label.text = value.ToString();
+        }
+
+        private bool MatchesFilter(string avatarId)
+        {
+            if (_activeAvatarFilter == AvatarFilter.All)
+                return true;
+
+            if (GetCustomProfile(avatarId) != null)
+                return _activeAvatarFilter == AvatarFilter.Custom;
+
+            return GetBuiltInFilter(avatarId) == _activeAvatarFilter;
+        }
+
+        private static AvatarFilter GetBuiltInFilter(string avatarId)
+        {
+            if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
+                return meta.Filter;
+            return AvatarFilter.Standard;
+        }
+
+        private string GetFirstAvatarForActiveFilter()
+        {
+            foreach (var id in BuiltInAvatarIds)
+            {
+                if (MatchesFilter(id))
+                    return id;
+            }
+
+            var custom = _cachedCustomProfiles?.FirstOrDefault();
+            return custom?.id;
+        }
+
+        private Texture2D GetOrLoadTexture(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            if (_customTextures.TryGetValue(path, out var cached))
+                return cached;
+
+            var texture = LoadTextureFromFile(path);
+            if (texture != null)
+                _customTextures[path] = texture;
+
+            return texture;
+        }
+
+        private void ReleaseCustomTexture(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            if (_customTextures.TryGetValue(path, out var texture))
+            {
+                if (texture != null)
+                    UnityEngine.Object.Destroy(texture);
+                _customTextures.Remove(path);
+            }
+        }
+
+        private static void DeleteCustomAvatarFileIfUnused(string path, List<AvatarProfile> profiles)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            bool isStillReferenced = profiles.Any(a => a != null && !a.isBuiltIn && string.Equals(a.imagePath, path, StringComparison.OrdinalIgnoreCase));
+            if (isStillReferenced || !System.IO.File.Exists(path))
+                return;
+
+            System.IO.File.Delete(path);
+        }
+
+        private enum AvatarFilter
+        {
+            All,
+            Standard,
+            Gradient,
+            Minimal,
+            Custom
+        }
+
+        private readonly struct BuiltInAvatarMeta
+        {
+            public BuiltInAvatarMeta(string displayNameRu, string styleTagRu, string personaRu, AvatarFilter filter)
+            {
+                DisplayNameRu = displayNameRu;
+                StyleTagRu = styleTagRu;
+                PersonaRu = personaRu;
+                Filter = filter;
+            }
+
+            public string DisplayNameRu { get; }
+            public string StyleTagRu { get; }
+            public string PersonaRu { get; }
+            public AvatarFilter Filter { get; }
+        }
+
+        private static Texture2D LoadTextureFromFile(string path)
+        {
+            if (!System.IO.File.Exists(path))
+                return null;
+
+            var bytes = System.IO.File.ReadAllBytes(path);
+            var texture = new Texture2D(2, 2);
+            if (texture.LoadImage(bytes))
+                return texture;
+
+            UnityEngine.Object.Destroy(texture);
+            return null;
         }
 
         // ============================================================
@@ -2036,20 +3232,53 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnOpenFolderClicked()
         {
+            OpenPath(Application.persistentDataPath);
+        }
+
+        private static void OpenPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
 #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            System.Diagnostics.Process.Start("explorer.exe", Application.persistentDataPath.Replace('/', '\\'));
+            System.Diagnostics.Process.Start("explorer.exe", path.Replace('/', '\\'));
 #elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-            System.Diagnostics.Process.Start("open", Application.persistentDataPath);
+            System.Diagnostics.Process.Start("open", path);
 #elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
-            System.Diagnostics.Process.Start("xdg-open", Application.persistentDataPath);
+            System.Diagnostics.Process.Start("xdg-open", path);
 #else
-            Application.OpenURL("file://" + Application.persistentDataPath);
+            Application.OpenURL("file://" + path);
 #endif
         }
 
         private void OnExportChatsClicked()
         {
             _ = ExportChatsAsync();
+        }
+
+        private void OnSettingsGitHubClicked()
+        {
+            OpenExternalUrl("https://github.com/isteelfelix/neon-companion");
+            AddSystemMessage("Открыт GitHub репозитория.");
+        }
+
+        private void OnSettingsDocsClicked()
+        {
+            OpenExternalUrl("https://github.com/isteelfelix/neon-companion/tree/main/docs");
+            AddSystemMessage("Открыта папка docs.");
+        }
+
+        private void OnSettingsDonateClicked()
+        {
+            AddSystemMessage("Ссылка для поддержки пока не настроена.");
+        }
+
+        private static void OpenExternalUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return;
+
+            Application.OpenURL(url);
         }
 
         private async Task ExportChatsAsync()
@@ -2066,6 +3295,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_subtitleBody != null)
                     _subtitleBody.text = $"Экспортировано: {System.IO.Path.GetFileName(path)}";
+
+                AddSystemMessage($"Чаты экспортированы в {System.IO.Path.GetFileName(path)}.");
+                OpenPath(path);
             }
             catch (Exception ex)
             {
@@ -2075,13 +3307,66 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnClearDataClicked()
         {
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (!_clearDataConfirmPending || nowMs > _clearDataConfirmExpiresAtMs)
+            {
+                _clearDataConfirmPending = true;
+                _clearDataConfirmExpiresAtMs = nowMs + 7000;
+                ArmClearDataConfirmationReset();
+                UpdateClearDataButtonState();
+                AddSystemMessage("Нажми «Подтвердить» ещё раз в течение 7 секунд, чтобы удалить все данные.");
+                return;
+            }
+
+            ResetClearDataConfirmation();
             _ = ClearAllDataAsync();
+        }
+
+        private void ResetClearDataConfirmation()
+        {
+            _clearDataConfirmResetSchedule?.Pause();
+            _clearDataConfirmResetSchedule = null;
+            _clearDataConfirmPending = false;
+            _clearDataConfirmExpiresAtMs = 0;
+            UpdateClearDataButtonState();
+        }
+
+        private void ArmClearDataConfirmationReset()
+        {
+            _clearDataConfirmResetSchedule?.Pause();
+            if (_settingsClearBtn == null)
+                return;
+
+            _clearDataConfirmResetSchedule = _settingsClearBtn.schedule
+                .Execute(() =>
+                {
+                    _clearDataConfirmResetSchedule = null;
+                    ResetClearDataConfirmation();
+                })
+                .StartingIn(7000);
+        }
+
+        private void UpdateClearDataButtonState()
+        {
+            if (_clearDataConfirmPending && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > _clearDataConfirmExpiresAtMs)
+            {
+                _clearDataConfirmPending = false;
+                _clearDataConfirmExpiresAtMs = 0;
+            }
+
+            bool armed = _clearDataConfirmPending;
+
+            if (_settingsClearBtnText != null)
+                _settingsClearBtnText.text = armed ? "Подтвердить" : "Очистить";
+
+            _settingsClearBtn?.EnableInClassList("btn--danger-armed", armed);
         }
 
         private async Task ClearAllDataAsync()
         {
             try
             {
+                ResetClearDataConfirmation();
                 var app = await GetAppAsync();
                 if (app == null) return;
 
@@ -2096,18 +3381,23 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // Reset settings
                 app.Settings.Save(new AppSettings());
 
-                // Reset service cache so next call reinitialises
+                // Reset service cache and session identity so next call reinitialises
                 _app = null;
                 _chatService = null;
+                _currentSessionId = string.Empty;
+                _currentSessionTitle = string.Empty;
 
                 RenderMessages(null);
                 SetNoProviderState();
                 if (_sessionsList != null) _sessionsList.Clear();
+                if (_historySessionsList != null) _historySessionsList.Clear();
+                ShowHistoryState("История пуста. Начните чат, чтобы появилась первая сессия.", isError: false);
                 if (_navChatCount != null) _navChatCount.text = "0";
                 if (_navProvidersCount != null) _navProvidersCount.text = "0";
             }
             catch (Exception ex)
             {
+                ResetClearDataConfirmation();
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2183,7 +3473,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Error] {ex.Message}");
+                AddSystemMessage("Не удалось пересоздать последний ответ.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2227,7 +3517,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка импорта] {ex.Message}");
+                AddSystemMessage("Не удалось импортировать провайдеров из файла.");
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -2258,27 +3548,96 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string destPath = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(path));
                 System.IO.File.Copy(path, destPath, overwrite: true);
 
+                var all = app.Avatars.GetAll();
+                string profileId = ResolveCustomAvatarId(fileName, destPath, all);
+
                 var profile = new NeonCompanion.Runtime.Data.Models.AvatarProfile
                 {
-                    id        = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant().Replace(" ", "_"),
+                    id        = profileId,
                     name      = fileName,
                     imagePath = destPath,
                     isBuiltIn = false
                 };
 
-                var all = app.Avatars.GetAll();
-                int existing = all.FindIndex(a => a.id == profile.id);
+                int existing = all.FindIndex(a => a != null && a.id == profile.id);
                 if (existing >= 0) all[existing] = profile;
                 else all.Add(profile);
                 app.Avatars.SaveAll(all);
+
+                RefreshCustomAvatarGallery(app);
+
+                // Auto-select the uploaded avatar (force re-selection even if same ID)
+                if (_activeAvatarId == profile.id) _activeAvatarId = string.Empty;
+                SelectAvatar(profile.id);
 
                 AddSystemMessage($"Аватар «{fileName}» загружен.");
             }
             catch (Exception ex)
             {
-                AddSystemMessage($"[Ошибка загрузки] {ex.Message}");
+                AddSystemMessage("Не удалось загрузить аватар.");
                 NeonLogger.LogError(ex.ToString());
             }
+        }
+
+        private string ResolveCustomAvatarId(string fileName, string imagePath, List<AvatarProfile> allProfiles)
+        {
+            string existingByPath = allProfiles?
+                .FirstOrDefault(a => a != null && !a.isBuiltIn && string.Equals(a.imagePath, imagePath, StringComparison.OrdinalIgnoreCase))
+                ?.id;
+            if (!string.IsNullOrWhiteSpace(existingByPath))
+                return existingByPath;
+
+            string baseId = BuildCustomAvatarBaseId(fileName);
+            string candidate = baseId;
+            int suffix = 2;
+
+            while (ContainsAvatarId(candidate, allProfiles))
+            {
+                candidate = $"{baseId}_{suffix}";
+                suffix++;
+            }
+
+            return candidate;
+        }
+
+        private static bool ContainsAvatarId(string candidateId, List<AvatarProfile> allProfiles)
+        {
+            if (string.IsNullOrWhiteSpace(candidateId))
+                return false;
+
+            if (Array.IndexOf(BuiltInAvatarIds, candidateId) >= 0)
+                return true;
+
+            return allProfiles != null && allProfiles.Any(a => a != null && string.Equals(a.id, candidateId, StringComparison.Ordinal));
+        }
+
+        private static string BuildCustomAvatarBaseId(string fileName)
+        {
+            string source = (fileName ?? string.Empty).Trim().ToLowerInvariant();
+            var sb = new StringBuilder(source.Length);
+            bool previousWasSeparator = false;
+
+            foreach (char ch in source)
+            {
+                if (char.IsLetterOrDigit(ch))
+                {
+                    sb.Append(ch);
+                    previousWasSeparator = false;
+                    continue;
+                }
+
+                if (!previousWasSeparator)
+                {
+                    sb.Append('_');
+                    previousWasSeparator = true;
+                }
+            }
+
+            string normalized = sb.ToString().Trim('_');
+            if (string.IsNullOrWhiteSpace(normalized))
+                normalized = "avatar";
+
+            return $"custom_{normalized}";
         }
 
         private void OnAvatarOpenFolderClicked()

@@ -78,42 +78,6 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- ===== Appearance ===== -->
-            <ui:VisualElement class="settings-card">
-                <ui:VisualElement class="settings-card__head">
-                    <ui:VisualElement class="icon icon--palette settings-card__icon" />
-                    <ui:Label text="Внешний вид" class="settings-card__title" />
-                </ui:VisualElement>
-
-                <ui:VisualElement class="settings-row">
-                    <ui:VisualElement class="settings-row__copy">
-                        <ui:Label text="Форма аватара" class="settings-row__name" />
-                        <ui:Label text="Круг, квадрат или шестиугольник." class="settings-row__sub" />
-                    </ui:VisualElement>
-                    <ui:VisualElement class="seg">
-                        <ui:Button name="shape-round" text="Круг" class="seg__btn seg__btn--active" />
-                        <ui:Button name="shape-square" text="Квадрат" class="seg__btn" />
-                        <ui:Button name="shape-hex" text="Hex" class="seg__btn" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:VisualElement class="settings-row">
-                    <ui:VisualElement class="settings-row__copy">
-                        <ui:Label text="Halo вокруг аватара" class="settings-row__name" />
-                        <ui:Label text="Мягкое неоновое свечение позади." class="settings-row__sub" />
-                    </ui:VisualElement>
-                    <ui:Toggle name="settings-show-halo" class="settings-toggle" value="true" />
-                </ui:VisualElement>
-
-                <ui:VisualElement class="settings-row">
-                    <ui:VisualElement class="settings-row__copy">
-                        <ui:Label text="Анимация breathing" class="settings-row__name" />
-                        <ui:Label text="Лёгкое дыхание аватара." class="settings-row__sub" />
-                    </ui:VisualElement>
-                    <ui:Toggle name="settings-breathing" class="settings-toggle" value="true" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-
             <!-- ===== Data ===== -->
             <ui:VisualElement class="settings-card">
                 <ui:VisualElement class="settings-card__head">
@@ -165,7 +129,7 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Лицензия" class="settings-row__name" />
-                    <ui:Label text="MIT" class="settings-row__value-mono" />
+                    <ui:Label text="Source-available" class="settings-row__value-mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Шрифты" class="settings-row__name" />
@@ -181,7 +145,7 @@
                         <ui:VisualElement class="icon icon--external btn__icon" />
                         <ui:Label text="Документация" />
                     </ui:Button>
-                    <ui:Button name="settings-donate-btn" class="btn btn--primary">
+                    <ui:Button name="settings-donate-btn" class="btn btn--muted" tooltip="Ссылка для поддержки будет добавлена позже">
                         <ui:VisualElement class="icon icon--heart btn__icon" />
                         <ui:Label text="Поддержать" />
                     </ui:Button>

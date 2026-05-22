@@ -1,12 +1,14 @@
 # neon-companion
 
-Open-source Unity client for connecting to personal AI agents with avatar visualization.
+Source-available Unity client for connecting to personal AI agents with avatar visualization.
 
 ## About the Project
 
 **neon-companion** is a cross-platform desktop/mobile application that allows you to chat with your own AI agents through an OpenAI-compatible API. The app supports custom backends, multiple providers, chat history, and 2D avatar visualization.
 
 This is currently the **first working prototype**. Core chat functionality and custom provider connection are already implemented and usable.
+
+This project is intended as a personal companion shell for self-hosted agents, with room for community forks and extensions.
 
 ## Current Status
 
@@ -76,8 +78,16 @@ Contributions are welcome. Please check [Contribution Guide](docs/10_Contributio
 
 ## License
 
-MIT License
+- **Code**: see [LICENSE](LICENSE)
+- **Assets / UI art / models / branding**: see [ASSET_LICENSE.md](ASSET_LICENSE.md)
+
+This repository is source-available: you may use it, modify it, fork it, and self-host it, but you may not sell it, repackage it as a paid product, or offer it as a commercial hosted service without permission.
 
 ## Author
 
 Maintained by iSteelFelix with contributions from the community.
+
+## Credits
+
+- **iSteelFelix** — creator, owner, product direction, engineering
+- **Neon** — AI companion, in-repo contributor, co-builder of `neon-companion`

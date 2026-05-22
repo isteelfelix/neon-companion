@@ -1,0 +1,231 @@
+/* ============================================================
+   ThemesView — avatar appearance controls
+   ============================================================ */
+
+.themes-page {
+    flex-grow: 1;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 28px 36px 0 36px;
+}
+
+.themes-scroll {
+    flex-grow: 1;
+    padding-bottom: 36px;
+}
+
+.themes-card {
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-1);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+}
+
+.themes-card--hero {
+    padding: 22px;
+}
+
+.themes-card--notes {
+    padding-bottom: 20px;
+}
+
+.themes-card__head {
+    flex-direction: row;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    margin-bottom: 10px;
+}
+
+.themes-card__icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 10px;
+    -unity-background-image-tint-color: var(--accent);
+}
+
+.themes-card__title {
+    font-size: 14px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    color: var(--text-0);
+}
+
+.themes-hero {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.themes-hero__copy {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: 24px;
+}
+
+.themes-hero__title {
+    font-size: 22px;
+    color: var(--text-0);
+    -unity-font-style: bold;
+    margin-bottom: 6px;
+}
+
+.themes-hero__subtitle {
+    font-size: 13px;
+    color: var(--text-3);
+    white-space: normal;
+    max-width: 520px;
+}
+
+.themes-preview {
+    min-width: 172px;
+    height: 148px;
+    align-items: center;
+    justify-content: center;
+}
+
+.themes-preview__halo {
+    position: absolute;
+    width: 118px;
+    height: 118px;
+    border-radius: 999px;
+    background-color: rgba(124, 122, 237, 0.22);
+    border-width: 1px;
+    border-color: rgba(124, 122, 237, 0.36);
+}
+
+.themes-preview__avatar {
+    width: 86px;
+    height: 86px;
+    border-radius: 999px;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--accent);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.themes-preview__avatar--square { border-radius: 8px; }
+.themes-preview__avatar--hex    { border-radius: 14px; }
+
+.themes-preview__letter {
+    color: white;
+    font-size: 28px;
+    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+}
+
+.themes-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+}
+
+.themes-row.is-last {
+    border-bottom-width: 0;
+    padding-bottom: 0;
+}
+
+.themes-row__copy {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: column;
+    margin-right: 16px;
+}
+
+.themes-row__name {
+    font-size: 13px;
+    color: var(--text-0);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
+    margin-bottom: 3px;
+}
+
+.themes-row__sub {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: normal;
+    max-width: 540px;
+}
+
+.themes-toggle {
+    margin: 0;
+}
+
+.themes-toggle > .unity-toggle__input {
+    width: 36px;
+    height: 20px;
+    border-radius: 999px;
+    background-color: var(--bg-4);
+    border-width: 1px;
+    border-color: var(--line-2);
+    padding: 0;
+    justify-content: flex-start;
+}
+
+.themes-toggle > .unity-toggle__input > .unity-toggle__checkmark {
+    width: 14px;
+    height: 14px;
+    margin: 2px;
+    border-radius: 999px;
+    background-color: var(--text-2);
+    background-image: none;
+    border-width: 0;
+}
+
+.themes-toggle:checked > .unity-toggle__input {
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+.themes-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
+    background-color: rgb(255, 255, 255);
+    translate: 16px 0;
+}
+
+.themes-toggle .unity-toggle__text {
+    display: none;
+}
+
+.seg {
+    flex-direction: row;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    padding: 2px;
+}
+
+.seg__btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-2);
+    font-size: 12px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
+    margin: 0;
+}
+
+.seg__btn:hover {
+    color: var(--text-0);
+}
+
+.seg__btn--active {
+    background-color: var(--bg-3);
+    color: var(--text-0);
+}
+
+.themes-note {
+    font-size: 12px;
+    color: var(--text-3);
+    white-space: normal;
+}
+
+.icon--palette { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
+.icon--sparkle { background-image: url("project://database/Assets/UI/Icons/sparkle.svg"); }

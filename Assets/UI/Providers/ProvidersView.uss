@@ -81,6 +81,16 @@
     background-color: rgba(124, 122, 237, 0.10);
 }
 
+.provider--editing {
+    border-color: var(--line-2);
+    background-color: rgba(124, 122, 237, 0.05);
+}
+
+.provider--active.provider--editing {
+    border-color: var(--accent);
+    background-color: rgba(124, 122, 237, 0.14);
+}
+
 /* Colored logo for the active provider */
 .provider--active .provider__logo {
     background-color: var(--accent);
@@ -89,6 +99,10 @@
 
 .provider--active .provider__logo Label {
     color: rgb(255, 255, 255);
+}
+
+.provider--editing .provider__logo {
+    border-color: var(--accent);
 }
 
 .provider__body {
@@ -186,6 +200,24 @@
 .editor__sub {
     font-size: 12px;
     color: var(--text-3);
+}
+
+.editor__status {
+    margin-top: 4px;
+    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.editor__status--active {
+    color: var(--ok);
+}
+
+.editor__status--inactive {
+    color: var(--text-3);
+}
+
+.editor__status--draft {
+    color: var(--accent);
 }
 
 .field {
