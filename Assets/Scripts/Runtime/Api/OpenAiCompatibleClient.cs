@@ -227,13 +227,14 @@ namespace NeonCompanion.Runtime.Api
             {
                 var bodyRaw = Encoding.UTF8.GetBytes(payloadJson);
                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                webRequest.downloadHandler = new SseDownloadHandler(onToken);
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
 
                 if (!string.IsNullOrWhiteSpace(provider.apiKey))
                     webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
 
                 var operation = webRequest.SendWebRequest();
+                int lastProcessed = 0;
 
                 while (!operation.isDone)
                 {
@@ -243,8 +244,13 @@ namespace NeonCompanion.Runtime.Api
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
+                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, onToken);
+
                     await Task.Yield();
                 }
+
+                // Drain any data that arrived after the last yield
+                ParseSseText(webRequest.downloadHandler.text, lastProcessed, onToken);
 
                 if (webRequest.result == UnityWebRequest.Result.ConnectionError ||
                     webRequest.result == UnityWebRequest.Result.DataProcessingError)
@@ -273,76 +279,62 @@ namespace NeonCompanion.Runtime.Api
             public bool stream = true;
         }
 
-        private sealed class SseDownloadHandler : DownloadHandlerScript
+        private static int ParseSseText(string text, int offset, Action<string> onToken)
         {
-            private readonly Action<string> _onToken;
-            private readonly StringBuilder _buf = new StringBuilder();
-
-            public SseDownloadHandler(Action<string> onToken) : base(new byte[4096])
+            int searchFrom = offset;
+            while (true)
             {
-                _onToken = onToken;
+                int nl = text.IndexOf('\n', searchFrom);
+                if (nl < 0) break;
+
+                string line = text.Substring(searchFrom, nl - searchFrom).TrimEnd('\r');
+                searchFrom = nl + 1;
+
+                if (!line.StartsWith("data: ")) continue;
+                string payload = line.Substring(6);
+                if (payload == "[DONE]") break;
+                if (string.IsNullOrWhiteSpace(payload)) continue;
+
+                string delta = ExtractDeltaContent(payload);
+                if (!string.IsNullOrEmpty(delta))
+                    onToken?.Invoke(delta);
             }
+            return searchFrom;
+        }
 
-            protected override bool ReceiveData(byte[] data, int dataLength)
+        private static string ExtractDeltaContent(string json)
+        {
+            const string marker = "\"content\":\"";
+            int idx = json.IndexOf(marker);
+            if (idx < 0) return null;
+
+            int start = idx + marker.Length;
+            var sb = new StringBuilder();
+            for (int i = start; i < json.Length; i++)
             {
-                _buf.Append(Encoding.UTF8.GetString(data, 0, dataLength));
-                Flush();
-                return true;
-            }
-
-            private void Flush()
-            {
-                string text = _buf.ToString();
-                int searchFrom = 0;
-
-                while (true)
+                char c = json[i];
+                if (c == '\\' && i + 1 < json.Length)
                 {
-                    int nl = text.IndexOf('\n', searchFrom);
-                    if (nl < 0) break;
-
-                    string line = text.Substring(searchFrom, nl - searchFrom).TrimEnd('\r');
-                    searchFrom = nl + 1;
-
-                    if (!line.StartsWith("data: ")) continue;
-                    string payload = line.Substring(6);
-                    if (payload == "[DONE]") break;
-                    if (string.IsNullOrWhiteSpace(payload)) continue;
-
-                    try
+                    i++;
+                    switch (json[i])
                     {
-                        var chunk = JsonUtility.FromJson<OpenAiStreamChunk>(payload);
-                        string delta = chunk?.choices != null && chunk.choices.Length > 0
-                            ? chunk.choices[0]?.delta?.content
-                            : null;
-                        if (!string.IsNullOrEmpty(delta))
-                            _onToken?.Invoke(delta);
+                        case '"':  sb.Append('"');  break;
+                        case '\\': sb.Append('\\'); break;
+                        case 'n':  sb.Append('\n'); break;
+                        case 'r':  sb.Append('\r'); break;
+                        case 't':  sb.Append('\t'); break;
+                        case 'b':  sb.Append('\b'); break;
+                        case 'f':  sb.Append('\f'); break;
+                        default:   sb.Append('\\'); sb.Append(json[i]); break;
                     }
-                    catch { /* malformed chunk, skip */ }
                 }
-
-                _buf.Clear();
-                if (searchFrom < text.Length)
-                    _buf.Append(text.Substring(searchFrom));
+                else if (c == '"')
+                    break;
+                else
+                    sb.Append(c);
             }
-        }
 
-        [Serializable]
-        private class OpenAiStreamChunk
-        {
-            public OpenAiStreamChoice[] choices;
-        }
-
-        [Serializable]
-        private class OpenAiStreamChoice
-        {
-            public OpenAiStreamDelta delta;
-        }
-
-        [Serializable]
-        private class OpenAiStreamDelta
-        {
-            public string role;
-            public string content;
+            return sb.Length > 0 ? sb.ToString() : null;
         }
 
         [Serializable]
