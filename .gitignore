@@ -119,3 +119,5 @@ config/secrets*
 HermesConfig*
 *ApiKey*
 *APIKey*
+NeonCompanion.Editor.csproj.lscache
+.gitignore
