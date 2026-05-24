@@ -328,6 +328,12 @@
     transition-duration: 0.15s;
 }
 
+.mic-btn--recording {
+    color: var(--accent);
+    border-color: rgba(124, 122, 237, 0.45);
+    background-color: var(--accent-soft);
+}
+
 .composer--focused {
     border-color: var(--accent);
 }

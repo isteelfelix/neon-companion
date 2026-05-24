@@ -10,6 +10,7 @@ using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
+using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -70,6 +71,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Toggle _settingsHistory;
         private Toggle _settingsStreaming;
         private Toggle _settingsSystemPrompt;
+        private Toggle _settingsVoiceIo;
         private Toggle _settingsEncryptKeys;
         private Toggle _settingsMaskLogs;
         private Label _settingsStoragePath;
@@ -209,6 +211,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _copyButton;
         private Button _regenerateButton;
         private Button _listenButton;
+        private Button _micButton;
         private Button _attachButton;
         private Button _avatarUploadBtn;
         private Button _avatarOpenFolderBtn;
@@ -244,6 +247,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private SpriteSheetAnimator _avatarAnimator;
         private Avatar3DRenderer _avatar3DRenderer;
         private IAvatar3DService _avatar3DService;
+        private IVoiceService _voiceService;
+        private VoiceInputManager _voiceInputManager;
+        private VoiceOutputManager _voiceOutputManager;
+        private bool _voiceBoundToChat;
 
         private void OnEnable()
         {
@@ -261,6 +268,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnDisable()
         {
             UnregisterCallbacks();
+            if (_voiceBoundToChat && _chatService != null && _voiceOutputManager != null)
+                _voiceOutputManager.UnbindChat(_chatService);
+            _voiceBoundToChat = false;
             _avatarAnimator?.Stop();
             _avatar3DService?.Unload();
             _clearDataConfirmResetSchedule?.Pause();
@@ -359,6 +369,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _copyButton       = root.Q<Button>("copy-btn");
             _regenerateButton = root.Q<Button>("refresh-btn");
             _listenButton = root.Q<Button>("listen-btn");
+            _micButton = root.Q<Button>("mic-button");
             _attachButton = root.Q<Button>("attach-btn");
             _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
             _avatarOpenFolderBtn  = root.Q<Button>("avatar-open-folder-btn");
@@ -400,6 +411,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsHistory     = root.Q<Toggle>("settings-save-history");
             _settingsStreaming    = root.Q<Toggle>("settings-streaming");
             _settingsSystemPrompt = root.Q<Toggle>("settings-system-prompt");
+            _settingsVoiceIo = root.Q<Toggle>("settings-voice-io");
             _settingsEncryptKeys = root.Q<Toggle>("settings-encrypt-keys");
             _settingsMaskLogs    = root.Q<Toggle>("settings-mask-logs");
             _settingsStoragePath = root.Q<Label>("settings-storage-path");
@@ -938,7 +950,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var messages = _chatService?.CurrentChatViewModel?.Messages;
             if (messages == null || messages.Count == 0)
             {
-                AddSystemMessage("Нет ответа ассистента для копирования.");
+                AddSystemMessage("Нет ответа ассистента для озвучивания.");
                 return;
             }
 
@@ -947,13 +959,78 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var msg = messages[i];
                 if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
                 {
-                    GUIUtility.systemCopyBuffer = msg.content;
-                    AddSystemMessage("Последний ответ скопирован в буфер обмена.");
+                    _voiceOutputManager?.EnqueueResponse(msg.content);
                     return;
                 }
             }
 
-            AddSystemMessage("Нет ответа ассистента для копирования.");
+            AddSystemMessage("Нет ответа ассистента для озвучивания.");
+        }
+
+        private async Task EnsureVoicePipelineAsync(ChatService chat)
+        {
+            if (chat == null)
+                return;
+
+            if (_voiceService == null)
+            {
+                _voiceService = GetComponent<WebSpeechBridge>();
+                if (_voiceService == null)
+                    _voiceService = gameObject.AddComponent<WebSpeechBridge>();
+            }
+
+            if (_voiceOutputManager == null)
+            {
+                _voiceOutputManager = GetComponent<VoiceOutputManager>();
+                if (_voiceOutputManager == null)
+                    _voiceOutputManager = gameObject.AddComponent<VoiceOutputManager>();
+                _voiceOutputManager.Initialize(_voiceService, IsVoiceEnabledBySettings, () => _voiceInputManager != null && _voiceInputManager.IsRecording);
+            }
+
+            if (_voiceInputManager == null)
+            {
+                _voiceInputManager = GetComponent<VoiceInputManager>();
+                if (_voiceInputManager == null)
+                    _voiceInputManager = gameObject.AddComponent<VoiceInputManager>();
+                _voiceInputManager.Initialize(_voiceService, _micButton, IsVoiceEnabledBySettings, SendVoiceMessageAsync, OnVoiceRecordingStarted);
+            }
+
+            if (!_voiceBoundToChat)
+            {
+                _voiceOutputManager.BindChat(chat);
+                _voiceBoundToChat = true;
+            }
+
+            RefreshVoiceControls();
+            await Task.CompletedTask;
+        }
+
+        private void OnVoiceRecordingStarted()
+        {
+            _voiceOutputManager?.StopSpeakingAndClear();
+        }
+
+        private async Task SendVoiceMessageAsync(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text) || _isSending)
+                return;
+
+            if (_messageInput != null)
+                _messageInput.value = text.Trim();
+
+            await SendCurrentMessageAsync();
+        }
+
+        private bool IsVoiceEnabledBySettings()
+        {
+            return _settingsVoiceIo?.value ?? false;
+        }
+
+        private void RefreshVoiceControls()
+        {
+            _voiceInputManager?.RefreshState();
+            if (!IsVoiceEnabledBySettings())
+                _voiceOutputManager?.StopSpeakingAndClear();
         }
 
         private void OnAttachClicked()
@@ -1029,6 +1106,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 var chat = await GetChatServiceAsync();
                 if (!_isBound || chat == null) return;
+                await EnsureVoicePipelineAsync(chat);
 
                 SetProviderHeader(chat.CurrentProvider);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
@@ -2315,6 +2393,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterToggleChanged(_settingsHistory,      _ => SaveSettings());
             RegisterToggleChanged(_settingsStreaming,     _ => SaveSettings());
             RegisterToggleChanged(_settingsSystemPrompt, _ => SaveSettings());
+            RegisterToggleChanged(_settingsVoiceIo,      _ => { SaveSettings(); RefreshVoiceControls(); });
             RegisterToggleChanged(_settingsEncryptKeys,  _ => SaveSettings());
             RegisterToggleChanged(_settingsMaskLogs,     _ => SaveSettings());
             RegisterToggleChanged(_settingsShowHalo,    v => { ApplyHaloVisibility(v); SaveSettings(); });
@@ -2350,6 +2429,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _settingsHistory?.SetValueWithoutNotify(s.saveChatHistory);
                 _settingsStreaming?.SetValueWithoutNotify(s.streaming);
                 _settingsSystemPrompt?.SetValueWithoutNotify(s.useSystemPrompt);
+                _settingsVoiceIo?.SetValueWithoutNotify(s.voiceIOEnabled);
                 _settingsEncryptKeys?.SetValueWithoutNotify(s.encryptKeys);
                 _settingsMaskLogs?.SetValueWithoutNotify(s.maskLogs);
                 _settingsShowHalo?.SetValueWithoutNotify(s.showHalo);
@@ -2382,6 +2462,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 await SyncActiveAvatarSystemPromptAsync(app, s);
+                RefreshVoiceControls();
             }
             catch (Exception ex)
             {
@@ -2406,6 +2487,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsHistory != null)      s.saveChatHistory     = _settingsHistory.value;
                 if (_settingsStreaming != null)     s.streaming           = _settingsStreaming.value;
                 if (_settingsSystemPrompt != null)  s.useSystemPrompt     = _settingsSystemPrompt.value;
+                if (_settingsVoiceIo != null)       s.voiceIOEnabled      = _settingsVoiceIo.value;
                 if (_settingsEncryptKeys != null)   s.encryptKeys         = _settingsEncryptKeys.value;
                 if (_settingsMaskLogs != null)      s.maskLogs            = _settingsMaskLogs.value;
                 if (_settingsShowHalo != null)      s.showHalo            = _settingsShowHalo.value;

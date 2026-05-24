@@ -19,6 +19,7 @@ namespace NeonCompanion.Runtime.Chat
         private ChatViewModel _currentChatViewModel;
         private ChatSession _currentSession;
         private ProviderConfig _currentProvider;
+        public event Action<string> OnAssistantResponse;
 
         public float Temperature { get; set; } = 0.7f;
         public int MaxTokens { get; set; } = 512;
@@ -190,6 +191,7 @@ namespace NeonCompanion.Runtime.Chat
 
             _currentChatViewModel.UseStreaming = UseStreaming;
             await _currentChatViewModel.RegenerateAsync(UseStreaming ? onStreamToken : null);
+            EmitLatestAssistantResponse();
 
             SaveCurrentSession();
         }
@@ -204,8 +206,26 @@ namespace NeonCompanion.Runtime.Chat
             _currentChatViewModel.UseStreaming = UseStreaming;
             _currentChatViewModel.InputMessage = message;
             await _currentChatViewModel.SendAsync(UseStreaming ? onStreamToken : null);
+            EmitLatestAssistantResponse();
 
             SaveCurrentSession();
+        }
+
+        private void EmitLatestAssistantResponse()
+        {
+            var messages = _currentChatViewModel?.Messages;
+            if (messages == null || messages.Count == 0)
+                return;
+
+            for (int i = messages.Count - 1; i >= 0; i--)
+            {
+                var message = messages[i];
+                if (message?.role == "assistant" && !string.IsNullOrWhiteSpace(message.content))
+                {
+                    OnAssistantResponse?.Invoke(message.content);
+                    return;
+                }
+            }
         }
 
         public async Task<string> SummarizeCurrentConversationAsync(int maxMessages = 12)

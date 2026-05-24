@@ -52,6 +52,14 @@
                     </ui:VisualElement>
                     <ui:Toggle name="settings-system-prompt" class="settings-toggle" value="true" />
                 </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Voice I/O" class="settings-row__name" />
+                        <ui:Label text="Голосовой ввод и озвучивание ответов." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-voice-io" class="settings-toggle" value="true" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- ===== Security ===== -->
