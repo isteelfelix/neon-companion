@@ -21,6 +21,9 @@ namespace NeonCompanion.Runtime.Voice
 
         public bool IsRecording => _voiceService?.IsRecording ?? false;
 
+        public event Action OnRecordingStarted;
+        public event Action OnRecordingStopped;
+
         public void Initialize(
             IVoiceService voiceService,
             Button micButton,
@@ -103,12 +106,14 @@ namespace NeonCompanion.Runtime.Voice
             _onRecordingStarted?.Invoke();
             _voiceService.StartRecording();
             UpdateMicVisual(true);
+            OnRecordingStarted?.Invoke();
         }
 
         private void StopRecording()
         {
             _voiceService.StopRecording();
             UpdateMicVisual(false);
+            OnRecordingStopped?.Invoke();
         }
 
         private bool EnsureMicrophonePermission()

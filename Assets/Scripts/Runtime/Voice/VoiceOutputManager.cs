@@ -17,6 +17,9 @@ namespace NeonCompanion.Runtime.Voice
         private Func<bool> _isUserRecording;
         private bool _isConsuming;
 
+        public event Action<string> OnPlaybackStarted;
+        public event Action OnPlaybackCompleted;
+
         public void Initialize(IVoiceService voiceService, Func<bool> isVoiceEnabled, Func<bool> isUserRecording)
         {
             _voiceService = voiceService;
@@ -72,6 +75,8 @@ namespace NeonCompanion.Runtime.Voice
                     }
 
                     var next = _queue.Dequeue();
+                    OnPlaybackStarted?.Invoke(next);
+
                     var tcs = new TaskCompletionSource<bool>();
 
                     void Complete() => tcs.TrySetResult(true);
@@ -83,6 +88,8 @@ namespace NeonCompanion.Runtime.Voice
                     _voiceService.OnPlaybackComplete -= Complete;
                     if (doneTask == timeoutTask)
                         _voiceService.StopSpeaking();
+
+                    OnPlaybackCompleted?.Invoke();
                 }
             }
             finally

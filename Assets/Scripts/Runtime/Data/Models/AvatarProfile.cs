@@ -26,5 +26,8 @@ namespace NeonCompanion.Runtime.Data.Models
         public string systemPrompt;
         public List<SpriteSheetAnimation> animationClips = new List<SpriteSheetAnimation>();
         public List<string> modelAnimationClips = new List<string>();
+        // Mouth sprite sheet for lipsync: frames ordered Silence(0), A(1), E(2), I(3), O(4), U(5)
+        public SpriteSheetAnimation lipsyncClip;
+        public AvatarCustomizationData customization;
     }
 }

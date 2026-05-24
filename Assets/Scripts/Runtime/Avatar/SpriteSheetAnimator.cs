@@ -89,6 +89,38 @@ namespace NeonCompanion.Runtime.Avatar
 
         public bool HasAnyClips => _clips.Count > 0;
 
+        /// <summary>
+        /// Pauses playback and pins a specific frame from the named clip.
+        /// Used by LipsyncController to drive mouth-shape frames directly.
+        /// </summary>
+        public void ShowFrame(string clipName, int frameIndex)
+        {
+            if (string.IsNullOrWhiteSpace(clipName) || !_clips.TryGetValue(clipName, out var clip))
+                return;
+
+            _activeClip = clip;
+            _isPlaying = false;
+            _frameTimer = 0f;
+            _frameIndex = Mathf.Clamp(frameIndex, 0, clip.Frames.Length - 1);
+            ApplyFrame();
+        }
+
+        /// <summary>
+        /// Registers a single clip at runtime without replacing existing clips.
+        /// Used by LipsyncController to inject the lipsync clip from AvatarProfile.
+        /// </summary>
+        public void RegisterClip(SpriteSheetAnimation clip)
+        {
+            if (clip == null || string.IsNullOrWhiteSpace(clip.clipName) || _targetImage == null)
+                return;
+
+            var frames = SpriteSheetAnimationLoader.LoadFrames(clip.spriteSheetPath, clip.columns, clip.rows);
+            if (frames == null || frames.Length == 0)
+                return;
+
+            _clips[clip.clipName] = new ClipRuntime(clip, frames);
+        }
+
         private void Update()
         {
             if (!_isPlaying || _activeClip == null || _targetImage == null)

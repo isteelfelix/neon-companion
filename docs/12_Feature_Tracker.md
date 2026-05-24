@@ -45,7 +45,7 @@
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
 | V-01 | Голосовой ввод/вывод | ✅ | M2 | IVoiceService, VoiceInputManager, VoiceOutputManager, WebSpeechBridge, mic button, settings toggle |
-| V-02 | Lipsync | 📋 | M2 | |
+| V-02 | Lipsync | ✅ | M2 | LipsyncController: phoneme→viseme, 2D sprite frames, 3D blend shapes, hooked into VoiceOutputManager/VoiceInputManager |
 | V-03 | 3D аватары | ✅ | M2 | IAvatar3DService, Avatar3DLoader (GLB/GLTF), Avatar3DRenderer (orbit, pinch-zoom), Avatar3DService, AvatarProfile.is3D |
 
 ## VR (M3+)
