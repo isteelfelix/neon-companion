@@ -53,11 +53,11 @@
 |---|------|--------|--------|---------|
 | VR-01 | Поддержка VR (Quest, PCVR) | 📋 | M3 | |
 | VR-02 | Кастомизация аватаров | ✅ | M3 | |
-| VR-03 | Плагины и расширения | 📋 | M3 | |
+| VR-03 | Плагины и расширения | ✅ | M3 | IPlugin, PluginManager, PluginContext, PluginConfigStorage, DLL loading, settings UI | |
 
 ## Публикация (M4)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| P-01 | itch.io / GitHub Releases | 📋 | M4 | |
+| P-01 | itch.io / GitHub Releases | ✅ | M4 | BuildScript.cs, build.sh, release.sh, VERSION, .gitignore | |
 | P-02 | Документация для контрибьюторов | 📋 | M4 | |
 | P-03 | Донат-система | 📋 | M4 | |
