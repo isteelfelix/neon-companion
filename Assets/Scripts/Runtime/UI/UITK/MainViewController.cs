@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -102,6 +103,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _previewTitle;
         private Label _previewTag;
         private Label _previewPersona;
+        private Label _previewAnimationInfo;
         private Label _previewPersonaStateBadge;
         private Label _previewPersonaStateHelp;
         private VisualElement _previewPersonaStateRow;
@@ -236,6 +238,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _currentSessionTitle = string.Empty;
         private bool _isBound;
         private bool _isSending;
+        private Image _avatarArtImage;
+        private SpriteSheetAnimator _avatarAnimator;
 
         private void OnEnable()
         {
@@ -253,6 +257,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnDisable()
         {
             UnregisterCallbacks();
+            _avatarAnimator?.Stop();
             _clearDataConfirmResetSchedule?.Pause();
             _clearDataConfirmResetSchedule = null;
             _themesBreathSchedule?.Pause();
@@ -410,6 +415,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewTitle   = root.Q<Label>("preview-title");
             _previewTag     = root.Q<Label>("preview-tag");
             _previewPersona = root.Q<Label>("preview-persona");
+            _previewAnimationInfo = root.Q<Label>("preview-animation-info");
             _previewPersonaStateBadge = root.Q<Label>("preview-persona-state-badge");
             _previewPersonaStateHelp = root.Q<Label>("preview-persona-state-help");
             _previewPersonaStateRow = root.Q<VisualElement>("preview-persona-state-row");
@@ -433,6 +439,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarFilterGradientCount = root.Q<Label>("avatar-filter-gradient-count");
             _avatarFilterMinimalCount = root.Q<Label>("avatar-filter-minimal-count");
             _avatarFilterCustomCount = root.Q<Label>("avatar-filter-custom-count");
+            EnsureAvatarAnimationImage();
             SetDisplay(_personaEditorPanel, DisplayStyle.None);
             SetDisplay(_previewDeleteAvatarBtn, DisplayStyle.None);
 
@@ -797,6 +804,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 chat.UseStreaming = streaming;
 
                 RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message));
+                SetAvatarTalking(true);
 
                 if (streaming)
                 {
@@ -819,6 +827,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             finally
             {
+                SetAvatarTalking(false);
                 SetSending(false);
             }
         }
@@ -2698,13 +2707,15 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void ApplyAvatarArt(string avatarId)
         {
             bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, avatarId) >= 0;
+            var profile = GetStoredProfile(avatarId);
+            bool hasAnimation = ConfigureAvatarAnimation(profile);
 
             if (_avatarArt != null)
             {
                 foreach (var id in BuiltInAvatarIds)
                     _avatarArt.EnableInClassList($"avatar__art--{id}", isBuiltIn && id == avatarId);
 
-                if (!isBuiltIn)
+                if (!isBuiltIn && !hasAnimation)
                 {
                     var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
                     _avatarArt.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
@@ -2740,9 +2751,98 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _previewTag.text = AvatarStyleTag(avatarId);
             if (_previewPersona != null)
                 _previewPersona.text = AvatarPersonaText(avatarId);
+            if (_previewAnimationInfo != null)
+                _previewAnimationInfo.text = BuildAnimationInfoText(profile);
             UpdatePersonaStateUi(avatarId);
 
             UpdateAvatarActionButtons(avatarId);
+        }
+
+        private void EnsureAvatarAnimationImage()
+        {
+            if (_avatarArt == null || _avatarArtImage != null)
+                return;
+
+            _avatarArtImage = new Image { name = "avatar-art-image" };
+            _avatarArtImage.pickingMode = PickingMode.Ignore;
+            _avatarArtImage.style.position = Position.Absolute;
+            _avatarArtImage.style.left = 0;
+            _avatarArtImage.style.right = 0;
+            _avatarArtImage.style.top = 0;
+            _avatarArtImage.style.bottom = 0;
+            _avatarArtImage.scaleMode = ScaleMode.ScaleAndCrop;
+            _avatarArt.Add(_avatarArtImage);
+
+            _avatarAnimator = gameObject.GetComponent<SpriteSheetAnimator>();
+            if (_avatarAnimator == null)
+                _avatarAnimator = gameObject.AddComponent<SpriteSheetAnimator>();
+        }
+
+        private bool ConfigureAvatarAnimation(AvatarProfile profile)
+        {
+            EnsureAvatarAnimationImage();
+
+            if (_avatarAnimator == null || _avatarArtImage == null)
+                return false;
+
+            var clips = profile?.animationClips;
+            if (clips == null || clips.Count == 0)
+            {
+                _avatarAnimator.Stop();
+                _avatarArtImage.sprite = null;
+                SetDisplay(_avatarArtImage, DisplayStyle.None);
+                return false;
+            }
+
+            _avatarAnimator.Configure(clips, _avatarArtImage);
+            if (!_avatarAnimator.HasAnyClips)
+            {
+                _avatarArtImage.sprite = null;
+                SetDisplay(_avatarArtImage, DisplayStyle.None);
+                return false;
+            }
+
+            SetDisplay(_avatarArtImage, DisplayStyle.Flex);
+            if (_isSending && _avatarAnimator.HasClip("talking"))
+                _avatarAnimator.Play("talking");
+            else
+                _avatarAnimator.Play("idle");
+
+            return true;
+        }
+
+        private void SetAvatarTalking(bool isTalking)
+        {
+            if (_avatarAnimator == null || !_avatarAnimator.HasAnyClips)
+                return;
+
+            if (isTalking && _avatarAnimator.HasClip("talking"))
+            {
+                _avatarAnimator.Play("talking");
+                return;
+            }
+
+            _avatarAnimator.Play("idle");
+        }
+
+        private static string BuildAnimationInfoText(AvatarProfile profile)
+        {
+            var clips = profile?.animationClips;
+            if (clips == null || clips.Count == 0)
+                return "Статичное изображение";
+
+            var parts = new List<string>();
+            for (int i = 0; i < clips.Count; i++)
+            {
+                var clip = clips[i];
+                if (clip == null || string.IsNullOrWhiteSpace(clip.clipName))
+                    continue;
+
+                float fps = clip.frameRate > 0f ? clip.frameRate : 1f;
+                parts.Add($"{clip.clipName} · {fps:0.#}fps");
+            }
+
+            return parts.Count > 0 ? string.Join(", ", parts) : "Статичное изображение";
         }
 
         private void UpdateAvatarActionButtons(string avatarId)
@@ -3445,6 +3545,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (messages.Count == 0) return;
 
                 SetSending(true);
+                SetAvatarTalking(true);
                 try
                 {
                     bool streaming = _settingsStreaming?.value ?? false;
@@ -3468,6 +3569,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 finally
                 {
+                    SetAvatarTalking(false);
                     SetSending(false);
                 }
             }
