@@ -218,6 +218,18 @@
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
+.preview-emoji-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 28px;
+}
+
+.preview-frame--none { }
+.preview-frame--neon { border-width: 2px; border-color: #7c7aed; }
+.preview-frame--gold { border-width: 3px; border-color: #f4c34f; }
+.preview-frame--holographic { border-width: 3px; border-color: #7ce7ff; }
+
 .preview-row {
     flex-direction: row;
     justify-content: space-between;
@@ -309,4 +321,81 @@
     font-size: 11px;
     white-space: normal;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.customize {
+    margin-top: 12px;
+    color: var(--text-2);
+}
+
+.customize__row {
+    margin-top: 8px;
+}
+
+.customize__hex {
+    margin-top: 4px;
+    height: 28px;
+}
+
+.customize__swatches {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.customize__swatch {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+    border-radius: 999px;
+    border-width: 1px;
+    border-color: var(--line-2);
+}
+
+.customize__emoji-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.customize__emoji-btn {
+    width: 34px;
+    height: 30px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--line-2);
+    background-color: var(--bg-2);
+}
+
+.customize__emoji-btn.is-active {
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+}
+
+.customize__frame-segment {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.customize__frame-btn {
+    flex-grow: 1;
+    height: 30px;
+    margin-right: 6px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--line-2);
+    background-color: var(--bg-2);
+}
+
+.customize__frame-btn:last-child {
+    margin-right: 0;
+}
+
+.customize__frame-btn.is-active {
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+    color: var(--accent-text);
 }

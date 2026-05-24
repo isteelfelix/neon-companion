@@ -144,6 +144,34 @@
                         <ui:Button name="persona-cancel-btn" text="Отмена" class="btn is-last" />
                     </ui:VisualElement>
                 </ui:VisualElement>
+                <ui:Foldout name="avatar-customization-foldout" text="Кастомизация" class="customize">
+                    <ui:VisualElement class="customize__row">
+                        <ui:Label text="Основной цвет" class="label" />
+                        <ui:TextField name="customize-primary-color" value="#FFFFFF" class="customize__hex" />
+                        <ui:VisualElement name="customize-swatches-primary" class="customize__swatches" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="customize__row">
+                        <ui:Label text="Акцент" class="label" />
+                        <ui:TextField name="customize-secondary-color" value="#7C7AED" class="customize__hex" />
+                        <ui:VisualElement name="customize-swatches-secondary" class="customize__swatches" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="customize__row">
+                        <ui:Label text="Ореол" class="label" />
+                        <ui:TextField name="customize-halo-color" value="#7C7AED" class="customize__hex" />
+                        <ui:VisualElement name="customize-swatches-halo" class="customize__swatches" />
+                    </ui:VisualElement>
+                    <ui:Slider name="customize-halo-intensity" label="Интенсивность ореола" low-value="0" high-value="1" value="0.6" />
+                    <ui:Slider name="customize-saturation" label="Насыщенность" low-value="0" high-value="2" value="1" />
+                    <ui:Slider name="customize-brightness" label="Яркость" low-value="0" high-value="2" value="1" />
+                    <ui:Label text="Эмодзи" class="label" />
+                    <ui:VisualElement name="customize-emoji-grid" class="customize__emoji-grid" />
+                    <ui:Label text="Рамка" class="label" />
+                    <ui:VisualElement name="customize-frame-segment" class="customize__frame-segment" />
+                    <ui:VisualElement class="preview-actions">
+                        <ui:Button name="customize-save-btn" text="Сохранить" class="btn btn--primary" />
+                        <ui:Button name="customize-cancel-btn" text="Отмена" class="btn is-last" />
+                    </ui:VisualElement>
+                </ui:Foldout>
             </ui:VisualElement>
         </ui:VisualElement>
 

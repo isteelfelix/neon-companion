@@ -576,6 +576,19 @@
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
 }
 
+.avatar-emoji-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 28px;
+    unity-text-align: middle-center;
+}
+
+.avatar-frame--none { }
+.avatar-frame--neon { border-width: 2px; }
+.avatar-frame--gold { border-width: 3px; border-color: #f4c34f; }
+.avatar-frame--holographic { border-width: 3px; border-color: #7ce7ff; }
+
 /* Session delete button */
 .history__delete-btn {
     width: 20px;

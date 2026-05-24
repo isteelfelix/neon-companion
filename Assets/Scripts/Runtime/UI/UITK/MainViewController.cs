@@ -10,6 +10,7 @@ using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
+using NeonCompanion.Runtime.UI.Avatars;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -137,6 +138,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _avatarFilterGradientCount;
         private Label _avatarFilterMinimalCount;
         private Label _avatarFilterCustomCount;
+        private AvatarCustomizationPanel _avatarCustomizationPanel;
+        private AvatarCustomizationData _activeCustomizationBaseline;
+        private Label _avatarEmojiOverlay;
+        private Label _previewEmojiOverlay;
 
         // ===== Typing animation =====
         private VisualElement _typingDot1;
@@ -456,6 +461,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarFilterGradientCount = root.Q<Label>("avatar-filter-gradient-count");
             _avatarFilterMinimalCount = root.Q<Label>("avatar-filter-minimal-count");
             _avatarFilterCustomCount = root.Q<Label>("avatar-filter-custom-count");
+            EnsureCustomizationOverlayElements();
+            if (_avatarCustomizationPanel == null)
+            {
+                var customizationRoot = root.Q<VisualElement>("avatar-customization-foldout");
+                if (customizationRoot != null)
+                {
+                    _avatarCustomizationPanel = new AvatarCustomizationPanel(customizationRoot);
+                    _avatarCustomizationPanel.Changed += OnAvatarCustomizationChanged;
+                    _avatarCustomizationPanel.Saved += OnAvatarCustomizationSaved;
+                    _avatarCustomizationPanel.Canceled += OnAvatarCustomizationCanceled;
+                }
+            }
             EnsureAvatarAnimationImage();
             SetDisplay(_personaEditorPanel, DisplayStyle.None);
             SetDisplay(_previewDeleteAvatarBtn, DisplayStyle.None);
@@ -2621,6 +2638,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_activeAvatarId == avatarId) return;
             ClosePersonaEditor();
+            CancelCustomizationEdits();
             _activeAvatarId = avatarId;
             SyncGallerySelection(avatarId);
             ApplyAvatarArt(avatarId);
@@ -2847,8 +2865,211 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_previewAnimationInfo != null)
                 _previewAnimationInfo.text = BuildAnimationInfoText(profile);
             UpdatePersonaStateUi(avatarId);
+            _activeCustomizationBaseline = CloneCustomization(profile?.customization);
+            _avatarCustomizationPanel?.Bind(_activeCustomizationBaseline);
+            ApplyAvatarCustomizationVisual(_activeCustomizationBaseline);
 
             UpdateAvatarActionButtons(avatarId);
+        }
+
+        private void EnsureCustomizationOverlayElements()
+        {
+            if (_avatarArt != null && _avatarEmojiOverlay == null)
+            {
+                _avatarEmojiOverlay = new Label { name = "avatar-emoji-overlay" };
+                _avatarEmojiOverlay.AddToClassList("avatar-emoji-overlay");
+                _avatarEmojiOverlay.pickingMode = PickingMode.Ignore;
+                _avatarArt.Add(_avatarEmojiOverlay);
+            }
+
+            if (_previewHero != null && _previewEmojiOverlay == null)
+            {
+                _previewEmojiOverlay = new Label { name = "preview-emoji-overlay" };
+                _previewEmojiOverlay.AddToClassList("preview-emoji-overlay");
+                _previewEmojiOverlay.pickingMode = PickingMode.Ignore;
+                _previewHero.Add(_previewEmojiOverlay);
+            }
+        }
+
+        private void OnAvatarCustomizationChanged(AvatarCustomizationData data)
+        {
+            ApplyAvatarCustomizationVisual(data);
+        }
+
+        private void OnAvatarCustomizationSaved()
+        {
+            _ = SaveAvatarCustomizationAsync();
+        }
+
+        private void OnAvatarCustomizationCanceled()
+        {
+            CancelCustomizationEdits();
+        }
+
+        private void CancelCustomizationEdits()
+        {
+            _avatarCustomizationPanel?.Bind(_activeCustomizationBaseline);
+            ApplyAvatarCustomizationVisual(_activeCustomizationBaseline);
+        }
+
+        private async Task SaveAvatarCustomizationAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null || _avatarCustomizationPanel == null)
+                    return;
+
+                var profiles = app.Avatars.GetAll();
+                var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
+                var data = CloneCustomization(GetPanelCustomizationData());
+                bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                bool shouldStore = !IsCustomizationEffectivelyDefault(data);
+
+                if (profile == null && !isBuiltIn)
+                    return;
+
+                if (profile == null && shouldStore)
+                {
+                    profile = new AvatarProfile
+                    {
+                        id = _activeAvatarId,
+                        isBuiltIn = true,
+                        name = string.Empty,
+                        imagePath = string.Empty,
+                        systemPrompt = string.Empty
+                    };
+                    profiles.Add(profile);
+                }
+
+                if (profile != null)
+                {
+                    profile.customization = shouldStore ? data : null;
+                    if (isBuiltIn && string.IsNullOrWhiteSpace(profile.systemPrompt) && profile.customization == null)
+                        profiles.RemoveAll(a => a.id == _activeAvatarId && a.isBuiltIn);
+                }
+
+                app.Avatars.SaveAll(profiles);
+                UpdateAvatarProfileCaches(profiles);
+                _activeCustomizationBaseline = CloneCustomization(shouldStore ? data : null);
+                _avatarCustomizationPanel.Bind(_activeCustomizationBaseline);
+                ApplyAvatarCustomizationVisual(_activeCustomizationBaseline);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private AvatarCustomizationData GetPanelCustomizationData()
+        {
+            return _avatarCustomizationPanel?.CurrentData ?? _activeCustomizationBaseline;
+        }
+
+        private void ApplyAvatarCustomizationVisual(AvatarCustomizationData data)
+        {
+            var effective = CloneCustomization(data);
+            if (_avatarArt != null)
+                _avatarArt.style.unityBackgroundImageTintColor = new StyleColor(BuildTintColor(effective.PrimaryColor, effective.Saturation, effective.Brightness));
+            if (_previewHero != null)
+                _previewHero.style.unityBackgroundImageTintColor = new StyleColor(BuildTintColor(effective.PrimaryColor, effective.Saturation, effective.Brightness));
+
+            if (_avatarCircle != null)
+            {
+                _avatarCircle.style.borderBottomColor = new StyleColor(ParseHtmlColor(effective.SecondaryColor, new Color(0.486f, 0.478f, 0.929f)));
+                _avatarCircle.style.borderTopColor = _avatarCircle.style.borderBottomColor;
+                _avatarCircle.style.borderLeftColor = _avatarCircle.style.borderBottomColor;
+                _avatarCircle.style.borderRightColor = _avatarCircle.style.borderBottomColor;
+            }
+
+            var halo = _root?.Q<VisualElement>("avatar-glow");
+            if (halo != null)
+            {
+                var haloColor = ParseHtmlColor(effective.HaloColor, new Color(0.486f, 0.478f, 0.929f));
+                haloColor.a = Mathf.Clamp01(effective.HaloIntensity) * 0.55f;
+                halo.style.backgroundColor = new StyleColor(haloColor);
+                halo.style.opacity = Mathf.Clamp(0.15f + effective.HaloIntensity, 0f, 1f);
+            }
+
+            string emoji = effective.OverlayEmoji ?? string.Empty;
+            if (_avatarEmojiOverlay != null)
+            {
+                _avatarEmojiOverlay.text = emoji;
+                SetDisplay(_avatarEmojiOverlay, string.IsNullOrEmpty(emoji) ? DisplayStyle.None : DisplayStyle.Flex);
+            }
+            if (_previewEmojiOverlay != null)
+            {
+                _previewEmojiOverlay.text = emoji;
+                SetDisplay(_previewEmojiOverlay, string.IsNullOrEmpty(emoji) ? DisplayStyle.None : DisplayStyle.Flex);
+            }
+
+            SetFrameClass(_avatarCircle, effective.CustomFrame, "avatar-frame");
+            SetFrameClass(_previewHero, effective.CustomFrame, "preview-frame");
+        }
+
+        private static void SetFrameClass(VisualElement element, string frame, string prefix)
+        {
+            if (element == null) return;
+            element.EnableInClassList($"{prefix}--none", false);
+            element.EnableInClassList($"{prefix}--neon", false);
+            element.EnableInClassList($"{prefix}--gold", false);
+            element.EnableInClassList($"{prefix}--holographic", false);
+            string normalized = string.IsNullOrWhiteSpace(frame) ? "none" : frame.ToLowerInvariant();
+            element.EnableInClassList($"{prefix}--{normalized}", true);
+        }
+
+        private static Color BuildTintColor(string hex, float saturation, float brightness)
+        {
+            var baseColor = ParseHtmlColor(hex, Color.white);
+            float gray = baseColor.r * 0.299f + baseColor.g * 0.587f + baseColor.b * 0.114f;
+            var saturated = new Color(
+                Mathf.Clamp01(gray + (baseColor.r - gray) * Mathf.Clamp(saturation, 0f, 2f)),
+                Mathf.Clamp01(gray + (baseColor.g - gray) * Mathf.Clamp(saturation, 0f, 2f)),
+                Mathf.Clamp01(gray + (baseColor.b - gray) * Mathf.Clamp(saturation, 0f, 2f)),
+                1f);
+            float b = Mathf.Clamp(brightness, 0f, 2f);
+            return new Color(
+                Mathf.Clamp01(saturated.r * b),
+                Mathf.Clamp01(saturated.g * b),
+                Mathf.Clamp01(saturated.b * b),
+                1f);
+        }
+
+        private static Color ParseHtmlColor(string hex, Color fallback)
+        {
+            if (!string.IsNullOrWhiteSpace(hex) && ColorUtility.TryParseHtmlString(hex, out var parsed))
+                return parsed;
+            return fallback;
+        }
+
+        private static AvatarCustomizationData CloneCustomization(AvatarCustomizationData source)
+        {
+            if (source == null) return null;
+            return new AvatarCustomizationData
+            {
+                PrimaryColor = source.PrimaryColor,
+                SecondaryColor = source.SecondaryColor,
+                HaloColor = source.HaloColor,
+                HaloIntensity = source.HaloIntensity,
+                Saturation = source.Saturation,
+                Brightness = source.Brightness,
+                OverlayEmoji = source.OverlayEmoji,
+                CustomFrame = source.CustomFrame
+            };
+        }
+
+        private static bool IsCustomizationEffectivelyDefault(AvatarCustomizationData data)
+        {
+            if (data == null) return true;
+            bool defaultColors = string.Equals((data.PrimaryColor ?? string.Empty).ToUpperInvariant(), "#FFFFFF", StringComparison.Ordinal)
+                && string.Equals((data.SecondaryColor ?? string.Empty).ToUpperInvariant(), "#7C7AED", StringComparison.Ordinal)
+                && string.Equals((data.HaloColor ?? string.Empty).ToUpperInvariant(), "#7C7AED", StringComparison.Ordinal);
+            bool defaultScalars = Mathf.Abs(data.HaloIntensity - 0.6f) < 0.0001f
+                && Mathf.Abs(data.Saturation - 1f) < 0.0001f
+                && Mathf.Abs(data.Brightness - 1f) < 0.0001f;
+            bool defaultOverlay = string.IsNullOrEmpty(data.OverlayEmoji)
+                && (string.IsNullOrWhiteSpace(data.CustomFrame) || string.Equals(data.CustomFrame, "none", StringComparison.OrdinalIgnoreCase));
+            return defaultColors && defaultScalars && defaultOverlay;
         }
 
         private void EnsureAvatarAnimationImage()
