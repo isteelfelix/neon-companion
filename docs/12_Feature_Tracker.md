@@ -31,8 +31,8 @@
 | A-02 | Кастомные аватары (загрузка) | ✅ | M1 | |
 | A-03 | Persona/инструкции аватара | ✅ | M1 | Edit + reset flow |
 | A-04 | Scale-and-crop фон | ✅ | M1 | |
-| A-05 | **Анимация спрайтшитами** | 📋 | M1 | Sprite sheet animation для reactions/state |
-| A-06 | Базовая анимация аватаров | 📋 | M1 | Breathing, talking, idle |
+| A-05 | **Анимация спрайтшитами** | ✅ | M1 | SpriteSheetAnimator + Loader, talking/idle clips, backward compatible |
+| A-06 | Базовая анимация аватаров | ✅ | M1 | Idle + talking clips через SpriteSheetAnimator, auto-switch при отправке |
 
 ## UI и UX
 | # | Фича | Статус | Спринт | Заметки |
