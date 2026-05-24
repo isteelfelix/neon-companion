@@ -8,6 +8,7 @@ using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
+using NeonCompanion.Runtime.Donation;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.Plugins;
@@ -259,6 +260,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IVoiceService _voiceService;
         private VoiceInputManager _voiceInputManager;
         private VoiceOutputManager _voiceOutputManager;
+        private IDonationService _donationService;
         private bool _voiceBoundToChat;
 
         private void OnEnable()
@@ -410,7 +412,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsGithubBtn     = root.Q<Button>("settings-github-btn");
             _settingsDocsBtn       = root.Q<Button>("settings-docs-btn");
             _settingsDonateBtn     = root.Q<Button>("settings-donate-btn");
-            _settingsDonateBtn?.SetEnabled(false);
+            _donationService = null;
+            if (_app != null)
+                _app.Services.TryGet(out _donationService);
+            _settingsDonateBtn?.SetEnabled(_donationService?.IsDonationSupported == true);
             _testProviderBtn = root.Q<Button>("test-provider-btn");
             _testRow         = root.Q<VisualElement>("test-row");
             _testRowLabel    = root.Q<Label>("test-row-label");
@@ -1120,6 +1125,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 var app = await GetAppAsync();
                 if (!_isBound || app == null) return;
+                if (_donationService == null)
+                    app.Services.TryGet(out _donationService);
+                _settingsDonateBtn?.SetEnabled(_donationService?.IsDonationSupported == true);
 
                 var providers = await app.ProviderManager.GetAllProvidersAsync();
                 if (providers.Count == 0)
@@ -3878,7 +3886,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnSettingsDonateClicked()
         {
-            AddSystemMessage("Ссылка для поддержки пока не настроена.");
+            if (_donationService?.IsDonationSupported == true)
+            {
+                _donationService.OpenDonationPage();
+                AddSystemMessage("Открыта страница поддержки проекта.");
+                return;
+            }
+
+            AddSystemMessage("Поддержка проекта пока недоступна.");
         }
 
         private static void OpenExternalUrl(string url)

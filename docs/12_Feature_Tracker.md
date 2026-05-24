@@ -38,7 +38,7 @@
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
 | U-01 | Dark UI (UI Toolkit) | ✅ | M0 | |
-| U-02 | Темы | 🔧 | M1 | Страница тем + sync preview |
+| U-02 | Темы | ✅ | M1 | Shape/halo/breathing, live preview sync |
 | U-03 | Composer overflow fix | ✅ | M1 | min-width: 0 |
 
 ## Голос и 3D (M2+)
@@ -59,5 +59,5 @@
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
 | P-01 | itch.io / GitHub Releases | ✅ | M4 | BuildScript.cs, build.sh, release.sh, VERSION, .gitignore | |
-| P-02 | Документация для контрибьюторов | 📋 | M4 | |
-| P-03 | Донат-система | 📋 | M4 | |
+| P-02 | Документация для контрибьюторов | ✅ | M4 | docs/10_Contribution.md |
+| P-03 | Донат-система | ✅ | M4 | IDonationService, DonationService, Settings: кнопка «Поддержать» |
