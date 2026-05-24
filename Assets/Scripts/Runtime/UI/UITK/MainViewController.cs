@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -239,7 +240,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isBound;
         private bool _isSending;
         private Image _avatarArtImage;
+        private Image _avatar3DImage;
         private SpriteSheetAnimator _avatarAnimator;
+        private Avatar3DRenderer _avatar3DRenderer;
+        private IAvatar3DService _avatar3DService;
 
         private void OnEnable()
         {
@@ -258,6 +262,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             UnregisterCallbacks();
             _avatarAnimator?.Stop();
+            _avatar3DService?.Unload();
             _clearDataConfirmResetSchedule?.Pause();
             _clearDataConfirmResetSchedule = null;
             _themesBreathSchedule?.Pause();
@@ -2666,14 +2671,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 string removedAvatarId = profile.id;
                 string removedName = string.IsNullOrWhiteSpace(profile.name) ? removedAvatarId : profile.name;
-                string imagePath = profile.imagePath;
+                string avatarAssetPath = profile.is3D ? profile.modelPath : profile.imagePath;
 
                 profiles.RemoveAll(a => a.id == removedAvatarId);
                 app.Avatars.SaveAll(profiles);
 
                 UpdateAvatarProfileCaches(profiles);
-                ReleaseCustomTexture(imagePath);
-                DeleteCustomAvatarFileIfUnused(imagePath, profiles);
+                ReleaseCustomTexture(avatarAssetPath);
+                DeleteCustomAvatarFileIfUnused(avatarAssetPath, profiles);
 
                 ClosePersonaEditor();
                 RefreshCustomAvatarGallery(app);
@@ -2708,14 +2713,20 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, avatarId) >= 0;
             var profile = GetStoredProfile(avatarId);
-            bool hasAnimation = ConfigureAvatarAnimation(profile);
+            bool is3D = profile != null && profile.is3D && !string.IsNullOrWhiteSpace(profile.modelPath);
+            bool hasAnimation = !is3D && ConfigureAvatarAnimation(profile);
+
+            if (is3D)
+                _ = ConfigureAvatar3DAsync(profile);
+            else
+                Disable3DAvatarRender();
 
             if (_avatarArt != null)
             {
                 foreach (var id in BuiltInAvatarIds)
                     _avatarArt.EnableInClassList($"avatar__art--{id}", isBuiltIn && id == avatarId);
 
-                if (!isBuiltIn && !hasAnimation)
+                if (!isBuiltIn && !hasAnimation && !is3D)
                 {
                     var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
                     _avatarArt.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
@@ -2731,7 +2742,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 foreach (var id in BuiltInAvatarIds)
                     _previewHero.EnableInClassList($"preview-hero--{id}", isBuiltIn && id == avatarId);
 
-                if (!isBuiltIn)
+                if (!isBuiltIn && !is3D)
                 {
                     var tex = GetOrLoadTexture(GetCustomProfile(avatarId)?.imagePath);
                     _previewHero.style.backgroundImage = tex != null ? new StyleBackground(tex) : StyleKeyword.Null;
@@ -2778,9 +2789,41 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarAnimator = gameObject.AddComponent<SpriteSheetAnimator>();
         }
 
+        private void EnsureAvatar3DImage()
+        {
+            if (_avatarArt == null || _avatar3DImage != null)
+                return;
+
+            _avatar3DImage = new Image { name = "avatar-art-3d-image" };
+            _avatar3DImage.pickingMode = PickingMode.Position;
+            _avatar3DImage.style.position = Position.Absolute;
+            _avatar3DImage.style.left = 0;
+            _avatar3DImage.style.right = 0;
+            _avatar3DImage.style.top = 0;
+            _avatar3DImage.style.bottom = 0;
+            _avatar3DImage.scaleMode = ScaleMode.ScaleAndCrop;
+            _avatarArt.Add(_avatar3DImage);
+
+            _avatar3DRenderer = gameObject.GetComponent<Avatar3DRenderer>();
+            if (_avatar3DRenderer == null)
+                _avatar3DRenderer = gameObject.AddComponent<Avatar3DRenderer>();
+            _avatar3DRenderer.AttachTargetImage(_avatar3DImage);
+
+            if (_avatar3DService == null)
+            {
+                if (_app != null && _app.Services.TryGet<IAvatar3DService>(out var sharedService))
+                    _avatar3DService = sharedService;
+                else
+                    _avatar3DService = new Avatar3DService();
+            }
+
+            SetDisplay(_avatar3DImage, DisplayStyle.None);
+        }
+
         private bool ConfigureAvatarAnimation(AvatarProfile profile)
         {
             EnsureAvatarAnimationImage();
+            EnsureAvatar3DImage();
 
             if (_avatarAnimator == null || _avatarArtImage == null)
                 return false;
@@ -2791,6 +2834,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarAnimator.Stop();
                 _avatarArtImage.sprite = null;
                 SetDisplay(_avatarArtImage, DisplayStyle.None);
+                if (_avatar3DImage != null)
+                    SetDisplay(_avatar3DImage, DisplayStyle.None);
                 return false;
             }
 
@@ -2803,6 +2848,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             SetDisplay(_avatarArtImage, DisplayStyle.Flex);
+            if (_avatar3DImage != null)
+                SetDisplay(_avatar3DImage, DisplayStyle.None);
             if (_isSending && _avatarAnimator.HasClip("talking"))
                 _avatarAnimator.Play("talking");
             else
@@ -2811,8 +2858,84 @@ namespace NeonCompanion.Runtime.UI.UITK
             return true;
         }
 
+        private async Task ConfigureAvatar3DAsync(AvatarProfile profile)
+        {
+            Disable2DAvatarAnimation();
+            EnsureAvatar3DImage();
+            if (_avatar3DService == null || _avatar3DRenderer == null || _avatar3DImage == null)
+                return;
+
+            if (profile == null || string.IsNullOrWhiteSpace(profile.modelPath))
+            {
+                Disable3DAvatarRender();
+                return;
+            }
+
+            bool loaded = await _avatar3DService.LoadAvatar(profile.modelPath);
+            if (!loaded)
+            {
+                Disable3DAvatarRender();
+                return;
+            }
+
+            var runtimeRoot = _avatar3DService.GetRuntimeRoot();
+            if (runtimeRoot == null)
+            {
+                Disable3DAvatarRender();
+                return;
+            }
+
+            runtimeRoot.transform.SetParent(transform, false);
+            runtimeRoot.transform.localPosition = Vector3.zero;
+            runtimeRoot.transform.localRotation = Quaternion.identity;
+            runtimeRoot.transform.localScale = Vector3.one;
+
+            _avatar3DRenderer.SetModelRoot(_avatar3DService.GetRuntimeTransform());
+            SetDisplay(_avatar3DImage, DisplayStyle.Flex);
+
+            if (_isSending && !_avatar3DService.SetAnimation("talking"))
+                _avatar3DService.SetAnimation("idle");
+            else if (!_isSending)
+                _avatar3DService.SetAnimation("idle");
+        }
+
+        private void Disable2DAvatarAnimation()
+        {
+            if (_avatarAnimator != null)
+                _avatarAnimator.Stop();
+
+            if (_avatarArtImage != null)
+            {
+                _avatarArtImage.sprite = null;
+                SetDisplay(_avatarArtImage, DisplayStyle.None);
+            }
+        }
+
+        private void Disable3DAvatarRender()
+        {
+            _avatar3DService?.Unload();
+            _avatar3DRenderer?.ClearModel();
+            if (_avatar3DImage != null)
+                SetDisplay(_avatar3DImage, DisplayStyle.None);
+        }
+
         private void SetAvatarTalking(bool isTalking)
         {
+            if (_avatar3DService != null && _avatar3DService.IsLoaded)
+            {
+                if (isTalking)
+                {
+                    if (!_avatar3DService.SetAnimation("talking"))
+                        _avatar3DService.SetAnimation("idle");
+                }
+                else
+                {
+                    _avatar3DService.SetAnimation("idle");
+                }
+
+                return;
+            }
+
             if (_avatarAnimator == null || !_avatarAnimator.HasAnyClips)
                 return;
 
@@ -2827,6 +2950,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private static string BuildAnimationInfoText(AvatarProfile profile)
         {
+            if (profile != null && profile.is3D)
+            {
+                if (profile.modelAnimationClips == null || profile.modelAnimationClips.Count == 0)
+                    return "3D модель";
+
+                return "3D анимации: " + string.Join(", ", profile.modelAnimationClips);
+            }
+
             var clips = profile?.animationClips;
             if (clips == null || clips.Count == 0)
                 return "Статичное изображение";
@@ -3217,7 +3348,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (string.IsNullOrWhiteSpace(path))
                 return;
 
-            bool isStillReferenced = profiles.Any(a => a != null && !a.isBuiltIn && string.Equals(a.imagePath, path, StringComparison.OrdinalIgnoreCase));
+            bool isStillReferenced = profiles.Any(a =>
+                a != null &&
+                !a.isBuiltIn &&
+                (string.Equals(a.imagePath, path, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(a.modelPath, path, StringComparison.OrdinalIgnoreCase)));
             if (isStillReferenced || !System.IO.File.Exists(path))
                 return;
 
@@ -3641,10 +3776,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (app == null) return;
 
                 var filePicker = app.Services.GetRequired<IFilePickerService>();
-                string path = await filePicker.PickFileAsync("png");
+                string path = await filePicker.PickFileAsync("png,glb,gltf");
                 if (string.IsNullOrEmpty(path)) return;
 
                 string fileName = System.IO.Path.GetFileNameWithoutExtension(path);
+                string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
+                bool is3D = extension == ".glb" || extension == ".gltf";
                 string destDir  = System.IO.Path.Combine(Application.persistentDataPath, "Avatars");
                 System.IO.Directory.CreateDirectory(destDir);
                 string destPath = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(path));
@@ -3652,13 +3789,27 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 var all = app.Avatars.GetAll();
                 string profileId = ResolveCustomAvatarId(fileName, destPath, all);
+                var modelAnimations = new List<string>();
+
+                if (is3D)
+                {
+                    var loadResult = await Avatar3DLoader.LoadAsync(destPath);
+                    if (loadResult.Success && loadResult.Instance != null)
+                    {
+                        modelAnimations.AddRange(loadResult.AnimationNames);
+                        Destroy(loadResult.Instance);
+                    }
+                }
 
                 var profile = new NeonCompanion.Runtime.Data.Models.AvatarProfile
                 {
                     id        = profileId,
                     name      = fileName,
-                    imagePath = destPath,
-                    isBuiltIn = false
+                    imagePath = is3D ? string.Empty : destPath,
+                    modelPath = is3D ? destPath : string.Empty,
+                    isBuiltIn = false,
+                    is3D = is3D,
+                    modelAnimationClips = modelAnimations
                 };
 
                 int existing = all.FindIndex(a => a != null && a.id == profile.id);
@@ -3672,7 +3823,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_activeAvatarId == profile.id) _activeAvatarId = string.Empty;
                 SelectAvatar(profile.id);
 
-                AddSystemMessage($"Аватар «{fileName}» загружен.");
+                AddSystemMessage(is3D
+                    ? $"3D аватар «{fileName}» загружен."
+                    : $"Аватар «{fileName}» загружен.");
             }
             catch (Exception ex)
             {
@@ -3684,7 +3837,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string ResolveCustomAvatarId(string fileName, string imagePath, List<AvatarProfile> allProfiles)
         {
             string existingByPath = allProfiles?
-                .FirstOrDefault(a => a != null && !a.isBuiltIn && string.Equals(a.imagePath, imagePath, StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(a =>
+                    a != null &&
+                    !a.isBuiltIn &&
+                    (string.Equals(a.imagePath, imagePath, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(a.modelPath, imagePath, StringComparison.OrdinalIgnoreCase)))
                 ?.id;
             if (!string.IsNullOrWhiteSpace(existingByPath))
                 return existingByPath;

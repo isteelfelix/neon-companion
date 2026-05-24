@@ -1,5 +1,6 @@
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Data.Secrets;
@@ -40,6 +41,7 @@ namespace NeonCompanion.Runtime.Core
             var settings = new AppSettingsRepository(storage);
             var aiClient = new OpenAiCompatibleClient();
             var avatarService = new AvatarService();
+            var avatar3DService = new Avatar3DService();
             var providerManager = new ProviderManager(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
 
@@ -84,6 +86,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IAppSettingsRepository>(settings);
             services.Register<IAiClient>(aiClient);
             services.Register<IAvatarService>(avatarService);
+            services.Register<IAvatar3DService>(avatar3DService);
             services.Register<ProviderManager>(providerManager);
             services.Register<ChatService>(chatService);
             services.Register<ILocalizationService>(localizationService);

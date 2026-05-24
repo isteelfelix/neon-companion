@@ -20,8 +20,11 @@ namespace NeonCompanion.Runtime.Data.Models
         public string id;
         public string name;
         public string imagePath;
+        public string modelPath;
         public bool isBuiltIn;
+        public bool is3D;
         public string systemPrompt;
         public List<SpriteSheetAnimation> animationClips = new List<SpriteSheetAnimation>();
+        public List<string> modelAnimationClips = new List<string>();
     }
 }
