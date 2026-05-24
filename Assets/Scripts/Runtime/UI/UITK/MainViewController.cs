@@ -10,6 +10,7 @@ using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
+using NeonCompanion.Runtime.Plugins;
 using NeonCompanion.Runtime.UI.Avatars;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
@@ -77,6 +78,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Toggle _settingsMaskLogs;
         private Label _settingsStoragePath;
         private Label _settingsVersion;
+        private Label _settingsPluginsSummary;
+        private Label _settingsPluginsConfig;
+        private VisualElement _settingsPluginsList;
         private Label _brandVersion;
         private Button _shapeRound;
         private Button _shapeSquare;
@@ -421,6 +425,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsMaskLogs    = root.Q<Toggle>("settings-mask-logs");
             _settingsStoragePath = root.Q<Label>("settings-storage-path");
             _settingsVersion     = root.Q<Label>("settings-version");
+            _settingsPluginsSummary = root.Q<Label>("settings-plugins-summary");
+            _settingsPluginsConfig = root.Q<Label>("settings-plugins-config");
+            _settingsPluginsList = root.Q<VisualElement>("settings-plugins-list");
             _brandVersion       = root.Q<Label>("brand-version");
             _shapeRound  = root.Q<Button>("shape-round");
             _shapeSquare = root.Q<Button>("shape-square");
@@ -2462,6 +2469,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
                 if (_brandVersion != null)
                     _brandVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
+                RefreshPluginStatus(app);
 
                 SetAvatarShape(s.avatarShape ?? "round", save: false);
                 ApplyHaloVisibility(s.showHalo);
@@ -2490,6 +2498,68 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void SaveSettings()
         {
             _ = SaveSettingsAsync();
+        }
+
+        private void RefreshPluginStatus(CompanionApp app)
+        {
+            if (app == null)
+                return;
+
+            if (!app.Services.TryGet<PluginManager>(out var pluginManager) || pluginManager == null)
+            {
+                if (_settingsPluginsSummary != null) _settingsPluginsSummary.text = "не инициализирован";
+                if (_settingsPluginsConfig != null) _settingsPluginsConfig.text = "нет данных";
+                _settingsPluginsList?.Clear();
+                return;
+            }
+
+            var plugins = pluginManager.Plugins;
+            int loaded = 0;
+            int failed = 0;
+            int skipped = 0;
+
+            for (int i = 0; i < plugins.Count; i++)
+            {
+                switch (plugins[i].Status)
+                {
+                    case PluginManager.PluginRuntimeStatus.Loaded:
+                        loaded++;
+                        break;
+                    case PluginManager.PluginRuntimeStatus.Failed:
+                        failed++;
+                        break;
+                    default:
+                        skipped++;
+                        break;
+                }
+            }
+
+            if (_settingsPluginsSummary != null)
+                _settingsPluginsSummary.text = $"loaded={loaded} failed={failed} skipped={skipped}";
+            if (_settingsPluginsConfig != null)
+                _settingsPluginsConfig.text = pluginManager.HasAnyPluginConfigFiles ? "обнаружены" : "не найдены";
+
+            if (_settingsPluginsList == null)
+                return;
+
+            _settingsPluginsList.Clear();
+            if (plugins.Count == 0)
+            {
+                var empty = new Label("Плагины не найдены в persistentDataPath/Plugins.");
+                empty.AddToClassList("settings-plugin-item");
+                _settingsPluginsList.Add(empty);
+                return;
+            }
+
+            for (int i = 0; i < plugins.Count; i++)
+            {
+                var p = plugins[i];
+                string status = p.Status == PluginManager.PluginRuntimeStatus.Loaded ? "loaded" :
+                    (p.Status == PluginManager.PluginRuntimeStatus.Failed ? "failed" : "skipped");
+                var label = new Label($"{p.Name} ({p.Version}) [{status}] config={(p.HasConfig ? "yes" : "no")}");
+                label.AddToClassList("settings-plugin-item");
+                _settingsPluginsList.Add(label);
+            }
         }
 
         private async Task SaveSettingsAsync()

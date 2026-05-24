@@ -7,6 +7,7 @@ using NeonCompanion.Runtime.Data.Secrets;
 using NeonCompanion.Runtime.Data.Storage;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
+using NeonCompanion.Runtime.Plugins;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Core
@@ -90,6 +91,12 @@ namespace NeonCompanion.Runtime.Core
             services.Register<ProviderManager>(providerManager);
             services.Register<ChatService>(chatService);
             services.Register<ILocalizationService>(localizationService);
+
+            var pluginManager = GetComponent<PluginManager>();
+            if (pluginManager == null)
+                pluginManager = gameObject.AddComponent<PluginManager>();
+            pluginManager.Initialize(services);
+            services.Register<PluginManager>(pluginManager);
 
             NeonLogger.Log("App bootstrap completed.");
         }

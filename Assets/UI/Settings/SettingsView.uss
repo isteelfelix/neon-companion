@@ -240,11 +240,23 @@
     margin-right: 8px;
 }
 
+.settings-plugins-list {
+    flex-direction: column;
+    padding: 6px 0 10px 0;
+}
+
+.settings-plugin-item {
+    font-size: 11px;
+    color: var(--text-2);
+    padding: 3px 0;
+}
+
 /* ---- Page-specific icons ---- */
 
 .icon--globe    { background-image: url("project://database/Assets/UI/Icons/globe.svg"); }
 .icon--shield   { background-image: url("project://database/Assets/UI/Icons/shield.svg"); }
 .icon--folder   { background-image: url("project://database/Assets/UI/Icons/folder.svg"); }
+.icon--bolt     { background-image: url("project://database/Assets/UI/Icons/bolt.svg"); }
 .icon--trash    { background-image: url("project://database/Assets/UI/Icons/trash.svg"); }
 .icon--info     { background-image: url("project://database/Assets/UI/Icons/info.svg"); }
 .icon--external { background-image: url("project://database/Assets/UI/Icons/external.svg"); }
