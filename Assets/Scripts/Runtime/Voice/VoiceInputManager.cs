@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
+using NeonCompanion.Runtime.Localization;
 using UnityEngine;
 using UnityEngine.Android;
 using UnityEngine.UIElements;
@@ -154,7 +155,9 @@ namespace NeonCompanion.Runtime.Voice
                 return;
 
             _micButton.EnableInClassList(MicRecordingClass, isRecording);
-            _micButton.tooltip = isRecording ? "Остановить запись" : "Голосовой ввод";
+            _micButton.tooltip = isRecording
+                ? LocalizationExtensions.Get("voice.mic.stop", "Остановить запись")
+                : LocalizationExtensions.Get("voice.mic.start", "Голосовой ввод");
             _micButton.style.opacity = 1f;
             _pulseOpacity = 1f;
             _pulseGrowing = false;

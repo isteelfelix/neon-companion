@@ -7,6 +7,7 @@ using NeonCompanion.Runtime.Api.Models;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Data.Repositories;
+using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.UI.Chat;
 
 namespace NeonCompanion.Runtime.Chat
@@ -235,11 +236,11 @@ namespace NeonCompanion.Runtime.Chat
 
             var sourceMessages = _currentChatViewModel?.Messages;
             if (sourceMessages == null || sourceMessages.Count == 0)
-                return "Пока нет сообщений для краткого пересказа.";
+                return LocalizationExtensions.Get("chat.summary.empty", "Пока нет сообщений для краткого пересказа.");
 
             var provider = _currentProvider ?? await _providerManager.GetActiveProviderAsync();
             if (provider == null)
-                return "Провайдер не настроен.";
+                return LocalizationExtensions.Get("chat.summary.provider_not_configured", "Провайдер не настроен.");
 
             var requestMessages = new List<AiChatMessage>();
             int start = Math.Max(0, sourceMessages.Count - Math.Max(1, maxMessages));
@@ -257,12 +258,12 @@ namespace NeonCompanion.Runtime.Chat
             }
 
             if (requestMessages.Count == 0)
-                return "Пока нет сообщений для краткого пересказа.";
+                return LocalizationExtensions.Get("chat.summary.empty", "Пока нет сообщений для краткого пересказа.");
 
             requestMessages.Add(new AiChatMessage
             {
                 role = "user",
-                content = "Сделай короткое резюме диалога на русском языке (2-4 предложения)."
+                content = LocalizationExtensions.Get("chat.summary.user_prompt", "Сделай короткое резюме диалога на русском языке (2-4 предложения).")
             });
 
             var request = new AiChatRequest
@@ -270,14 +271,14 @@ namespace NeonCompanion.Runtime.Chat
                 model = provider.defaultModel,
                 temperature = 0.2f,
                 maxTokens = 140,
-                systemPrompt = "Ты помощник, который кратко и точно суммирует переписку на русском языке.",
+                systemPrompt = LocalizationExtensions.Get("chat.summary.system_prompt", "Ты помощник, который кратко и точно суммирует переписку на русском языке."),
                 messages = requestMessages
             };
 
             var response = await _aiClient.SendMessageAsync(provider, request);
             var summary = response?.content?.Trim();
             return string.IsNullOrWhiteSpace(summary)
-                ? "Не удалось получить резюме."
+                ? LocalizationExtensions.Get("chat.summary.failed", "Не удалось получить резюме.")
                 : summary;
         }
 

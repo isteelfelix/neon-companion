@@ -477,6 +477,9 @@
     -unity-font-style: bold;
     flex-grow: 1;
     min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .history__provider {
@@ -487,6 +490,10 @@
     font-size: 10px;
     -unity-font-style: bold;
     flex-shrink: 0;
+    max-width: 48%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .history__meta {

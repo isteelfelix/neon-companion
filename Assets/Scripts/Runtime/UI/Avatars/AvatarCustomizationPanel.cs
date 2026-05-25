@@ -188,6 +188,8 @@ namespace NeonCompanion.Runtime.UI.Avatars
                     text = value
                 };
                 button.AddToClassList("customize__frame-btn");
+                if (value == FrameStyles[FrameStyles.Length - 1])
+                    button.AddToClassList("customize__frame-btn--last");
                 _frameSegment.Add(button);
                 _frameButtons[value] = button;
             }

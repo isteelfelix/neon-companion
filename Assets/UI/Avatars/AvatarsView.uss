@@ -390,7 +390,7 @@
     background-color: var(--bg-2);
 }
 
-.customize__frame-btn:last-child {
+.customize__frame-btn--last {
     margin-right: 0;
 }
 

@@ -207,14 +207,14 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_target == null)
                 return;
 
-            if (evt.pointerType == PointerType.touch)
+            if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
             {
                 _lastPinchDistance = GetCurrentPinchDistance();
                 return;
             }
 
             _activePointerId = evt.pointerId;
-            _lastPointer = evt.position;
+            _lastPointer = new Vector2(evt.position.x, evt.position.y);
             _dragging = true;
             _targetImage?.CapturePointer(evt.pointerId);
         }
@@ -224,7 +224,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_target == null)
                 return;
 
-            if (evt.pointerType == PointerType.touch)
+            if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
             {
                 float currentPinchDistance = GetCurrentPinchDistance();
                 if (_lastPinchDistance > 0f && currentPinchDistance > 0f)
@@ -240,8 +240,9 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (!_dragging || evt.pointerId != _activePointerId)
                 return;
 
-            Vector2 deltaMove = evt.position - _lastPointer;
-            _lastPointer = evt.position;
+            Vector2 pointerPos = new Vector2(evt.position.x, evt.position.y);
+            Vector2 deltaMove = pointerPos - _lastPointer;
+            _lastPointer = pointerPos;
 
             _yaw += deltaMove.x * _orbitSensitivity;
             _pitch = Mathf.Clamp(_pitch - deltaMove.y * _orbitSensitivity, _minPitch, _maxPitch);
@@ -249,7 +250,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void OnPointerUp(PointerUpEvent evt)
         {
-            if (evt.pointerType == PointerType.touch)
+            if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
             {
                 _lastPinchDistance = 0f;
                 return;

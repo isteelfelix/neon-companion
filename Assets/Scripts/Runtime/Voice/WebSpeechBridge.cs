@@ -171,15 +171,26 @@ namespace NeonCompanion.Runtime.Voice
         {
             try
             {
+                if (!PhraseRecognitionSystem.isSupported)
+                {
+                    NeonLogger.LogWarning("Windows speech recognition is not supported on this machine.");
+                    return false;
+                }
+
                 _dictation = new DictationRecognizer();
                 _dictation.DictationResult += OnWindowsDictationResult;
                 _dictation.DictationComplete += _ => _isRecording = false;
                 _dictation.DictationError += (_, error) =>
                 {
-                    NeonLogger.LogError($"Dictation error: {error}");
+                    NeonLogger.LogWarning($"Dictation error: {error}");
                     _isRecording = false;
                 };
                 return true;
+            }
+            catch (UnityException ex)
+            {
+                NeonLogger.LogWarning($"Windows dictation unavailable: {ex.Message}");
+                return false;
             }
             catch (Exception ex)
             {

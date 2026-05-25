@@ -581,7 +581,7 @@
     top: 10px;
     right: 10px;
     font-size: 28px;
-    unity-text-align: middle-center;
+    -unity-text-align: middle-center;
 }
 
 .avatar-frame--none { }

@@ -28,6 +28,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const string EditingProviderClass = "provider--editing";
         private const string ActiveAvatarFilterClass = "filterchip--active";
         private const string CustomModelPresetValue = "Custom / manual";
+        private static readonly Dictionary<string, string> StaticTemplateTextToKey = BuildStaticTemplateTextMap();
 
         private readonly List<VisualElement> _navItems = new List<VisualElement>();
         private readonly List<VisualElement> _sessionItems = new List<VisualElement>();
@@ -95,14 +96,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
         private static readonly Dictionary<string, BuiltInAvatarMeta> BuiltInAvatarMetaById = new Dictionary<string, BuiltInAvatarMeta>
         {
-            ["neon"] = new BuiltInAvatarMeta("Неон", "стандартный", "Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу.", AvatarFilter.Standard),
-            ["aurora"] = new BuiltInAvatarMeta("Аврора", "прохладный · градиент", "Аврора — спокойная и аналитичная. Объясняет ясно и сначала обдумывает ответ.", AvatarFilter.Gradient),
-            ["ember"] = new BuiltInAvatarMeta("Эмбер", "тёплый · градиент", "Эмбер — тёплая и эмпатичная. Улавливает настроение и отвечает бережно.", AvatarFilter.Gradient),
-            ["glass"] = new BuiltInAvatarMeta("Гласс", "минимал · тёмный", "Гласс — энергичная и смелая. Любит сложные задачи и быстрый темп.", AvatarFilter.Minimal),
-            ["flora"] = new BuiltInAvatarMeta("Флора", "природный · градиент", "Флора — вдумчивая и спокойная. Даёт нюансированные и сбалансированные ответы.", AvatarFilter.Gradient),
-            ["mono"] = new BuiltInAvatarMeta("Моно", "минимал · монохром", "Моно — точная и эффективная. Ценит корректность и краткость.", AvatarFilter.Minimal),
-            ["cobalt"] = new BuiltInAvatarMeta("Кобальт", "смелый · градиент", "Кобальт — креативная и изобретательная. Любит исследовать идеи и связи.", AvatarFilter.Gradient),
-            ["rose"] = new BuiltInAvatarMeta("Роуз", "мягкий · градиент", "Роуз — обаятельная и общительная. Делает диалог более личным.", AvatarFilter.Gradient)
+            ["neon"] = new BuiltInAvatarMeta("avatar.builtin.neon.name", "Неон", "avatar.builtin.neon.style", "стандартный", "avatar.builtin.neon.persona", "Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу.", AvatarFilter.Standard),
+            ["aurora"] = new BuiltInAvatarMeta("avatar.builtin.aurora.name", "Аврора", "avatar.builtin.aurora.style", "прохладный · градиент", "avatar.builtin.aurora.persona", "Аврора — спокойная и аналитичная. Объясняет ясно и сначала обдумывает ответ.", AvatarFilter.Gradient),
+            ["ember"] = new BuiltInAvatarMeta("avatar.builtin.ember.name", "Эмбер", "avatar.builtin.ember.style", "тёплый · градиент", "avatar.builtin.ember.persona", "Эмбер — тёплая и эмпатичная. Улавливает настроение и отвечает бережно.", AvatarFilter.Gradient),
+            ["glass"] = new BuiltInAvatarMeta("avatar.builtin.glass.name", "Гласс", "avatar.builtin.glass.style", "минимал · тёмный", "avatar.builtin.glass.persona", "Гласс — энергичная и смелая. Любит сложные задачи и быстрый темп.", AvatarFilter.Minimal),
+            ["flora"] = new BuiltInAvatarMeta("avatar.builtin.flora.name", "Флора", "avatar.builtin.flora.style", "природный · градиент", "avatar.builtin.flora.persona", "Флора — вдумчивая и спокойная. Даёт нюансированные и сбалансированные ответы.", AvatarFilter.Gradient),
+            ["mono"] = new BuiltInAvatarMeta("avatar.builtin.mono.name", "Моно", "avatar.builtin.mono.style", "минимал · монохром", "avatar.builtin.mono.persona", "Моно — точная и эффективная. Ценит корректность и краткость.", AvatarFilter.Minimal),
+            ["cobalt"] = new BuiltInAvatarMeta("avatar.builtin.cobalt.name", "Кобальт", "avatar.builtin.cobalt.style", "смелый · градиент", "avatar.builtin.cobalt.persona", "Кобальт — креативная и изобретательная. Любит исследовать идеи и связи.", AvatarFilter.Gradient),
+            ["rose"] = new BuiltInAvatarMeta("avatar.builtin.rose.name", "Роуз", "avatar.builtin.rose.style", "мягкий · градиент", "avatar.builtin.rose.persona", "Роуз — обаятельная и общительная. Делает диалог более личным.", AvatarFilter.Gradient)
         };
         private string _activeAvatarId = "neon";
         private AvatarFilter _activeAvatarFilter = AvatarFilter.All;
@@ -247,7 +248,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _cancelPending;
         private bool _clearDataConfirmPending;
         private long _clearDataConfirmExpiresAtMs;
-        private string _chatSubtitle = "0 сообщений";
+        private string _chatSubtitle = string.Empty;
         private string _currentSessionId = string.Empty;
         private string _currentSessionTitle = string.Empty;
         private bool _isBound;
@@ -261,7 +262,115 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VoiceInputManager _voiceInputManager;
         private VoiceOutputManager _voiceOutputManager;
         private IDonationService _donationService;
+        private ILocalizationService _localizationService;
+        private bool _isRefreshingLocalizedUi;
         private bool _voiceBoundToChat;
+
+        private static Dictionary<string, string> BuildStaticTemplateTextMap()
+        {
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            void Add(string key, string ru, string en)
+            {
+                map[ru] = key;
+                map[en] = key;
+            }
+
+            Add("settings.page.title", "Настройки", "Settings");
+            Add("settings.page.subtitle", "Общие параметры приложения, данные и информация.", "General app parameters, data, and info.");
+            Add("settings.section.general", "Общие", "General");
+            Add("settings.language.row.title", "Язык", "Language");
+            Add("settings.language.row.subtitle", "Язык интерфейса. Применяется сразу.", "Interface language. Applied immediately.");
+            Add("settings.history.row.title", "Сохранять историю чатов", "Save chat history");
+            Add("settings.history.row.subtitle", "Локально, в JSON-файлах.", "Stored locally in JSON files.");
+            Add("settings.streaming.row.title", "Streaming ответов", "Streaming responses");
+            Add("settings.streaming.row.subtitle", "Показывать ответ по мере поступления токенов.", "Show response as tokens arrive.");
+            Add("settings.systemprompt.row.title", "System prompt персонажа", "Avatar system prompt");
+            Add("settings.systemprompt.row.subtitle", "Использовать персону выбранного аватара.", "Use selected avatar persona.");
+            Add("settings.voice.row.subtitle", "Голосовой ввод и озвучивание ответов.", "Voice input and response playback.");
+            Add("settings.section.security", "Безопасность", "Security");
+            Add("settings.security.encrypt.title", "Шифровать API-ключи", "Encrypt API keys");
+            Add("settings.security.encrypt.subtitle", "Хранить ключи в защищённом виде на устройстве.", "Store keys securely on this device.");
+            Add("settings.security.mask.title", "Скрывать ключи в логах", "Mask keys in logs");
+            Add("settings.security.mask.subtitle", "Маскировать значения при отладке.", "Mask values in debug output.");
+            Add("settings.section.data", "Данные", "Data");
+            Add("settings.data.storage", "Папка хранения", "Storage folder");
+            Add("settings.data.export.title", "Экспорт чатов", "Export chats");
+            Add("settings.data.export.subtitle", "Сохранить всю историю в JSON.", "Save all history to JSON.");
+            Add("settings.data.clear.title", "Очистить все данные", "Clear all data");
+            Add("settings.data.clear.subtitle", "Удалить сессии, провайдеров и настройки. Действие необратимо.", "Delete sessions, providers, and settings. This action is irreversible.");
+            Add("settings.section.plugins", "Плагины", "Plugins");
+            Add("settings.plugins.load_status", "Статус загрузки", "Load status");
+            Add("settings.plugins.configs", "Конфиги плагинов", "Plugin configs");
+            Add("settings.section.about", "О приложении", "About");
+            Add("settings.about.version", "Версия", "Version");
+            Add("settings.about.license", "Лицензия", "License");
+            Add("settings.about.fonts", "Шрифты", "Fonts");
+            Add("settings.docs", "Документация", "Documentation");
+            Add("settings.support", "Поддержать", "Support");
+
+            Add("providers.page.title", "Провайдеры", "Providers");
+            Add("providers.page.subtitle", "Подключи любой OpenAI-совместимый API и переключайся прямо из чата.", "Connect any OpenAI-compatible API and switch right from chat.");
+            Add("providers.connection.config", "Конфигурация подключения", "Connection configuration");
+            Add("providers.field.name", "Название", "Name");
+            Add("providers.field.baseurl", "Базовый URL", "Base URL");
+            Add("providers.field.apikey", "API-ключ", "API key");
+            Add("providers.field.model", "Модель по умолчанию", "Default model");
+            Add("providers.field.model.manual", "ID модели (вручную)", "Model ID (manual)");
+            Add("providers.field.temperature", "Температура", "Temperature");
+            Add("providers.field.max_tokens", "Макс. токенов", "Max tokens");
+            Add("providers.test.hint", "Нажми Тест для проверки соединения", "Press Test to check connection");
+
+            Add("avatars.page.title", "Аватары", "Avatars");
+            Add("avatars.page.subtitle", "Визуальное представление агента. Можно выбрать готовый образ или загрузить свой PNG.", "Agent visual identity. Choose a preset or upload your own PNG.");
+            Add("avatars.filter.all", "Все", "All");
+            Add("avatars.filter.standard", "Стандартные", "Standard");
+            Add("avatars.filter.gradient", "Градиентные", "Gradient");
+            Add("avatars.filter.minimal", "Минимализм", "Minimal");
+            Add("avatars.filter.custom", "Свои", "Custom");
+            Add("avatars.drag_png", "перетащи PNG", "drop PNG");
+            Add("avatars.section.params", "Параметры", "Parameters");
+            Add("avatars.param.animation", "Анимация", "Animation");
+            Add("avatars.param.halo", "Ореол", "Halo");
+            Add("avatars.param.pulse", "Пульс речи", "Speech pulse");
+            Add("avatars.param.pulse.auto", "авто", "auto");
+            Add("avatars.persona.label", "Инструкции аватара", "Avatar instructions");
+            Add("avatars.customization", "Кастомизация", "Customization");
+            Add("avatars.color.primary", "Основной цвет", "Primary color");
+            Add("avatars.color.accent", "Акцент", "Accent");
+            Add("avatars.color.halo", "Ореол", "Halo");
+            Add("avatars.emoji", "Эмодзи", "Emoji");
+            Add("avatars.frame", "Рамка", "Frame");
+
+            Add("themes.page.title", "Темы", "Themes");
+            Add("themes.page.subtitle", "Форма и поведение аватара в интерфейсе. Без смены персоны — только визуальный режим.", "Avatar shape and behavior in UI. Visual mode only, no persona changes.");
+            Add("themes.hero.title", "Визуальная подача Neon", "Neon visual style");
+            Add("themes.hero.subtitle", "Собери внешний вид аватара: форма, halo и breathing. Изменения применяются сразу и сохраняются локально.", "Tune avatar look: shape, halo, and breathing. Changes apply instantly and are saved locally.");
+            Add("themes.section.shape", "Форма и анимация", "Shape and animation");
+            Add("themes.shape.title", "Форма аватара", "Avatar shape");
+            Add("themes.shape.subtitle", "Выбери базовую геометрию для портрета справа в чате.", "Choose base geometry for the portrait on the right.");
+            Add("themes.shape.round", "Круг", "Round");
+            Add("themes.shape.square", "Квадрат", "Square");
+            Add("themes.halo.title", "Halo вокруг аватара", "Halo around avatar");
+            Add("themes.halo.subtitle", "Неоновое свечение за портретом. Добавляет глубину, но не перегружает сцену.", "Neon glow behind portrait. Adds depth without clutter.");
+            Add("themes.breathing.title", "Анимация breathing", "Breathing animation");
+            Add("themes.breathing.subtitle", "Лёгкая пульсация аватара в idle-состоянии.", "Subtle avatar pulsing while idle.");
+            Add("themes.next", "Что дальше", "What next");
+            Add("themes.next.note", "Следующим большим куском сюда можно вынести палитры, реактивные состояния и дополнительные пресеты отображения.", "Next step: move palettes, reactive states, and extra display presets here.");
+
+            Add("tooltip.history.search", "Поиск сессий", "Search sessions");
+            Add("tooltip.chat.new", "Новый чат", "New chat");
+            Add("tooltip.clear", "Очистить", "Clear");
+            Add("tooltip.search", "Поиск", "Search");
+            Add("tooltip.more", "Ещё", "More");
+            Add("tooltip.copy", "Копировать", "Copy");
+            Add("tooltip.regenerate", "Пересоздать", "Regenerate");
+            Add("tooltip.listen", "Озвучить последний ответ", "Speak last response");
+            Add("tooltip.attach", "Добавить токен вложения", "Insert attachment token");
+            Add("tooltip.voice.input", "Голосовой ввод", "Voice input");
+
+            return map;
+        }
 
         private void OnEnable()
         {
@@ -271,6 +380,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             Bind(document.rootVisualElement);
             RegisterCallbacks();
+            _ = BindLocalizationEventsAsync();
             ShowChat();
 
             _ = RefreshAsync();
@@ -282,6 +392,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_voiceBoundToChat && _chatService != null && _voiceOutputManager != null)
                 _voiceOutputManager.UnbindChat(_chatService);
             _voiceBoundToChat = false;
+            UnbindLocalizationEvents();
             _avatarAnimator?.Stop();
             _avatar3DService?.Unload();
             _clearDataConfirmResetSchedule?.Pause();
@@ -361,6 +472,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _messagesList = root.Q<ScrollView>("messages-list");
             _sessionsList = root.Q<ScrollView>("sessions-list");
             _historySessionsList = root.Q<ScrollView>("history-panel-sessions-list");
+            if (_sessionsList != null)
+                _sessionsList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            if (_historySessionsList != null)
+                _historySessionsList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             _historyState = root.Q<Label>("history-panel-state");
             _historySearchBar   = root.Q<VisualElement>("history-search-bar");
             _historySearchInput = root.Q<TextField>("history-search-input");
@@ -397,12 +512,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editMaxTokens = root.Q<TextField>("edit-maxtokens");
             _editTemperature = root.Q<Slider>("edit-temperature");
 
-            _navChatLabel?.Localize("tab.chat");
-            _navAvatarsLabel?.Localize("tab.avatar");
-            _navProvidersLabel?.Localize("settings.providers");
-            _navHistoryLabel?.Localize("chat.history");
-            _navThemesLabel?.Localize("settings.themes");
-            _navSettingsLabel?.Localize("tab.settings");
+            ApplyLocalizedStaticTexts();
 
             // Settings action buttons
             _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
@@ -642,6 +752,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editBaseUrl.UnregisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
             if (_editModel != null)
                 _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
+            if (_settingsLanguage != null)
+                _settingsLanguage.UnregisterCallback<ChangeEvent<string>>(OnSettingsLanguageChanged);
 
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
@@ -706,7 +818,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             SetActiveNav(_navAvatars);
             int total = BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0);
-            SetTopbar("Аватары", $"{total} образов · {AvatarDisplayName(_activeAvatarId)}");
+            SetTopbar(LocalizationExtensions.Get("topbar.avatars.title", "Аватары"),
+                LocalizationExtensions.GetFormat("topbar.avatars.subtitle", "{0} образов · {1}", total, AvatarDisplayName(_activeAvatarId)));
             ShowArea(_avatarsPanel);
         }
 
@@ -716,7 +829,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navProviders);
-            SetTopbar("Провайдеры", "OpenAI-совместимые провайдеры");
+            SetTopbar(LocalizationExtensions.Get("topbar.providers.title", "Провайдеры"), LocalizationExtensions.Get("topbar.providers.subtitle", "OpenAI-совместимые провайдеры"));
             ShowArea(_providersPanel);
             _ = RefreshProvidersListAsync();
         }
@@ -727,23 +840,28 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navHistory);
-            SetTopbar("История чатов", string.IsNullOrWhiteSpace(_sessionSearchQuery) ? "Сохранённые сессии" : $"Поиск: {_sessionSearchQuery}");
+            SetTopbar(LocalizationExtensions.Get("topbar.history.title", "История чатов"),
+                string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                    ? LocalizationExtensions.Get("topbar.history.subtitle.saved", "Сохранённые сессии")
+                    : LocalizationExtensions.GetFormat("topbar.history.subtitle.search", "Поиск: {0}", _sessionSearchQuery));
             ShowArea(_historyPanel);
             _ = RefreshSessionsFromCacheAsync();
         }
 
         private string GetChatTitle()
         {
-            return !string.IsNullOrWhiteSpace(_currentSessionTitle) ? _currentSessionTitle : "Новый чат";
+            return !string.IsNullOrWhiteSpace(_currentSessionTitle)
+                ? _currentSessionTitle
+                : LocalizationExtensions.Get("chat.new", "Новый чат");
         }
 
         private string GetProviderStatusText()
         {
             var provider = _chatService?.CurrentProvider;
-            if (provider == null) return "нет провайдера";
+            if (provider == null) return LocalizationExtensions.Get("provider.status.none", "нет провайдера");
             if (!string.IsNullOrWhiteSpace(provider.defaultModel))
-                return $"{provider.displayName ?? "API"} · {provider.defaultModel}";
-            return provider.displayName ?? "настроен";
+                return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {provider.defaultModel}";
+            return provider.displayName ?? LocalizationExtensions.Get("provider.status.configured", "настроен");
         }
 
         private void ShowThemes()
@@ -752,7 +870,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navThemes);
-            SetTopbar("Темы", "Форма, ореол и дыхание для аватара");
+            SetTopbar(LocalizationExtensions.Get("topbar.themes.title", "Темы"), LocalizationExtensions.Get("topbar.themes.subtitle", "Форма, ореол и дыхание для аватара"));
             ShowArea(_themesPanel);
         }
 
@@ -762,7 +880,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navSettings);
-            SetTopbar("Настройки", string.Empty);
+            SetTopbar(LocalizationExtensions.Get("topbar.settings.title", "Настройки"), string.Empty);
             ShowArea(_settingsPanel);
         }
 
@@ -842,7 +960,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var chat = await GetChatServiceAsync();
                 if (chat == null)
                 {
-                    AddSystemMessage("Приложение не инициализировано.");
+                    AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
                     return;
                 }
 
@@ -868,7 +986,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось отправить сообщение. Попробуй ещё раз.");
+                AddSystemMessage(LocalizationExtensions.Get("system.chat.send_failed", "Не удалось отправить сообщение. Попробуй ещё раз."));
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -900,7 +1018,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _sendButton.SetEnabled(!isSending);
 
             if (_connectionStatus != null)
-                _connectionStatus.text = isSending ? "генерация…" : GetProviderStatusText();
+                _connectionStatus.text = isSending
+                    ? LocalizationExtensions.Get("provider.status.generating", "генерация…")
+                    : GetProviderStatusText();
 
             SetDisplay(_typingIndicator, isSending ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_subtitleBody, isSending ? DisplayStyle.None : DisplayStyle.Flex);
@@ -921,7 +1041,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var chat = await GetChatServiceAsync();
                 if (chat == null)
                 {
-                    AddSystemMessage("Приложение не инициализировано.");
+                    AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
                     return;
                 }
 
@@ -930,7 +1050,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось получить сводку диалога. Попробуй позже.");
+                AddSystemMessage(LocalizationExtensions.Get("system.chat.summary_failed", "Не удалось получить сводку диалога. Попробуй позже."));
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -964,7 +1084,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось выполнить поиск по чатам. Попробуй ещё раз.");
+                AddSystemMessage(LocalizationExtensions.Get("system.chat.search_failed", "Не удалось выполнить поиск по чатам. Попробуй ещё раз."));
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -979,7 +1099,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var messages = _chatService?.CurrentChatViewModel?.Messages;
             if (messages == null || messages.Count == 0)
             {
-                AddSystemMessage("Нет ответа ассистента для озвучивания.");
+                AddSystemMessage(LocalizationExtensions.Get("system.voice.no_assistant_reply", "Нет ответа ассистента для озвучивания."));
                 return;
             }
 
@@ -993,7 +1113,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
             }
 
-            AddSystemMessage("Нет ответа ассистента для озвучивания.");
+            AddSystemMessage(LocalizationExtensions.Get("system.voice.no_assistant_reply", "Нет ответа ассистента для озвучивания."));
         }
 
         private async Task EnsureVoicePipelineAsync(ChatService chat)
@@ -1088,7 +1208,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось добавить вложение к сообщению.");
+                AddSystemMessage(LocalizationExtensions.Get("system.chat.attachment_failed", "Не удалось добавить вложение к сообщению."));
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -1125,6 +1245,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 var app = await GetAppAsync();
                 if (!_isBound || app == null) return;
+                await BindLocalizationEventsAsync();
                 if (_donationService == null)
                     app.Services.TryGet(out _donationService);
                 _settingsDonateBtn?.SetEnabled(_donationService?.IsDonationSupported == true);
@@ -1154,13 +1275,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void SetNoProviderState()
         {
             if (_subtitleBody != null)
-                _subtitleBody.text = "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ.";
+                _subtitleBody.text = LocalizationExtensions.Get("provider.not_configured.hint", "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ.");
             if (_subtitleRole != null)
-                _subtitleRole.text = "Система";
+                _subtitleRole.text = LocalizationExtensions.Get("chat.role.system", "Система");
             if (_sendButton != null)
                 _sendButton.SetEnabled(false);
             if (_connectionStatus != null)
-                _connectionStatus.text = "нет провайдера";
+                _connectionStatus.text = LocalizationExtensions.Get("provider.status.none", "нет провайдера");
         }
 
         private async Task<CompanionApp> GetAppAsync()
@@ -1209,7 +1330,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_sessionsList == null && _historySessionsList == null)
                 return;
 
-            ShowHistoryState("Загрузка истории…", isError: false);
+            ShowHistoryState(LocalizationExtensions.Get("history.loading", "Загрузка истории…"), isError: false);
             var allSessions = await chat.GetAllSessionsAsync();
             var providers = new List<ProviderConfig>();
             var app = await GetAppAsync();
@@ -1267,8 +1388,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (sessions.Count == 0)
             {
                 string emptyText = string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                    ? "Сохранённых сессий пока нет."
-                    : "По этому запросу ничего не найдено.";
+                    ? LocalizationExtensions.Get("history.empty.saved_sessions", "Сохранённых сессий пока нет.")
+                    : LocalizationExtensions.Get("history.empty.search", "По этому запросу ничего не найдено.");
                 var railEmpty = new Label(emptyText);
                 railEmpty.AddToClassList("history__meta");
                 _sessionsList?.Add(railEmpty);
@@ -1277,8 +1398,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 historyEmpty.AddToClassList("history__meta");
                 _historySessionsList?.Add(historyEmpty);
                 ShowHistoryState(string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                    ? "История пуста. Начните чат, чтобы появилась первая сессия."
-                    : "Попробуйте изменить поисковый запрос.", isError: false);
+                    ? LocalizationExtensions.Get("history.empty.first_session", "История пуста. Начните чат, чтобы появилась первая сессия.")
+                    : LocalizationExtensions.Get("history.search.try_another", "Попробуйте изменить поисковый запрос."), isError: false);
                 return;
             }
 
@@ -1345,7 +1466,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (chat == null) return;
             try
             {
-                ShowHistoryState("Загрузка истории…", isError: false);
+                ShowHistoryState(LocalizationExtensions.Get("history.loading", "Загрузка истории…"), isError: false);
                 var allSessions = await chat.GetAllSessionsAsync();
                 var app = await GetAppAsync();
                 var providers = app != null ? await app.ProviderManager.GetAllProvidersAsync() : new List<ProviderConfig>();
@@ -1353,7 +1474,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                ShowHistoryState("Не удалось загрузить историю чатов.", isError: true);
+                ShowHistoryState(LocalizationExtensions.Get("history.load_failed", "Не удалось загрузить историю чатов."), isError: true);
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -1362,8 +1483,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (target == null) return;
             var groupLabel = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                ? "Недавние"
-                : $"Результаты: {sessionsCount}");
+                ? LocalizationExtensions.Get("history.group.recent", "Недавние")
+                : LocalizationExtensions.GetFormat("history.group.results", "Результаты: {0}", sessionsCount));
             groupLabel.AddToClassList("history__group");
             target.Add(groupLabel);
         }
@@ -1389,7 +1510,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             headerRow.AddToClassList("history__row");
 
             var titleLabel = new Label(string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
-                ? "Новый чат"
+                ? LocalizationExtensions.Get("chat.new", "Новый чат")
                 : session.title);
             titleLabel.AddToClassList("history__title");
 
@@ -1430,16 +1551,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         private static string BuildSessionProviderLabel(ChatSession session, List<ProviderConfig> providers)
         {
             if (session == null)
-                return "Провайдер: —";
+                return LocalizationExtensions.Get("history.provider.none", "Провайдер: —");
 
             if (string.IsNullOrWhiteSpace(session.providerId))
-                return "Провайдер: default";
+                return LocalizationExtensions.Get("history.provider.default", "Провайдер: default");
 
             var provider = providers?.Find(p => p != null && p.id == session.providerId);
             if (provider != null && !string.IsNullOrWhiteSpace(provider.displayName))
-                return $"Провайдер: {provider.displayName}";
+                return LocalizationExtensions.GetFormat("history.provider.named", "Провайдер: {0}", provider.displayName);
 
-            return $"Провайдер: {ShortProviderId(session.providerId)}";
+            return LocalizationExtensions.GetFormat("history.provider.named", "Провайдер: {0}", ShortProviderId(session.providerId));
         }
 
         private static string ShortProviderId(string providerId)
@@ -1517,7 +1638,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_subtitleBody == null)
                 return;
 
-            string text = $"Готова помочь. С чего начнём?";
+            string text = LocalizationExtensions.Get("chat.subtitle.ready", "Готова помочь. С чего начнём?");
             if (messages != null)
             {
                 for (int i = messages.Count - 1; i >= 0; i--)
@@ -1569,10 +1690,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             var container = new VisualElement();
             container.AddToClassList("transcript__empty");
 
-            var title = new Label("Пока нет сообщений");
+            var title = new Label(LocalizationExtensions.Get("chat.empty.title", "Пока нет сообщений"));
             title.AddToClassList("transcript__empty-title");
 
-            var body = new Label("Начни диалог ниже, и здесь появится полная история текущей сессии.");
+            var body = new Label(LocalizationExtensions.Get("chat.empty.body", "Начни диалог ниже, и здесь появится полная история текущей сессии."));
             body.AddToClassList("transcript__empty-body");
 
             container.Add(title);
@@ -1667,11 +1788,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             switch (role)
             {
                 case "user":
-                    return "Ты";
+                    return LocalizationExtensions.Get("chat.role.you", "Ты");
                 case "system":
-                    return "Система";
+                    return LocalizationExtensions.Get("chat.role.system", "Система");
                 default:
-                    return "Neon";
+                    return LocalizationExtensions.Get("chat.role.neon", "Neon");
             }
         }
 
@@ -1693,13 +1814,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             string word;
 
             if (mod100 >= 11 && mod100 <= 14)
-                word = "сообщений";
+                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
             else if (mod10 == 1)
-                word = "сообщение";
+                word = LocalizationExtensions.Get("chat.messages.one", "сообщение");
             else if (mod10 >= 2 && mod10 <= 4)
-                word = "сообщения";
+                word = LocalizationExtensions.Get("chat.messages.few", "сообщения");
             else
-                word = "сообщений";
+                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
 
             return $"{count} {word}";
         }
@@ -1727,7 +1848,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _cancelPending = false;
             _editingProviderSource = null;
-            _editingProvider = ProviderConfig.CreateDefault("Новый провайдер", "https://api.openai.com/v1");
+            _editingProvider = ProviderConfig.CreateDefault(LocalizationExtensions.Get("providers.new_provider", "Новый провайдер"), "https://api.openai.com/v1");
             _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
             _editModelUsesCustomMode = false;
             ShowProviderEditPanel();
@@ -1840,12 +1961,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (app == null) return;
 
                 if (_testProviderBtn != null) _testProviderBtn.SetEnabled(false);
-                SetTestRow(null, "Проверяем соединение…");
+                SetTestRow(null, LocalizationExtensions.Get("providers.test.checking", "Проверяем соединение…"));
 
                 var draft = BuildProviderDraftFromEditor();
                 if (draft == null)
                 {
-                    SetTestRow(false, "Не удалось собрать настройки провайдера.");
+                    SetTestRow(false, LocalizationExtensions.Get("providers.test.build_failed", "Не удалось собрать настройки провайдера."));
                     return;
                 }
 
@@ -1854,7 +1975,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                SetTestRow(false, "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа.");
+                SetTestRow(false, LocalizationExtensions.Get("providers.test.failed", "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа."));
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -1879,7 +2000,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (HasUnsavedChanges() && !_cancelPending)
             {
                 _cancelPending = true;
-                SetTestRow(false, "Изменения не сохранены. Нажми «Отмена» ещё раз, чтобы сбросить.");
+                SetTestRow(false, LocalizationExtensions.Get("providers.unsaved.press_cancel_again", "Изменения не сохранены. Нажми «Отмена» ещё раз, чтобы сбросить."));
                 return;
             }
 
@@ -1945,7 +2066,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool CanLeaveProviderEditor()
         {
             if (!HasUnsavedChanges()) return true;
-            SetTestRow(false, "Есть несохранённые изменения. Сначала сохрани или отмени.");
+            SetTestRow(false, LocalizationExtensions.Get("providers.unsaved.save_or_cancel", "Есть несохранённые изменения. Сначала сохрани или отмени."));
             return false;
         }
 
@@ -1953,7 +2074,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_editingProviderSource?.id == target?.id) return true;
             if (!HasUnsavedChanges()) return true;
-            SetTestRow(false, "Есть несохранённые изменения. Сначала сохрани или отмени.");
+            SetTestRow(false, LocalizationExtensions.Get("providers.unsaved.save_or_cancel", "Есть несохранённые изменения. Сначала сохрани или отмени."));
             return false;
         }
 
@@ -2067,7 +2188,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_editingProviderSource == null)
             {
-                _editorProviderStatus.text = "Новый черновик";
+                _editorProviderStatus.text = LocalizationExtensions.Get("providers.editor.status.new_draft", "Новый черновик");
                 _editorProviderStatus.EnableInClassList("editor__status--active", false);
                 _editorProviderStatus.EnableInClassList("editor__status--inactive", false);
                 _editorProviderStatus.EnableInClassList("editor__status--draft", true);
@@ -2076,8 +2197,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool isActive = string.Equals(_chatService?.CurrentProvider?.id, _editingProviderSource.id, StringComparison.Ordinal);
             _editorProviderStatus.text = isActive
-                ? "В редакторе: активный провайдер"
-                : "В редакторе: неактивный провайдер";
+                ? LocalizationExtensions.Get("providers.editor.status.active", "В редакторе: активный провайдер")
+                : LocalizationExtensions.Get("providers.editor.status.inactive", "В редакторе: неактивный провайдер");
             _editorProviderStatus.EnableInClassList("editor__status--active", isActive);
             _editorProviderStatus.EnableInClassList("editor__status--inactive", !isActive);
             _editorProviderStatus.EnableInClassList("editor__status--draft", false);
@@ -2216,7 +2337,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var app = await GetAppAsync();
             if (!_isBound || app == null)
             {
-                _providersList.Add(new Label("Менеджер провайдеров не готов."));
+                _providersList.Add(new Label(LocalizationExtensions.Get("providers.manager.not_ready", "Менеджер провайдеров не готов.")));
                 return;
             }
 
@@ -2226,7 +2347,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (providers.Count == 0)
             {
-                _providersList.Add(new Label("Провайдеры не настроены."));
+                _providersList.Add(new Label(LocalizationExtensions.Get("providers.empty", "Провайдеры не настроены.")));
                 return;
             }
 
@@ -2266,20 +2387,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             var nameRow = new VisualElement();
             nameRow.AddToClassList("provider__name-row");
 
-            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? "Провайдер" : provider.displayName);
+            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? LocalizationExtensions.Get("providers.default_name", "Провайдер") : provider.displayName);
             nameLabel.AddToClassList("provider__name");
             nameRow.Add(nameLabel);
 
             if (isActive)
             {
-                var chip = new Label("активен");
+                var chip = new Label(LocalizationExtensions.Get("providers.chip.active", "активен"));
                 chip.AddToClassList("chip");
                 chip.AddToClassList("chip--accent");
                 nameRow.Add(chip);
             }
             if (isEditing)
             {
-                var chip = new Label("в редакторе");
+                var chip = new Label(LocalizationExtensions.Get("providers.chip.editing", "в редакторе"));
                 chip.AddToClassList("chip");
                 nameRow.Add(chip);
             }
@@ -2296,7 +2417,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var meta = new VisualElement();
             meta.AddToClassList("provider__meta");
-            var metaLabel = new Label("Источник");
+            var metaLabel = new Label(LocalizationExtensions.Get("providers.source", "Источник"));
             metaLabel.AddToClassList("provider__meta-label");
             var metaValue = new Label(BuildProviderLocationText(provider));
             metaValue.AddToClassList("provider__meta-value");
@@ -2305,9 +2426,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var actions = new VisualElement();
             actions.AddToClassList("provider__actions");
-            var useButton = new Button(() => SwitchProvider(provider)) { text = "Использовать" };
-            var editButton = new Button(() => StartEditingProvider(provider)) { text = "Изменить" };
-            var deleteButton = new Button(() => DeleteProvider(provider)) { text = "Удалить" };
+            var useButton = new Button(() => SwitchProvider(provider)) { text = LocalizationExtensions.Get("providers.action.use", "Использовать") };
+            var editButton = new Button(() => StartEditingProvider(provider)) { text = LocalizationExtensions.Get("providers.action.edit", "Изменить") };
+            var deleteButton = new Button(() => DeleteProvider(provider)) { text = LocalizationExtensions.Get("providers.action.delete", "Удалить") };
             useButton.AddToClassList("btn");
             editButton.AddToClassList("btn");
             deleteButton.AddToClassList("btn");
@@ -2343,7 +2464,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             string shortName = BuildProviderShort(provider);
-            string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? "—" : provider.displayName;
+            string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? LocalizationExtensions.Get("common.dash", "—") : provider.displayName;
             string model = string.IsNullOrWhiteSpace(provider.defaultModel) ? string.Empty : provider.defaultModel;
 
             if (_providerShort != null)
@@ -2388,7 +2509,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             string baseUrl = provider?.baseUrl;
             if (string.IsNullOrWhiteSpace(baseUrl))
-                return "неизвестно";
+            return LocalizationExtensions.Get("providers.location.unknown", "неизвестно");
 
             if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
             {
@@ -2397,19 +2518,19 @@ namespace NeonCompanion.Runtime.UI.UITK
                     || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase))
                 {
-                    return "локально";
+                    return LocalizationExtensions.Get("providers.location.local", "локально");
                 }
 
-                return "удалённо";
+                return LocalizationExtensions.Get("providers.location.remote", "удалённо");
             }
 
             if (baseUrl.IndexOf("localhost", StringComparison.OrdinalIgnoreCase) >= 0
                 || baseUrl.IndexOf("127.0.0.1", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return "локально";
+                return LocalizationExtensions.Get("providers.location.local", "локально");
             }
 
-            return "удалённо";
+            return LocalizationExtensions.Get("providers.location.remote", "удалённо");
         }
 
         // ============================================================
@@ -2432,7 +2553,230 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterToggleChanged(_settingsBreathing,   v => { ApplyBreathingAnimation(v); SaveSettings(); });
 
             if (_settingsLanguage != null)
-                _settingsLanguage.RegisterCallback<ChangeEvent<string>>(_ => SaveSettings());
+                _settingsLanguage.RegisterCallback<ChangeEvent<string>>(OnSettingsLanguageChanged);
+        }
+
+        private void OnSettingsLanguageChanged(ChangeEvent<string> evt)
+        {
+            OnLanguageSettingChanged(evt?.newValue);
+        }
+
+        private void ApplyLocalizedStaticTexts()
+        {
+            _navChatLabel?.Localize("tab.chat");
+            _navAvatarsLabel?.Localize("tab.avatar");
+            _navProvidersLabel?.Localize("settings.providers");
+            _navHistoryLabel?.Localize("chat.history");
+            _navThemesLabel?.Localize("settings.themes");
+            _navSettingsLabel?.Localize("tab.settings");
+            ApplyStaticTemplateLocalization();
+        }
+
+        private void OnLanguageSettingChanged(string selectedValue)
+        {
+            string languageCode = ResolveLanguageCode(selectedValue);
+            _ = ApplyLanguageRuntimeAsync(languageCode);
+            SaveSettings();
+        }
+
+        private async Task ApplyLanguageRuntimeAsync(string languageCode)
+        {
+            var app = await GetAppAsync();
+            if (app == null)
+                return;
+
+            if (app.Services.TryGet<ILocalizationService>(out var localization) && localization != null)
+            {
+                localization.SetLanguage(languageCode);
+                LocalizationExtensions.SetLocalizationService(localization);
+                await RefreshLocalizedUiAsync();
+            }
+        }
+
+        private async Task BindLocalizationEventsAsync()
+        {
+            var app = await GetAppAsync();
+            if (app == null)
+                return;
+
+            if (!app.Services.TryGet<ILocalizationService>(out var localization) || localization == null)
+                return;
+
+            if (ReferenceEquals(_localizationService, localization))
+                return;
+
+            UnbindLocalizationEvents();
+            _localizationService = localization;
+            LocalizationExtensions.SetLocalizationService(localization);
+            _localizationService.LanguageChanged += OnLocalizationLanguageChanged;
+        }
+
+        private void UnbindLocalizationEvents()
+        {
+            if (_localizationService == null)
+                return;
+
+            _localizationService.LanguageChanged -= OnLocalizationLanguageChanged;
+            _localizationService = null;
+        }
+
+        private void OnLocalizationLanguageChanged()
+        {
+            if (!isActiveAndEnabled || !_isBound)
+                return;
+
+            _ = RefreshLocalizedUiAsync();
+        }
+
+        private async Task RefreshLocalizedUiAsync()
+        {
+            if (!_isBound || _isRefreshingLocalizedUi)
+                return;
+
+            _isRefreshingLocalizedUi = true;
+            try
+            {
+                ApplyLocalizedStaticTexts();
+                ApplyStaticTemplateLocalization();
+
+                if (_settingsLanguage != null)
+                {
+                    string currentLanguage = _localizationService?.CurrentLanguage ?? ResolveLanguageCode(_settingsLanguage.value);
+                    _settingsLanguage.SetValueWithoutNotify(currentLanguage == "en"
+                        ? LocalizationExtensions.Get("settings.language.english", "English")
+                        : LocalizationExtensions.Get("settings.language.russian", "Русский"));
+                }
+
+                if (_previewPersona != null)
+                    _previewPersona.text = AvatarPersonaText(_activeAvatarId);
+                UpdatePersonaStateUi(_activeAvatarId);
+                UpdateAvatarActionButtons(_activeAvatarId);
+                RefreshBuiltInAvatarTileLabels();
+                UpdateAvatarFilterCounts();
+                UpdateClearDataButtonState();
+
+                var app = await GetAppAsync();
+                if (!_isBound)
+                    return;
+
+                if (app != null)
+                    RefreshPluginStatus(app);
+
+                var chat = await GetChatServiceAsync();
+                if (!_isBound)
+                    return;
+
+                if (chat != null)
+                {
+                    RenderMessages(chat.CurrentChatViewModel?.Messages);
+                    await LoadSessionsAsync(chat);
+                }
+
+                await RefreshProvidersListAsync();
+                UpdateEditorStatus();
+                UpdateCurrentTopbarTexts();
+            }
+            finally
+            {
+                _isRefreshingLocalizedUi = false;
+            }
+        }
+
+        private void UpdateCurrentTopbarTexts()
+        {
+            if (_chatPanel != null && _chatPanel.style.display != DisplayStyle.None)
+            {
+                SetTopbar(GetChatTitle(), _chatSubtitle);
+                return;
+            }
+
+            if (_avatarsPanel != null && _avatarsPanel.style.display != DisplayStyle.None)
+            {
+                int total = BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0);
+                SetTopbar(LocalizationExtensions.Get("topbar.avatars.title", "Аватары"),
+                    LocalizationExtensions.GetFormat("topbar.avatars.subtitle", "{0} образов · {1}", total, AvatarDisplayName(_activeAvatarId)));
+                return;
+            }
+
+            if (_providersPanel != null && _providersPanel.style.display != DisplayStyle.None)
+            {
+                SetTopbar(LocalizationExtensions.Get("topbar.providers.title", "Провайдеры"), LocalizationExtensions.Get("topbar.providers.subtitle", "OpenAI-совместимые провайдеры"));
+                return;
+            }
+
+            if (_historyPanel != null && _historyPanel.style.display != DisplayStyle.None)
+            {
+                SetTopbar(LocalizationExtensions.Get("topbar.history.title", "История чатов"),
+                    string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                        ? LocalizationExtensions.Get("topbar.history.subtitle.saved", "Сохранённые сессии")
+                        : LocalizationExtensions.GetFormat("topbar.history.subtitle.search", "Поиск: {0}", _sessionSearchQuery));
+                return;
+            }
+
+            if (_themesPanel != null && _themesPanel.style.display != DisplayStyle.None)
+            {
+                SetTopbar(LocalizationExtensions.Get("topbar.themes.title", "Темы"), LocalizationExtensions.Get("topbar.themes.subtitle", "Форма, ореол и дыхание для аватара"));
+                return;
+            }
+
+            if (_settingsPanel != null && _settingsPanel.style.display != DisplayStyle.None)
+                SetTopbar(LocalizationExtensions.Get("topbar.settings.title", "Настройки"), string.Empty);
+        }
+
+        private void ApplyStaticTemplateLocalization()
+        {
+            if (_root == null)
+                return;
+
+            var labels = _root.Query<Label>().ToList();
+            for (int i = 0; i < labels.Count; i++)
+            {
+                string localized = ResolveStaticTemplateText(labels[i].text);
+                if (!string.Equals(localized, labels[i].text, StringComparison.Ordinal))
+                    labels[i].text = localized;
+            }
+
+            var buttons = _root.Query<Button>().ToList();
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                string localizedText = ResolveStaticTemplateText(buttons[i].text);
+                if (!string.Equals(localizedText, buttons[i].text, StringComparison.Ordinal))
+                    buttons[i].text = localizedText;
+
+                string localizedTooltip = ResolveStaticTemplateText(buttons[i].tooltip);
+                if (!string.Equals(localizedTooltip, buttons[i].tooltip, StringComparison.Ordinal))
+                    buttons[i].tooltip = localizedTooltip;
+            }
+
+            var foldouts = _root.Query<Foldout>().ToList();
+            for (int i = 0; i < foldouts.Count; i++)
+            {
+                string localized = ResolveStaticTemplateText(foldouts[i].text);
+                if (!string.Equals(localized, foldouts[i].text, StringComparison.Ordinal))
+                    foldouts[i].text = localized;
+            }
+        }
+
+        private static string ResolveStaticTemplateText(string currentText)
+        {
+            if (string.IsNullOrWhiteSpace(currentText))
+                return currentText;
+
+            string candidate = currentText.Trim();
+            if (!StaticTemplateTextToKey.TryGetValue(candidate, out var key))
+                return currentText;
+
+            return LocalizationExtensions.Get(key, currentText);
+        }
+
+        private static string ResolveLanguageCode(string languageValue)
+        {
+            if (string.IsNullOrWhiteSpace(languageValue))
+                return "ru";
+
+            return languageValue.Trim().Equals("english", StringComparison.OrdinalIgnoreCase)
+                ? "en"
+                : "ru";
         }
 
         private static void RegisterToggleChanged(Toggle toggle, Action<bool> handler)
@@ -2468,7 +2812,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _settingsBreathing?.SetValueWithoutNotify(s.breathingAnimation);
 
                 if (_settingsLanguage != null)
-                    _settingsLanguage.SetValueWithoutNotify(s.language == "en" ? "English" : "Русский");
+                    _settingsLanguage.SetValueWithoutNotify(s.language == "en"
+                        ? LocalizationExtensions.Get("settings.language.english", "English")
+                        : LocalizationExtensions.Get("settings.language.russian", "Русский"));
+
+                await ApplyLanguageRuntimeAsync(s.language == "en" ? "en" : "ru");
 
                 if (_settingsStoragePath != null)
                     _settingsStoragePath.text = Application.persistentDataPath;
@@ -2515,8 +2863,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (!app.Services.TryGet<PluginManager>(out var pluginManager) || pluginManager == null)
             {
-                if (_settingsPluginsSummary != null) _settingsPluginsSummary.text = "не инициализирован";
-                if (_settingsPluginsConfig != null) _settingsPluginsConfig.text = "нет данных";
+                if (_settingsPluginsSummary != null) _settingsPluginsSummary.text = LocalizationExtensions.Get("plugins.status.not_initialized", "не инициализирован");
+                if (_settingsPluginsConfig != null) _settingsPluginsConfig.text = LocalizationExtensions.Get("plugins.status.no_data", "нет данных");
                 _settingsPluginsList?.Clear();
                 return;
             }
@@ -2545,7 +2893,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_settingsPluginsSummary != null)
                 _settingsPluginsSummary.text = $"loaded={loaded} failed={failed} skipped={skipped}";
             if (_settingsPluginsConfig != null)
-                _settingsPluginsConfig.text = pluginManager.HasAnyPluginConfigFiles ? "обнаружены" : "не найдены";
+                _settingsPluginsConfig.text = pluginManager.HasAnyPluginConfigFiles
+                    ? LocalizationExtensions.Get("plugins.config.found", "обнаружены")
+                    : LocalizationExtensions.Get("plugins.config.not_found", "не найдены");
 
             if (_settingsPluginsList == null)
                 return;
@@ -2553,7 +2903,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsPluginsList.Clear();
             if (plugins.Count == 0)
             {
-                var empty = new Label("Плагины не найдены в persistentDataPath/Plugins.");
+                var empty = new Label(LocalizationExtensions.Get("plugins.empty", "Плагины не найдены в persistentDataPath/Plugins."));
                 empty.AddToClassList("settings-plugin-item");
                 _settingsPluginsList.Add(empty);
                 return;
@@ -2587,7 +2937,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsMaskLogs != null)      s.maskLogs            = _settingsMaskLogs.value;
                 if (_settingsShowHalo != null)      s.showHalo            = _settingsShowHalo.value;
                 if (_settingsBreathing != null)     s.breathingAnimation  = _settingsBreathing.value;
-                if (_settingsLanguage != null)      s.language            = _settingsLanguage.value == "English" ? "en" : "ru";
+                if (_settingsLanguage != null)      s.language            = ResolveLanguageCode(_settingsLanguage.value);
 
                 s.avatarShape    = _avatarShape;
                 s.activeAvatarId = _activeAvatarId;
@@ -2834,7 +3184,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0)
             {
-                AddSystemMessage("Встроенные аватары нельзя удалить.");
+                AddSystemMessage(LocalizationExtensions.Get("avatar.delete.builtin_forbidden", "Встроенные аватары нельзя удалить."));
                 return;
             }
 
@@ -2866,11 +3216,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 await SyncActiveAvatarSystemPromptAsync(app);
 
-                AddSystemMessage($"Аватар «{removedName}» удалён.");
+                AddSystemMessage(LocalizationExtensions.GetFormat("avatar.delete.success", "Аватар «{0}» удалён.", removedName));
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось удалить аватар.");
+                AddSystemMessage(LocalizationExtensions.Get("avatar.delete.failed", "Не удалось удалить аватар."));
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -3046,7 +3396,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ApplyAvatarCustomizationVisual(AvatarCustomizationData data)
         {
-            var effective = CloneCustomization(data);
+            var effective = CloneCustomization(data) ?? new AvatarCustomizationData();
             if (_avatarArt != null)
                 _avatarArt.style.unityBackgroundImageTintColor = new StyleColor(BuildTintColor(effective.PrimaryColor, effective.Saturation, effective.Brightness));
             if (_previewHero != null)
@@ -3334,14 +3684,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (profile != null && profile.is3D)
             {
                 if (profile.modelAnimationClips == null || profile.modelAnimationClips.Count == 0)
-                    return "3D модель";
+                    return LocalizationExtensions.Get("avatar.animation.3d_model", "3D модель");
 
-                return "3D анимации: " + string.Join(", ", profile.modelAnimationClips);
+                return LocalizationExtensions.GetFormat("avatar.animation.3d_animations", "3D анимации: {0}", string.Join(", ", profile.modelAnimationClips));
             }
 
             var clips = profile?.animationClips;
             if (clips == null || clips.Count == 0)
-                return "Статичное изображение";
+                return LocalizationExtensions.Get("avatar.animation.static", "Статичное изображение");
 
             var parts = new List<string>();
             for (int i = 0; i < clips.Count; i++)
@@ -3354,7 +3704,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 parts.Add($"{clip.clipName} · {fps:0.#}fps");
             }
 
-            return parts.Count > 0 ? string.Join(", ", parts) : "Статичное изображение";
+            return parts.Count > 0 ? string.Join(", ", parts) : LocalizationExtensions.Get("avatar.animation.static", "Статичное изображение");
         }
 
         private void UpdateAvatarActionButtons(string avatarId)
@@ -3378,7 +3728,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return stored.systemPrompt;
 
             if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
-                return meta.PersonaRu;
+                return LocalizationExtensions.Get(meta.PersonaKey, meta.PersonaFallback);
 
             return string.Empty;
         }
@@ -3427,9 +3777,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string AvatarStyleTag(string avatarId)
         {
             if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
-                return meta.StyleTagRu;
+                return LocalizationExtensions.Get(meta.StyleTagKey, meta.StyleTagFallback);
 
-            return "пользовательский";
+            return LocalizationExtensions.Get("avatar.style.custom", "пользовательский");
         }
 
         private void UpdatePersonaStateUi(string avatarId)
@@ -3442,20 +3792,20 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (hasOverride)
             {
-                _previewPersonaStateBadge.text = "Локальные инструкции";
-                _previewPersonaStateHelp.text = "Сейчас используется сохранённый локально system prompt для этого аватара.";
+                _previewPersonaStateBadge.text = LocalizationExtensions.Get("avatar.persona.state.local.badge", "Локальные инструкции");
+                _previewPersonaStateHelp.text = LocalizationExtensions.Get("avatar.persona.state.local.help", "Сейчас используется сохранённый локально system prompt для этого аватара.");
                 return;
             }
 
             if (isCustom)
             {
-                _previewPersonaStateBadge.text = "Инструкции не заданы";
-                _previewPersonaStateHelp.text = "Для этого пользовательского аватара system prompt сейчас не применяется.";
+                _previewPersonaStateBadge.text = LocalizationExtensions.Get("avatar.persona.state.missing.badge", "Инструкции не заданы");
+                _previewPersonaStateHelp.text = LocalizationExtensions.Get("avatar.persona.state.missing.help", "Для этого пользовательского аватара system prompt сейчас не применяется.");
                 return;
             }
 
-            _previewPersonaStateBadge.text = "Встроенные инструкции";
-            _previewPersonaStateHelp.text = "Сейчас используются встроенные инструкции по умолчанию.";
+            _previewPersonaStateBadge.text = LocalizationExtensions.Get("avatar.persona.state.builtin.badge", "Встроенные инструкции");
+            _previewPersonaStateHelp.text = LocalizationExtensions.Get("avatar.persona.state.builtin.help", "Сейчас используются встроенные инструкции по умолчанию.");
         }
 
         private string AvatarPersonaText(string avatarId)
@@ -3465,12 +3815,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return stored.systemPrompt;
 
             if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
-                return meta.PersonaRu;
+                return LocalizationExtensions.Get(meta.PersonaKey, meta.PersonaFallback);
 
             if (GetCustomProfile(avatarId) != null)
-                return "Инструкции не заданы. Нажми «Изменить», чтобы добавить текст для system prompt.";
+                return LocalizationExtensions.Get("avatar.persona.custom.missing", "Инструкции не заданы. Нажми «Изменить», чтобы добавить текст для system prompt.");
 
-            return BuiltInAvatarMetaById["neon"].PersonaRu;
+            var fallbackMeta = BuiltInAvatarMetaById["neon"];
+            return LocalizationExtensions.Get(fallbackMeta.PersonaKey, fallbackMeta.PersonaFallback);
         }
 
         private string AvatarDisplayName(string avatarId)
@@ -3480,8 +3831,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return custom.name;
 
             if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
-                return meta.DisplayNameRu;
-            return BuiltInAvatarMetaById["neon"].DisplayNameRu;
+                return LocalizationExtensions.Get(meta.DisplayNameKey, meta.DisplayNameFallback);
+            var fallbackMeta = BuiltInAvatarMetaById["neon"];
+            return LocalizationExtensions.Get(fallbackMeta.DisplayNameKey, fallbackMeta.DisplayNameFallback);
         }
 
         private void RefreshCustomAvatarGallery(CompanionApp app)
@@ -3751,17 +4103,30 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private readonly struct BuiltInAvatarMeta
         {
-            public BuiltInAvatarMeta(string displayNameRu, string styleTagRu, string personaRu, AvatarFilter filter)
+            public BuiltInAvatarMeta(
+                string displayNameKey,
+                string displayNameFallback,
+                string styleTagKey,
+                string styleTagFallback,
+                string personaKey,
+                string personaFallback,
+                AvatarFilter filter)
             {
-                DisplayNameRu = displayNameRu;
-                StyleTagRu = styleTagRu;
-                PersonaRu = personaRu;
+                DisplayNameKey = displayNameKey;
+                DisplayNameFallback = displayNameFallback;
+                StyleTagKey = styleTagKey;
+                StyleTagFallback = styleTagFallback;
+                PersonaKey = personaKey;
+                PersonaFallback = personaFallback;
                 Filter = filter;
             }
 
-            public string DisplayNameRu { get; }
-            public string StyleTagRu { get; }
-            public string PersonaRu { get; }
+            public string DisplayNameKey { get; }
+            public string DisplayNameFallback { get; }
+            public string StyleTagKey { get; }
+            public string StyleTagFallback { get; }
+            public string PersonaKey { get; }
+            public string PersonaFallback { get; }
             public AvatarFilter Filter { get; }
         }
 
@@ -3875,13 +4240,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnSettingsGitHubClicked()
         {
             OpenExternalUrl("https://github.com/isteelfelix/neon-companion");
-            AddSystemMessage("Открыт GitHub репозитория.");
+            AddSystemMessage(LocalizationExtensions.Get("system.open.github", "Открыт GitHub репозитория."));
         }
 
         private void OnSettingsDocsClicked()
         {
             OpenExternalUrl("https://github.com/isteelfelix/neon-companion/tree/main/docs");
-            AddSystemMessage("Открыта папка docs.");
+            AddSystemMessage(LocalizationExtensions.Get("system.open.docs", "Открыта папка docs."));
         }
 
         private void OnSettingsDonateClicked()
@@ -3889,11 +4254,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_donationService?.IsDonationSupported == true)
             {
                 _donationService.OpenDonationPage();
-                AddSystemMessage("Открыта страница поддержки проекта.");
+                AddSystemMessage(LocalizationExtensions.Get("system.open.donate", "Открыта страница поддержки проекта."));
                 return;
             }
 
-            AddSystemMessage("Поддержка проекта пока недоступна.");
+            AddSystemMessage(LocalizationExtensions.Get("system.donate.unavailable", "Поддержка проекта пока недоступна."));
         }
 
         private static void OpenExternalUrl(string url)
@@ -3915,11 +4280,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string json = JsonUtility.ToJson(new ChatSessionCollection { items = sessions }, true);
                 string path = System.IO.Path.Combine(Application.persistentDataPath, $"export_{DateTime.Now:yyyyMMdd_HHmmss}.json");
                 System.IO.File.WriteAllText(path, json);
+                string fileName = System.IO.Path.GetFileName(path);
 
                 if (_subtitleBody != null)
-                    _subtitleBody.text = $"Экспортировано: {System.IO.Path.GetFileName(path)}";
+                    _subtitleBody.text = LocalizationExtensions.GetFormat("system.export.subtitle", "Экспортировано: {0}", fileName);
 
-                AddSystemMessage($"Чаты экспортированы в {System.IO.Path.GetFileName(path)}.");
+                AddSystemMessage(LocalizationExtensions.GetFormat("system.export.chats", "Чаты экспортированы в {0}.", fileName));
                 OpenPath(path);
             }
             catch (Exception ex)
@@ -3937,7 +4303,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _clearDataConfirmExpiresAtMs = nowMs + 7000;
                 ArmClearDataConfirmationReset();
                 UpdateClearDataButtonState();
-                AddSystemMessage("Нажми «Подтвердить» ещё раз в течение 7 секунд, чтобы удалить все данные.");
+                AddSystemMessage(LocalizationExtensions.Get("system.clear.confirm_hint", "Нажми «Подтвердить» ещё раз в течение 7 секунд, чтобы удалить все данные."));
                 return;
             }
 
@@ -3980,7 +4346,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             bool armed = _clearDataConfirmPending;
 
             if (_settingsClearBtnText != null)
-                _settingsClearBtnText.text = armed ? "Подтвердить" : "Очистить";
+                _settingsClearBtnText.text = armed
+                    ? LocalizationExtensions.Get("settings.clear.confirm", "Подтвердить")
+                    : LocalizationExtensions.Get("chat.clear", "Очистить");
 
             _settingsClearBtn?.EnableInClassList("btn--danger-armed", armed);
         }
@@ -4014,7 +4382,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetNoProviderState();
                 if (_sessionsList != null) _sessionsList.Clear();
                 if (_historySessionsList != null) _historySessionsList.Clear();
-                ShowHistoryState("История пуста. Начните чат, чтобы появилась первая сессия.", isError: false);
+                ShowHistoryState(LocalizationExtensions.Get("history.empty.first_session", "История пуста. Начните чат, чтобы появилась первая сессия."), isError: false);
                 if (_navChatCount != null) _navChatCount.text = "0";
                 if (_navProvidersCount != null) _navProvidersCount.text = "0";
             }
@@ -4040,7 +4408,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
                 {
                     GUIUtility.systemCopyBuffer = msg.content;
-                    AddSystemMessage("Скопировано в буфер обмена.");
+                    AddSystemMessage(LocalizationExtensions.Get("system.copy.success", "Скопировано в буфер обмена."));
                     return;
                 }
             }
@@ -4098,7 +4466,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось пересоздать последний ответ.");
+                AddSystemMessage(LocalizationExtensions.Get("system.regenerate.failed", "Не удалось пересоздать последний ответ."));
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -4127,7 +4495,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var imported = JsonUtility.FromJson<ProviderConfigCollection>(json);
                 if (imported?.items == null || imported.items.Count == 0)
                 {
-                    AddSystemMessage("Файл не содержит провайдеров.");
+                    AddSystemMessage(LocalizationExtensions.Get("providers.import.empty", "Файл не содержит провайдеров."));
                     return;
                 }
 
@@ -4138,11 +4506,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 await RefreshProvidersListAsync();
-                AddSystemMessage($"Импортировано: {imported.items.Count} провайдер(ов).");
+                AddSystemMessage(LocalizationExtensions.GetFormat("providers.import.success", "Импортировано: {0} провайдер(ов).", imported.items.Count));
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось импортировать провайдеров из файла.");
+                AddSystemMessage(LocalizationExtensions.Get("providers.import.failed", "Не удалось импортировать провайдеров из файла."));
                 NeonLogger.LogError(ex.ToString());
             }
         }
@@ -4212,12 +4580,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SelectAvatar(profile.id);
 
                 AddSystemMessage(is3D
-                    ? $"3D аватар «{fileName}» загружен."
-                    : $"Аватар «{fileName}» загружен.");
+                    ? LocalizationExtensions.GetFormat("avatar.upload.success.3d", "3D аватар «{0}» загружен.", fileName)
+                    : LocalizationExtensions.GetFormat("avatar.upload.success", "Аватар «{0}» загружен.", fileName));
             }
             catch (Exception ex)
             {
-                AddSystemMessage("Не удалось загрузить аватар.");
+                AddSystemMessage(LocalizationExtensions.Get("avatar.upload.failed", "Не удалось загрузить аватар."));
                 NeonLogger.LogError(ex.ToString());
             }
         }
