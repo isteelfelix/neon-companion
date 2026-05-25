@@ -16,7 +16,7 @@ This project is intended as a personal companion shell for self-hosted agents, w
 - ✅ Multiple providers support + switching
 - ✅ Chat sessions and history
 - ✅ Connection to self-hosted agents (tested with Hermes + Grok)
-- 🚧 2D avatar rendering and reactions (in progress)
+- 🚧 2D avatar rendering with sprite sheet animations (in progress)
 - 🚧 Cross-platform builds (Desktop + Mobile)
 
 ## Features (MVP)
@@ -48,6 +48,76 @@ This project is intended as a personal companion shell for self-hosted agents, w
 
 4. Build the project for your target platform (Desktop / Android / iOS).
 
+## Versioning
+
+Project version is tracked in the root [`VERSION`](VERSION) file and follows semantic versioning (`MAJOR.MINOR.PATCH`).
+
+Current version: `0.2.0` (post-M2, pre-M4).
+
+## Build From CLI
+
+The project includes a Unity batch build pipeline:
+
+- Unity entrypoint: `BuildScript.Build`
+- Script wrapper: `scripts/build.sh`
+- Output directory: `Builds/`
+
+### Requirements
+
+- Unity 2022.3+ installed
+- Unity CLI binary available as `UNITY_PATH` env var or passed via `--unity`
+
+### Build Commands
+
+Build Windows x64:
+
+```bash
+scripts/build.sh --target windows --version 0.2.0 --unity "/path/to/Unity"
+```
+
+Build Linux x64:
+
+```bash
+scripts/build.sh --target linux --version 0.2.0 --unity "/path/to/Unity"
+```
+
+Build Android APK:
+
+```bash
+scripts/build.sh --target android --version 0.2.0 --unity "/path/to/Unity"
+```
+
+The script prints the built artifact path on success.
+
+Build name format includes version and commit hash:
+
+`<product>-v<version>-<commit>-<target>`
+
+## Release Process
+
+Use `scripts/release.sh` to produce all platform builds and publish a GitHub Release using `gh`.
+
+```bash
+scripts/release.sh 0.2.0 --unity "/path/to/Unity"
+```
+
+What it does:
+
+1. Builds `windows`, `linux`, and `android` artifacts.
+2. Creates annotated tag `v<version>`.
+3. Generates release notes from commits since previous tag (or a default note for first release).
+4. Creates GitHub release and uploads artifacts.
+
+Optional custom release notes:
+
+```bash
+scripts/release.sh 0.2.0 --unity "/path/to/Unity" --notes /path/to/notes.md
+```
+
+GitHub Releases:
+
+- https://github.com/isteelfelix/neon-companion/releases
+
 ## Connecting Your Own Agent
 
 The app can connect to any OpenAI-compatible endpoint.
@@ -67,10 +137,12 @@ More detailed information is available in the `docs/` folder:
 - [Architecture](docs/01_Architecture.md)
 - [MVP Features](docs/02_Features_MVP.md)
 - [API Integration](docs/03_API_Integration.md)
+- [Avatar System](docs/04_Avatar_System.md)
 - [Data Models](docs/06_Data_Model.md)
 - [Cross-Platform](docs/07_CrossPlatform.md)
 - [Build & Deploy](docs/08_Build_and_Deploy.md)
 - [Roadmap](docs/09_Roadmap.md)
+- [Feature Tracker](docs/12_Feature_Tracker.md)
 
 ## Contributing
 

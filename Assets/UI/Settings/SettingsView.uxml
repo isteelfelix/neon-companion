@@ -52,6 +52,14 @@
                     </ui:VisualElement>
                     <ui:Toggle name="settings-system-prompt" class="settings-toggle" value="true" />
                 </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Voice I/O" class="settings-row__name" />
+                        <ui:Label text="Голосовой ввод и озвучивание ответов." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-voice-io" class="settings-toggle" value="true" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- ===== Security ===== -->
@@ -114,6 +122,24 @@
                         <ui:Label text="Очистить" />
                     </ui:Button>
                 </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- ===== Plugins ===== -->
+            <ui:VisualElement class="settings-card">
+                <ui:VisualElement class="settings-card__head">
+                    <ui:VisualElement class="icon icon--bolt settings-card__icon" />
+                    <ui:Label text="Плагины" class="settings-card__title" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row settings-row--compact">
+                    <ui:Label text="Статус загрузки" class="settings-row__name" />
+                    <ui:Label name="settings-plugins-summary" text="—" class="settings-row__value-mono" />
+                </ui:VisualElement>
+                <ui:VisualElement class="settings-row settings-row--compact">
+                    <ui:Label text="Конфиги плагинов" class="settings-row__name" />
+                    <ui:Label name="settings-plugins-config" text="—" class="settings-row__value-mono" />
+                </ui:VisualElement>
+                <ui:VisualElement name="settings-plugins-list" class="settings-plugins-list" />
             </ui:VisualElement>
 
             <!-- ===== About ===== -->

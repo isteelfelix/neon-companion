@@ -121,3 +121,13 @@ HermesConfig*
 *APIKey*
 NeonCompanion.Editor.csproj.lscache
 .gitignore
+
+# Local build/release outputs
+/Builds/
+/Temp/
+/UserSettings/
+*.exe
+*.x86_64
+*.apk
+.voice-brief.txt
+.brief-*.txt

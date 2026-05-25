@@ -1,0 +1,238 @@
+using System;
+using System.Runtime.InteropServices;
+using NeonCompanion.Runtime.Core;
+using UnityEngine;
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+using UnityEngine.Windows.Speech;
+#endif
+
+namespace NeonCompanion.Runtime.Voice
+{
+    public sealed class WebSpeechBridge : MonoBehaviour, IVoiceService
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")] private static extern int NeonWebSpeech_IsAvailable();
+        [DllImport("__Internal")] private static extern void NeonWebSpeech_StartRecognition(string gameObjectName);
+        [DllImport("__Internal")] private static extern void NeonWebSpeech_StopRecognition();
+        [DllImport("__Internal")] private static extern void NeonWebSpeech_Speak(string text, string gameObjectName);
+        [DllImport("__Internal")] private static extern void NeonWebSpeech_StopSpeaking();
+#endif
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        private DictationRecognizer _dictation;
+#endif
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private AndroidJavaObject _androidTts;
+#endif
+
+        private bool _isRecording;
+        private bool _isSpeaking;
+        private bool _isAvailable;
+
+        public bool IsRecording => _isRecording;
+        public bool IsSpeaking => _isSpeaking;
+        public bool IsAvailable => _isAvailable;
+
+        public event Action<string> OnSpeechRecognized;
+        public event Action OnPlaybackComplete;
+
+        private void Awake()
+        {
+            _isAvailable = InitializePlatform();
+            if (!_isAvailable)
+                NeonLogger.Log("Voice I/O unavailable on this platform. Voice will be disabled.");
+        }
+
+        private void OnDestroy()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            if (_dictation != null)
+            {
+                if (_dictation.Status == SpeechSystemStatus.Running)
+                    _dictation.Stop();
+                _dictation.Dispose();
+                _dictation = null;
+            }
+#endif
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (_androidTts != null)
+            {
+                _androidTts.Call<int>("stop");
+                _androidTts.Call("shutdown");
+                _androidTts.Dispose();
+                _androidTts = null;
+            }
+#endif
+        }
+
+        public void StartRecording()
+        {
+            if (!_isAvailable || _isRecording)
+                return;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            NeonWebSpeech_StartRecognition(gameObject.name);
+            _isRecording = true;
+#elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            if (_dictation == null)
+                return;
+            if (_dictation.Status != SpeechSystemStatus.Running)
+                _dictation.Start();
+            _isRecording = true;
+#else
+            NeonLogger.Log("Speech recognition is not supported on this platform backend.");
+#endif
+        }
+
+        public byte[] StopRecording()
+        {
+            if (!_isRecording)
+                return null;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            NeonWebSpeech_StopRecognition();
+#elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            if (_dictation != null && _dictation.Status == SpeechSystemStatus.Running)
+                _dictation.Stop();
+#endif
+            _isRecording = false;
+            return null;
+        }
+
+        public void Speak(string text)
+        {
+            if (!_isAvailable || string.IsNullOrWhiteSpace(text))
+            {
+                OnPlaybackComplete?.Invoke();
+                return;
+            }
+
+            _isSpeaking = true;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            NeonWebSpeech_Speak(text, gameObject.name);
+#elif UNITY_ANDROID && !UNITY_EDITOR
+            if (_androidTts == null)
+            {
+                _isSpeaking = false;
+                OnPlaybackComplete?.Invoke();
+                return;
+            }
+            string utteranceId = Guid.NewGuid().ToString("N");
+            _androidTts.Call<int>("speak", text, 0, null, utteranceId);
+            float duration = Mathf.Clamp(0.45f + (text.Length * 0.055f), 0.5f, 12f);
+            StartCoroutine(FinishSpeakAfter(duration));
+#else
+            NeonLogger.Log("TTS is not supported on this platform backend.");
+            _isSpeaking = false;
+            OnPlaybackComplete?.Invoke();
+#endif
+        }
+
+        public void StopSpeaking()
+        {
+            if (!_isSpeaking)
+                return;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            NeonWebSpeech_StopSpeaking();
+#elif UNITY_ANDROID && !UNITY_EDITOR
+            _androidTts?.Call<int>("stop");
+#endif
+            _isSpeaking = false;
+            OnPlaybackComplete?.Invoke();
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private System.Collections.IEnumerator FinishSpeakAfter(float seconds)
+        {
+            yield return new WaitForSecondsRealtime(seconds);
+            _isSpeaking = false;
+            OnPlaybackComplete?.Invoke();
+        }
+#endif
+
+        private bool InitializePlatform()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return NeonWebSpeech_IsAvailable() == 1;
+#elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            return InitializeWindowsDictation();
+#elif UNITY_ANDROID && !UNITY_EDITOR
+            return InitializeAndroidTts();
+#else
+            return false;
+#endif
+        }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        private bool InitializeWindowsDictation()
+        {
+            try
+            {
+                _dictation = new DictationRecognizer();
+                _dictation.DictationResult += OnWindowsDictationResult;
+                _dictation.DictationComplete += _ => _isRecording = false;
+                _dictation.DictationError += (_, error) =>
+                {
+                    NeonLogger.LogError($"Dictation error: {error}");
+                    _isRecording = false;
+                };
+                return true;
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError($"Failed to initialize Windows dictation: {ex}");
+                return false;
+            }
+        }
+
+        private void OnWindowsDictationResult(string text, ConfidenceLevel _)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            OnSpeechRecognized?.Invoke(text.Trim());
+        }
+#endif
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private bool InitializeAndroidTts()
+        {
+            try
+            {
+                using var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                using var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+                _androidTts = new AndroidJavaObject("android.speech.tts.TextToSpeech", activity, null);
+                return _androidTts != null;
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError($"Failed to initialize Android TTS: {ex}");
+                return false;
+            }
+        }
+#endif
+
+        // WebGL JS callbacks
+        public void OnWebSpeechRecognized(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            OnSpeechRecognized?.Invoke(text.Trim());
+        }
+
+        public void OnWebSpeechEnded(string _)
+        {
+            _isRecording = false;
+        }
+
+        public void OnWebTtsComplete(string _)
+        {
+            _isSpeaking = false;
+            OnPlaybackComplete?.Invoke();
+        }
+    }
+}
