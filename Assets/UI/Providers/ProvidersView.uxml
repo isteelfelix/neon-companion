@@ -64,7 +64,7 @@
 
                 <ui:VisualElement name="test-row" class="testrow">
                     <ui:VisualElement name="test-row-icon" class="icon icon--check testrow__icon" />
-                    <ui:Label name="test-row-label" text="Нажми Тест для проверки соединения" />
+                    <ui:Label name="test-row-label" class="testrow__label" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="provider-edit-actions">

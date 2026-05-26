@@ -105,10 +105,26 @@ namespace NeonCompanion.Runtime.UI.UITK
             ["cobalt"] = new BuiltInAvatarMeta("avatar.builtin.cobalt.name", "Кобальт", "avatar.builtin.cobalt.style", "смелый · градиент", "avatar.builtin.cobalt.persona", "Кобальт — креативная и изобретательная. Любит исследовать идеи и связи.", AvatarFilter.Gradient),
             ["rose"] = new BuiltInAvatarMeta("avatar.builtin.rose.name", "Роуз", "avatar.builtin.rose.style", "мягкий · градиент", "avatar.builtin.rose.persona", "Роуз — обаятельная и общительная. Делает диалог более личным.", AvatarFilter.Gradient)
         };
+        private enum AvatarViewMode { Static, Animated, Volume3D }
+        private AvatarViewMode _avatarViewMode = AvatarViewMode.Static;
+
+        private Button _viewModeStaticBtn;
+        private Button _viewModeAnimatedBtn;
+        private Button _viewMode3DBtn;
+        private VisualElement _avatarFilterRow;
+        private VisualElement _galleryStatic;
+        private VisualElement _galleryAnimated;
+        private VisualElement _gallery3D;
+        private VisualElement _avtileNeonAnimated;
+
         private string _activeAvatarId = "neon";
         private AvatarFilter _activeAvatarFilter = AvatarFilter.All;
         private VisualElement _avatarArt;
         private VisualElement _avatarCircle;
+        private VisualElement _avatarStageHero;
+        private VisualElement _avatarGlow;
+        private VisualElement _avatarShade;
+        private Label _avatarLetter;
         private VisualElement _previewHero;
         private Label _previewTitle;
         private Label _previewTag;
@@ -565,8 +581,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsBreathing  = root.Q<Toggle>("settings-breathing");
 
             // Avatar elements
-            _avatarArt    = root.Q<VisualElement>("avatar-art");
-            _avatarCircle = root.Q<VisualElement>("avatar-circle");
+            _avatarArt       = root.Q<VisualElement>("avatar-art");
+            _avatarCircle    = root.Q<VisualElement>("avatar-circle");
+            _avatarStageHero = root.Q<VisualElement>("avatar-stage-hero");
+            _avatarGlow      = root.Q<VisualElement>("avatar-glow");
+            _avatarShade     = _avatarCircle?.Q<VisualElement>(className: "avatar__shade");
+            _avatarLetter    = _avatarCircle?.Q<Label>(className: "avatar__letter");
             _previewHero  = root.Q<VisualElement>("preview-hero");
             _themesPreviewHalo   = root.Q<VisualElement>("themes-preview-halo");
             _themesPreviewAvatar = root.Q<VisualElement>("themes-preview-avatar");
@@ -587,6 +607,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _personaEditField     = root.Q<TextField>("persona-edit-field");
             _personaSaveBtn       = root.Q<Button>("persona-save-btn");
             _personaCancelBtn     = root.Q<Button>("persona-cancel-btn");
+            _viewModeStaticBtn   = root.Q<Button>("viewmode-static-btn");
+            _viewModeAnimatedBtn = root.Q<Button>("viewmode-animated-btn");
+            _viewMode3DBtn       = root.Q<Button>("viewmode-3d-btn");
+            _avatarFilterRow     = root.Q<VisualElement>("avatar-filterrow");
+            _galleryStatic       = root.Q<VisualElement>("gallery-static");
+            _galleryAnimated     = root.Q<VisualElement>("gallery-animated");
+            _gallery3D           = root.Q<VisualElement>("gallery-3d");
+            _avtileNeonAnimated  = root.Q<VisualElement>("avtile-neon-animated");
             _avatarFilterAllBtn = root.Q<Button>("avatar-filter-all-btn");
             _avatarFilterStandardBtn = root.Q<Button>("avatar-filter-standard-btn");
             _avatarFilterGradientBtn = root.Q<Button>("avatar-filter-gradient-btn");
@@ -710,6 +738,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
             RegisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             RegisterClick(_personaCancelBtn, OnPersonaCancelClicked);
+            RegisterClick(_viewModeStaticBtn,   OnViewModeStaticClicked);
+            RegisterClick(_viewModeAnimatedBtn, OnViewModeAnimatedClicked);
+            RegisterClick(_viewMode3DBtn,       OnViewMode3DClicked);
+            RegisterClick(_avtileNeonAnimated,  OnNeonAnimatedTileClicked);
             RegisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
             RegisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
             RegisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
@@ -753,6 +785,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
             UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             UnregisterClick(_personaCancelBtn, OnPersonaCancelClicked);
+            UnregisterClick(_viewModeStaticBtn,   OnViewModeStaticClicked);
+            UnregisterClick(_viewModeAnimatedBtn, OnViewModeAnimatedClicked);
+            UnregisterClick(_viewMode3DBtn,       OnViewMode3DClicked);
+            UnregisterClick(_avtileNeonAnimated,  OnNeonAnimatedTileClicked);
             UnregisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
             UnregisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
             UnregisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
@@ -2653,6 +2689,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navHistoryLabel?.Localize("chat.history");
             _navThemesLabel?.Localize("settings.themes");
             _navSettingsLabel?.Localize("tab.settings");
+            _testRowLabel?.Localize("providers.test.hint");
             ApplyStaticTemplateLocalization();
         }
 
@@ -3134,6 +3171,26 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        private void OnViewModeStaticClicked()                    => SetAvatarViewMode(AvatarViewMode.Static);
+        private void OnViewModeAnimatedClicked()                  => SetAvatarViewMode(AvatarViewMode.Animated);
+        private void OnViewMode3DClicked()                        => SetAvatarViewMode(AvatarViewMode.Volume3D);
+        private void OnNeonAnimatedTileClicked(ClickEvent _)
+        {
+            // SelectAvatar has an early-return when the same avatar is already active.
+            // The animated tile must force-refresh art even if "neon" is already selected
+            // (e.g. user was on the Static tab and just switched to Animated).
+            if (_activeAvatarId == "neon")
+            {
+                SyncGallerySelection("neon");
+                ApplyAvatarArt("neon");
+                SaveSettings();
+            }
+            else
+            {
+                SelectAvatar("neon");
+            }
+        }
+
         private void OnAvatarFilterAllClicked() => SetAvatarFilter(AvatarFilter.All);
         private void OnAvatarFilterStandardClicked() => SetAvatarFilter(AvatarFilter.Standard);
         private void OnAvatarFilterGradientClicked() => SetAvatarFilter(AvatarFilter.Gradient);
@@ -3144,6 +3201,35 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _activeAvatarFilter = filter;
             ApplyAvatarFilter();
+        }
+
+        private void SetAvatarViewMode(AvatarViewMode mode)
+        {
+            if (_avatarViewMode == mode) return;
+            _avatarViewMode = mode;
+            ApplyAvatarViewMode();
+            // Re-apply avatar art so the chat display and preview labels update
+            // immediately when switching between Static / Animated / 3D tabs.
+            ApplyAvatarArt(_activeAvatarId);
+        }
+
+        private void ApplyAvatarViewMode()
+        {
+            bool isStatic   = _avatarViewMode == AvatarViewMode.Static;
+            bool isAnimated = _avatarViewMode == AvatarViewMode.Animated;
+            bool is3D       = _avatarViewMode == AvatarViewMode.Volume3D;
+
+            _viewModeStaticBtn?.EnableInClassList("viewmode-btn--active", isStatic);
+            _viewModeAnimatedBtn?.EnableInClassList("viewmode-btn--active", isAnimated);
+            _viewMode3DBtn?.EnableInClassList("viewmode-btn--active", is3D);
+
+            SetDisplay(_avatarFilterRow, isStatic ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_galleryStatic,   isStatic ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_galleryAnimated, isAnimated ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_gallery3D,       is3D ? DisplayStyle.Flex : DisplayStyle.None);
+
+            // Sync animated tile selection badge
+            _avtileNeonAnimated?.EnableInClassList("avtile--selected", isAnimated && _activeAvatarId == "neon");
         }
 
         private void SelectAvatar(string avatarId)
@@ -3319,14 +3405,27 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             foreach (var kvp in _customAvatarTiles)
                 kvp.Value.EnableInClassList("avtile--selected", kvp.Key == avatarId);
+
+            // Animated gallery tile
+            _avtileNeonAnimated?.EnableInClassList("avtile--selected",
+                _avatarViewMode == AvatarViewMode.Animated && avatarId == "neon");
         }
 
         private void ApplyAvatarArt(string avatarId)
         {
             bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, avatarId) >= 0;
             var profile = GetStoredProfile(avatarId);
+            NeonLogger.Log("[AvatarArt] ApplyAvatarArt id='" + avatarId +
+                "' isBuiltIn=" + isBuiltIn +
+                " storedProfile=" + (profile != null ? "found (clips=" + (profile.animationClips?.Count ?? 0) + ")" : "null") +
+                " _avatarArt=" + (_avatarArt != null ? "ok" : "NULL"));
+            // For built-in avatars with no stored profile, create a stub so motion-pack
+            // discovery in AvatarMotionPackLoader.ResolveProfileMotion can run.
+            if (profile == null && isBuiltIn)
+                profile = new AvatarProfile { id = avatarId, isBuiltIn = true };
             bool is3D = profile != null && profile.is3D && !string.IsNullOrWhiteSpace(profile.modelPath);
             bool hasAnimation = !is3D && ConfigureAvatarAnimation(profile);
+            NeonLogger.Log("[AvatarArt] hasAnimation=" + hasAnimation + " is3D=" + is3D);
 
             if (is3D)
                 _ = ConfigureAvatar3DAsync(profile);
@@ -3335,8 +3434,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_avatarArt != null)
             {
+                // When animation is active, remove the CSS art class so its background-image
+                // and background-color don't bleed through the sprite's transparent areas.
                 foreach (var id in BuiltInAvatarIds)
-                    _avatarArt.EnableInClassList($"avatar__art--{id}", isBuiltIn && id == avatarId);
+                    _avatarArt.EnableInClassList($"avatar__art--{id}", isBuiltIn && id == avatarId && !hasAnimation);
 
                 if (!isBuiltIn && !hasAnimation && !is3D)
                 {
@@ -3348,6 +3449,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _avatarArt.style.backgroundImage = StyleKeyword.Null;
                 }
             }
+
+            // Hide the letter placeholder and shade ring when animation is running;
+            // show them when displaying a static image so the circle doesn't look empty.
+            SetDisplay(_avatarShade,  hasAnimation ? DisplayStyle.None : DisplayStyle.Flex);
+            SetDisplay(_avatarLetter, hasAnimation ? DisplayStyle.None : DisplayStyle.Flex);
+
+            ApplyAvatarLayout(hasAnimation);
 
             if (_previewHero != null)
             {
@@ -3375,13 +3483,83 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_previewPersona != null)
                 _previewPersona.text = AvatarPersonaText(avatarId);
             if (_previewAnimationInfo != null)
-                _previewAnimationInfo.text = BuildAnimationInfoText(profile);
+                _previewAnimationInfo.text = (_avatarViewMode == AvatarViewMode.Animated)
+                    ? BuildAnimationInfoText(profile)
+                    : LocalizationExtensions.Get("avatar.animation.static", "Статичное изображение");
             UpdatePersonaStateUi(avatarId);
             _activeCustomizationBaseline = CloneCustomization(profile?.customization);
             _avatarCustomizationPanel?.Bind(_activeCustomizationBaseline);
             ApplyAvatarCustomizationVisual(_activeCustomizationBaseline);
 
             UpdateAvatarActionButtons(avatarId);
+        }
+
+        /// <summary>
+        /// Switches the avatar container between "fullscreen sprite" layout (animation active)
+        /// and the default circular badge layout (static image).
+        /// </summary>
+        private void ApplyAvatarLayout(bool animated)
+        {
+            if (_avatarCircle != null)
+            {
+                if (animated)
+                {
+                    // Remove the fixed 240×240 circle – let it fill the hero area.
+                    _avatarCircle.style.width          = new StyleLength(new Length(100, LengthUnit.Percent));
+                    _avatarCircle.style.height         = new StyleLength(new Length(100, LengthUnit.Percent));
+                    _avatarCircle.style.alignSelf      = Align.Stretch;
+                    _avatarCircle.style.borderTopLeftRadius     = 0;
+                    _avatarCircle.style.borderTopRightRadius    = 0;
+                    _avatarCircle.style.borderBottomLeftRadius  = 0;
+                    _avatarCircle.style.borderBottomRightRadius = 0;
+                    _avatarCircle.style.borderTopWidth    = 0;
+                    _avatarCircle.style.borderBottomWidth = 0;
+                    _avatarCircle.style.borderLeftWidth   = 0;
+                    _avatarCircle.style.borderRightWidth  = 0;
+                    _avatarCircle.style.backgroundColor  = new StyleColor(Color.clear);
+                }
+                else
+                {
+                    // Restore CSS defaults (remove all inline overrides).
+                    _avatarCircle.style.width          = StyleKeyword.Null;
+                    _avatarCircle.style.height         = StyleKeyword.Null;
+                    _avatarCircle.style.alignSelf      = StyleKeyword.Null;
+                    _avatarCircle.style.borderTopLeftRadius     = StyleKeyword.Null;
+                    _avatarCircle.style.borderTopRightRadius    = StyleKeyword.Null;
+                    _avatarCircle.style.borderBottomLeftRadius  = StyleKeyword.Null;
+                    _avatarCircle.style.borderBottomRightRadius = StyleKeyword.Null;
+                    _avatarCircle.style.borderTopWidth    = StyleKeyword.Null;
+                    _avatarCircle.style.borderBottomWidth = StyleKeyword.Null;
+                    _avatarCircle.style.borderLeftWidth   = StyleKeyword.Null;
+                    _avatarCircle.style.borderRightWidth  = StyleKeyword.Null;
+                    _avatarCircle.style.backgroundColor  = StyleKeyword.Null;
+                }
+            }
+
+            if (_avatarStageHero != null)
+            {
+                if (animated)
+                {
+                    _avatarStageHero.style.paddingTop    = 0;
+                    _avatarStageHero.style.paddingBottom = 0;
+                    _avatarStageHero.style.paddingLeft   = 0;
+                    _avatarStageHero.style.paddingRight  = 0;
+                }
+                else
+                {
+                    _avatarStageHero.style.paddingTop    = StyleKeyword.Null;
+                    _avatarStageHero.style.paddingBottom = StyleKeyword.Null;
+                    _avatarStageHero.style.paddingLeft   = StyleKeyword.Null;
+                    _avatarStageHero.style.paddingRight  = StyleKeyword.Null;
+                }
+            }
+
+            // Hide the decorative halo glow in animated mode (it would show behind the sprite).
+            SetDisplay(_avatarGlow, animated ? DisplayStyle.None : DisplayStyle.Flex);
+
+            // In animated mode use ScaleToFit so the full character is always visible.
+            if (_avatarArtImage != null)
+                _avatarArtImage.scaleMode = animated ? ScaleMode.ScaleToFit : ScaleMode.ScaleAndCrop;
         }
 
         private void EnsureCustomizationOverlayElements()
@@ -3641,10 +3819,29 @@ namespace NeonCompanion.Runtime.UI.UITK
             EnsureAvatar3DImage();
 
             if (_avatarAnimator == null || _avatarArtImage == null)
+            {
+                NeonLogger.LogWarning("[AvatarAnim] EnsureAvatarAnimationImage failed: " +
+                    "_avatarAnimator=" + (_avatarAnimator == null ? "null" : "ok") +
+                    " _avatarArtImage=" + (_avatarArtImage == null ? "null" : "ok") +
+                    " _avatarArt=" + (_avatarArt == null ? "null" : "ok"));
                 return false;
+            }
+
+            // In Static gallery mode the user explicitly wants the still PNG, not animation.
+            // Only load sprites when the Animated (or future 3D-anim) tab is active.
+            if (_avatarViewMode != AvatarViewMode.Animated)
+            {
+                _avatarAnimator.Stop();
+                _avatarArtImage.sprite = null;
+                SetDisplay(_avatarArtImage, DisplayStyle.None);
+                return false;
+            }
 
             var resolvedMotion = AvatarMotionPackLoader.ResolveProfileMotion(profile) ?? new AvatarProfileMotionResolution();
             var clips = resolvedMotion.animationClips;
+            NeonLogger.Log("[AvatarAnim] ResolveProfileMotion for '" + (profile?.id ?? "null") +
+                "' -> clips=" + (clips?.Count.ToString() ?? "null") +
+                " manifest=" + (resolvedMotion.sourceManifestPath ?? "none"));
             if (clips == null || clips.Count == 0)
             {
                 _avatarAnimator.Stop();
@@ -3658,6 +3855,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarAnimator.Configure(clips, _avatarArtImage);
             if (resolvedMotion.lipsyncClip != null)
                 _avatarAnimator.RegisterClip(resolvedMotion.lipsyncClip);
+            NeonLogger.Log("[AvatarAnim] After Configure: HasAnyClips=" + _avatarAnimator.HasAnyClips);
             if (!_avatarAnimator.HasAnyClips)
             {
                 _avatarArtImage.sprite = null;

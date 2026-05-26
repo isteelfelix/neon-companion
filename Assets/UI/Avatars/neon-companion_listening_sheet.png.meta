@@ -1,190 +1,190 @@
 fileFormatVersion: 2
-guid: 3a38e62f1b041994d9903442ca4d0a7a
+guid: 6ec35476321d4774cb018e470f3d9e4d
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 6393671040499922555
-    second: animation_idle_sheet_0
+      213: -3889396954908509495
+    second: listening_sheet_0
   - first:
-      213: -546637741184756439
-    second: animation_idle_sheet_1
+      213: 1497397991814852957
+    second: listening_sheet_1
   - first:
-      213: 1177034769688252347
-    second: animation_idle_sheet_2
+      213: -4924935133967999649
+    second: listening_sheet_2
   - first:
-      213: 2762124123481325252
-    second: animation_idle_sheet_3
+      213: -7132680488722867411
+    second: listening_sheet_3
   - first:
-      213: -5154083356380834195
-    second: animation_idle_sheet_4
+      213: 2613807560848517127
+    second: listening_sheet_4
   - first:
-      213: -8572886868971822707
-    second: animation_idle_sheet_5
+      213: -2700059277048684538
+    second: listening_sheet_5
   - first:
-      213: -7042739734062325806
-    second: animation_idle_sheet_6
+      213: -7424625290092222296
+    second: listening_sheet_6
   - first:
-      213: 6456509253156089373
-    second: animation_idle_sheet_7
+      213: -330325314981892667
+    second: listening_sheet_7
   - first:
-      213: 5689685657107100998
-    second: animation_idle_sheet_8
+      213: -627280923256356838
+    second: listening_sheet_8
   - first:
-      213: 5934237881319705219
-    second: animation_idle_sheet_9
+      213: 6302844257384859011
+    second: listening_sheet_9
   - first:
-      213: 3104135779763073028
-    second: animation_idle_sheet_10
+      213: -8821053461239376495
+    second: listening_sheet_10
   - first:
-      213: 6519909039587686485
-    second: animation_idle_sheet_11
+      213: 2872668648889632441
+    second: listening_sheet_11
   - first:
-      213: -5310125079106385412
-    second: animation_idle_sheet_12
+      213: 2166138779540826687
+    second: listening_sheet_12
   - first:
-      213: -8997898777039774330
-    second: animation_idle_sheet_13
+      213: 4699851326121696738
+    second: listening_sheet_13
   - first:
-      213: 7075708442600249233
-    second: animation_idle_sheet_14
+      213: 576591784918689006
+    second: listening_sheet_14
   - first:
-      213: -1094790037575543543
-    second: animation_idle_sheet_15
+      213: 2245395466191592060
+    second: listening_sheet_15
   - first:
-      213: 837746416914948855
-    second: animation_idle_sheet_16
+      213: -3859609379438643256
+    second: listening_sheet_16
   - first:
-      213: -4379807324714719895
-    second: animation_idle_sheet_17
+      213: 4578563844239431790
+    second: listening_sheet_17
   - first:
-      213: 6766556591614438774
-    second: animation_idle_sheet_18
+      213: 6356600650422180842
+    second: listening_sheet_18
   - first:
-      213: 2609958744298168421
-    second: animation_idle_sheet_19
+      213: -4314968022264098877
+    second: listening_sheet_19
   - first:
-      213: -7870376665311816174
-    second: animation_idle_sheet_20
+      213: -8630411089110655277
+    second: listening_sheet_20
   - first:
-      213: 4467607294631538328
-    second: animation_idle_sheet_21
+      213: -1135522809003360988
+    second: listening_sheet_21
   - first:
-      213: 2847535837136051122
-    second: animation_idle_sheet_22
+      213: -2616237881759838438
+    second: listening_sheet_22
   - first:
-      213: 8303780121798913271
-    second: animation_idle_sheet_23
+      213: -5667554657684216689
+    second: listening_sheet_23
   - first:
-      213: 3321602935352928144
-    second: animation_idle_sheet_24
+      213: -8400592711726501873
+    second: listening_sheet_24
   - first:
-      213: -6164105137839721839
-    second: animation_idle_sheet_25
+      213: -5874896688977793403
+    second: listening_sheet_25
   - first:
-      213: -2676475928403121453
-    second: animation_idle_sheet_26
+      213: 6952371294771094777
+    second: listening_sheet_26
   - first:
-      213: 5178299707763553653
-    second: animation_idle_sheet_27
+      213: 6433511842961416482
+    second: listening_sheet_27
   - first:
-      213: 868337083800683659
-    second: animation_idle_sheet_28
+      213: 5366293211560833131
+    second: listening_sheet_28
   - first:
-      213: -7524831288743522931
-    second: animation_idle_sheet_29
+      213: -4294642955446439011
+    second: listening_sheet_29
   - first:
-      213: 347922746029345821
-    second: animation_idle_sheet_30
+      213: 6805835612693197773
+    second: listening_sheet_30
   - first:
-      213: -6743767495007390546
-    second: animation_idle_sheet_31
+      213: 5026175674826716107
+    second: listening_sheet_31
   - first:
-      213: -5972154702920311620
-    second: animation_idle_sheet_32
+      213: 7246858632183236678
+    second: listening_sheet_32
   - first:
-      213: 360007753135960048
-    second: animation_idle_sheet_33
+      213: 5536608659322364402
+    second: listening_sheet_33
   - first:
-      213: 8241770155813476914
-    second: animation_idle_sheet_34
+      213: 4568332709346895357
+    second: listening_sheet_34
   - first:
-      213: -6205767837765083148
-    second: animation_idle_sheet_35
+      213: 6996150100511782122
+    second: listening_sheet_35
   - first:
-      213: -257034330968178722
-    second: animation_idle_sheet_36
+      213: 3168804929475354867
+    second: listening_sheet_36
   - first:
-      213: 6841281583492728841
-    second: animation_idle_sheet_37
+      213: -183034740501398912
+    second: listening_sheet_37
   - first:
-      213: 7492888567439001906
-    second: animation_idle_sheet_38
+      213: 1324235286092391104
+    second: listening_sheet_38
   - first:
-      213: 3259733225629869304
-    second: animation_idle_sheet_39
+      213: -3944107914492641307
+    second: listening_sheet_39
   - first:
-      213: 8517443776109287523
-    second: animation_idle_sheet_40
+      213: -2261753443970369776
+    second: listening_sheet_40
   - first:
-      213: -5015258011008416058
-    second: animation_idle_sheet_41
+      213: -1095839068388905951
+    second: listening_sheet_41
   - first:
-      213: 6501335710319947712
-    second: animation_idle_sheet_42
+      213: 2867397722837572849
+    second: listening_sheet_42
   - first:
-      213: -153809104258961322
-    second: animation_idle_sheet_43
+      213: 1494171793999802668
+    second: listening_sheet_43
   - first:
-      213: 1778223301041746939
-    second: animation_idle_sheet_44
+      213: 7917751711947200036
+    second: listening_sheet_44
   - first:
-      213: -3986023913365703715
-    second: animation_idle_sheet_45
+      213: -3815139171200639471
+    second: listening_sheet_45
   - first:
-      213: -83751438278651918
-    second: animation_idle_sheet_46
+      213: -5291931150697710909
+    second: listening_sheet_46
   - first:
-      213: 6173342047275919563
-    second: animation_idle_sheet_47
+      213: 6289510237849707598
+    second: listening_sheet_47
   - first:
-      213: 2063318150228963509
-    second: animation_idle_sheet_48
+      213: -42628673564963364
+    second: listening_sheet_48
   - first:
-      213: 744857448473666342
-    second: animation_idle_sheet_49
+      213: 1190919090865911318
+    second: listening_sheet_49
   - first:
-      213: 7877277222692550113
-    second: animation_idle_sheet_50
+      213: 8735651467914648026
+    second: listening_sheet_50
   - first:
-      213: 3161698229170949863
-    second: animation_idle_sheet_51
+      213: 8172458853639601608
+    second: listening_sheet_51
   - first:
-      213: -2784927442303070232
-    second: animation_idle_sheet_52
+      213: -4876755313686992315
+    second: listening_sheet_52
   - first:
-      213: 9047433615385033288
-    second: animation_idle_sheet_53
+      213: 1465352663546729657
+    second: listening_sheet_53
   - first:
-      213: -1440453501726151089
-    second: animation_idle_sheet_54
+      213: 4132728658015227098
+    second: listening_sheet_54
   - first:
-      213: 7201177262541152259
-    second: animation_idle_sheet_55
+      213: 1156736200498207059
+    second: listening_sheet_55
   - first:
-      213: -6537781077638589177
-    second: animation_idle_sheet_56
+      213: 146948881264063272
+    second: listening_sheet_56
   - first:
-      213: -4706798465053174983
-    second: animation_idle_sheet_57
+      213: -3088909619093109459
+    second: listening_sheet_57
   - first:
-      213: 4712715778858717861
-    second: animation_idle_sheet_58
+      213: -3631372673359781288
+    second: listening_sheet_58
   - first:
-      213: 5126913755208274657
-    second: animation_idle_sheet_59
+      213: -4128261718012907894
+    second: listening_sheet_59
   - first:
-      213: 8965481858227957423
-    second: animation_idle_sheet_60
+      213: -2822310833511712990
+    second: listening_sheet_60
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -280,7 +280,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: animation_idle_sheet_0
+      name: listening_sheet_0
       rect:
         serializedVersion: 2
         x: 131
@@ -295,196 +295,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: b7633bbafe1eab850800000000000000
-      internalID: 6393671040499922555
+      spriteID: 9ca31309316160ac0800000000000000
+      internalID: -3889396954908509495
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_1
-      rect:
-        serializedVersion: 2
-        x: 642
-        y: 4780
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 9255cdfded3f968f0800000000000000
-      internalID: -546637741184756439
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_2
-      rect:
-        serializedVersion: 2
-        x: 1154
-        y: 4780
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: bbf4d8703eaa55010800000000000000
-      internalID: 1177034769688252347
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_3
-      rect:
-        serializedVersion: 2
-        x: 1666
-        y: 4780
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 4ce34a58149055620800000000000000
-      internalID: 2762124123481325252
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_4
-      rect:
-        serializedVersion: 2
-        x: 2178
-        y: 4780
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d66da20be740978b0800000000000000
-      internalID: -5154083356380834195
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_5
-      rect:
-        serializedVersion: 2
-        x: 2690
-        y: 4780
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d81e25350dcf60980800000000000000
-      internalID: -8572886868971822707
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_6
-      rect:
-        serializedVersion: 2
-        x: 3202
-        y: 4780
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 2df9fa1a689234e90800000000000000
-      internalID: -7042739734062325806
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_7
-      rect:
-        serializedVersion: 2
-        x: 3714
-        y: 4780
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d1e246b25f02a9950800000000000000
-      internalID: 6456509253156089373
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_8
-      rect:
-        serializedVersion: 2
-        x: 130
-        y: 4097
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 645f08bb5f2d5fe40800000000000000
-      internalID: 5689685657107100998
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_9
+      name: listening_sheet_1
       rect:
         serializedVersion: 2
         x: 643
-        y: 4097
-        width: 242
-        height: 677
+        y: 4780
+        width: 243
+        height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -493,18 +317,40 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 38a4ab089e5aa5250800000000000000
-      internalID: 5934237881319705219
+      spriteID: d51f18d3a83d7c410800000000000000
+      internalID: 1497397991814852957
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_10
+      name: listening_sheet_2
       rect:
         serializedVersion: 2
         x: 1155
-        y: 4097
+        y: 4780
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f5d1ffdc69d17abb0800000000000000
+      internalID: -4924935133967999649
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_3
+      rect:
+        serializedVersion: 2
+        x: 1667
+        y: 4780
         width: 242
         height: 677
       alignment: 0
@@ -515,19 +361,19 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 400bb579b0b141b20800000000000000
-      internalID: 3104135779763073028
+      spriteID: d2b5055d2e0a30d90800000000000000
+      internalID: -7132680488722867411
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_11
+      name: listening_sheet_4
       rect:
         serializedVersion: 2
-        x: 1666
-        y: 4097
-        width: 243
+        x: 2180
+        y: 4780
+        width: 241
         height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -537,19 +383,19 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 5587b704abe5b7a50800000000000000
-      internalID: 6519909039587686485
+      spriteID: 7082b97c02c164420800000000000000
+      internalID: 2613807560848517127
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_12
+      name: listening_sheet_5
       rect:
         serializedVersion: 2
-        x: 2178
-        y: 4097
-        width: 243
+        x: 2692
+        y: 4780
+        width: 241
         height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -559,20 +405,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: cf988f2ff55ae46b0800000000000000
-      internalID: -5310125079106385412
+      spriteID: 600e30f9466778ad0800000000000000
+      internalID: -2700059277048684538
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_13
+      name: listening_sheet_6
       rect:
         serializedVersion: 2
-        x: 2690
-        y: 4097
-        width: 243
-        height: 679
+        x: 3203
+        y: 4780
+        width: 240
+        height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -581,20 +427,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 68d5f953cba012380800000000000000
-      internalID: -8997898777039774330
+      spriteID: 8a8eba1d2ae66f890800000000000000
+      internalID: -7424625290092222296
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_14
+      name: listening_sheet_7
       rect:
         serializedVersion: 2
-        x: 3202
-        y: 4097
-        width: 244
-        height: 679
+        x: 3715
+        y: 4780
+        width: 240
+        height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -603,39 +449,325 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 1979b6ff657f13260800000000000000
-      internalID: 7075708442600249233
+      spriteID: 5cd6f2c40e27a6bf0800000000000000
+      internalID: -330325314981892667
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_15
-      rect:
-        serializedVersion: 2
-        x: 3714
-        y: 4097
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 9055ca2e2468ec0f0800000000000000
-      internalID: -1094790037575543543
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_16
+      name: listening_sheet_8
       rect:
         serializedVersion: 2
         x: 130
+        y: 4097
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a100de2e2537b47f0800000000000000
+      internalID: -627280923256356838
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_9
+      rect:
+        serializedVersion: 2
+        x: 642
+        y: 4097
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 385090c4573387750800000000000000
+      internalID: 6302844257384859011
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_10
+      rect:
+        serializedVersion: 2
+        x: 1152
+        y: 4097
+        width: 245
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 195d81aec92559580800000000000000
+      internalID: -8821053461239376495
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_11
+      rect:
+        serializedVersion: 2
+        x: 1664
+        y: 4097
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9b6c7768ae4cdd720800000000000000
+      internalID: 2872668648889632441
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_12
+      rect:
+        serializedVersion: 2
+        x: 2175
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f3aaab84ebbaf0e10800000000000000
+      internalID: 2166138779540826687
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_13
+      rect:
+        serializedVersion: 2
+        x: 2687
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2edd1a651e9393140800000000000000
+      internalID: 4699851326121696738
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_14
+      rect:
+        serializedVersion: 2
+        x: 3197
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ee4ac786c27700800800000000000000
+      internalID: 576591784918689006
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_15
+      rect:
+        serializedVersion: 2
+        x: 3709
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c7a5f96a74f392f10800000000000000
+      internalID: 2245395466191592060
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_16
+      rect:
+        serializedVersion: 2
+        x: 125
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8c73bcee7b9ef6ac0800000000000000
+      internalID: -3859609379438643256
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_17
+      rect:
+        serializedVersion: 2
+        x: 637
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e68965dde835a8f30800000000000000
+      internalID: 4578563844239431790
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_18
+      rect:
+        serializedVersion: 2
+        x: 1149
+        y: 3414
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: aeb5e63ec9e273850800000000000000
+      internalID: 6356600650422180842
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_19
+      rect:
+        serializedVersion: 2
+        x: 1661
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3cf47c702772e14c0800000000000000
+      internalID: -4314968022264098877
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_20
+      rect:
+        serializedVersion: 2
+        x: 2173
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3de97ff17de9a3880800000000000000
+      internalID: -8630411089110655277
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_21
+      rect:
+        serializedVersion: 2
+        x: 2685
+        y: 3414
+        width: 246
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 42d300f7500dd30f0800000000000000
+      internalID: -1135522809003360988
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_22
+      rect:
+        serializedVersion: 2
+        x: 3199
         y: 3414
         width: 244
         height: 679
@@ -647,17 +779,17 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 7f262187de540ab00800000000000000
-      internalID: 837746416914948855
+      spriteID: a1fc8c9028141bbd0800000000000000
+      internalID: -2616237881759838438
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_17
+      name: listening_sheet_23
       rect:
         serializedVersion: 2
-        x: 642
+        x: 3712
         y: 3414
         width: 246
         height: 679
@@ -669,19 +801,19 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 965a9b1817cc733c0800000000000000
-      internalID: -4379807324714719895
+      spriteID: f842f9b111dc851b0800000000000000
+      internalID: -5667554657684216689
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_18
+      name: listening_sheet_24
       rect:
         serializedVersion: 2
-        x: 1154
-        y: 3414
-        width: 246
+        x: 130
+        y: 2731
+        width: 244
         height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -691,62 +823,18 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 67da1cb8e53a7ed50800000000000000
-      internalID: 6766556591614438774
+      spriteID: f007ecadf691b6b80800000000000000
+      internalID: -8400592711726501873
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_19
+      name: listening_sheet_25
       rect:
         serializedVersion: 2
-        x: 1666
-        y: 3414
-        width: 246
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 560215856af683420800000000000000
-      internalID: 2609958744298168421
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_20
-      rect:
-        serializedVersion: 2
-        x: 2179
-        y: 3414
-        width: 246
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 216d0973f1ec6c290800000000000000
-      internalID: -7870376665311816174
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_21
-      rect:
-        serializedVersion: 2
-        x: 2693
-        y: 3414
+        x: 645
+        y: 2731
         width: 243
         height: 679
       alignment: 0
@@ -757,63 +845,19 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 89ee4700a21200e30800000000000000
-      internalID: 4467607294631538328
+      spriteID: 58e2c51869c287ea0800000000000000
+      internalID: -5874896688977793403
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_22
+      name: listening_sheet_26
       rect:
         serializedVersion: 2
-        x: 3205
-        y: 3414
-        width: 243
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 2bb50b9c1ca748720800000000000000
-      internalID: 2847535837136051122
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_23
-      rect:
-        serializedVersion: 2
-        x: 3717
-        y: 3414
-        width: 243
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 7fc26c48604fc3370800000000000000
-      internalID: 8303780121798913271
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_24
-      rect:
-        serializedVersion: 2
-        x: 135
+        x: 1157
         y: 2731
-        width: 239
+        width: 244
         height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -823,64 +867,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 0972b966544b81e20800000000000000
-      internalID: 3321602935352928144
+      spriteID: 9f4247b7bd8cb7060800000000000000
+      internalID: 6952371294771094777
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_25
-      rect:
-        serializedVersion: 2
-        x: 647
-        y: 2731
-        width: 239
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 19237e43903b47aa0800000000000000
-      internalID: -6164105137839721839
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_26
-      rect:
-        serializedVersion: 2
-        x: 1159
-        y: 2731
-        width: 241
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 3dae5add25f3bdad0800000000000000
-      internalID: -2676475928403121453
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_27
+      name: listening_sheet_27
       rect:
         serializedVersion: 2
         x: 1671
         y: 2731
-        width: 241
-        height: 679
+        width: 242
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -889,20 +889,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 57571cdf5240dd740800000000000000
-      internalID: 5178299707763553653
+      spriteID: 221ebf95fec684950800000000000000
+      internalID: 6433511842961416482
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_28
+      name: listening_sheet_28
       rect:
         serializedVersion: 2
         x: 2183
         y: 2731
-        width: 241
-        height: 679
+        width: 242
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -911,20 +911,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: b840d312af3fc0c00800000000000000
-      internalID: 868337083800683659
+      spriteID: b607cab7e37e87a40800000000000000
+      internalID: 5366293211560833131
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_29
+      name: listening_sheet_29
       rect:
         serializedVersion: 2
         x: 2695
         y: 2731
-        width: 242
-        height: 679
+        width: 244
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -933,20 +933,196 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: d8d82b7afcd629790800000000000000
-      internalID: -7524831288743522931
+      spriteID: d933b7b6cfc5664c0800000000000000
+      internalID: -4294642955446439011
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_30
+      name: listening_sheet_30
+      rect:
+        serializedVersion: 2
+        x: 3208
+        y: 2731
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dc3f74e4e6f237e50800000000000000
+      internalID: 6805835612693197773
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_31
+      rect:
+        serializedVersion: 2
+        x: 3720
+        y: 2731
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bc371cc752090c540800000000000000
+      internalID: 5026175674826716107
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_32
+      rect:
+        serializedVersion: 2
+        x: 136
+        y: 2048
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 64841ccc783029460800000000000000
+      internalID: 7246858632183236678
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_33
+      rect:
+        serializedVersion: 2
+        x: 648
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2f1e24fcd3cf5dc40800000000000000
+      internalID: 5536608659322364402
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_34
+      rect:
+        serializedVersion: 2
+        x: 1160
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: df56b64256af56f30800000000000000
+      internalID: 4568332709346895357
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_35
+      rect:
+        serializedVersion: 2
+        x: 1672
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ae471500371571160800000000000000
+      internalID: 6996150100511782122
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_36
+      rect:
+        serializedVersion: 2
+        x: 2184
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3f0a2e75b4bd9fb20800000000000000
+      internalID: 3168804929475354867
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_37
+      rect:
+        serializedVersion: 2
+        x: 2695
+        y: 2048
+        width: 246
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 08abbde8fdab57df0800000000000000
+      internalID: -183034740501398912
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_38
       rect:
         serializedVersion: 2
         x: 3207
-        y: 2731
-        width: 242
-        height: 679
+        y: 2048
+        width: 246
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -955,20 +1131,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: d1c8b56e4e114d400800000000000000
-      internalID: 347922746029345821
+      spriteID: 0c223920af0a06210800000000000000
+      internalID: 1324235286092391104
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_31
+      name: listening_sheet_39
       rect:
         serializedVersion: 2
         x: 3719
-        y: 2731
-        width: 242
-        height: 679
+        y: 2048
+        width: 246
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -977,20 +1153,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: ea4324c71335962a0800000000000000
-      internalID: -6743767495007390546
+      spriteID: 5effbd0afb6b349c0800000000000000
+      internalID: -3944107914492641307
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_32
+      name: listening_sheet_40
       rect:
         serializedVersion: 2
         x: 135
-        y: 2048
-        width: 242
-        height: 679
+        y: 1365
+        width: 246
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -999,20 +1175,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: cbc91c480f4ae1da0800000000000000
-      internalID: -5972154702920311620
+      spriteID: 01731aad933ac90e0800000000000000
+      internalID: -2261753443970369776
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_33
+      name: listening_sheet_41
       rect:
         serializedVersion: 2
         x: 647
-        y: 2048
-        width: 242
-        height: 679
+        y: 1365
+        width: 245
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1021,20 +1197,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 0ff2e02e4210ff400800000000000000
-      internalID: 360007753135960048
+      spriteID: 12c2fad5c2ccac0f0800000000000000
+      internalID: -1095839068388905951
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_34
+      name: listening_sheet_42
       rect:
         serializedVersion: 2
         x: 1159
-        y: 2048
-        width: 242
-        height: 679
+        y: 1365
+        width: 244
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1043,20 +1219,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 23a9da93a46a06270800000000000000
-      internalID: 8241770155813476914
+      spriteID: 1fc5f7b690b0bc720800000000000000
+      internalID: 2867397722837572849
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_35
+      name: listening_sheet_43
       rect:
         serializedVersion: 2
         x: 1669
-        y: 2048
-        width: 243
-        height: 679
+        y: 1365
+        width: 246
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1065,130 +1241,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 4ffd777f70fa0e9a0800000000000000
-      internalID: -6205767837765083148
+      spriteID: c2134c6845d5cb410800000000000000
+      internalID: 1494171793999802668
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_36
+      name: listening_sheet_44
       rect:
         serializedVersion: 2
         x: 2181
-        y: 2048
-        width: 243
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: edfbf8743a4de6cf0800000000000000
-      internalID: -257034330968178722
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_37
-      rect:
-        serializedVersion: 2
-        x: 2691
-        y: 2048
-        width: 243
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 90881808a5d11fe50800000000000000
-      internalID: 6841281583492728841
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_38
-      rect:
-        serializedVersion: 2
-        x: 3202
-        y: 2048
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 23989cbf3761cf760800000000000000
-      internalID: 7492888567439001906
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_39
-      rect:
-        serializedVersion: 2
-        x: 3714
-        y: 2048
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 8f4e4301916ec3d20800000000000000
-      internalID: 3259733225629869304
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_40
-      rect:
-        serializedVersion: 2
-        x: 128
-        y: 1365
-        width: 246
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 3681b5dacf9043670800000000000000
-      internalID: 8517443776109287523
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_41
-      rect:
-        serializedVersion: 2
-        x: 640
         y: 1365
         width: 244
-        height: 679
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1197,17 +1263,39 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 6c649e43969366ab0800000000000000
-      internalID: -5015258011008416058
+      spriteID: 4269a526b3181ed60800000000000000
+      internalID: 7917751711947200036
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_42
+      name: listening_sheet_45
       rect:
         serializedVersion: 2
-        x: 1152
+        x: 2693
+        y: 1365
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 11e58e32327ed0bc0800000000000000
+      internalID: -3815139171200639471
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_46
+      rect:
+        serializedVersion: 2
+        x: 3203
         y: 1365
         width: 245
         height: 679
@@ -1219,283 +1307,19 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 0cfae2b0262693a50800000000000000
-      internalID: 6501335710319947712
+      spriteID: 3cab6d208a84f86b0800000000000000
+      internalID: -5291931150697710909
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_43
-      rect:
-        serializedVersion: 2
-        x: 1664
-        y: 1365
-        width: 243
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 6507c614f6f8dddf0800000000000000
-      internalID: -153809104258961322
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_44
-      rect:
-        serializedVersion: 2
-        x: 2178
-        y: 1365
-        width: 241
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: bf37aedbba48da810800000000000000
-      internalID: 1778223301041746939
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_45
-      rect:
-        serializedVersion: 2
-        x: 2690
-        y: 1365
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: dd3ff91ae5ccea8c0800000000000000
-      internalID: -3986023913365703715
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_46
-      rect:
-        serializedVersion: 2
-        x: 3202
-        y: 1365
-        width: 242
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 2ff09f7b28476def0800000000000000
-      internalID: -83751438278651918
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_47
+      name: listening_sheet_47
       rect:
         serializedVersion: 2
         x: 3715
         y: 1365
-        width: 242
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: bc82ddc52ed1ca550800000000000000
-      internalID: 6173342047275919563
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_48
-      rect:
-        serializedVersion: 2
-        x: 133
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 5b0730bfce062ac10800000000000000
-      internalID: 2063318150228963509
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_49
-      rect:
-        serializedVersion: 2
-        x: 645
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 623a39827e3465a00800000000000000
-      internalID: 744857448473666342
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_50
-      rect:
-        serializedVersion: 2
-        x: 1157
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 1e57ddff5e5b15d60800000000000000
-      internalID: 7877277222692550113
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_51
-      rect:
-        serializedVersion: 2
-        x: 1669
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 7ee47bcb9cb90eb20800000000000000
-      internalID: 3161698229170949863
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_52
-      rect:
-        serializedVersion: 2
-        x: 2181
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 8efc9441f33f959d0800000000000000
-      internalID: -2784927442303070232
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_53
-      rect:
-        serializedVersion: 2
-        x: 2693
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 84af3f510f0fe8d70800000000000000
-      internalID: 9047433615385033288
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_54
-      rect:
-        serializedVersion: 2
-        x: 3205
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: f4e252a0c2b720ce0800000000000000
-      internalID: -1440453501726151089
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_55
-      rect:
-        serializedVersion: 2
-        x: 3716
-        y: 682
-        width: 242
+        width: 243
         height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -1505,20 +1329,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 300a26a1198bfe360800000000000000
-      internalID: 7201177262541152259
+      spriteID: e44e632fc34d84750800000000000000
+      internalID: 6289510237849707598
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_56
+      name: listening_sheet_48
       rect:
         serializedVersion: 2
-        x: 131
-        y: 0
-        width: 243
-        height: 678
+        x: 130
+        y: 682
+        width: 244
+        height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1527,17 +1351,237 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 705d410afb22545a0800000000000000
-      internalID: -6537781077638589177
+      spriteID: cdd0aee727d886ff0800000000000000
+      internalID: -42628673564963364
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_57
+      name: listening_sheet_49
       rect:
         serializedVersion: 2
         x: 642
+        y: 682
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6163b477a9ef68010800000000000000
+      internalID: 1190919090865911318
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_50
+      rect:
+        serializedVersion: 2
+        x: 1152
+        y: 682
+        width: 245
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ad91ca20ab44b3970800000000000000
+      internalID: 8735651467914648026
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_51
+      rect:
+        serializedVersion: 2
+        x: 1664
+        y: 682
+        width: 245
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8cd3fa027086a6170800000000000000
+      internalID: 8172458853639601608
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_52
+      rect:
+        serializedVersion: 2
+        x: 2176
+        y: 682
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 54a203f51e8425cb0800000000000000
+      internalID: -4876755313686992315
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_53
+      rect:
+        serializedVersion: 2
+        x: 2688
+        y: 682
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9b41065db7af55410800000000000000
+      internalID: 1465352663546729657
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_54
+      rect:
+        serializedVersion: 2
+        x: 3200
+        y: 682
+        width: 243
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: adc031e71d66a5930800000000000000
+      internalID: 4132728658015227098
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_55
+      rect:
+        serializedVersion: 2
+        x: 3712
+        y: 682
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 359d789127d8d0010800000000000000
+      internalID: 1156736200498207059
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_56
+      rect:
+        serializedVersion: 2
+        x: 128
+        y: 0
+        width: 241
+        height: 676
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 823b2eb9a311a0200800000000000000
+      internalID: 146948881264063272
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_57
+      rect:
+        serializedVersion: 2
+        x: 639
+        y: 0
+        width: 242
+        height: 676
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d250ba2311df125d0800000000000000
+      internalID: -3088909619093109459
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_58
+      rect:
+        serializedVersion: 2
+        x: 1151
+        y: 0
+        width: 242
+        height: 678
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 852645d1bc5ca9dc0800000000000000
+      internalID: -3631372673359781288
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_59
+      rect:
+        serializedVersion: 2
+        x: 1661
         y: 0
         width: 243
         height: 678
@@ -1549,17 +1593,17 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 933d625dbb71eaeb0800000000000000
-      internalID: -4706798465053174983
+      spriteID: a8e2ff507d775b6c0800000000000000
+      internalID: -4128261718012907894
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_58
+      name: listening_sheet_60
       rect:
         serializedVersion: 2
-        x: 1154
+        x: 2173
         y: 0
         width: 243
         height: 678
@@ -1571,52 +1615,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 5a29046280ee66140800000000000000
-      internalID: 4712715778858717861
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_59
-      rect:
-        serializedVersion: 2
-        x: 1666
-        y: 0
-        width: 241
-        height: 678
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 1e2d04595e4762740800000000000000
-      internalID: 5126913755208274657
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_60
-      rect:
-        serializedVersion: 2
-        x: 2178
-        y: 0
-        width: 241
-        height: 678
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: faee2e7bf3acb6c70800000000000000
-      internalID: 8965481858227957423
+      spriteID: 2273cca004325d8d0800000000000000
+      internalID: -2822310833511712990
       vertices: []
       indices: 
       edges: []
@@ -1635,67 +1635,67 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      animation_idle_sheet_0: 6393671040499922555
-      animation_idle_sheet_1: -546637741184756439
-      animation_idle_sheet_10: 3104135779763073028
-      animation_idle_sheet_11: 6519909039587686485
-      animation_idle_sheet_12: -5310125079106385412
-      animation_idle_sheet_13: -8997898777039774330
-      animation_idle_sheet_14: 7075708442600249233
-      animation_idle_sheet_15: -1094790037575543543
-      animation_idle_sheet_16: 837746416914948855
-      animation_idle_sheet_17: -4379807324714719895
-      animation_idle_sheet_18: 6766556591614438774
-      animation_idle_sheet_19: 2609958744298168421
-      animation_idle_sheet_2: 1177034769688252347
-      animation_idle_sheet_20: -7870376665311816174
-      animation_idle_sheet_21: 4467607294631538328
-      animation_idle_sheet_22: 2847535837136051122
-      animation_idle_sheet_23: 8303780121798913271
-      animation_idle_sheet_24: 3321602935352928144
-      animation_idle_sheet_25: -6164105137839721839
-      animation_idle_sheet_26: -2676475928403121453
-      animation_idle_sheet_27: 5178299707763553653
-      animation_idle_sheet_28: 868337083800683659
-      animation_idle_sheet_29: -7524831288743522931
-      animation_idle_sheet_3: 2762124123481325252
-      animation_idle_sheet_30: 347922746029345821
-      animation_idle_sheet_31: -6743767495007390546
-      animation_idle_sheet_32: -5972154702920311620
-      animation_idle_sheet_33: 360007753135960048
-      animation_idle_sheet_34: 8241770155813476914
-      animation_idle_sheet_35: -6205767837765083148
-      animation_idle_sheet_36: -257034330968178722
-      animation_idle_sheet_37: 6841281583492728841
-      animation_idle_sheet_38: 7492888567439001906
-      animation_idle_sheet_39: 3259733225629869304
-      animation_idle_sheet_4: -5154083356380834195
-      animation_idle_sheet_40: 8517443776109287523
-      animation_idle_sheet_41: -5015258011008416058
-      animation_idle_sheet_42: 6501335710319947712
-      animation_idle_sheet_43: -153809104258961322
-      animation_idle_sheet_44: 1778223301041746939
-      animation_idle_sheet_45: -3986023913365703715
-      animation_idle_sheet_46: -83751438278651918
-      animation_idle_sheet_47: 6173342047275919563
-      animation_idle_sheet_48: 2063318150228963509
-      animation_idle_sheet_49: 744857448473666342
-      animation_idle_sheet_5: -8572886868971822707
-      animation_idle_sheet_50: 7877277222692550113
-      animation_idle_sheet_51: 3161698229170949863
-      animation_idle_sheet_52: -2784927442303070232
-      animation_idle_sheet_53: 9047433615385033288
-      animation_idle_sheet_54: -1440453501726151089
-      animation_idle_sheet_55: 7201177262541152259
-      animation_idle_sheet_56: -6537781077638589177
-      animation_idle_sheet_57: -4706798465053174983
-      animation_idle_sheet_58: 4712715778858717861
-      animation_idle_sheet_59: 5126913755208274657
-      animation_idle_sheet_6: -7042739734062325806
-      animation_idle_sheet_60: 8965481858227957423
-      animation_idle_sheet_7: 6456509253156089373
-      animation_idle_sheet_8: 5689685657107100998
-      animation_idle_sheet_9: 5934237881319705219
+      listening_sheet_0: -3889396954908509495
+      listening_sheet_1: 1497397991814852957
+      listening_sheet_10: -8821053461239376495
+      listening_sheet_11: 2872668648889632441
+      listening_sheet_12: 2166138779540826687
+      listening_sheet_13: 4699851326121696738
+      listening_sheet_14: 576591784918689006
+      listening_sheet_15: 2245395466191592060
+      listening_sheet_16: -3859609379438643256
+      listening_sheet_17: 4578563844239431790
+      listening_sheet_18: 6356600650422180842
+      listening_sheet_19: -4314968022264098877
+      listening_sheet_2: -4924935133967999649
+      listening_sheet_20: -8630411089110655277
+      listening_sheet_21: -1135522809003360988
+      listening_sheet_22: -2616237881759838438
+      listening_sheet_23: -5667554657684216689
+      listening_sheet_24: -8400592711726501873
+      listening_sheet_25: -5874896688977793403
+      listening_sheet_26: 6952371294771094777
+      listening_sheet_27: 6433511842961416482
+      listening_sheet_28: 5366293211560833131
+      listening_sheet_29: -4294642955446439011
+      listening_sheet_3: -7132680488722867411
+      listening_sheet_30: 6805835612693197773
+      listening_sheet_31: 5026175674826716107
+      listening_sheet_32: 7246858632183236678
+      listening_sheet_33: 5536608659322364402
+      listening_sheet_34: 4568332709346895357
+      listening_sheet_35: 6996150100511782122
+      listening_sheet_36: 3168804929475354867
+      listening_sheet_37: -183034740501398912
+      listening_sheet_38: 1324235286092391104
+      listening_sheet_39: -3944107914492641307
+      listening_sheet_4: 2613807560848517127
+      listening_sheet_40: -2261753443970369776
+      listening_sheet_41: -1095839068388905951
+      listening_sheet_42: 2867397722837572849
+      listening_sheet_43: 1494171793999802668
+      listening_sheet_44: 7917751711947200036
+      listening_sheet_45: -3815139171200639471
+      listening_sheet_46: -5291931150697710909
+      listening_sheet_47: 6289510237849707598
+      listening_sheet_48: -42628673564963364
+      listening_sheet_49: 1190919090865911318
+      listening_sheet_5: -2700059277048684538
+      listening_sheet_50: 8735651467914648026
+      listening_sheet_51: 8172458853639601608
+      listening_sheet_52: -4876755313686992315
+      listening_sheet_53: 1465352663546729657
+      listening_sheet_54: 4132728658015227098
+      listening_sheet_55: 1156736200498207059
+      listening_sheet_56: 146948881264063272
+      listening_sheet_57: -3088909619093109459
+      listening_sheet_58: -3631372673359781288
+      listening_sheet_59: -4128261718012907894
+      listening_sheet_6: -7424625290092222296
+      listening_sheet_60: -2822310833511712990
+      listening_sheet_7: -330325314981892667
+      listening_sheet_8: -627280923256356838
+      listening_sheet_9: 6302844257384859011
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

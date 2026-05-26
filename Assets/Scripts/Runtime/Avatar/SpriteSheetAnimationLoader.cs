@@ -29,7 +29,12 @@ namespace NeonCompanion.Runtime.Avatar
                 return null;
 
             if (TextureCache.TryGetValue(resolvedPath, out var cached))
-                return cached;
+            {
+                // Guard against stale entries left over after an Editor Play-Mode reset
+                if (cached != null)
+                    return cached;
+                TextureCache.Remove(resolvedPath);
+            }
 
             if (!File.Exists(resolvedPath))
                 return null;
@@ -57,7 +62,12 @@ namespace NeonCompanion.Runtime.Avatar
 
             string cacheKey = $"{resolvedPath}|{columns}x{rows}";
             if (SpriteCache.TryGetValue(cacheKey, out var cached))
-                return cached;
+            {
+                // Guard against stale sprite entries after an Editor Play-Mode reset
+                if (cached != null && cached.Length > 0 && cached[0] != null)
+                    return cached;
+                SpriteCache.Remove(cacheKey);
+            }
 
             var texture = LoadTextureResolved(resolvedPath);
             if (texture == null)
@@ -77,6 +87,40 @@ namespace NeonCompanion.Runtime.Avatar
                     var sprite = Sprite.Create(texture, rect, new Vector2(0.5f, 0.5f), 100f);
                     sprites.Add(sprite);
                 }
+            }
+
+            // Trim trailing blank frames caused by sprite-sheet grid padding.
+            // Spritesheets often have fewer actual frames than columns×rows cells;
+            // the remainder are fully transparent. Without trimming, the animator
+            // plays into those empty cells and the character appears to blink/vanish.
+            if (sprites.Count > 1)
+            {
+                int trimTo = sprites.Count;
+                for (int i = sprites.Count - 1; i > 0; i--)
+                {
+                    var s = sprites[i];
+                    var r = s.textureRect;
+                    bool hasContent = false;
+                    // Sample a 3×3 grid of interior points to detect any visible pixel.
+                    for (int sy = 0; sy < 3 && !hasContent; sy++)
+                    {
+                        for (int sx = 0; sx < 3 && !hasContent; sx++)
+                        {
+                            int px = (int)(r.x + r.width  * (0.25f + sx * 0.25f));
+                            int py = (int)(r.y + r.height * (0.25f + sy * 0.25f));
+                            if (texture.GetPixel(px, py).a > 0.01f)
+                                hasContent = true;
+                        }
+                    }
+
+                    if (hasContent)
+                        break;
+
+                    trimTo = i;
+                }
+
+                if (trimTo < sprites.Count)
+                    sprites.RemoveRange(trimTo, sprites.Count - trimTo);
             }
 
             var result = sprites.ToArray();

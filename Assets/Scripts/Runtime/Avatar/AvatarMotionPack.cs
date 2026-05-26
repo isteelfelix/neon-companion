@@ -16,6 +16,7 @@ namespace NeonCompanion.Runtime.Avatar
         public int rows = 1;
         public float frameRate = 8f;
         public bool loop = true;
+        public bool pingPong = false;
     }
 
     [Serializable]
@@ -154,7 +155,10 @@ namespace NeonCompanion.Runtime.Avatar
                 }
             }
 
-            if (manifest.lipsyncClip != null)
+            // JsonUtility default-constructs lipsyncClip even when the field is absent in JSON.
+            // Treat it as "no lipsync" when spriteSheetPath is empty.
+            if (manifest.lipsyncClip != null &&
+                !string.IsNullOrWhiteSpace(manifest.lipsyncClip.spriteSheetPath))
             {
                 if (!ValidateLipsyncEntry(manifest.lipsyncClip, out error))
                     return false;
@@ -182,7 +186,8 @@ namespace NeonCompanion.Runtime.Avatar
                 output.animationClips.Add(ConvertClip(clip, baseDir));
             }
 
-            if (manifest.lipsyncClip != null)
+            if (manifest.lipsyncClip != null &&
+                !string.IsNullOrWhiteSpace(manifest.lipsyncClip.spriteSheetPath))
             {
                 var lipsync = ConvertClip(manifest.lipsyncClip, baseDir);
                 lipsync.clipName = "lipsync";
@@ -206,6 +211,42 @@ namespace NeonCompanion.Runtime.Avatar
                     return BuildRuntimeClips(load.manifest, load.manifestPath);
 
                 NeonLogger.LogWarning("Motion pack manifest rejected for avatar '" + profile.id + "': " + (load.error ?? "unknown error"));
+            }
+
+            // Fallback: try built-in motion pack at StreamingAssets/Avatars/{id}/motion_pack.json
+            // Use Application.streamingAssetsPath directly instead of ResolvePath to avoid
+            // any path-separator or candidate-ordering issues on Windows.
+            if (!string.IsNullOrWhiteSpace(profile.id) &&
+                (profile.animationClips == null || profile.animationClips.Count == 0))
+            {
+                string directPath = Path.Combine(
+                    Application.streamingAssetsPath, "Avatars", profile.id, "motion_pack.json");
+
+                NeonLogger.Log("[MotionPack] Built-in lookup for '" + profile.id +
+                    "' at '" + directPath + "' exists=" + File.Exists(directPath));
+
+                if (File.Exists(directPath))
+                {
+                    try
+                    {
+                        string json = File.ReadAllText(directPath);
+                        var manifest = JsonUtility.FromJson<AvatarMotionPackManifest>(json);
+                        string validationError = null;
+                        if (manifest != null && ValidateManifest(manifest, out validationError))
+                        {
+                            NeonLogger.Log("[MotionPack] Loaded built-in pack for '" + profile.id +
+                                "' clips=" + manifest.clips.Count);
+                            return BuildRuntimeClips(manifest, directPath);
+                        }
+                        NeonLogger.LogWarning("[MotionPack] Manifest validation failed for '" +
+                            profile.id + "': " + (validationError ?? "manifest was null"));
+                    }
+                    catch (Exception ex)
+                    {
+                        NeonLogger.LogWarning("[MotionPack] Failed to read manifest for '" +
+                            profile.id + "': " + ex.Message);
+                    }
+                }
             }
 
             resolved.animationClips = profile.animationClips ?? new List<SpriteSheetAnimation>();
@@ -265,6 +306,7 @@ namespace NeonCompanion.Runtime.Avatar
 
         private static SpriteSheetAnimation ConvertClip(AvatarMotionClipEntry clip, string baseDir)
         {
+            bool oneShot = RequiresOneShot((clip.action ?? string.Empty).Trim());
             return new SpriteSheetAnimation
             {
                 clipName = (clip.action ?? string.Empty).Trim().ToLowerInvariant(),
@@ -272,7 +314,8 @@ namespace NeonCompanion.Runtime.Avatar
                 columns = Mathf.Max(1, clip.columns),
                 rows = Mathf.Max(1, clip.rows),
                 frameRate = Mathf.Max(0.01f, clip.frameRate),
-                loop = RequiresOneShot((clip.action ?? string.Empty).Trim()) ? false : clip.loop
+                loop = oneShot ? false : clip.loop,
+                pingPong = oneShot ? false : clip.pingPong,
             };
         }
 

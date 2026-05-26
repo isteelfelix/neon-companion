@@ -1,190 +1,190 @@
 fileFormatVersion: 2
-guid: 3a38e62f1b041994d9903442ca4d0a7a
+guid: 85ae8eab4a99b4c418edba0b45d96f21
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 6393671040499922555
-    second: animation_idle_sheet_0
+      213: -6841108652290840578
+    second: confused_sheet_0
   - first:
-      213: -546637741184756439
-    second: animation_idle_sheet_1
+      213: 1213112184301702562
+    second: confused_sheet_1
   - first:
-      213: 1177034769688252347
-    second: animation_idle_sheet_2
+      213: -363722630793752175
+    second: confused_sheet_2
   - first:
-      213: 2762124123481325252
-    second: animation_idle_sheet_3
+      213: 8756571548161384211
+    second: confused_sheet_3
   - first:
-      213: -5154083356380834195
-    second: animation_idle_sheet_4
+      213: 1273428782783109133
+    second: confused_sheet_4
   - first:
-      213: -8572886868971822707
-    second: animation_idle_sheet_5
+      213: -3849243202754412318
+    second: confused_sheet_5
   - first:
-      213: -7042739734062325806
-    second: animation_idle_sheet_6
+      213: -5777943400099433009
+    second: confused_sheet_6
   - first:
-      213: 6456509253156089373
-    second: animation_idle_sheet_7
+      213: -621960997724422165
+    second: confused_sheet_7
   - first:
-      213: 5689685657107100998
-    second: animation_idle_sheet_8
+      213: -7152429323715003048
+    second: confused_sheet_8
   - first:
-      213: 5934237881319705219
-    second: animation_idle_sheet_9
+      213: -1653069098970304850
+    second: confused_sheet_9
   - first:
-      213: 3104135779763073028
-    second: animation_idle_sheet_10
+      213: 605621397721730205
+    second: confused_sheet_10
   - first:
-      213: 6519909039587686485
-    second: animation_idle_sheet_11
+      213: -8975625702348105338
+    second: confused_sheet_11
   - first:
-      213: -5310125079106385412
-    second: animation_idle_sheet_12
+      213: 8149102321241816701
+    second: confused_sheet_12
   - first:
-      213: -8997898777039774330
-    second: animation_idle_sheet_13
+      213: 5106173945046138018
+    second: confused_sheet_13
   - first:
-      213: 7075708442600249233
-    second: animation_idle_sheet_14
+      213: -8212744531367513436
+    second: confused_sheet_14
   - first:
-      213: -1094790037575543543
-    second: animation_idle_sheet_15
+      213: 4797549791658430401
+    second: confused_sheet_15
   - first:
-      213: 837746416914948855
-    second: animation_idle_sheet_16
+      213: -6597047929274890747
+    second: confused_sheet_16
   - first:
-      213: -4379807324714719895
-    second: animation_idle_sheet_17
+      213: -8493453374967467086
+    second: confused_sheet_17
   - first:
-      213: 6766556591614438774
-    second: animation_idle_sheet_18
+      213: -1186550274754345245
+    second: confused_sheet_18
   - first:
-      213: 2609958744298168421
-    second: animation_idle_sheet_19
+      213: -6214844733236748084
+    second: confused_sheet_19
   - first:
-      213: -7870376665311816174
-    second: animation_idle_sheet_20
+      213: 6633930275680241261
+    second: confused_sheet_20
   - first:
-      213: 4467607294631538328
-    second: animation_idle_sheet_21
+      213: 1802284231720178974
+    second: confused_sheet_21
   - first:
-      213: 2847535837136051122
-    second: animation_idle_sheet_22
+      213: -8895985251962165194
+    second: confused_sheet_22
   - first:
-      213: 8303780121798913271
-    second: animation_idle_sheet_23
+      213: 8515439569038186400
+    second: confused_sheet_23
   - first:
-      213: 3321602935352928144
-    second: animation_idle_sheet_24
+      213: -6274846000834481154
+    second: confused_sheet_24
   - first:
-      213: -6164105137839721839
-    second: animation_idle_sheet_25
+      213: -5381867385023676176
+    second: confused_sheet_25
   - first:
-      213: -2676475928403121453
-    second: animation_idle_sheet_26
+      213: -2464966633667382761
+    second: confused_sheet_26
   - first:
-      213: 5178299707763553653
-    second: animation_idle_sheet_27
+      213: 2553122419257932185
+    second: confused_sheet_27
   - first:
-      213: 868337083800683659
-    second: animation_idle_sheet_28
+      213: 3622105309053944248
+    second: confused_sheet_28
   - first:
-      213: -7524831288743522931
-    second: animation_idle_sheet_29
+      213: -2307740750691538124
+    second: confused_sheet_29
   - first:
-      213: 347922746029345821
-    second: animation_idle_sheet_30
+      213: -2495870851325723457
+    second: confused_sheet_30
   - first:
-      213: -6743767495007390546
-    second: animation_idle_sheet_31
+      213: -5961683118500988762
+    second: confused_sheet_31
   - first:
-      213: -5972154702920311620
-    second: animation_idle_sheet_32
+      213: -7480276567842957552
+    second: confused_sheet_32
   - first:
-      213: 360007753135960048
-    second: animation_idle_sheet_33
+      213: -88065196963470533
+    second: confused_sheet_33
   - first:
-      213: 8241770155813476914
-    second: animation_idle_sheet_34
+      213: 6323976177500515582
+    second: confused_sheet_34
   - first:
-      213: -6205767837765083148
-    second: animation_idle_sheet_35
+      213: -8531958647411632038
+    second: confused_sheet_35
   - first:
-      213: -257034330968178722
-    second: animation_idle_sheet_36
+      213: 1814107380270181124
+    second: confused_sheet_36
   - first:
-      213: 6841281583492728841
-    second: animation_idle_sheet_37
+      213: -6783957438318617372
+    second: confused_sheet_37
   - first:
-      213: 7492888567439001906
-    second: animation_idle_sheet_38
+      213: 7344635798947985458
+    second: confused_sheet_38
   - first:
-      213: 3259733225629869304
-    second: animation_idle_sheet_39
+      213: 5836533762386270917
+    second: confused_sheet_39
   - first:
-      213: 8517443776109287523
-    second: animation_idle_sheet_40
+      213: 3442774051538721589
+    second: confused_sheet_40
   - first:
-      213: -5015258011008416058
-    second: animation_idle_sheet_41
+      213: 316939064265562887
+    second: confused_sheet_41
   - first:
-      213: 6501335710319947712
-    second: animation_idle_sheet_42
+      213: -7545789376916084579
+    second: confused_sheet_42
   - first:
-      213: -153809104258961322
-    second: animation_idle_sheet_43
+      213: 2910659078748520193
+    second: confused_sheet_43
   - first:
-      213: 1778223301041746939
-    second: animation_idle_sheet_44
+      213: 8348819262614814785
+    second: confused_sheet_44
   - first:
-      213: -3986023913365703715
-    second: animation_idle_sheet_45
+      213: 4162962175276072056
+    second: confused_sheet_45
   - first:
-      213: -83751438278651918
-    second: animation_idle_sheet_46
+      213: 5272172158626814
+    second: confused_sheet_46
   - first:
-      213: 6173342047275919563
-    second: animation_idle_sheet_47
+      213: 8887903679045494162
+    second: confused_sheet_47
   - first:
-      213: 2063318150228963509
-    second: animation_idle_sheet_48
+      213: -844192609909937057
+    second: confused_sheet_48
   - first:
-      213: 744857448473666342
-    second: animation_idle_sheet_49
+      213: -4324392450635376281
+    second: confused_sheet_49
   - first:
-      213: 7877277222692550113
-    second: animation_idle_sheet_50
+      213: 7322523644051765569
+    second: confused_sheet_50
   - first:
-      213: 3161698229170949863
-    second: animation_idle_sheet_51
+      213: 4773379584720406168
+    second: confused_sheet_51
   - first:
-      213: -2784927442303070232
-    second: animation_idle_sheet_52
+      213: -6427251478115099526
+    second: confused_sheet_52
   - first:
-      213: 9047433615385033288
-    second: animation_idle_sheet_53
+      213: 1579323919862928264
+    second: confused_sheet_53
   - first:
-      213: -1440453501726151089
-    second: animation_idle_sheet_54
+      213: -4306314265761639777
+    second: confused_sheet_54
   - first:
-      213: 7201177262541152259
-    second: animation_idle_sheet_55
+      213: -513523107467415709
+    second: confused_sheet_55
   - first:
-      213: -6537781077638589177
-    second: animation_idle_sheet_56
+      213: -5834176651097784903
+    second: confused_sheet_56
   - first:
-      213: -4706798465053174983
-    second: animation_idle_sheet_57
+      213: -285655349174410770
+    second: confused_sheet_57
   - first:
-      213: 4712715778858717861
-    second: animation_idle_sheet_58
+      213: -3761784656716831411
+    second: confused_sheet_58
   - first:
-      213: 5126913755208274657
-    second: animation_idle_sheet_59
+      213: -2864058520354907208
+    second: confused_sheet_59
   - first:
-      213: 8965481858227957423
-    second: animation_idle_sheet_60
+      213: 6658232459265816042
+    second: confused_sheet_60
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -280,7 +280,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: animation_idle_sheet_0
+      name: confused_sheet_0
       rect:
         serializedVersion: 2
         x: 131
@@ -295,282 +295,18 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: b7633bbafe1eab850800000000000000
-      internalID: 6393671040499922555
+      spriteID: ef76a5e2def7f01a0800000000000000
+      internalID: -6841108652290840578
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_1
-      rect:
-        serializedVersion: 2
-        x: 642
-        y: 4780
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 9255cdfded3f968f0800000000000000
-      internalID: -546637741184756439
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_2
-      rect:
-        serializedVersion: 2
-        x: 1154
-        y: 4780
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: bbf4d8703eaa55010800000000000000
-      internalID: 1177034769688252347
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_3
-      rect:
-        serializedVersion: 2
-        x: 1666
-        y: 4780
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 4ce34a58149055620800000000000000
-      internalID: 2762124123481325252
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_4
-      rect:
-        serializedVersion: 2
-        x: 2178
-        y: 4780
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d66da20be740978b0800000000000000
-      internalID: -5154083356380834195
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_5
-      rect:
-        serializedVersion: 2
-        x: 2690
-        y: 4780
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d81e25350dcf60980800000000000000
-      internalID: -8572886868971822707
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_6
-      rect:
-        serializedVersion: 2
-        x: 3202
-        y: 4780
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 2df9fa1a689234e90800000000000000
-      internalID: -7042739734062325806
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_7
-      rect:
-        serializedVersion: 2
-        x: 3714
-        y: 4780
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d1e246b25f02a9950800000000000000
-      internalID: 6456509253156089373
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_8
-      rect:
-        serializedVersion: 2
-        x: 130
-        y: 4097
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 645f08bb5f2d5fe40800000000000000
-      internalID: 5689685657107100998
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_9
+      name: confused_sheet_1
       rect:
         serializedVersion: 2
         x: 643
-        y: 4097
-        width: 242
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 38a4ab089e5aa5250800000000000000
-      internalID: 5934237881319705219
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_10
-      rect:
-        serializedVersion: 2
-        x: 1155
-        y: 4097
-        width: 242
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 400bb579b0b141b20800000000000000
-      internalID: 3104135779763073028
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_11
-      rect:
-        serializedVersion: 2
-        x: 1666
-        y: 4097
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 5587b704abe5b7a50800000000000000
-      internalID: 6519909039587686485
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_12
-      rect:
-        serializedVersion: 2
-        x: 2178
-        y: 4097
-        width: 243
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: cf988f2ff55ae46b0800000000000000
-      internalID: -5310125079106385412
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_13
-      rect:
-        serializedVersion: 2
-        x: 2690
-        y: 4097
+        y: 4780
         width: 243
         height: 679
       alignment: 0
@@ -581,108 +317,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 68d5f953cba012380800000000000000
-      internalID: -8997898777039774330
+      spriteID: 2ad4002ba17d5d010800000000000000
+      internalID: 1213112184301702562
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_14
-      rect:
-        serializedVersion: 2
-        x: 3202
-        y: 4097
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 1979b6ff657f13260800000000000000
-      internalID: 7075708442600249233
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_15
-      rect:
-        serializedVersion: 2
-        x: 3714
-        y: 4097
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 9055ca2e2468ec0f0800000000000000
-      internalID: -1094790037575543543
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_16
-      rect:
-        serializedVersion: 2
-        x: 130
-        y: 3414
-        width: 244
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 7f262187de540ab00800000000000000
-      internalID: 837746416914948855
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_17
-      rect:
-        serializedVersion: 2
-        x: 642
-        y: 3414
-        width: 246
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 965a9b1817cc733c0800000000000000
-      internalID: -4379807324714719895
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_18
+      name: confused_sheet_2
       rect:
         serializedVersion: 2
         x: 1154
-        y: 3414
-        width: 246
-        height: 679
+        y: 4780
+        width: 244
+        height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -691,20 +339,306 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 67da1cb8e53a7ed50800000000000000
-      internalID: 6766556591614438774
+      spriteID: 19194c2c13cc3faf0800000000000000
+      internalID: -363722630793752175
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_19
+      name: confused_sheet_3
       rect:
         serializedVersion: 2
         x: 1666
+        y: 4780
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 31f9372cd67958970800000000000000
+      internalID: 8756571548161384211
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_4
+      rect:
+        serializedVersion: 2
+        x: 2176
+        y: 4780
+        width: 245
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d089b842bb02ca110800000000000000
+      internalID: 1273428782783109133
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_5
+      rect:
+        serializedVersion: 2
+        x: 2685
+        y: 4780
+        width: 248
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2e08cb583bdb49ac0800000000000000
+      internalID: -3849243202754412318
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_6
+      rect:
+        serializedVersion: 2
+        x: 3178
+        y: 4780
+        width: 268
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fc5b2c8271f90dfa0800000000000000
+      internalID: -5777943400099433009
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_7
+      rect:
+        serializedVersion: 2
+        x: 3680
+        y: 4780
+        width: 280
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: beffc7294c95e57f0800000000000000
+      internalID: -621960997724422165
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_8
+      rect:
+        serializedVersion: 2
+        x: 112
+        y: 4097
+        width: 267
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 85d31eedc677dbc90800000000000000
+      internalID: -7152429323715003048
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_9
+      rect:
+        serializedVersion: 2
+        x: 621
+        y: 4097
+        width: 273
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: eae23bea96e1f09e0800000000000000
+      internalID: -1653069098970304850
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_10
+      rect:
+        serializedVersion: 2
+        x: 1128
+        y: 4097
+        width: 280
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d9c4497d379976800800000000000000
+      internalID: 605621397721730205
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_11
+      rect:
+        serializedVersion: 2
+        x: 1642
+        y: 4097
+        width: 276
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 689dca68afb207380800000000000000
+      internalID: -8975625702348105338
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_12
+      rect:
+        serializedVersion: 2
+        x: 2155
+        y: 4097
+        width: 275
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d7efde7a26d671170800000000000000
+      internalID: 8149102321241816701
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_13
+      rect:
+        serializedVersion: 2
+        x: 2669
+        y: 4097
+        width: 272
+        height: 673
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2ac74db3626ccd640800000000000000
+      internalID: 5106173945046138018
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_14
+      rect:
+        serializedVersion: 2
+        x: 3179
+        y: 4097
+        width: 272
+        height: 673
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4a2bec89c58760e80800000000000000
+      internalID: -8212744531367513436
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_15
+      rect:
+        serializedVersion: 2
+        x: 3690
+        y: 4097
+        width: 273
+        height: 673
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1cfcc04fd12549240800000000000000
+      internalID: 4797549791658430401
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_16
+      rect:
+        serializedVersion: 2
+        x: 106
         y: 3414
-        width: 246
-        height: 679
+        width: 275
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -713,20 +647,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 560215856af683420800000000000000
-      internalID: 2609958744298168421
+      spriteID: 50608596cd39274a0800000000000000
+      internalID: -6597047929274890747
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_20
+      name: confused_sheet_17
       rect:
         serializedVersion: 2
-        x: 2179
+        x: 618
         y: 3414
-        width: 246
-        height: 679
+        width: 276
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -735,20 +669,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 216d0973f1ec6c290800000000000000
-      internalID: -7870376665311816174
+      spriteID: 2b3b8bcd721312a80800000000000000
+      internalID: -8493453374967467086
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_21
+      name: confused_sheet_18
       rect:
         serializedVersion: 2
-        x: 2693
+        x: 1130
         y: 3414
-        width: 243
-        height: 679
+        width: 278
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -757,20 +691,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 89ee4700a21200e30800000000000000
-      internalID: 4467607294631538328
+      spriteID: 3e6002dcfc6888fe0800000000000000
+      internalID: -1186550274754345245
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_22
+      name: confused_sheet_19
       rect:
         serializedVersion: 2
-        x: 3205
+        x: 1645
         y: 3414
-        width: 243
-        height: 679
+        width: 278
+        height: 671
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -779,20 +713,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 2bb50b9c1ca748720800000000000000
-      internalID: 2847535837136051122
+      spriteID: cc0673d84af60c9a0800000000000000
+      internalID: -6214844733236748084
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_23
+      name: confused_sheet_20
       rect:
         serializedVersion: 2
-        x: 3717
+        x: 2162
         y: 3414
-        width: 243
-        height: 679
+        width: 276
+        height: 671
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -801,20 +735,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 7fc26c48604fc3370800000000000000
-      internalID: 8303780121798913271
+      spriteID: d6641aa0074701c50800000000000000
+      internalID: 6633930275680241261
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_24
+      name: confused_sheet_21
       rect:
         serializedVersion: 2
-        x: 135
-        y: 2731
-        width: 239
-        height: 679
+        x: 2679
+        y: 3414
+        width: 273
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -823,20 +757,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 0972b966544b81e20800000000000000
-      internalID: 3321602935352928144
+      spriteID: e1518f7b5fff20910800000000000000
+      internalID: 1802284231720178974
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_25
+      name: confused_sheet_22
       rect:
         serializedVersion: 2
-        x: 647
-        y: 2731
-        width: 239
-        height: 679
+        x: 3197
+        y: 3414
+        width: 270
+        height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -845,129 +779,41 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 19237e43903b47aa0800000000000000
-      internalID: -6164105137839721839
+      spriteID: 6386ea9db8c1b8480800000000000000
+      internalID: -8895985251962165194
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_26
-      rect:
-        serializedVersion: 2
-        x: 1159
-        y: 2731
-        width: 241
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 3dae5add25f3bdad0800000000000000
-      internalID: -2676475928403121453
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_27
-      rect:
-        serializedVersion: 2
-        x: 1671
-        y: 2731
-        width: 241
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 57571cdf5240dd740800000000000000
-      internalID: 5178299707763553653
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_28
-      rect:
-        serializedVersion: 2
-        x: 2183
-        y: 2731
-        width: 241
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: b840d312af3fc0c00800000000000000
-      internalID: 868337083800683659
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_29
-      rect:
-        serializedVersion: 2
-        x: 2695
-        y: 2731
-        width: 242
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d8d82b7afcd629790800000000000000
-      internalID: -7524831288743522931
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_30
-      rect:
-        serializedVersion: 2
-        x: 3207
-        y: 2731
-        width: 242
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d1c8b56e4e114d400800000000000000
-      internalID: 347922746029345821
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_31
+      name: confused_sheet_23
       rect:
         serializedVersion: 2
         x: 3719
+        y: 3414
+        width: 266
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0a793dadb2bec2670800000000000000
+      internalID: 8515439569038186400
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_24
+      rect:
+        serializedVersion: 2
+        x: 144
         y: 2731
-        width: 242
+        width: 261
         height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -977,20 +823,174 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: ea4324c71335962a0800000000000000
-      internalID: -6743767495007390546
+      spriteID: ef3fafbcec44be8a0800000000000000
+      internalID: -6274846000834481154
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_32
+      name: confused_sheet_25
       rect:
         serializedVersion: 2
-        x: 135
+        x: 664
+        y: 2731
+        width: 254
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0f0476fa024cf45b0800000000000000
+      internalID: -5381867385023676176
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_26
+      rect:
+        serializedVersion: 2
+        x: 1183
+        y: 2731
+        width: 249
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 712b01918edaacdd0800000000000000
+      internalID: -2464966633667382761
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_27
+      rect:
+        serializedVersion: 2
+        x: 1698
+        y: 2731
+        width: 247
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 99974f330538e6320800000000000000
+      internalID: 2553122419257932185
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_28
+      rect:
+        serializedVersion: 2
+        x: 2208
+        y: 2731
+        width: 251
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8b1873d769d444230800000000000000
+      internalID: 3622105309053944248
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_29
+      rect:
+        serializedVersion: 2
+        x: 2714
+        y: 2731
+        width: 257
+        height: 671
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 43b6651a30249ffd0800000000000000
+      internalID: -2307740750691538124
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_30
+      rect:
+        serializedVersion: 2
+        x: 3216
+        y: 2731
+        width: 267
+        height: 668
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fbc7a753fa2ec5dd0800000000000000
+      internalID: -2495870851325723457
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_31
+      rect:
+        serializedVersion: 2
+        x: 3717
+        y: 2731
+        width: 273
+        height: 668
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6a83e424ac8d34da0800000000000000
+      internalID: -5961683118500988762
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_32
+      rect:
+        serializedVersion: 2
+        x: 122
         y: 2048
-        width: 242
-        height: 679
+        width: 274
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -999,20 +999,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: cbc91c480f4ae1da0800000000000000
-      internalID: -5972154702920311620
+      spriteID: 017da000818b03890800000000000000
+      internalID: -7480276567842957552
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_33
+      name: confused_sheet_33
       rect:
         serializedVersion: 2
-        x: 647
+        x: 624
         y: 2048
-        width: 242
-        height: 679
+        width: 273
+        height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1021,19 +1021,19 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 0ff2e02e4210ff400800000000000000
-      internalID: 360007753135960048
+      spriteID: b33eae18b2127cef0800000000000000
+      internalID: -88065196963470533
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_34
+      name: confused_sheet_34
       rect:
         serializedVersion: 2
-        x: 1159
+        x: 1128
         y: 2048
-        width: 242
+        width: 273
         height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -1043,20 +1043,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 23a9da93a46a06270800000000000000
-      internalID: 8241770155813476914
+      spriteID: efc63fbd3d643c750800000000000000
+      internalID: 6323976177500515582
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_35
+      name: confused_sheet_35
       rect:
         serializedVersion: 2
-        x: 1669
+        x: 1637
         y: 2048
-        width: 243
-        height: 679
+        width: 272
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1065,19 +1065,19 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 4ffd777f70fa0e9a0800000000000000
-      internalID: -6205767837765083148
+      spriteID: a5815be70d4689980800000000000000
+      internalID: -8531958647411632038
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_36
+      name: confused_sheet_36
       rect:
         serializedVersion: 2
-        x: 2181
+        x: 2149
         y: 2048
-        width: 243
+        width: 270
         height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
@@ -1087,20 +1087,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: edfbf8743a4de6cf0800000000000000
-      internalID: -257034330968178722
+      spriteID: 40b2b610d010d2910800000000000000
+      internalID: 1814107380270181124
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_37
+      name: confused_sheet_37
       rect:
         serializedVersion: 2
-        x: 2691
+        x: 2661
         y: 2048
-        width: 243
-        height: 679
+        width: 270
+        height: 677
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1109,20 +1109,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 90881808a5d11fe50800000000000000
-      internalID: 6841281583492728841
+      spriteID: 4ec56ad17aa8ad1a0800000000000000
+      internalID: -6783957438318617372
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_38
+      name: confused_sheet_38
       rect:
         serializedVersion: 2
-        x: 3202
+        x: 3176
         y: 2048
-        width: 244
-        height: 679
+        width: 267
+        height: 675
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1131,20 +1131,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 23989cbf3761cf760800000000000000
-      internalID: 7492888567439001906
+      spriteID: 23879e878536de560800000000000000
+      internalID: 7344635798947985458
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_39
+      name: confused_sheet_39
       rect:
         serializedVersion: 2
-        x: 3714
+        x: 3690
         y: 2048
-        width: 244
-        height: 679
+        width: 265
+        height: 675
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1153,20 +1153,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 8f4e4301916ec3d20800000000000000
-      internalID: 3259733225629869304
+      spriteID: 5ca9b9a98888ff050800000000000000
+      internalID: 5836533762386270917
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_40
+      name: confused_sheet_40
       rect:
         serializedVersion: 2
-        x: 128
+        x: 106
         y: 1365
-        width: 246
-        height: 679
+        width: 265
+        height: 675
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1175,20 +1175,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 3681b5dacf9043670800000000000000
-      internalID: 8517443776109287523
+      spriteID: 53bd5ef52c037cf20800000000000000
+      internalID: 3442774051538721589
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_41
+      name: confused_sheet_41
       rect:
         serializedVersion: 2
-        x: 640
+        x: 618
         y: 1365
-        width: 244
-        height: 679
+        width: 265
+        height: 675
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1197,20 +1197,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 6c649e43969366ab0800000000000000
-      internalID: -5015258011008416058
+      spriteID: 70b5ef4566ef56400800000000000000
+      internalID: 316939064265562887
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_42
+      name: confused_sheet_42
       rect:
         serializedVersion: 2
-        x: 1152
+        x: 1130
         y: 1365
-        width: 245
-        height: 679
+        width: 265
+        height: 675
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1219,20 +1219,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 0cfae2b0262693a50800000000000000
-      internalID: 6501335710319947712
+      spriteID: d98200f7a88f74790800000000000000
+      internalID: -7545789376916084579
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_43
+      name: confused_sheet_43
       rect:
         serializedVersion: 2
-        x: 1664
+        x: 1642
         y: 1365
-        width: 243
-        height: 679
+        width: 265
+        height: 675
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1241,20 +1241,42 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 6507c614f6f8dddf0800000000000000
-      internalID: -153809104258961322
+      spriteID: 10f3213c20db46820800000000000000
+      internalID: 2910659078748520193
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_44
+      name: confused_sheet_44
       rect:
         serializedVersion: 2
-        x: 2178
+        x: 1650
+        y: 682
+        width: 295
+        height: 683
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 140481aa2e6fcd370800000000000000
+      internalID: 8348819262614814785
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_45
+      rect:
+        serializedVersion: 2
+        x: 2155
         y: 1365
-        width: 241
-        height: 679
+        width: 262
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1263,20 +1285,42 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: bf37aedbba48da810800000000000000
-      internalID: 1778223301041746939
+      spriteID: 87cb7b6ca00d5c930800000000000000
+      internalID: 4162962175276072056
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_45
+      name: confused_sheet_46
       rect:
         serializedVersion: 2
-        x: 2690
+        x: 2186
+        y: 682
+        width: 271
+        height: 683
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: efba5bc330bb21000800000000000000
+      internalID: 5272172158626814
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_47
+      rect:
+        serializedVersion: 2
+        x: 2674
         y: 1365
-        width: 241
-        height: 677
+        width: 254
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1285,20 +1329,42 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: dd3ff91ae5ccea8c0800000000000000
-      internalID: -3986023913365703715
+      spriteID: 295e4635e4d285b70800000000000000
+      internalID: 8887903679045494162
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_46
+      name: confused_sheet_48
       rect:
         serializedVersion: 2
-        x: 3202
+        x: 2711
+        y: 682
+        width: 252
+        height: 683
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f5cee444b43d844f0800000000000000
+      internalID: -844192609909937057
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_49
+      rect:
+        serializedVersion: 2
+        x: 3192
         y: 1365
-        width: 242
-        height: 677
+        width: 248
+        height: 672
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1307,20 +1373,42 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 2ff09f7b28476def0800000000000000
-      internalID: -83751438278651918
+      spriteID: 7695f7e4afbacf3c0800000000000000
+      internalID: -4324392450635376281
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_47
+      name: confused_sheet_50
       rect:
         serializedVersion: 2
-        x: 3715
+        x: 3227
+        y: 682
+        width: 240
+        height: 683
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 149ba173574de9560800000000000000
+      internalID: 7322523644051765569
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_51
+      rect:
+        serializedVersion: 2
+        x: 3693
         y: 1365
-        width: 242
-        height: 677
+        width: 260
+        height: 673
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1329,20 +1417,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: bc82ddc52ed1ca550800000000000000
-      internalID: 6173342047275919563
+      spriteID: 8968c5d11737e3240800000000000000
+      internalID: 4773379584720406168
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_48
+      name: confused_sheet_52
       rect:
         serializedVersion: 2
-        x: 133
+        x: 3736
         y: 682
-        width: 241
-        height: 677
+        width: 238
+        height: 683
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1351,20 +1439,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 5b0730bfce062ac10800000000000000
-      internalID: 2063318150228963509
+      spriteID: a7c58dc65d0ddc6a0800000000000000
+      internalID: -6427251478115099526
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_49
+      name: confused_sheet_53
       rect:
         serializedVersion: 2
-        x: 645
+        x: 90
         y: 682
-        width: 241
-        height: 677
+        width: 286
+        height: 675
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1373,152 +1461,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 623a39827e3465a00800000000000000
-      internalID: 744857448473666342
+      spriteID: 88315bcccb2eae510800000000000000
+      internalID: 1579323919862928264
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_50
+      name: confused_sheet_54
       rect:
         serializedVersion: 2
-        x: 1157
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 1e57ddff5e5b15d60800000000000000
-      internalID: 7877277222692550113
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_51
-      rect:
-        serializedVersion: 2
-        x: 1669
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 7ee47bcb9cb90eb20800000000000000
-      internalID: 3161698229170949863
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_52
-      rect:
-        serializedVersion: 2
-        x: 2181
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 8efc9441f33f959d0800000000000000
-      internalID: -2784927442303070232
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_53
-      rect:
-        serializedVersion: 2
-        x: 2693
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 84af3f510f0fe8d70800000000000000
-      internalID: 9047433615385033288
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_54
-      rect:
-        serializedVersion: 2
-        x: 3205
-        y: 682
-        width: 241
-        height: 677
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: f4e252a0c2b720ce0800000000000000
-      internalID: -1440453501726151089
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_55
-      rect:
-        serializedVersion: 2
-        x: 3716
-        y: 682
-        width: 242
-        height: 679
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 300a26a1198bfe360800000000000000
-      internalID: 7201177262541152259
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: animation_idle_sheet_56
-      rect:
-        serializedVersion: 2
-        x: 131
+        x: 147
         y: 0
         width: 243
-        height: 678
+        height: 682
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1527,20 +1483,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 705d410afb22545a0800000000000000
-      internalID: -6537781077638589177
+      spriteID: f92941abdf5ec34c0800000000000000
+      internalID: -4306314265761639777
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_57
+      name: confused_sheet_55
       rect:
         serializedVersion: 2
-        x: 642
-        y: 0
-        width: 243
-        height: 678
+        x: 597
+        y: 682
+        width: 305
+        height: 679
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1549,20 +1505,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 933d625dbb71eaeb0800000000000000
-      internalID: -4706798465053174983
+      spriteID: 36f237b54799fd8f0800000000000000
+      internalID: -513523107467415709
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_58
+      name: confused_sheet_56
       rect:
         serializedVersion: 2
-        x: 1154
+        x: 655
         y: 0
-        width: 243
-        height: 678
+        width: 247
+        height: 682
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1571,20 +1527,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 5a29046280ee66140800000000000000
-      internalID: 4712715778858717861
+      spriteID: 9bd30722f37d80fa0800000000000000
+      internalID: -5834176651097784903
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_59
+      name: confused_sheet_57
       rect:
         serializedVersion: 2
-        x: 1666
-        y: 0
-        width: 241
-        height: 678
+        x: 1119
+        y: 682
+        width: 308
+        height: 681
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1593,20 +1549,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 1e2d04595e4762740800000000000000
-      internalID: 5126913755208274657
+      spriteID: ee1e44039f5290cf0800000000000000
+      internalID: -285655349174410770
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: animation_idle_sheet_60
+      name: confused_sheet_58
       rect:
         serializedVersion: 2
-        x: 2178
+        x: 1165
         y: 0
-        width: 241
-        height: 678
+        width: 249
+        height: 682
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -1615,8 +1571,52 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: faee2e7bf3acb6c70800000000000000
-      internalID: 8965481858227957423
+      spriteID: d45e0e619c47bcbc0800000000000000
+      internalID: -3761784656716831411
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_59
+      rect:
+        serializedVersion: 2
+        x: 1677
+        y: 0
+        width: 249
+        height: 682
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8bb905e33f1d048d0800000000000000
+      internalID: -2864058520354907208
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: confused_sheet_60
+      rect:
+        serializedVersion: 2
+        x: 2191
+        y: 0
+        width: 247
+        height: 682
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ae5b386152bc66c50800000000000000
+      internalID: 6658232459265816042
       vertices: []
       indices: 
       edges: []
@@ -1635,67 +1635,67 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      animation_idle_sheet_0: 6393671040499922555
-      animation_idle_sheet_1: -546637741184756439
-      animation_idle_sheet_10: 3104135779763073028
-      animation_idle_sheet_11: 6519909039587686485
-      animation_idle_sheet_12: -5310125079106385412
-      animation_idle_sheet_13: -8997898777039774330
-      animation_idle_sheet_14: 7075708442600249233
-      animation_idle_sheet_15: -1094790037575543543
-      animation_idle_sheet_16: 837746416914948855
-      animation_idle_sheet_17: -4379807324714719895
-      animation_idle_sheet_18: 6766556591614438774
-      animation_idle_sheet_19: 2609958744298168421
-      animation_idle_sheet_2: 1177034769688252347
-      animation_idle_sheet_20: -7870376665311816174
-      animation_idle_sheet_21: 4467607294631538328
-      animation_idle_sheet_22: 2847535837136051122
-      animation_idle_sheet_23: 8303780121798913271
-      animation_idle_sheet_24: 3321602935352928144
-      animation_idle_sheet_25: -6164105137839721839
-      animation_idle_sheet_26: -2676475928403121453
-      animation_idle_sheet_27: 5178299707763553653
-      animation_idle_sheet_28: 868337083800683659
-      animation_idle_sheet_29: -7524831288743522931
-      animation_idle_sheet_3: 2762124123481325252
-      animation_idle_sheet_30: 347922746029345821
-      animation_idle_sheet_31: -6743767495007390546
-      animation_idle_sheet_32: -5972154702920311620
-      animation_idle_sheet_33: 360007753135960048
-      animation_idle_sheet_34: 8241770155813476914
-      animation_idle_sheet_35: -6205767837765083148
-      animation_idle_sheet_36: -257034330968178722
-      animation_idle_sheet_37: 6841281583492728841
-      animation_idle_sheet_38: 7492888567439001906
-      animation_idle_sheet_39: 3259733225629869304
-      animation_idle_sheet_4: -5154083356380834195
-      animation_idle_sheet_40: 8517443776109287523
-      animation_idle_sheet_41: -5015258011008416058
-      animation_idle_sheet_42: 6501335710319947712
-      animation_idle_sheet_43: -153809104258961322
-      animation_idle_sheet_44: 1778223301041746939
-      animation_idle_sheet_45: -3986023913365703715
-      animation_idle_sheet_46: -83751438278651918
-      animation_idle_sheet_47: 6173342047275919563
-      animation_idle_sheet_48: 2063318150228963509
-      animation_idle_sheet_49: 744857448473666342
-      animation_idle_sheet_5: -8572886868971822707
-      animation_idle_sheet_50: 7877277222692550113
-      animation_idle_sheet_51: 3161698229170949863
-      animation_idle_sheet_52: -2784927442303070232
-      animation_idle_sheet_53: 9047433615385033288
-      animation_idle_sheet_54: -1440453501726151089
-      animation_idle_sheet_55: 7201177262541152259
-      animation_idle_sheet_56: -6537781077638589177
-      animation_idle_sheet_57: -4706798465053174983
-      animation_idle_sheet_58: 4712715778858717861
-      animation_idle_sheet_59: 5126913755208274657
-      animation_idle_sheet_6: -7042739734062325806
-      animation_idle_sheet_60: 8965481858227957423
-      animation_idle_sheet_7: 6456509253156089373
-      animation_idle_sheet_8: 5689685657107100998
-      animation_idle_sheet_9: 5934237881319705219
+      confused_sheet_0: -6841108652290840578
+      confused_sheet_1: 1213112184301702562
+      confused_sheet_10: 605621397721730205
+      confused_sheet_11: -8975625702348105338
+      confused_sheet_12: 8149102321241816701
+      confused_sheet_13: 5106173945046138018
+      confused_sheet_14: -8212744531367513436
+      confused_sheet_15: 4797549791658430401
+      confused_sheet_16: -6597047929274890747
+      confused_sheet_17: -8493453374967467086
+      confused_sheet_18: -1186550274754345245
+      confused_sheet_19: -6214844733236748084
+      confused_sheet_2: -363722630793752175
+      confused_sheet_20: 6633930275680241261
+      confused_sheet_21: 1802284231720178974
+      confused_sheet_22: -8895985251962165194
+      confused_sheet_23: 8515439569038186400
+      confused_sheet_24: -6274846000834481154
+      confused_sheet_25: -5381867385023676176
+      confused_sheet_26: -2464966633667382761
+      confused_sheet_27: 2553122419257932185
+      confused_sheet_28: 3622105309053944248
+      confused_sheet_29: -2307740750691538124
+      confused_sheet_3: 8756571548161384211
+      confused_sheet_30: -2495870851325723457
+      confused_sheet_31: -5961683118500988762
+      confused_sheet_32: -7480276567842957552
+      confused_sheet_33: -88065196963470533
+      confused_sheet_34: 6323976177500515582
+      confused_sheet_35: -8531958647411632038
+      confused_sheet_36: 1814107380270181124
+      confused_sheet_37: -6783957438318617372
+      confused_sheet_38: 7344635798947985458
+      confused_sheet_39: 5836533762386270917
+      confused_sheet_4: 1273428782783109133
+      confused_sheet_40: 3442774051538721589
+      confused_sheet_41: 316939064265562887
+      confused_sheet_42: -7545789376916084579
+      confused_sheet_43: 2910659078748520193
+      confused_sheet_44: 8348819262614814785
+      confused_sheet_45: 4162962175276072056
+      confused_sheet_46: 5272172158626814
+      confused_sheet_47: 8887903679045494162
+      confused_sheet_48: -844192609909937057
+      confused_sheet_49: -4324392450635376281
+      confused_sheet_5: -3849243202754412318
+      confused_sheet_50: 7322523644051765569
+      confused_sheet_51: 4773379584720406168
+      confused_sheet_52: -6427251478115099526
+      confused_sheet_53: 1579323919862928264
+      confused_sheet_54: -4306314265761639777
+      confused_sheet_55: -513523107467415709
+      confused_sheet_56: -5834176651097784903
+      confused_sheet_57: -285655349174410770
+      confused_sheet_58: -3761784656716831411
+      confused_sheet_59: -2864058520354907208
+      confused_sheet_6: -5777943400099433009
+      confused_sheet_60: 6658232459265816042
+      confused_sheet_7: -621960997724422165
+      confused_sheet_8: -7152429323715003048
+      confused_sheet_9: -1653069098970304850
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

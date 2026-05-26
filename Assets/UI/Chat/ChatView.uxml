@@ -59,7 +59,7 @@
                 </ui:Button>
             </ui:VisualElement>
 
-            <ui:VisualElement class="avatar-stage__hero">
+            <ui:VisualElement name="avatar-stage-hero" class="avatar-stage__hero">
                 <ui:VisualElement name="avatar-glow" class="halo" />
                 <ui:VisualElement name="avatar-circle" class="avatar">
                     <ui:VisualElement name="avatar-art" class="avatar__art avatar__art--neon" />

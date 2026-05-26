@@ -121,6 +121,19 @@ namespace NeonCompanion.Runtime.Api
                 {
                     // 401 = server reachable, credentials wrong — still proves endpoint is live
                     bool authed = webRequest.responseCode != 401;
+
+                    if (authed)
+                    {
+                        var modelsPayload = webRequest.downloadHandler?.text;
+                        if (!string.IsNullOrWhiteSpace(provider.defaultModel) &&
+                            !ModelExistsInModelsResponse(modelsPayload, provider.defaultModel))
+                        {
+                            return new ConnectionTestResult(false,
+                                $"Connected, but model '{provider.defaultModel}' was not found in /models · {latency} ms",
+                                latency);
+                        }
+                    }
+
                     string msg = authed
                         ? $"OK · {latency} ms"
                         : $"Reachable but unauthorized · {latency} ms";
@@ -235,6 +248,15 @@ namespace NeonCompanion.Runtime.Api
 
                 var operation = webRequest.SendWebRequest();
                 int lastProcessed = 0;
+                bool emittedAnyToken = false;
+                Action<string> emitToken = token =>
+                {
+                    if (string.IsNullOrEmpty(token))
+                        return;
+
+                    emittedAnyToken = true;
+                    onToken?.Invoke(token);
+                };
 
                 while (!operation.isDone)
                 {
@@ -244,20 +266,59 @@ namespace NeonCompanion.Runtime.Api
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
-                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, onToken);
+                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, emitToken);
 
                     await Task.Yield();
                 }
 
                 // Drain any data that arrived after the last yield
-                ParseSseText(webRequest.downloadHandler.text, lastProcessed, onToken);
+                ParseSseText(webRequest.downloadHandler.text, lastProcessed, emitToken);
 
-                if (webRequest.result == UnityWebRequest.Result.ConnectionError ||
-                    webRequest.result == UnityWebRequest.Result.DataProcessingError)
+                if (webRequest.result != UnityWebRequest.Result.Success)
                 {
-                    throw new InvalidOperationException($"Streaming request failed: {webRequest.error}");
+                    throw new InvalidOperationException($"Streaming request failed: {ParseErrorMessage(webRequest)}");
+                }
+
+                // Some providers ignore `stream=true` and return a normal JSON completion.
+                if (!emittedAnyToken)
+                {
+                    var fallback = ParseResponse(webRequest.downloadHandler?.text)?.content;
+                    if (!string.IsNullOrWhiteSpace(fallback))
+                    {
+                        emittedAnyToken = true;
+                        onToken?.Invoke(fallback);
+                    }
+                }
+
+                if (!emittedAnyToken)
+                {
+                    throw new InvalidOperationException("Streaming response contained no tokens. Check provider endpoint, model id, and streaming compatibility.");
                 }
             }
+        }
+
+        private static bool ModelExistsInModelsResponse(string payload, string model)
+        {
+            if (string.IsNullOrWhiteSpace(payload) || string.IsNullOrWhiteSpace(model))
+                return true;
+
+            // Best-effort check for OpenAI-compatible `/models` payloads.
+            string escapedModel = JsonEscape(model.Trim());
+            string marker = $"\"id\":\"{escapedModel}\"";
+            return payload.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string JsonEscape(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            return value
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\r")
+                .Replace("\t", "\\t");
         }
 
         [Serializable]

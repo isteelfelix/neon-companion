@@ -9,6 +9,78 @@
     overflow: hidden;
 }
 
+/* ---- View-mode switcher ---- */
+
+.viewmode-row {
+    flex-direction: row;
+    margin-bottom: 14px;
+    background-color: var(--bg-2);
+    border-radius: 10px;
+    padding: 3px;
+    align-self: flex-start;
+    border-width: 1px;
+    border-color: var(--line-2);
+}
+
+.viewmode-btn {
+    height: 28px;
+    padding: 0 18px;
+    border-radius: 7px;
+    border-width: 0;
+    background-color: transparent;
+    color: var(--text-3);
+    -unity-font-style: normal;
+    font-size: 12px;
+    transition-property: background-color, color;
+    transition-duration: 0.12s;
+}
+
+.viewmode-btn Label {
+    font-size: 12px;
+}
+
+.viewmode-btn--active {
+    background-color: var(--bg-0);
+    color: var(--text-0);
+    border-width: 1px;
+    border-color: var(--line-2);
+}
+
+/* ---- Gallery container ---- */
+
+.gallery-container {
+    flex-grow: 1;
+    min-height: 0;
+    flex-direction: column;
+}
+
+/* ---- Empty gallery hint ---- */
+
+.gallery-empty-hint {
+    color: var(--text-3);
+    font-size: 12px;
+    margin: 24px 0 0 4px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+/* ---- Animated tile badge ---- */
+
+.avtile__anim-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(124, 122, 237, 0.85);
+    border-radius: 5px;
+    padding: 2px 6px;
+}
+
+.avtile__anim-badge Label {
+    font-size: 9px;
+    color: white;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Medium.ttf");
+    letter-spacing: 0.5px;
+}
+
 /* ---- Filter row ---- */
 
 .filterrow {

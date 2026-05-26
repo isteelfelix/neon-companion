@@ -17,7 +17,19 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:VisualElement class="filterrow">
+        <ui:VisualElement class="viewmode-row">
+            <ui:Button name="viewmode-static-btn" class="viewmode-btn viewmode-btn--active">
+                <ui:Label text="Статика" />
+            </ui:Button>
+            <ui:Button name="viewmode-animated-btn" class="viewmode-btn">
+                <ui:Label text="Анимация" />
+            </ui:Button>
+            <ui:Button name="viewmode-3d-btn" class="viewmode-btn">
+                <ui:Label text="3D" />
+            </ui:Button>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="avatar-filterrow" class="filterrow">
             <ui:Button name="avatar-filter-all-btn" class="filterchip filterchip--active">
                 <ui:Label text="Все" />
                 <ui:Label name="avatar-filter-all-count" text="0" class="filterchip__count" />
@@ -41,7 +53,9 @@
         </ui:VisualElement>
 
         <ui:VisualElement class="avatar-split">
-            <ui:VisualElement class="gallery">
+            <ui:VisualElement name="gallery-container" class="gallery-container">
+
+            <ui:VisualElement name="gallery-static" class="gallery">
 
                 <ui:VisualElement name="avtile-neon" class="avtile avtile--selected avtile--neon">
                     <ui:VisualElement class="avtile__vignette" />
@@ -115,6 +129,27 @@
                 </ui:VisualElement>
 
             </ui:VisualElement>
+
+            <!-- Animated gallery -->
+            <ui:VisualElement name="gallery-animated" class="gallery">
+                <ui:VisualElement name="avtile-neon-animated" class="avtile avtile--neon-animated">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:VisualElement class="avtile__anim-badge">
+                        <ui:Label text="ANIM" />
+                    </ui:VisualElement>
+                    <ui:Label text="Неон" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 3D gallery (future) -->
+            <ui:VisualElement name="gallery-3d" class="gallery">
+                <ui:Label text="3D-аватары появятся в следующих обновлениях" class="gallery-empty-hint" />
+            </ui:VisualElement>
+
+            </ui:VisualElement> <!-- end gallery-container -->
 
             <ui:VisualElement class="previewcard">
                 <ui:ScrollView name="avatar-preview-scroll" class="preview-scroll" mode="Vertical">

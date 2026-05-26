@@ -12,6 +12,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public int rows = 1;
         public float frameRate = 8f;
         public bool loop = true;
+        public bool pingPong = false;
     }
 
     [Serializable]

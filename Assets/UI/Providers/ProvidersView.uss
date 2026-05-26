@@ -287,7 +287,7 @@
 .testrow {
     min-height: 42px;
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
     padding: 10px 12px;
     border-width: 1px;
     border-color: var(--line-2);
@@ -316,7 +316,15 @@
     width: 14px;
     height: 14px;
     margin-right: 10px;
+    margin-top: 2px;
     -unity-background-image-tint-color: var(--ok);
+}
+
+.testrow__label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    white-space: normal;
 }
 
 .provider-edit-actions {

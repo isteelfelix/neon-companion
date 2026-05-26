@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -16,6 +17,7 @@ namespace NeonCompanion.Runtime.Avatar
         private int _frameIndex;
         private bool _isPlaying;
         private bool _isPlayingOneShot;
+        private bool _pingPongForward = true;
         private Action _onClipCompleted;
 
         public void Configure(IReadOnlyList<SpriteSheetAnimation> clips, Image targetImage)
@@ -38,6 +40,9 @@ namespace NeonCompanion.Runtime.Avatar
                     continue;
 
                 var frames = SpriteSheetAnimationLoader.LoadFrames(clip.spriteSheetPath, clip.columns, clip.rows);
+                NeonLogger.Log("[SpriteSheetAnimator] clip='" + clip.clipName +
+                    "' path='" + clip.spriteSheetPath +
+                    "' frames=" + (frames?.Length.ToString() ?? "null"));
                 if (frames == null || frames.Length == 0)
                     continue;
 
@@ -65,6 +70,7 @@ namespace NeonCompanion.Runtime.Avatar
             _activeClip = clip;
             _frameTimer = 0f;
             _frameIndex = 0;
+            _pingPongForward = true;
             ApplyFrame();
         }
 
@@ -162,24 +168,54 @@ namespace NeonCompanion.Runtime.Avatar
             while (_frameTimer >= frameDuration)
             {
                 _frameTimer -= frameDuration;
-                _frameIndex++;
 
-                if (_frameIndex >= _activeClip.Frames.Length)
+                bool isPingPong = _activeClip.Config.pingPong &&
+                                  _activeClip.Config.loop &&
+                                  !_isPlayingOneShot;
+
+                if (isPingPong)
                 {
-                    bool shouldLoop = _activeClip.Config.loop && !_isPlayingOneShot;
-                    if (shouldLoop)
+                    if (_pingPongForward)
                     {
-                        _frameIndex = 0;
+                        _frameIndex++;
+                        if (_frameIndex >= _activeClip.Frames.Length)
+                        {
+                            _pingPongForward = false;
+                            // Step back from last frame to avoid repeating it
+                            _frameIndex = Mathf.Max(0, _activeClip.Frames.Length - 2);
+                        }
                     }
                     else
                     {
-                        _frameIndex = _activeClip.Frames.Length - 1;
-                        _isPlaying = false;
-                        _isPlayingOneShot = false;
-                        var callback = _onClipCompleted;
-                        _onClipCompleted = null;
-                        if (callback != null)
-                            callback();
+                        _frameIndex--;
+                        if (_frameIndex < 0)
+                        {
+                            _pingPongForward = true;
+                            // Step forward from first frame to avoid repeating it
+                            _frameIndex = Mathf.Min(1, _activeClip.Frames.Length - 1);
+                        }
+                    }
+                }
+                else
+                {
+                    _frameIndex++;
+                    if (_frameIndex >= _activeClip.Frames.Length)
+                    {
+                        bool shouldLoop = _activeClip.Config.loop && !_isPlayingOneShot;
+                        if (shouldLoop)
+                        {
+                            _frameIndex = 0;
+                        }
+                        else
+                        {
+                            _frameIndex = _activeClip.Frames.Length - 1;
+                            _isPlaying = false;
+                            _isPlayingOneShot = false;
+                            var callback = _onClipCompleted;
+                            _onClipCompleted = null;
+                            if (callback != null)
+                                callback();
+                        }
                     }
                 }
 
