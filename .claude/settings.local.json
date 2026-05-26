@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls \"D:\\\\dw\\\\Neon Assistent-handoff.zip\")"
+      "Bash(ls \"D:\\\\dw\\\\Neon Assistent-handoff.zip\")",
+      "PowerShell(ffprobe -v quiet -print_format json -show_streams \"C:\\\\Users\\\\iFlex\\\\Downloads\\\\animation.mp4\" 2>&1)"
     ]
   }
 }
