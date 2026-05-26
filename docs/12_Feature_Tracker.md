@@ -33,6 +33,8 @@
 | A-04 | Scale-and-crop фон | ✅ | M1 | |
 | A-05 | **Анимация спрайтшитами** | ✅ | M1 | SpriteSheetAnimator + Loader, talking/idle clips, backward compatible |
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Idle + talking clips через SpriteSheetAnimator, auto-switch при отправке |
+| A-07 | 2D action-set baseline | 📋 | M2 | Low-end/mobile path: idle, talk, listen, thinking, typing/coding, emotion variants |
+| A-08 | LongCat asset-pipeline research | 📋 | M2 | Use LongCat-Video-Avatar-1.5 as tooling/async renderer candidate, not required runtime dependency; see docs/13_Avatar_Motion_Research.md |
 
 ## UI и UX
 | # | Фича | Статус | Спринт | Заметки |
@@ -47,6 +49,7 @@
 | V-01 | Голосовой ввод/вывод | ✅ | M2 | IVoiceService, VoiceInputManager, VoiceOutputManager, WebSpeechBridge, mic button, settings toggle |
 | V-02 | Lipsync | ✅ | M2 | LipsyncController: phoneme→viseme, 2D sprite frames, 3D blend shapes, hooked into VoiceOutputManager/VoiceInputManager |
 | V-03 | 3D аватары | ✅ | M2 | IAvatar3DService, Avatar3DLoader (GLB/GLTF), Avatar3DRenderer (orbit, pinch-zoom), Avatar3DService, AvatarProfile.is3D |
+| V-04 | Desktop realtime avatar layer | 📋 | M2+ | 3D-first realtime path: blendshapes/visemes/live lipsync; separate from 2D mobile baseline |
 
 ## VR (M3+)
 | # | Фича | Статус | Спринт | Заметки |

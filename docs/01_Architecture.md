@@ -6,7 +6,7 @@
 
 - **Core** — базовая логика, управление сессиями, конфигурация провайдеров
 - **API Layer** — работа с OpenAI-совместимыми API
-- **Avatar System** — управление 2D аватарами, спрайтшит-анимациями (idle, talking, reactions), подготовка к 3D
+- **Avatar System** — управление 2D аватарами, sprite-sheet action sets для low-end/mobile, подготовка к desktop-first 3D realtime аватарам
 - **UI Layer** — интерфейс чата и настроек
 - **Data Layer** — локальное хранение истории, конфигов и настроек
 - **Platform Layer** — специфичный код для Desktop / Mobile / VR
@@ -29,6 +29,7 @@
 
 ## Будущие расширения
 - Голосовой ввод/вывод + lipsync
-- 3D аватары
+- 3D realtime аватары для desktop
+- Генерация motion assets через внешние инструменты/backend pipeline (например LongCat-Video-Avatar-1.5) без обязательной runtime-зависимости клиента
 - VR режим
 - Локальные модели (через llama.cpp / Ollama)

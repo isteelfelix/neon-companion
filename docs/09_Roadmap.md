@@ -9,14 +9,15 @@
 - Сохранение истории
 
 ### M1 — Улучшенный опыт
-- Несколько аватаров с базовой анимацией (спрайтшиты: idle, talking, reactions)
+- Несколько аватаров с базовой анимацией (спрайтшиты/action sets: idle, talking, reactions, thinking, typing/coding)
 - Улучшенный UI
 - Поддержка нескольких провайдеров одновременно
 
 ### M2 — Голос и 3D
 - Голосовой ввод/вывод
 - Базовый lipsync
-- Переход на 3D аватары
+- Desktop-first 3D realtime аватары
+- Research asset-pipeline: генерация 2D motion clips/sprite sheets через LongCat-Video-Avatar-1.5 или альтернативные инструменты
 
 ### M3 — VR и расширения
 - Поддержка VR (Quest, PCVR)
