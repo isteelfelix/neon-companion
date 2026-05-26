@@ -156,7 +156,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: 
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
@@ -426,7 +426,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d9e66a0bc7d84c34b86cb9db3fa5282f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: NeonCompanion.Runtime::NeonCompanion.Runtime.UI.UITK.RuntimeUiInstaller
   panelSettings: {fileID: 11400000, guid: ae2762ae198b2dc4c8187c18ade78514, type: 2}
   visualTreeAsset: {fileID: 9197481963319205126, guid: 970115e0f47c9424098dc8f38a813d91, type: 3}

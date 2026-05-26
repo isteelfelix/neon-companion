@@ -256,6 +256,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _syncingModelPresetUi;
         private string _lastCustomModel = string.Empty;
         private bool _editModelUsesCustomMode;
+        private IReadOnlyList<string> _discoveredModels;
 
         private CompanionApp _app;
         private ChatService _chatService;
@@ -710,9 +711,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editModelPreset != null)
                 _editModelPreset.RegisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
             if (_editName != null)
-                _editName.RegisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+                _editName.RegisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
-                _editBaseUrl.RegisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+                _editBaseUrl.RegisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
             if (_editModel != null)
                 _editModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
 
@@ -797,9 +798,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editModelPreset != null)
                 _editModelPreset.UnregisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
             if (_editName != null)
-                _editName.UnregisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+                _editName.UnregisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
-                _editBaseUrl.UnregisterCallback<ChangeEvent<string>>(OnProviderEditorIdentityChanged);
+                _editBaseUrl.UnregisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
             if (_editModel != null)
                 _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
             if (_settingsLanguage != null)
@@ -1971,6 +1972,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editingProvider = ProviderConfig.CreateDefault(LocalizationExtensions.Get("providers.new_provider", "Новый провайдер"), "https://api.openai.com/v1");
             _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
             _editModelUsesCustomMode = false;
+            _discoveredModels = null;
             ShowProviderEditPanel();
         }
 
@@ -1987,6 +1989,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editingProvider = CloneProvider(provider);
             _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
             _editModelUsesCustomMode = false;
+            _discoveredModels = null;
             ShowProviderEditPanel();
         }
 
@@ -2201,14 +2204,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             return false;
         }
 
-        private void OnProviderEditorIdentityChanged(ChangeEvent<string> _)
+        private void OnProviderNameChanged(ChangeEvent<string> _)
         {
-            if (_syncingModelPresetUi)
-                return;
-
+            if (_syncingModelPresetUi) return;
             if (_editorProviderName != null)
                 _editorProviderName.text = string.IsNullOrWhiteSpace(_editName?.value) ? "—" : _editName.value;
+        }
 
+        private void OnBaseUrlChanged(ChangeEvent<string> _)
+        {
+            if (_syncingModelPresetUi) return;
+            _discoveredModels = null;
             SyncModelPresetUi(GetCurrentModelValue());
         }
 
@@ -2263,44 +2269,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editModelPreset == null)
                 return;
 
-            string nameHint = _editName?.value ?? _editingProvider?.displayName ?? _editingProviderSource?.displayName ?? string.Empty;
-            string baseUrlHint = _editBaseUrl?.value ?? _editingProvider?.baseUrl ?? _editingProviderSource?.baseUrl ?? string.Empty;
-            var presets = BuildModelPresets(nameHint, baseUrlHint);
-            bool preserveCustomMode = _editModelUsesCustomMode;
+            if (_discoveredModels != null && _discoveredModels.Count > 0)
+            {
+                SyncModelPresetFromDiscovery(_discoveredModels, currentModel);
+                return;
+            }
 
+            // Before discovery: only "Custom / manual" — no guessed presets
             _syncingModelPresetUi = true;
             _modelPresetByLabel.Clear();
-            var choices = new List<string>(presets.Count + 1);
-            foreach (var preset in presets)
-            {
-                _modelPresetByLabel[preset.Label] = preset.ModelId;
-                choices.Add(preset.Label);
-            }
-            choices.Add(CustomModelPresetValue);
-            _editModelPreset.choices = choices;
-
-            string targetChoice = CustomModelPresetValue;
-            if (!preserveCustomMode)
-            {
-                for (int i = 0; i < presets.Count; i++)
-                {
-                    if (string.Equals(presets[i].ModelId, currentModel, StringComparison.Ordinal))
-                    {
-                        targetChoice = presets[i].Label;
-                        break;
-                    }
-                }
-            }
-
-            if (targetChoice == CustomModelPresetValue)
-                _lastCustomModel = currentModel ?? string.Empty;
-
-            _editModelPreset.SetValueWithoutNotify(targetChoice);
-            bool showCustom = string.Equals(targetChoice, CustomModelPresetValue, StringComparison.Ordinal);
-            _editModelUsesCustomMode = showCustom;
-            SetDisplay(_editModelCustomWrap, showCustom ? DisplayStyle.Flex : DisplayStyle.None);
+            _editModelPreset.choices = new List<string> { CustomModelPresetValue };
+            _lastCustomModel = currentModel ?? string.Empty;
+            _editModelPreset.SetValueWithoutNotify(CustomModelPresetValue);
+            _editModelUsesCustomMode = true;
+            SetDisplay(_editModelCustomWrap, DisplayStyle.Flex);
             if (_editModel != null)
-                _editModel.SetValueWithoutNotify(showCustom ? (_lastCustomModel ?? string.Empty) : (currentModel ?? string.Empty));
+                _editModel.SetValueWithoutNotify(_lastCustomModel);
             _syncingModelPresetUi = false;
         }
 
@@ -2332,6 +2316,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editModelPreset == null || discoveredModels == null || discoveredModels.Count == 0)
                 return;
 
+            _discoveredModels = discoveredModels;
             _syncingModelPresetUi = true;
             _modelPresetByLabel.Clear();
             var choices = new List<string>(discoveredModels.Count + 1);
