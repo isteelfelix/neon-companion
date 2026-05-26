@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Avatar3D;
@@ -257,6 +258,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _lastCustomModel = string.Empty;
         private bool _editModelUsesCustomMode;
         private IReadOnlyList<string> _discoveredModels;
+        private IVisualElementScheduledItem _autoDiscoverSchedule;
+        private CancellationTokenSource _autoDiscoverCts;
 
         private CompanionApp _app;
         private ChatService _chatService;
@@ -714,6 +717,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editName.RegisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
                 _editBaseUrl.RegisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
+            if (_editApiKey != null)
+                _editApiKey.RegisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
             if (_editModel != null)
                 _editModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
 
@@ -801,6 +806,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editName.UnregisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
                 _editBaseUrl.UnregisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
+            if (_editApiKey != null)
+                _editApiKey.UnregisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
             if (_editModel != null)
                 _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
             if (_settingsLanguage != null)
@@ -2216,6 +2223,47 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_syncingModelPresetUi) return;
             _discoveredModels = null;
             SyncModelPresetUi(GetCurrentModelValue());
+        }
+
+        private void OnProviderEndpointChanged(ChangeEvent<string> _)
+        {
+            if (_syncingModelPresetUi)
+                return;
+
+            // Update model presets from static heuristics first
+            SyncModelPresetUi(GetCurrentModelValue());
+
+            // Then debounce-fetch live models from the endpoint
+            _autoDiscoverSchedule?.Pause();
+            _autoDiscoverSchedule = _providerEditPanel?.schedule.Execute(() => _ = AutoDiscoverModelsAsync()).StartingIn(800);
+        }
+
+        private async System.Threading.Tasks.Task AutoDiscoverModelsAsync()
+        {
+            _autoDiscoverCts?.Cancel();
+            _autoDiscoverCts = new CancellationTokenSource();
+            var ct = _autoDiscoverCts.Token;
+
+            var draft = BuildProviderDraftFromEditor();
+            if (draft == null || string.IsNullOrWhiteSpace(draft.baseUrl))
+                return;
+
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null || ct.IsCancellationRequested) return;
+
+                var result = await app.AiClient.TestConnectionAsync(draft, ct);
+                if (ct.IsCancellationRequested) return;
+
+                if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
+                    SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
+            }
+            catch (System.OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning($"Auto-discover models failed: {ex.Message}");
+            }
         }
 
         private void OnManualModelChanged(ChangeEvent<string> evt)
