@@ -31,10 +31,10 @@
 | A-02 | Кастомные аватары (загрузка) | ✅ | M1 | |
 | A-03 | Persona/инструкции аватара | ✅ | M1 | Edit + reset flow |
 | A-04 | Scale-and-crop фон | ✅ | M1 | |
-| A-05 | **Анимация спрайтшитами** | ✅ | M1 | SpriteSheetAnimator + Loader, talking/idle clips, backward compatible |
+| A-05 | Анимация спрайтшитами | ✅ | M1 | SpriteSheetAnimator + Loader, talking/idle clips, backward compatible |
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Idle + talking clips через SpriteSheetAnimator, auto-switch при отправке |
-| A-07 | 2D action-set baseline | 📋 | M2 | Low-end/mobile path: idle, talk, listen, thinking, typing/coding, emotion variants |
-| A-08 | LongCat asset-pipeline research | 📋 | M2 | Use LongCat-Video-Avatar-1.5 as tooling/async renderer candidate, not required runtime dependency; see docs/13_Avatar_Motion_Research.md |
+| A-07 | 2D motion-pack MVP contract | 📋 | M2 | Fixed action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`; continuous + one-shot split |
+| A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | Исследование внешней генерации/подготовки motion clips без runtime-зависимости клиента; see docs/13_Avatar_Motion_Research.md |
 
 ## UI и UX
 | # | Фича | Статус | Спринт | Заметки |
@@ -56,11 +56,11 @@
 |---|------|--------|--------|---------|
 | VR-01 | Поддержка VR (Quest, PCVR) | 📋 | M3 | |
 | VR-02 | Кастомизация аватаров | ✅ | M3 | |
-| VR-03 | Плагины и расширения | ✅ | M3 | IPlugin, PluginManager, PluginContext, PluginConfigStorage, DLL loading, settings UI | |
+| VR-03 | Плагины и расширения | ✅ | M3 | IPlugin, PluginManager, PluginContext, PluginConfigStorage, DLL loading, settings UI |
 
 ## Публикация (M4)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| P-01 | itch.io / GitHub Releases | ✅ | M4 | BuildScript.cs, build.sh, release.sh, VERSION, .gitignore | |
+| P-01 | itch.io / GitHub Releases | ✅ | M4 | BuildScript.cs, build.sh, release.sh, VERSION, .gitignore |
 | P-02 | Документация для контрибьюторов | ✅ | M4 | docs/10_Contribution.md |
 | P-03 | Донат-система | ✅ | M4 | IDonationService, DonationService, Settings: кнопка «Поддержать» |

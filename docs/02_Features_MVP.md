@@ -6,14 +6,15 @@
 - Подключение к одному или нескольким OpenAI-совместимым провайдерам
 - Простой чат с агентом
 - Смена 2D аватара (несколько предустановленных + возможность загрузки своей картинки)
-- Анимация аватаров через спрайтшиты / action sets (idle, talking, reactions, thinking, typing/coding)
+- Анимация аватаров через sprite-sheet motion packs с фиксированным MVP action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
+- Continuous states + one-shot reactions для 2D baseline
 - Сохранение истории чата
 - Базовые настройки (API ключ, модель, температура)
 
 ### Не входит в MVP
-- Голос
+- Голос как обязательный baseline
 - 3D realtime модели как обязательный baseline
-- Runtime video generation / LongCat как обязательная зависимость клиента
+- Runtime video generation как обязательная зависимость клиента
 - VR
 - Сложная система памяти агента
 - Мультиагентный режим

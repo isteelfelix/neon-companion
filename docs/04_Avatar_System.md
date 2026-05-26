@@ -2,30 +2,85 @@
 
 ## Система аватаров
 
-### MVP (2D)
+### MVP (2D baseline)
 - Статичные 2D изображения аватаров
 - Возможность переключения между несколькими аватарами
 - Загрузка своей картинки (из файла или URL)
-- Анимация через спрайтшиты (idle, talking, reactions)
-- 2D остаётся базовым режимом для слабых ПК и mobile: runtime должен проигрывать заранее подготовленные sprite-sheet action clips без зависимости от GPU/generative backend
+- Анимация через sprite-sheet motion packs
+- 2D остаётся базовым режимом для слабых ПК и mobile: runtime должен проигрывать заранее подготовленные клипы без зависимости от GPU/generative backend
 
-### 2D action sets
-- Базовые клипы: `idle`, `talk-neutral`, `talk-happy`, `listen`, `thinking`, `typing/coding`
-- Эмоциональные варианты: `smile/smirk`, `focused`, `surprised`, `annoyed`, `tired`, `error/confused`
-- Personality variants опциональны: `soft`, `teasing`, `dominant`
-- Ассеты должны быть loop-friendly: без drift позы/лица/силуэта, с согласованным scale и композицией между клипами
+### Фиксированный MVP action set
+- Continuous states: `idle`, `thinking`, `talking`, `listening`
+- One-shot reactions: `smile`, `confused`
+
+Это жёсткий MVP-набор. Новые action names не добавляются без отдельного пересмотра контракта.
+
+### Как это используется в runtime
+- Формат хранит доступные клипы, но не принимает решения за приложение
+- App/state mapper выбирает continuous state: `idle`, `thinking`, `talking`, `listening`
+- Reaction policy триггерит `smile` или `confused` как one-shot события
+- После one-shot реакции проигрыватель возвращается в текущий базовый continuous state
+
+Примеры:
+- ничего не происходит → `idle`
+- модель генерирует ответ → `thinking`
+- идёт TTS / воспроизведение ответа → `talking`
+- пользователь печатает / говорит → `listening`
+- тёплое успешное завершение → `smile`
+- ошибка / сбой / неуспешный шаг → `confused`
+
+### Motion pack v1 (MVP)
+Каноничный runtime-формат — один motion pack на один аватар:
+
+```text
+<avatar-root>/
+  motion/
+    manifest.json
+    idle.png
+    thinking.png
+    talking.png
+    listening.png
+    smile.png
+    confused.png
+```
+
+`manifest.json` хранит:
+- `version`
+- `format`
+- `defaultAction`
+- `clips[]`
+
+Каждый clip описывает:
+- `action`
+- `file`
+- `columns`
+- `rows`
+- `frameCount`
+- `fps`
+- `loop`
+
+### Инварианты MVP
+- `version = 1`
+- `format = "spritesheet-pack"`
+- `idle` обязателен
+- actions уникальны
+- `frameCount <= columns * rows`
+- continuous states обычно loop, `smile` и `confused` — one-shot
+- fallback при отсутствии action: `idle`
 
 ### Будущие версии
-- 2D анимированные аватары (**спрайтшиты** — приоритет; Spine — опционально)
 - 3D модели как desktop-first realtime слой
 - Lipsync при голосовом режиме
 - Кастомизация аватара
-- Генеративные модели вроде LongCat-Video-Avatar-1.5 рассматривать как tooling для производства ассетов или async premium snippets, не как baseline runtime dependency
+- Расширение action vocabulary только после MVP
+- Внешние генеративные инструменты для производства motion-ассетов не должны становиться baseline runtime dependency
 
 ## Research notes
-- Подробности по LongCat, full-body/talking-head рискам и asset-pipeline эксперименту: [13_Avatar_Motion_Research.md](13_Avatar_Motion_Research.md)
+- Подробности по motion-pack ограничениям, full-body/talking-head рискам и asset-pipeline экспериментам: [13_Avatar_Motion_Research.md](13_Avatar_Motion_Research.md)
 
 ## Требования к изображениям
 - Рекомендуемый размер: 512x512 или 1024x1024
 - Поддержка прозрачности (PNG)
+- Grid spritesheet с одинаковым размером кадров внутри файла
+- Порядок кадров: слева направо, сверху вниз
 - Автоматическое масштабирование и обрезка

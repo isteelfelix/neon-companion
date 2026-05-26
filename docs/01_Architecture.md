@@ -6,9 +6,9 @@
 
 - **Core** — базовая логика, управление сессиями, конфигурация провайдеров
 - **API Layer** — работа с OpenAI-совместимыми API
-- **Avatar System** — управление 2D аватарами, sprite-sheet action sets для low-end/mobile, подготовка к desktop-first 3D realtime аватарам
+- **Avatar System** — управление 2D аватарами, sprite-sheet motion packs для low-end/mobile, state mapper (`idle` / `thinking` / `talking` / `listening`) и one-shot reactions (`smile` / `confused`), подготовка к desktop-first 3D realtime аватарам
 - **UI Layer** — интерфейс чата и настроек
-- **Data Layer** — локальное хранение истории, конфигов и настроек
+- **Data Layer** — локальное хранение истории, конфигов, аватаров и motion-pack metadata
 - **Platform Layer** — специфичный код для Desktop / Mobile / VR
 
 ## Технологии
@@ -19,7 +19,7 @@
 
 ## Диаграмма компонентов (упрощённая)
 
-```
+```text
 [UI Layer] ↔ [Core] ↔ [API Layer]
                 ↕
           [Avatar System]
@@ -27,9 +27,15 @@
           [Data Layer]
 ```
 
+## Avatar System contract (MVP)
+- Runtime читает motion pack (`manifest.json` + sprite sheets)
+- State mapper выбирает continuous state: `idle`, `thinking`, `talking`, `listening`
+- Reaction policy триггерит `smile` и `confused`
+- Формат не решает эмоцию сам по себе; он только описывает доступные клипы
+
 ## Будущие расширения
 - Голосовой ввод/вывод + lipsync
 - 3D realtime аватары для desktop
-- Генерация motion assets через внешние инструменты/backend pipeline (например LongCat-Video-Avatar-1.5) без обязательной runtime-зависимости клиента
+- Генерация motion assets через внешний asset-pipeline без обязательной runtime-зависимости клиента
 - VR режим
 - Локальные модели (через llama.cpp / Ollama)
