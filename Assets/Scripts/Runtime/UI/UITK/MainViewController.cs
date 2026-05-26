@@ -2389,11 +2389,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             choices.Add(CustomModelPresetValue);
             _editModelPreset.choices = choices;
 
-            // Preserve current model if it appears in the discovered list; otherwise take first.
+            // Preserve current model if available.
+            // If it's not in discovered list, keep it as custom/manual instead of overwriting it.
             string targetChoice = CustomModelPresetValue;
             if (!string.IsNullOrWhiteSpace(currentModel) && _modelPresetByLabel.ContainsKey(currentModel))
                 targetChoice = currentModel;
-            else if (discoveredModels.Count > 0 && !string.IsNullOrWhiteSpace(discoveredModels[0]))
+            else if (string.IsNullOrWhiteSpace(currentModel) && discoveredModels.Count > 0 && !string.IsNullOrWhiteSpace(discoveredModels[0]))
                 targetChoice = discoveredModels[0];
 
             bool showCustom = string.Equals(targetChoice, CustomModelPresetValue, StringComparison.Ordinal);
