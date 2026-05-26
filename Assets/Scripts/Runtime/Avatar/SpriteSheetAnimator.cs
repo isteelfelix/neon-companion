@@ -15,6 +15,8 @@ namespace NeonCompanion.Runtime.Avatar
         private float _frameTimer;
         private int _frameIndex;
         private bool _isPlaying;
+        private bool _isPlayingOneShot;
+        private Action _onClipCompleted;
 
         public void Configure(IReadOnlyList<SpriteSheetAnimation> clips, Image targetImage)
         {
@@ -24,6 +26,7 @@ namespace NeonCompanion.Runtime.Avatar
             _frameTimer = 0f;
             _frameIndex = 0;
             _isPlaying = false;
+            _isPlayingOneShot = false;
 
             if (targetImage == null || clips == null)
                 return;
@@ -57,6 +60,8 @@ namespace NeonCompanion.Runtime.Avatar
             if (!_clips.TryGetValue(clipName, out var clip))
                 return;
 
+            _onClipCompleted = null;
+            _isPlayingOneShot = false;
             _activeClip = clip;
             _frameTimer = 0f;
             _frameIndex = 0;
@@ -77,6 +82,8 @@ namespace NeonCompanion.Runtime.Avatar
         public void Stop()
         {
             _isPlaying = false;
+            _isPlayingOneShot = false;
+            _onClipCompleted = null;
             _frameTimer = 0f;
             _frameIndex = 0;
             ApplyFrame();
@@ -88,6 +95,8 @@ namespace NeonCompanion.Runtime.Avatar
         }
 
         public bool HasAnyClips => _clips.Count > 0;
+        public bool IsPlayingOneShot => _isPlayingOneShot;
+        public string ActiveClipName => _activeClip != null ? _activeClip.Config.clipName : null;
 
         /// <summary>
         /// Pauses playback and pins a specific frame from the named clip.
@@ -100,9 +109,14 @@ namespace NeonCompanion.Runtime.Avatar
 
             _activeClip = clip;
             _isPlaying = false;
+            _isPlayingOneShot = false;
+            var callback = _onClipCompleted;
+            _onClipCompleted = null;
             _frameTimer = 0f;
             _frameIndex = Mathf.Clamp(frameIndex, 0, clip.Frames.Length - 1);
             ApplyFrame();
+            if (callback != null)
+                callback();
         }
 
         /// <summary>
@@ -121,6 +135,21 @@ namespace NeonCompanion.Runtime.Avatar
             _clips[clip.clipName] = new ClipRuntime(clip, frames);
         }
 
+        public bool PlayOneShot(string clipName, Action onComplete)
+        {
+            if (string.IsNullOrWhiteSpace(clipName))
+                return false;
+
+            if (!_clips.TryGetValue(clipName, out var clip))
+                return false;
+
+            SetClip(clipName);
+            _onClipCompleted = onComplete;
+            _isPlayingOneShot = true;
+            _isPlaying = true;
+            return true;
+        }
+
         private void Update()
         {
             if (!_isPlaying || _activeClip == null || _targetImage == null)
@@ -137,7 +166,8 @@ namespace NeonCompanion.Runtime.Avatar
 
                 if (_frameIndex >= _activeClip.Frames.Length)
                 {
-                    if (_activeClip.Config.loop)
+                    bool shouldLoop = _activeClip.Config.loop && !_isPlayingOneShot;
+                    if (shouldLoop)
                     {
                         _frameIndex = 0;
                     }
@@ -145,6 +175,11 @@ namespace NeonCompanion.Runtime.Avatar
                     {
                         _frameIndex = _activeClip.Frames.Length - 1;
                         _isPlaying = false;
+                        _isPlayingOneShot = false;
+                        var callback = _onClipCompleted;
+                        _onClipCompleted = null;
+                        if (callback != null)
+                            callback();
                     }
                 }
 

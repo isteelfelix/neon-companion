@@ -265,6 +265,17 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ILocalizationService _localizationService;
         private bool _isRefreshingLocalizedUi;
         private bool _voiceBoundToChat;
+        private AvatarMotionState _avatarMotionState = AvatarMotionState.Idle;
+        private bool _isVoicePlaying;
+        private bool _isVoiceRecording;
+
+        private enum AvatarMotionState
+        {
+            Idle,
+            Thinking,
+            Talking,
+            Listening
+        }
 
         private static Dictionary<string, string> BuildStaticTemplateTextMap()
         {
@@ -389,6 +400,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnDisable()
         {
             UnregisterCallbacks();
+            UnbindVoiceAnimationEvents();
+            _isSending = false;
+            _avatarMotionState = AvatarMotionState.Idle;
             if (_voiceBoundToChat && _chatService != null && _voiceOutputManager != null)
                 _voiceOutputManager.UnbindChat(_chatService);
             _voiceBoundToChat = false;
@@ -968,7 +982,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 chat.UseStreaming = streaming;
 
                 RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message));
-                SetAvatarTalking(true);
 
                 if (streaming)
                 {
@@ -983,15 +996,16 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
+                TriggerAvatarSmile();
             }
             catch (Exception ex)
             {
                 AddSystemMessage(LocalizationExtensions.Get("system.chat.send_failed", "Не удалось отправить сообщение. Попробуй ещё раз."));
                 NeonLogger.LogError(ex.ToString());
+                TriggerAvatarConfused();
             }
             finally
             {
-                SetAvatarTalking(false);
                 SetSending(false);
             }
         }
@@ -1027,6 +1041,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (isSending) StartTypingAnimation();
             else StopTypingAnimation();
+
+            RefreshAvatarMotionState();
         }
 
         private void OnSummarizeClicked()
@@ -1144,6 +1160,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _voiceInputManager.Initialize(_voiceService, _micButton, IsVoiceEnabledBySettings, SendVoiceMessageAsync, OnVoiceRecordingStarted);
             }
 
+            BindVoiceAnimationEvents();
+
             if (!_voiceBoundToChat)
             {
                 _voiceOutputManager.BindChat(chat);
@@ -1179,7 +1197,73 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _voiceInputManager?.RefreshState();
             if (!IsVoiceEnabledBySettings())
+            {
                 _voiceOutputManager?.StopSpeakingAndClear();
+                _isVoicePlaying = false;
+                _isVoiceRecording = false;
+                RefreshAvatarMotionState();
+            }
+        }
+
+        private void BindVoiceAnimationEvents()
+        {
+            if (_voiceOutputManager != null)
+            {
+                _voiceOutputManager.OnPlaybackStarted -= HandleVoicePlaybackStarted;
+                _voiceOutputManager.OnPlaybackCompleted -= HandleVoicePlaybackCompleted;
+                _voiceOutputManager.OnPlaybackStarted += HandleVoicePlaybackStarted;
+                _voiceOutputManager.OnPlaybackCompleted += HandleVoicePlaybackCompleted;
+            }
+
+            if (_voiceInputManager != null)
+            {
+                _voiceInputManager.OnRecordingStarted -= HandleVoiceRecordingStarted;
+                _voiceInputManager.OnRecordingStopped -= HandleVoiceRecordingStopped;
+                _voiceInputManager.OnRecordingStarted += HandleVoiceRecordingStarted;
+                _voiceInputManager.OnRecordingStopped += HandleVoiceRecordingStopped;
+            }
+        }
+
+        private void UnbindVoiceAnimationEvents()
+        {
+            if (_voiceOutputManager != null)
+            {
+                _voiceOutputManager.OnPlaybackStarted -= HandleVoicePlaybackStarted;
+                _voiceOutputManager.OnPlaybackCompleted -= HandleVoicePlaybackCompleted;
+            }
+
+            if (_voiceInputManager != null)
+            {
+                _voiceInputManager.OnRecordingStarted -= HandleVoiceRecordingStarted;
+                _voiceInputManager.OnRecordingStopped -= HandleVoiceRecordingStopped;
+            }
+
+            _isVoicePlaying = false;
+            _isVoiceRecording = false;
+        }
+
+        private void HandleVoicePlaybackStarted(string _)
+        {
+            _isVoicePlaying = true;
+            RefreshAvatarMotionState();
+        }
+
+        private void HandleVoicePlaybackCompleted()
+        {
+            _isVoicePlaying = false;
+            RefreshAvatarMotionState();
+        }
+
+        private void HandleVoiceRecordingStarted()
+        {
+            _isVoiceRecording = true;
+            RefreshAvatarMotionState();
+        }
+
+        private void HandleVoiceRecordingStopped()
+        {
+            _isVoiceRecording = false;
+            RefreshAvatarMotionState();
         }
 
         private void OnAttachClicked()
@@ -3559,7 +3643,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_avatarAnimator == null || _avatarArtImage == null)
                 return false;
 
-            var clips = profile?.animationClips;
+            var resolvedMotion = AvatarMotionPackLoader.ResolveProfileMotion(profile) ?? new AvatarProfileMotionResolution();
+            var clips = resolvedMotion.animationClips;
             if (clips == null || clips.Count == 0)
             {
                 _avatarAnimator.Stop();
@@ -3571,6 +3656,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _avatarAnimator.Configure(clips, _avatarArtImage);
+            if (resolvedMotion.lipsyncClip != null)
+                _avatarAnimator.RegisterClip(resolvedMotion.lipsyncClip);
             if (!_avatarAnimator.HasAnyClips)
             {
                 _avatarArtImage.sprite = null;
@@ -3581,10 +3668,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_avatarArtImage, DisplayStyle.Flex);
             if (_avatar3DImage != null)
                 SetDisplay(_avatar3DImage, DisplayStyle.None);
-            if (_isSending && _avatarAnimator.HasClip("talking"))
-                _avatarAnimator.Play("talking");
-            else
-                _avatarAnimator.Play("idle");
+            RefreshAvatarMotionState();
 
             return true;
         }
@@ -3623,11 +3707,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _avatar3DRenderer.SetModelRoot(_avatar3DService.GetRuntimeTransform());
             SetDisplay(_avatar3DImage, DisplayStyle.Flex);
-
-            if (_isSending && !_avatar3DService.SetAnimation("talking"))
-                _avatar3DService.SetAnimation("idle");
-            else if (!_isSending)
-                _avatar3DService.SetAnimation("idle");
+            RefreshAvatarMotionState();
         }
 
         private void Disable2DAvatarAnimation()
@@ -3650,33 +3730,103 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetDisplay(_avatar3DImage, DisplayStyle.None);
         }
 
-        private void SetAvatarTalking(bool isTalking)
+        private void SetAvatarMotionState(AvatarMotionState state)
         {
+            _avatarMotionState = state;
+
             if (_avatar3DService != null && _avatar3DService.IsLoaded)
             {
-                if (isTalking)
-                {
-                    if (!_avatar3DService.SetAnimation("talking"))
-                        _avatar3DService.SetAnimation("idle");
-                }
-                else
-                {
+                string clip3D = StateToClipName(state);
+                if (!_avatar3DService.SetAnimation(clip3D))
                     _avatar3DService.SetAnimation("idle");
-                }
-
                 return;
             }
 
             if (_avatarAnimator == null || !_avatarAnimator.HasAnyClips)
                 return;
 
-            if (isTalking && _avatarAnimator.HasClip("talking"))
+            string clip2D = ResolveAvailableClipForState(state);
+            _avatarAnimator.Play(clip2D);
+        }
+
+        private void RefreshAvatarMotionState()
+        {
+            if (_avatarAnimator != null && _avatarAnimator.IsPlayingOneShot)
+                return;
+
+            if (_isVoiceRecording)
             {
-                _avatarAnimator.Play("talking");
+                SetAvatarMotionState(AvatarMotionState.Listening);
                 return;
             }
 
-            _avatarAnimator.Play("idle");
+            if (_isVoicePlaying)
+            {
+                SetAvatarMotionState(AvatarMotionState.Talking);
+                return;
+            }
+
+            if (_isSending)
+            {
+                SetAvatarMotionState(AvatarMotionState.Thinking);
+                return;
+            }
+
+            SetAvatarMotionState(AvatarMotionState.Idle);
+        }
+
+        private string ResolveAvailableClipForState(AvatarMotionState state)
+        {
+            string preferred = StateToClipName(state);
+            if (_avatarAnimator != null && _avatarAnimator.HasClip(preferred))
+                return preferred;
+
+            return "idle";
+        }
+
+        private static string StateToClipName(AvatarMotionState state)
+        {
+            switch (state)
+            {
+                case AvatarMotionState.Thinking:
+                    return "thinking";
+                case AvatarMotionState.Talking:
+                    return "talking";
+                case AvatarMotionState.Listening:
+                    return "listening";
+                default:
+                    return "idle";
+            }
+        }
+
+        private void PlayAvatarReaction(string reactionClipName)
+        {
+            if (string.IsNullOrWhiteSpace(reactionClipName))
+                return;
+
+            if (_avatar3DService != null && _avatar3DService.IsLoaded)
+            {
+                NeonLogger.LogWarning("3D avatar reaction is not implemented for clip '" + reactionClipName + "'.");
+                return;
+            }
+
+            if (_avatarAnimator == null || !_avatarAnimator.HasAnyClips)
+                return;
+
+            if (!_avatarAnimator.HasClip(reactionClipName))
+                return;
+
+            _avatarAnimator.PlayOneShot(reactionClipName, RefreshAvatarMotionState);
+        }
+
+        private void TriggerAvatarSmile()
+        {
+            PlayAvatarReaction("smile");
+        }
+
+        private void TriggerAvatarConfused()
+        {
+            PlayAvatarReaction("confused");
         }
 
         private static string BuildAnimationInfoText(AvatarProfile profile)
@@ -3689,7 +3839,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return LocalizationExtensions.GetFormat("avatar.animation.3d_animations", "3D анимации: {0}", string.Join(", ", profile.modelAnimationClips));
             }
 
-            var clips = profile?.animationClips;
+            var motion = AvatarMotionPackLoader.ResolveProfileMotion(profile) ?? new AvatarProfileMotionResolution();
+            var clips = motion.animationClips;
             if (clips == null || clips.Count == 0)
                 return LocalizationExtensions.Get("avatar.animation.static", "Статичное изображение");
 
@@ -4436,7 +4587,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (messages.Count == 0) return;
 
                 SetSending(true);
-                SetAvatarTalking(true);
                 try
                 {
                     bool streaming = _settingsStreaming?.value ?? false;
@@ -4457,10 +4607,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                     RenderMessages(chat.CurrentChatViewModel?.Messages);
                     await LoadSessionsAsync(chat);
+                    TriggerAvatarSmile();
                 }
                 finally
                 {
-                    SetAvatarTalking(false);
                     SetSending(false);
                 }
             }
@@ -4468,6 +4618,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 AddSystemMessage(LocalizationExtensions.Get("system.regenerate.failed", "Не удалось пересоздать последний ответ."));
                 NeonLogger.LogError(ex.ToString());
+                TriggerAvatarConfused();
             }
         }
 
