@@ -2235,7 +2235,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Then debounce-fetch live models from the endpoint
             _autoDiscoverSchedule?.Pause();
-            _autoDiscoverSchedule = _providerEditPanel?.schedule.Execute(() => _ = AutoDiscoverModelsAsync()).StartingIn(800);
+            _autoDiscoverSchedule = _providerEditPanel?.schedule.Execute(StartAutoDiscoverModels).StartingIn(800);
+        }
+
+        private void StartAutoDiscoverModels()
+        {
+            _ = AutoDiscoverModelsAsync();
         }
 
         private async System.Threading.Tasks.Task AutoDiscoverModelsAsync()
