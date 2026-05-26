@@ -2027,6 +2027,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetTestRow(null, string.Empty);
             _providerEditPanel.style.display = DisplayStyle.Flex;
             _ = RefreshProvidersListAsync();
+
+            // Auto-discover models if endpoint is already configured
+            if (!string.IsNullOrWhiteSpace(_editingProvider.baseUrl))
+                _ = AutoDiscoverModelsAsync();
         }
 
         private void OnSaveProviderClicked()
