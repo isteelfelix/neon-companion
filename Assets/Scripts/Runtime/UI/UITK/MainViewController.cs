@@ -883,9 +883,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ShowProviders()
         {
-            if (!CanLeaveProviderEditor())
-                return;
-
             SetActiveNav(_navProviders);
             SetTopbar(LocalizationExtensions.Get("topbar.providers.title", "Провайдеры"), LocalizationExtensions.Get("topbar.providers.subtitle", "OpenAI-совместимые провайдеры"));
             ShowArea(_providersPanel);
@@ -2192,10 +2189,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             var draft = BuildProviderDraftFromEditor();
             if (draft == null) return false;
 
-            return draft.displayName  != _editingProviderSource.displayName
-                || draft.baseUrl      != _editingProviderSource.baseUrl
-                || draft.apiKey       != _editingProviderSource.apiKey
-                || draft.defaultModel != _editingProviderSource.defaultModel
+            static bool SameText(string left, string right)
+            {
+                return string.Equals(left ?? string.Empty, right ?? string.Empty, StringComparison.Ordinal);
+            }
+
+            return !SameText(draft.displayName, _editingProviderSource.displayName)
+                || !SameText(draft.baseUrl, _editingProviderSource.baseUrl)
+                || !SameText(draft.apiKey, _editingProviderSource.apiKey)
+                || !SameText(draft.defaultModel, _editingProviderSource.defaultModel)
                 || Math.Abs(draft.temperature - _editingProviderSource.temperature) > 0.001f
                 || draft.maxTokens    != _editingProviderSource.maxTokens;
         }
