@@ -86,7 +86,7 @@ namespace NeonCompanion.Runtime.Api
             ProviderConfig provider,
             CancellationToken cancellationToken = default)
         {
-            ProviderValidator.Validate(provider);
+            ProviderValidator.ValidateForConnection(provider);
 
             var normalized = (provider.baseUrl ?? string.Empty).Trim().TrimEnd('/');
             if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
@@ -121,28 +121,54 @@ namespace NeonCompanion.Runtime.Api
                 {
                     // 401 = server reachable, credentials wrong — still proves endpoint is live
                     bool authed = webRequest.responseCode != 401;
+                    IReadOnlyList<string> discoveredModels = null;
 
                     if (authed)
                     {
                         var modelsPayload = webRequest.downloadHandler?.text;
+                        if (!string.IsNullOrEmpty(modelsPayload))
+                            discoveredModels = ParseModelIds(modelsPayload);
+
                         if (!string.IsNullOrWhiteSpace(provider.defaultModel) &&
                             !ModelExistsInModelsResponse(modelsPayload, provider.defaultModel))
                         {
                             return new ConnectionTestResult(false,
                                 $"Connected, but model '{provider.defaultModel}' was not found in /models · {latency} ms",
-                                latency);
+                                latency,
+                                discoveredModels);
                         }
                     }
 
                     string msg = authed
                         ? $"OK · {latency} ms"
                         : $"Reachable but unauthorized · {latency} ms";
-                    return new ConnectionTestResult(authed, msg, latency);
+                    return new ConnectionTestResult(authed, msg, latency, discoveredModels);
                 }
 
                 return new ConnectionTestResult(false,
                     $"{webRequest.error ?? "error"} (HTTP {webRequest.responseCode}) · {latency} ms",
                     latency);
+            }
+        }
+
+        private static IReadOnlyList<string> ParseModelIds(string json)
+        {
+            try
+            {
+                var response = JsonUtility.FromJson<OpenAiModelsResponse>(json);
+                if (response?.data == null || response.data.Length == 0)
+                    return null;
+                var ids = new List<string>(response.data.Length);
+                foreach (var entry in response.data)
+                {
+                    if (!string.IsNullOrWhiteSpace(entry?.id))
+                        ids.Add(entry.id);
+                }
+                return ids.Count > 0 ? ids : null;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -430,6 +456,18 @@ namespace NeonCompanion.Runtime.Api
         {
             public string message;
             public string type;
+        }
+
+        [Serializable]
+        private class OpenAiModelsResponse
+        {
+            public OpenAiModelEntry[] data;
+        }
+
+        [Serializable]
+        private class OpenAiModelEntry
+        {
+            public string id;
         }
     }
 }

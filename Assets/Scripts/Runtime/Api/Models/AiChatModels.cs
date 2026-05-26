@@ -8,12 +8,14 @@ namespace NeonCompanion.Runtime.Api.Models
         public bool Success { get; }
         public string Message { get; }
         public long LatencyMs { get; }
+        public IReadOnlyList<string> DiscoveredModels { get; }
 
-        public ConnectionTestResult(bool success, string message, long latencyMs = 0)
+        public ConnectionTestResult(bool success, string message, long latencyMs = 0, IReadOnlyList<string> discoveredModels = null)
         {
             Success = success;
             Message = message;
             LatencyMs = latencyMs;
+            DiscoveredModels = discoveredModels;
         }
     }
 

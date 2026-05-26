@@ -2092,6 +2092,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 var result = await app.AiClient.TestConnectionAsync(draft);
                 SetTestRow(result.Success, result.Message);
+
+                if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
+                    SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
             }
             catch (Exception ex)
             {
@@ -2322,6 +2325,43 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editorProviderStatus.EnableInClassList("editor__status--active", isActive);
             _editorProviderStatus.EnableInClassList("editor__status--inactive", !isActive);
             _editorProviderStatus.EnableInClassList("editor__status--draft", false);
+        }
+
+        private void SyncModelPresetFromDiscovery(IReadOnlyList<string> discoveredModels, string currentModel)
+        {
+            if (_editModelPreset == null || discoveredModels == null || discoveredModels.Count == 0)
+                return;
+
+            _syncingModelPresetUi = true;
+            _modelPresetByLabel.Clear();
+            var choices = new List<string>(discoveredModels.Count + 1);
+            foreach (var modelId in discoveredModels)
+            {
+                if (string.IsNullOrWhiteSpace(modelId)) continue;
+                _modelPresetByLabel[modelId] = modelId;
+                choices.Add(modelId);
+            }
+            choices.Add(CustomModelPresetValue);
+            _editModelPreset.choices = choices;
+
+            // Preserve current model if it appears in the discovered list; otherwise take first.
+            string targetChoice = CustomModelPresetValue;
+            if (!string.IsNullOrWhiteSpace(currentModel) && _modelPresetByLabel.ContainsKey(currentModel))
+                targetChoice = currentModel;
+            else if (discoveredModels.Count > 0 && !string.IsNullOrWhiteSpace(discoveredModels[0]))
+                targetChoice = discoveredModels[0];
+
+            bool showCustom = string.Equals(targetChoice, CustomModelPresetValue, StringComparison.Ordinal);
+            if (showCustom)
+                _lastCustomModel = currentModel ?? string.Empty;
+            _editModelUsesCustomMode = showCustom;
+
+            _editModelPreset.SetValueWithoutNotify(targetChoice);
+            SetDisplay(_editModelCustomWrap, showCustom ? DisplayStyle.Flex : DisplayStyle.None);
+            if (_editModel != null)
+                _editModel.SetValueWithoutNotify(showCustom ? (_lastCustomModel ?? string.Empty) : (targetChoice ?? string.Empty));
+
+            _syncingModelPresetUi = false;
         }
 
         private readonly struct ModelPreset
