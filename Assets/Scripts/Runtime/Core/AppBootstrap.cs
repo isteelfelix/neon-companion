@@ -46,6 +46,7 @@ namespace NeonCompanion.Runtime.Core
             var avatar3DService = new Avatar3DService();
             var donationService = new DonationService();
             var providerManager = new ProviderManager(providers);
+            var modelDiscoveryService = new ModelDiscoveryService(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
 
             // Apply avatar system prompt
@@ -92,6 +93,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IAvatar3DService>(avatar3DService);
             services.Register<IDonationService>(donationService);
             services.Register<ProviderManager>(providerManager);
+            services.Register<ModelDiscoveryService>(modelDiscoveryService);
             services.Register<ChatService>(chatService);
             services.Register<ILocalizationService>(localizationService);
 

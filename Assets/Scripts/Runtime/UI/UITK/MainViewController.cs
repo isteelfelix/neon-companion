@@ -2253,8 +2253,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _autoDiscoverCts = new CancellationTokenSource();
             var ct = _autoDiscoverCts.Token;
 
-            var draft = BuildProviderDraftFromEditor();
-            if (draft == null || string.IsNullOrWhiteSpace(draft.baseUrl))
+            var currentDraft = BuildProviderDraftFromEditor();
+            if (currentDraft == null || string.IsNullOrWhiteSpace(currentDraft.baseUrl))
                 return;
 
             try
@@ -2262,11 +2262,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await GetAppAsync();
                 if (app == null || ct.IsCancellationRequested) return;
 
-                var result = await app.AiClient.TestConnectionAsync(draft, ct);
+                if (!app.Services.TryGet<ModelDiscoveryService>(out var discovery))
+                    return;
+
+                var models = await discovery.DiscoverModelsAsync(currentDraft, ct);
                 if (ct.IsCancellationRequested) return;
 
-                if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
-                    SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
+                if (models != null && models.Count > 0)
+                    SyncModelPresetFromDiscovery(models, GetCurrentModelValue());
             }
             catch (System.OperationCanceledException) { }
             catch (Exception ex)
