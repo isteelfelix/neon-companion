@@ -80,6 +80,7 @@
                     <ui:Label name="topbar-title" text="Новый чат" class="topbar__title" />
                     <ui:VisualElement name="topbar-sep" class="topbar__sep" />
                     <ui:Label name="topbar-subtitle" text="" class="topbar__subtitle" />
+                    <ui:DropdownField name="topbar-model-picker" class="topbar__model-picker" />
                 </ui:VisualElement>
                 <ui:VisualElement class="topbar__right">
                     <ui:Button name="summarize-btn" text="Резюме" class="btn btn--ghost" />

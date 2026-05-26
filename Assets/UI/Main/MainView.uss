@@ -246,6 +246,11 @@
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
+.topbar__model-picker {
+    margin-left: 12px;
+    max-width: 200px;
+}
+
 .topbar__sep {
     width: 1px;
     height: 18px;

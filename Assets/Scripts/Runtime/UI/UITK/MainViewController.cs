@@ -186,6 +186,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Label _topbarTitle;
         private Label _topbarSubtitle;
+        private DropdownField _topbarModelPicker;
         private Label _placeholderTitle;
         private Label _placeholderBody;
         private Label _subtitleRole;
@@ -483,6 +484,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _topbarTitle = root.Q<Label>("topbar-title");
             _topbarSubtitle = root.Q<Label>("topbar-subtitle");
+            _topbarModelPicker = root.Q<DropdownField>("topbar-model-picker");
             _placeholderTitle = root.Q<Label>("placeholder-title");
             _placeholderBody = root.Q<Label>("placeholder-body");
             _subtitleRole = root.Q<Label>("subtitle-role");
@@ -713,6 +715,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarUploadTile.RegisterCallback<ClickEvent>(_ => OnAvatarUploadClicked());
             if (_editModelPreset != null)
                 _editModelPreset.RegisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
+            if (_topbarModelPicker != null)
+                _topbarModelPicker.RegisterCallback<ChangeEvent<string>>(OnTopbarModelChanged);
             if (_editName != null)
                 _editName.RegisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
@@ -802,6 +806,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
             if (_editModelPreset != null)
                 _editModelPreset.UnregisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
+            if (_topbarModelPicker != null)
+                _topbarModelPicker.UnregisterCallback<ChangeEvent<string>>(OnTopbarModelChanged);
             if (_editName != null)
                 _editName.UnregisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
@@ -2269,7 +2275,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (ct.IsCancellationRequested) return;
 
                 if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
+                {
                     SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
+                    SyncTopbarModelPicker(GetCurrentModelValue());
+                }
             }
             catch (System.OperationCanceledException) { }
             catch (Exception ex)
@@ -2310,6 +2319,69 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editModelUsesCustomMode = false;
             if (_modelPresetByLabel.TryGetValue(selectedLabel, out string modelId) && _editModel != null)
                 _editModel.SetValueWithoutNotify(modelId ?? string.Empty);
+        }
+
+        private void OnTopbarModelChanged(ChangeEvent<string> evt)
+        {
+            if (evt == null || _topbarModelPicker == null) return;
+
+            string selectedModel = evt.newValue ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(selectedModel)) return;
+
+            _ = ApplyTopbarModelSwitchAsync(selectedModel);
+        }
+
+        private async System.Threading.Tasks.Task ApplyTopbarModelSwitchAsync(string modelId)
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null) return;
+
+                var providers = await app.Providers.GetAllAsync();
+                if (providers == null || providers.Count == 0) return;
+
+                var activeProvider = providers[0];
+                if (activeProvider == null) return;
+
+                activeProvider.defaultModel = modelId;
+                await app.Providers.SaveAllAsync(providers);
+
+                if (_providerModel != null)
+                    _providerModel.text = modelId;
+                if (_railProviderModel != null)
+                    _railProviderModel.text = modelId;
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning($"Topbar model switch failed: {ex.Message}");
+            }
+        }
+
+        private void SyncTopbarModelPicker(string currentModel)
+        {
+            if (_topbarModelPicker == null) return;
+
+            if (_discoveredModels == null || _discoveredModels.Count == 0)
+            {
+                _topbarModelPicker.choices = new List<string> { currentModel };
+                _topbarModelPicker.SetValueWithoutNotify(currentModel);
+                return;
+            }
+
+            var choices = new List<string>(_discoveredModels.Count);
+            foreach (var m in _discoveredModels)
+            {
+                if (!string.IsNullOrWhiteSpace(m))
+                    choices.Add(m);
+            }
+            _topbarModelPicker.choices = choices;
+
+            string target = currentModel;
+            if (!string.IsNullOrWhiteSpace(currentModel) && !choices.Contains(currentModel))
+                target = choices.Count > 0 ? choices[0] : currentModel;
+
+            _topbarModelPicker.SetValueWithoutNotify(target);
         }
 
         private string GetCurrentModelValue()
@@ -2683,6 +2755,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _railProviderName.text = displayName;
             if (_railProviderModel != null)
                 _railProviderModel.text = model;
+            SyncTopbarModelPicker(model);
         }
 
         private static string BuildProviderShort(ProviderConfig provider)
