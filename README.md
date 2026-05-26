@@ -16,7 +16,8 @@ This project is intended as a personal companion shell for self-hosted agents, w
 - ✅ Multiple providers support + switching
 - ✅ Chat sessions and history
 - ✅ Connection to self-hosted agents (tested with Hermes + Grok)
-- 🚧 2D avatar rendering with sprite-sheet action sets for low-end/mobile baseline
+- 🚧 2D avatar rendering with sprite-sheet motion packs for low-end/mobile baseline
+- 📋 Fixed MVP 2D action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
 - 📋 Desktop-first 3D realtime avatar layer is planned separately
 - 🚧 Cross-platform builds (Desktop + Mobile)
 
@@ -26,7 +27,7 @@ This project is intended as a personal companion shell for self-hosted agents, w
 - Switch between providers directly in the app
 - Persistent chat sessions
 - Modern dark UI built with Unity UI Toolkit
-- Designed around a lightweight 2D sprite-sheet baseline, with optional desktop 3D realtime avatars later
+- Lightweight 2D sprite-sheet baseline with continuous states + one-shot reactions
 
 ## Getting Started
 
@@ -139,6 +140,7 @@ More detailed information is available in the `docs/` folder:
 - [MVP Features](docs/02_Features_MVP.md)
 - [API Integration](docs/03_API_Integration.md)
 - [Avatar System](docs/04_Avatar_System.md)
+- [UI Flows](docs/05_UI_Flows.md)
 - [Data Models](docs/06_Data_Model.md)
 - [Cross-Platform](docs/07_CrossPlatform.md)
 - [Build & Deploy](docs/08_Build_and_Deploy.md)

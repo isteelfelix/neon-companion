@@ -6,7 +6,11 @@
 - Базовая структура проекта
 - Документация
 - План MVP
-- Avatar motion research: 2D sprite-sheet baseline для weak PC/mobile, desktop-first 3D realtime path, LongCat-Video-Avatar-1.5 как tooling/async renderer candidate
+- Avatar motion research: 2D sprite-sheet baseline для weak PC/mobile и desktop-first 3D realtime path
+
+### Changed
+- Зафиксирован MVP contract для 2D avatar motion: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
+- Документация приведена к одному vocabulary для continuous states и one-shot reactions
 
 ## [0.1.0] - 2026-05-XX
 
