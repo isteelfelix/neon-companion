@@ -2264,14 +2264,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await GetAppAsync();
                 if (app == null || ct.IsCancellationRequested) return;
 
-                if (!app.Services.TryGet<ModelDiscoveryService>(out var discovery))
-                    return;
-
-                var models = await discovery.DiscoverModelsAsync(currentDraft, ct);
+                // TestConnectionAsync has Hermes picker inventory logic
+                var result = await app.AiClient.TestConnectionAsync(currentDraft, ct);
                 if (ct.IsCancellationRequested) return;
 
-                if (models != null && models.Count > 0)
-                    SyncModelPresetFromDiscovery(models, GetCurrentModelValue());
+                if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
+                    SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
             }
             catch (System.OperationCanceledException) { }
             catch (Exception ex)
