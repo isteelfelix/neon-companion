@@ -14,20 +14,29 @@ This project is intended as a personal companion shell for self-hosted agents, w
 
 - ✅ Text chat with custom OpenAI-compatible providers
 - ✅ Multiple providers support + switching
+- ✅ Model auto-discovery from provider endpoints
+- ✅ Model switcher in chat topbar (per-session model selection)
 - ✅ Chat sessions and history
 - ✅ Connection to self-hosted agents (tested with Hermes + Grok)
-- 🚧 2D avatar rendering with sprite-sheet motion packs for low-end/mobile baseline
-- 📋 Fixed MVP 2D action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
-- 📋 Desktop-first 3D realtime avatar layer is planned separately
+- ✅ 2D avatar rendering with sprite-sheet motion packs
+- ✅ Fixed MVP 2D action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
+- ✅ Custom NeonDropdown UI component
+- ✅ Chat attachments (images)
+- ✅ Hermes session routing + inventory integration
 - 🚧 Cross-platform builds (Desktop + Mobile)
+- 📋 Desktop-first 3D realtime avatar layer is planned separately
 
 ## Features (MVP)
 
 - Connect any OpenAI-compatible API (including self-hosted)
 - Switch between providers directly in the app
+- Auto-discover available models from provider endpoints
+- Per-session model switching from chat topbar
 - Persistent chat sessions
 - Modern dark UI built with Unity UI Toolkit
 - Lightweight 2D sprite-sheet baseline with continuous states + one-shot reactions
+- Chat with image attachments
+- Resizable sidebar rail
 
 ## Getting Started
 
