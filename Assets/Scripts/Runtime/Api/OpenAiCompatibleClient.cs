@@ -767,7 +767,8 @@ namespace NeonCompanion.Runtime.Api
             ProviderConfig provider,
             AiChatRequest request,
             Action<string> onToken,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Action<string, string, string, string> onToolProgress = null)
         {
             ProviderValidator.Validate(provider);
 
@@ -835,14 +836,14 @@ namespace NeonCompanion.Runtime.Api
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
-                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, emitToken, flushPartialLine: false);
+                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, emitToken, flushPartialLine: false, onToolProgress: onToolProgress);
 
                     await Task.Yield();
                 }
 
                 // Drain any data that arrived after the last yield
                 string finalStreamingText = webRequest.downloadHandler?.text ?? string.Empty;
-                ParseSseText(finalStreamingText, lastProcessed, emitToken, flushPartialLine: true);
+                ParseSseText(finalStreamingText, lastProcessed, emitToken, flushPartialLine: true, onToolProgress: onToolProgress);
 
                 if (webRequest.result != UnityWebRequest.Result.Success)
                 {
@@ -1191,12 +1192,19 @@ namespace NeonCompanion.Runtime.Api
             public string ProviderSessionId;
         }
 
-        private static int ParseSseText(string text, int offset, Action<string> onToken, bool flushPartialLine)
+        private static int ParseSseText(
+            string text,
+            int offset,
+            Action<string> onToken,
+            bool flushPartialLine,
+            Action<string, string, string, string> onToolProgress = null)
         {
             if (string.IsNullOrEmpty(text) || offset >= text.Length)
                 return Math.Max(0, offset);
 
             int searchFrom = offset;
+            string pendingEventType = null;
+
             while (searchFrom < text.Length)
             {
                 int lineEnd = FindLineEnd(text, searchFrom, out int nextLineStart);
@@ -1212,6 +1220,20 @@ namespace NeonCompanion.Runtime.Api
                 string line = text.Substring(searchFrom, lineEnd - searchFrom).Trim();
                 searchFrom = nextLineStart;
 
+                if (string.IsNullOrEmpty(line))
+                {
+                    // SSE event boundary — reset pending event type
+                    pendingEventType = null;
+                    continue;
+                }
+
+                // Track custom SSE event types
+                if (line.StartsWith("event:", StringComparison.OrdinalIgnoreCase))
+                {
+                    pendingEventType = line.Length > 6 ? line.Substring(6).Trim() : string.Empty;
+                    continue;
+                }
+
                 if (!TryExtractSsePayload(line, out string payload))
                     continue;
 
@@ -1221,12 +1243,34 @@ namespace NeonCompanion.Runtime.Api
                 if (string.IsNullOrWhiteSpace(payload))
                     continue;
 
+                // Handle Hermes tool progress events
+                if (onToolProgress != null &&
+                    string.Equals(pendingEventType, "hermes.tool.progress", StringComparison.OrdinalIgnoreCase))
+                {
+                    ParseAndEmitToolProgress(payload, onToolProgress);
+                    pendingEventType = null;
+                    continue;
+                }
+
                 string delta = ExtractDeltaContent(payload);
                 if (!string.IsNullOrEmpty(delta))
                     onToken?.Invoke(delta);
             }
 
             return searchFrom;
+        }
+
+        private static void ParseAndEmitToolProgress(string json, Action<string, string, string, string> onToolProgress)
+        {
+            if (string.IsNullOrWhiteSpace(json) || onToolProgress == null)
+                return;
+
+            string tool = ExtractJsonStringValue(json, "tool", 0) ?? string.Empty;
+            string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? string.Empty;
+            string label = ExtractJsonStringValue(json, "label", 0) ?? string.Empty;
+            string status = ExtractJsonStringValue(json, "status", 0) ?? string.Empty;
+
+            onToolProgress.Invoke(tool, label, emoji, status);
         }
 
         private static string ExtractContentFromStreamingPayload(string text)

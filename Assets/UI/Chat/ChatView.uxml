@@ -39,6 +39,10 @@
         <!-- RIGHT: Avatar panel -->
         <ui:VisualElement name="avatar-panel" class="avatar-panel">
 
+            <ui:VisualElement name="thinking-bubble" class="thinking-bubble" style="display: none;">
+                <ui:Label name="thinking-text" class="thinking-bubble__text" />
+            </ui:VisualElement>
+
             <ui:VisualElement name="avatar-stage-hero" class="avatar-stage__hero">
                 <ui:VisualElement name="avatar-glow" class="halo" />
                 <ui:VisualElement name="avatar-circle" class="avatar">

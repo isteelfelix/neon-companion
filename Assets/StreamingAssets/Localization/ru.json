@@ -256,5 +256,15 @@
   "quit.confirm": "Закрыть",
   "settings.close.hotkey.title": "Горячая клавиша закрытия",
   "settings.close.hotkey.subtitle": "Нажми кнопку, затем клавишу или комбинацию.",
-  "settings.hotkey.capturing": "Нажми клавишу…"
+  "settings.hotkey.capturing": "Нажми клавишу…",
+  "thinking.parsing": "Выполняю...",
+  "thinking.searching": "Ищу...",
+  "thinking.reading": "Читаю...",
+  "thinking.writing": "Пишу...",
+  "thinking.default": "Думаю...",
+  "tool.terminal": "терминал",
+  "tool.search": "поиск",
+  "tool.read_file": "чтение файла",
+  "tool.write_file": "запись файла",
+  "tool.default": "инструмент"
 }

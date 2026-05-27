@@ -256,5 +256,15 @@
   "quit.confirm": "Close",
   "settings.close.hotkey.title": "Close hotkey",
   "settings.close.hotkey.subtitle": "Click the button, then press a key or combination.",
-  "settings.hotkey.capturing": "Press a key…"
+  "settings.hotkey.capturing": "Press a key…",
+  "thinking.parsing": "Running...",
+  "thinking.searching": "Searching...",
+  "thinking.reading": "Reading...",
+  "thinking.writing": "Writing...",
+  "thinking.default": "Thinking...",
+  "tool.terminal": "terminal",
+  "tool.search": "search",
+  "tool.read_file": "read_file",
+  "tool.write_file": "write_file",
+  "tool.default": "tool"
 }

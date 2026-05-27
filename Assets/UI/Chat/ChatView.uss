@@ -636,3 +636,89 @@
 .typing--inline .typing__dot--delay-2 {
     opacity: 0.15;
 }
+
+/* ============== Thinking bubble (above avatar) ============== */
+
+.thinking-bubble {
+    margin: 10px 12px 0;
+    padding: 8px 12px;
+    background-color: rgba(124, 122, 237, 0.10);
+    border-width: 1px;
+    border-color: rgba(124, 122, 237, 0.35);
+    border-radius: 12px;
+    border-top-left-radius: 4px;
+    flex-direction: column;
+    align-items: flex-start;
+    transition-property: opacity;
+    transition-duration: 0.3s;
+}
+
+.thinking-bubble__text {
+    color: rgba(124, 122, 237, 0.85);
+    font-size: 11px;
+    -unity-font-style: italic;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============== Tool call entries (in transcript) ============== */
+
+.tool-entry {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    min-height: 24px;
+}
+
+.tool-entry__icon {
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-right: 6px;
+    width: 18px;
+    -unity-text-align: middle-center;
+}
+
+.tool-entry__name {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: var(--text-2);
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.tool-entry__label {
+    font-size: 11px;
+    color: var(--text-4);
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.tool-entry__status {
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-left: 6px;
+    width: 14px;
+    -unity-text-align: middle-center;
+}
+
+.tool-entry__status--running {
+    color: var(--ok);
+    transition-property: opacity;
+    transition-duration: 0.6s;
+}
+
+.tool-entry__status--done {
+    color: var(--ok);
+}

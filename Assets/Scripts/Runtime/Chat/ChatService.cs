@@ -223,13 +223,13 @@ namespace NeonCompanion.Runtime.Chat
             NeonLogger.Log("New chat session started.");
         }
 
-        public async Task RegenerateAsync(Action<string> onStreamToken = null)
+        public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
         {
             if (_currentChatViewModel == null)
                 await GetOrCreateChatAsync();
 
             _currentChatViewModel.UseStreaming = UseStreaming;
-            await _currentChatViewModel.RegenerateAsync(UseStreaming ? onStreamToken : null);
+            await _currentChatViewModel.RegenerateAsync(UseStreaming ? onStreamToken : null, UseStreaming ? onToolProgress : null);
             EmitLatestAssistantResponse();
 
             SaveCurrentSession();
@@ -237,13 +237,14 @@ namespace NeonCompanion.Runtime.Chat
 
         public Task SendMessageAsync(string message, Action<string> onStreamToken = null)
         {
-            return SendMessageAsync(message, null, onStreamToken);
+            return SendMessageAsync(message, null, onStreamToken, null);
         }
 
         public async Task SendMessageAsync(
             string message,
             IReadOnlyList<ChatAttachment> attachments,
-            Action<string> onStreamToken = null)
+            Action<string> onStreamToken = null,
+            Action<string, string, string, string> onToolProgress = null)
         {
             if (_currentChatViewModel == null)
             {
@@ -270,7 +271,7 @@ namespace NeonCompanion.Runtime.Chat
                     });
                 }
             }
-            await _currentChatViewModel.SendAsync(UseStreaming ? onStreamToken : null);
+            await _currentChatViewModel.SendAsync(UseStreaming ? onStreamToken : null, UseStreaming ? onToolProgress : null);
             EmitLatestAssistantResponse();
 
             SaveCurrentSession();

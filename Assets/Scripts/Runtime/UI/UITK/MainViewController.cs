@@ -199,6 +199,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IVisualElementScheduledItem _inlineTypingSchedule;
         private int _inlineTypingFrame;
 
+        // ===== Tool progress UI =====
+        private VisualElement _thinkingBubble;
+        private Label _thinkingText;
+        private readonly ToolCallUiHelper _toolCallUiHelper = new ToolCallUiHelper();
+
         // ===== Breathing animation =====
         private IVisualElementScheduledItem _breathSchedule;
         private long _breathStartMs;
@@ -653,6 +658,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarCircle    = root.Q<VisualElement>("avatar-circle");
             _avatarStageHero = root.Q<VisualElement>("avatar-stage-hero");
             _avatarGlow      = root.Q<VisualElement>("avatar-glow");
+            _thinkingBubble  = root.Q<VisualElement>("thinking-bubble");
+            _thinkingText    = root.Q<Label>("thinking-text");
             _avatarShade     = _avatarCircle?.Q<VisualElement>(className: "avatar__shade");
             _avatarLetter    = _avatarCircle?.Q<Label>(className: "avatar__letter");
             _previewHero  = root.Q<VisualElement>("preview-hero");
@@ -1175,7 +1182,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (streaming)
                 {
                     AddStreamingBubble();
-                    await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken);
+                    await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken, OnToolProgress);
+                    ClearThinkingBubble();
+                    _toolCallUiHelper.Clear();
                     _streamingLabel = null;
                     StopInlineTypingAnimation();
                     if (_streamingTypingDots != null)
@@ -1266,6 +1275,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (bubble != null)
                 bubble.Insert(1, _streamingTypingDots); // after meta row, before body label
 
+            _toolCallUiHelper.SetBubble(bubble);
             StartInlineTypingAnimation();
             ScrollTranscriptToBottom();
         }
@@ -1281,6 +1291,45 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_streamingLabel != null)
                 _streamingLabel.text += token;
             ScrollTranscriptToBottom();
+        }
+
+        private void OnToolProgress(string tool, string label, string emoji, string status)
+        {
+            if (_thinkingBubble != null && _thinkingText != null)
+            {
+                string displayText = string.IsNullOrEmpty(label) ? GetThinkingText(tool) : label;
+                if (displayText.Length > 40)
+                    displayText = displayText.Substring(0, 40) + "...";
+                _thinkingText.text = displayText;
+                SetDisplay(_thinkingBubble, DisplayStyle.Flex);
+            }
+
+            _toolCallUiHelper.OnToolProgress(tool, label, emoji, status);
+        }
+
+        private static string GetThinkingText(string tool)
+        {
+            if (string.IsNullOrWhiteSpace(tool))
+                return LocalizationExtensions.Get("thinking.default", "Thinking...");
+
+            string lower = tool.ToLowerInvariant();
+            if (lower.Contains("terminal") || lower.Contains("bash") || lower.Contains("shell"))
+                return LocalizationExtensions.Get("thinking.parsing", "Running...");
+            if (lower.Contains("search") || lower.Contains("grep"))
+                return LocalizationExtensions.Get("thinking.searching", "Searching...");
+            if (lower.Contains("read"))
+                return LocalizationExtensions.Get("thinking.reading", "Reading...");
+            if (lower.Contains("write") || lower.Contains("edit"))
+                return LocalizationExtensions.Get("thinking.writing", "Writing...");
+            return LocalizationExtensions.Get("thinking.default", "Thinking...");
+        }
+
+        private void ClearThinkingBubble()
+        {
+            if (_thinkingBubble != null)
+                SetDisplay(_thinkingBubble, DisplayStyle.None);
+            if (_thinkingText != null)
+                _thinkingText.text = string.Empty;
         }
 
         private void SetSending(bool isSending)
@@ -5822,7 +5871,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (streaming)
                     {
                         AddStreamingBubble();
-                        await chat.RegenerateAsync(OnStreamToken);
+                        await chat.RegenerateAsync(OnStreamToken, OnToolProgress);
+                        ClearThinkingBubble();
+                        _toolCallUiHelper.Clear();
                         _streamingLabel = null;
                         StopInlineTypingAnimation();
                         if (_streamingTypingDots != null)

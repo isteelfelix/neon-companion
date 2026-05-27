@@ -55,7 +55,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             });
         }
 
-        public async Task RegenerateAsync(Action<string> onStreamToken = null)
+        public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
         {
             if (IsSending) return;
 
@@ -63,7 +63,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             IsSending = true;
             try
             {
-                await SendRequestAsync(onStreamToken);
+                await SendRequestAsync(onStreamToken, onToolProgress);
             }
             finally
             {
@@ -71,7 +71,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
         }
 
-        public async Task SendAsync(Action<string> onStreamToken = null)
+        public async Task SendAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
         {
             bool hasPendingAttachments = PendingAttachments != null && PendingAttachments.Count > 0;
             if (IsSending || (string.IsNullOrWhiteSpace(InputMessage) && !hasPendingAttachments))
@@ -86,7 +86,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             IsSending = true;
             try
             {
-                await SendRequestAsync(onStreamToken);
+                await SendRequestAsync(onStreamToken, onToolProgress);
             }
             finally
             {
@@ -94,7 +94,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
         }
 
-        private async Task SendRequestAsync(Action<string> onStreamToken)
+        private async Task SendRequestAsync(Action<string> onStreamToken, Action<string, string, string, string> onToolProgress = null)
         {
             try
             {
@@ -143,7 +143,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                         buf.Append(token);
                         streamMsg.content = buf.ToString();
                         onStreamToken(token);
-                    }, _cts.Token);
+                    }, _cts.Token, onToolProgress);
                     ProviderSessionId = response?.providerSessionId ?? ProviderSessionId;
                     if (string.IsNullOrWhiteSpace(streamMsg.content) && !string.IsNullOrWhiteSpace(response?.content))
                         streamMsg.content = response.content;
