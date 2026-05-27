@@ -30,34 +30,47 @@
 - ошибка / сбой / неуспешный шаг → `confused`
 
 ### Motion pack v1 (MVP)
-Каноничный runtime-формат — один motion pack на один аватар:
+
+Каноничный runtime-формат — один `motion_pack.json` на один аватар. Спрайтшиты хранятся напрямую в корне аватара (без подкаталога `motion/`):
 
 ```text
-<avatar-root>/
-  motion/
-    manifest.json
-    idle.png
-    thinking.png
-    talking.png
-    listening.png
-    smile.png
-    confused.png
+<StreamingAssets/Avatars/neon>/
+  motion_pack.json
+  idle.png
+  thinking.png
+  talking.png
+  listening.png
+  smile.png
+  confused.png
 ```
 
-`manifest.json` хранит:
-- `version`
-- `format`
-- `defaultAction`
-- `clips[]`
+### Структура `motion_pack.json`
 
-Каждый clip описывает:
-- `action`
-- `file`
-- `columns`
-- `rows`
-- `frameCount`
-- `fps`
-- `loop`
+```json
+{
+  "formatVersion": 1,
+  "format": "spritesheet-pack",
+  "clips": [
+    {
+      "action": "idle",
+      "spriteSheetPath": "idle.png",
+      "columns": 4,
+      "rows": 4,
+      "frameRate": 12,
+      "loop": true,
+      "pingPong": false
+    }
+  ]
+}
+```
+
+Поля клипов:
+- `action` — имя действия (`idle`, `thinking`, `talking`, `listening`, `smile`, `confused`)
+- `spriteSheetPath` — путь к PNG спрайтшиту (относительно корня аватара)
+- `columns`, `rows` — размерность сетки спрайтшита
+- `frameRate` — частота кадров
+- `loop` — зацикленность
+- `pingPong` — обратное проигрывание (idle/thinking)
 
 ### Инварианты MVP
 - `version = 1`
@@ -74,6 +87,14 @@
 - Кастомизация аватара
 - Расширение action vocabulary только после MVP
 - Внешние генеративные инструменты для производства motion-ассетов не должны становиться baseline runtime dependency
+
+### Режимы отображения аватара
+`AvatarViewMode` enum:
+- `Static` — статичное изображение
+- `Animated` —.sprite-sheet анимация через motion pack
+- `Volume3D` — 3D модель (desktop-first)
+
+Тогглы переключения доступны в UI. Галерея аватаров разбита по табам: static / animated / 3D.
 
 ## Research notes
 - Подробности по motion-pack ограничениям, full-body/talking-head рискам и asset-pipeline экспериментам: [13_Avatar_Motion_Research.md](13_Avatar_Motion_Research.md)

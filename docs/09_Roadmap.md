@@ -12,6 +12,8 @@
 - Несколько аватаров с базовой sprite-sheet анимацией
 - Фиксация MVP action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
 - Разделение continuous states и one-shot reactions
+- Автоматическое определение доступных моделей через `/models` с кэшированием
+- Переключение модели из окна чата (модель-пикер в topbar)
 - Улучшенный UI
 - Поддержка нескольких провайдеров одновременно
 
