@@ -47,6 +47,13 @@
 
                 <ui:VisualElement class="settings-row">
                     <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Enter → отправить" class="settings-row__name" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-enter-to-send" class="settings-toggle" value="true" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
                         <ui:Label text="System prompt персонажа" class="settings-row__name" />
                         <ui:Label text="Использовать персону выбранного аватара." class="settings-row__sub" />
                     </ui:VisualElement>
@@ -117,6 +124,17 @@
                     <ui:Button name="settings-export-btn" class="btn">
                         <ui:VisualElement class="icon icon--download btn__icon" />
                         <ui:Label text="Экспорт" />
+                    </ui:Button>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Очистить историю чатов" class="settings-row__name" />
+                        <ui:Label text="Удалить все сессии. Провайдеры и настройки сохранятся." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Button name="settings-clear-chats-btn" class="btn btn--danger">
+                        <ui:VisualElement class="icon icon--trash btn__icon" />
+                        <ui:Label text="Очистить" />
                     </ui:Button>
                 </ui:VisualElement>
 

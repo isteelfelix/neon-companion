@@ -95,6 +95,7 @@
                     <ui:Button name="more-btn" class="iconbtn icon icon--dots" tooltip="Ещё" />
                 </ui:VisualElement>
             </ui:VisualElement>
+            <ui:Button name="scroll-bottom-btn" text="↓" class="scroll-bottom-btn" />
 
             <ui:VisualElement name="content-host" class="content-host">
                 <ui:Instance template="ChatView"      name="chat-panel"      class="panel panel--active" />

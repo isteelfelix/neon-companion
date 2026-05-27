@@ -95,6 +95,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private NeonDropdown _settingsLanguage;
         private Toggle _settingsHistory;
         private Toggle _settingsStreaming;
+        private Toggle _settingsEnterToSend;
         private Toggle _settingsSystemPrompt;
         private Toggle _settingsVoiceIo;
         private Toggle _settingsEncryptKeys;
@@ -228,7 +229,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _newSessionButton;
         private Button _settingsOpenFolderBtn;
         private Button _settingsExportBtn;
+        private Button _settingsClearChatsBtn;
         private Button _settingsClearBtn;
+        private Button _scrollBottomBtn;
         private Label _settingsClearBtnText;
         private Button _settingsGithubBtn;
         private Button _settingsDocsBtn;
@@ -315,6 +318,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private AvatarMotionState _avatarMotionState = AvatarMotionState.Idle;
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
+        private IVisualElementScheduledItem _scrollBottomButtonSchedule;
 
         private enum AvatarMotionState
         {
@@ -343,6 +347,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             Add("settings.history.row.subtitle", "Локально, в JSON-файлах.", "Stored locally in JSON files.");
             Add("settings.streaming.row.title", "Streaming ответов", "Streaming responses");
             Add("settings.streaming.row.subtitle", "Показывать ответ по мере поступления токенов.", "Show response as tokens arrive.");
+            Add("settings.enter_to_send.row.title", "Enter → отправить", "Enter → send");
             Add("settings.systemprompt.row.title", "System prompt персонажа", "Avatar system prompt");
             Add("settings.systemprompt.row.subtitle", "Использовать персону выбранного аватара.", "Use selected avatar persona.");
             Add("settings.voice.row.subtitle", "Голосовой ввод и озвучивание ответов.", "Voice input and response playback.");
@@ -355,6 +360,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             Add("settings.data.storage", "Папка хранения", "Storage folder");
             Add("settings.data.export.title", "Экспорт чатов", "Export chats");
             Add("settings.data.export.subtitle", "Сохранить всю историю в JSON.", "Save all history to JSON.");
+            Add("settings.data.clear_chats.title", "Очистить историю чатов", "Clear chat history");
+            Add("settings.data.clear_chats.subtitle", "Удалить все сессии. Провайдеры и настройки сохранятся.", "Delete all sessions. Providers and settings are kept.");
             Add("settings.data.clear.title", "Очистить все данные", "Clear all data");
             Add("settings.data.clear.subtitle", "Удалить сессии, провайдеров и настройки. Действие необратимо.", "Delete sessions, providers, and settings. This action is irreversible.");
             Add("settings.section.plugins", "Плагины", "Plugins");
@@ -546,6 +553,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _moreButton = root.Q<Button>("more-btn");
             _newSessionButton = root.Q<Button>("new-session-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
+            _scrollBottomBtn = root.Q<Button>("scroll-bottom-btn");
             _sessionsList = root.Q<ScrollView>("sessions-list");
             _historySessionsList = root.Q<ScrollView>("history-panel-sessions-list");
             if (_sessionsList != null)
@@ -593,6 +601,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Settings action buttons
             _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
             _settingsExportBtn     = root.Q<Button>("settings-export-btn");
+            _settingsClearChatsBtn = root.Q<Button>("settings-clear-chats-btn");
             _settingsClearBtn      = root.Q<Button>("settings-clear-btn");
             _settingsClearBtnText  = _settingsClearBtn?.Q<Label>();
             _settingsGithubBtn     = root.Q<Button>("settings-github-btn");
@@ -610,6 +619,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsLanguage    = root.Q<NeonDropdown>("settings-language");
             _settingsHistory     = root.Q<Toggle>("settings-save-history");
             _settingsStreaming    = root.Q<Toggle>("settings-streaming");
+            _settingsEnterToSend = root.Q<Toggle>("settings-enter-to-send");
             _settingsSystemPrompt = root.Q<Toggle>("settings-system-prompt");
             _settingsVoiceIo = root.Q<Toggle>("settings-voice-io");
             _settingsEncryptKeys = root.Q<Toggle>("settings-encrypt-keys");
@@ -750,7 +760,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_cancelEditButton, OnCancelEditClicked);
             RegisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
             RegisterClick(_settingsExportBtn, OnExportChatsClicked);
+            RegisterClick(_settingsClearChatsBtn, OnClearChatsClicked);
             RegisterClick(_settingsClearBtn, OnClearDataClicked);
+            RegisterClick(_scrollBottomBtn, OnScrollBottomClicked);
             RegisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
             RegisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
             RegisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
@@ -781,6 +793,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
                 _messageInput.RegisterCallback<FocusEvent>(_ => _composer?.AddToClassList("composer--focused"));
                 _messageInput.RegisterCallback<BlurEvent>(_ => _composer?.RemoveFromClassList("composer--focused"));
+            }
+
+            if (_messagesList != null)
+            {
+                _scrollBottomButtonSchedule?.Pause();
+                _scrollBottomButtonSchedule = _messagesList.schedule.Execute(UpdateScrollBottomButton).Every(200);
             }
 
             if (_resizeHandle != null)
@@ -848,7 +866,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
             UnregisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
             UnregisterClick(_settingsExportBtn, OnExportChatsClicked);
+            UnregisterClick(_settingsClearChatsBtn, OnClearChatsClicked);
             UnregisterClick(_settingsClearBtn, OnClearDataClicked);
+            UnregisterClick(_scrollBottomBtn, OnScrollBottomClicked);
             UnregisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
             UnregisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
             UnregisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
@@ -909,6 +929,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _typingSchedule?.Pause();
             _breathSchedule?.Pause();
+            _scrollBottomButtonSchedule?.Pause();
+            _scrollBottomButtonSchedule = null;
         }
 
         private static void RegisterClick(VisualElement element, EventCallback<ClickEvent> handler)
@@ -1079,8 +1101,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
                 return;
 
-            evt.StopPropagation();
-            OnSendClicked();
+            bool enterToSend = _settingsEnterToSend == null || _settingsEnterToSend.value;
+            bool hasCtrl = evt.ctrlKey || evt.commandKey;
+
+            if (enterToSend)
+            {
+                evt.StopPropagation();
+                OnSendClicked();
+                return;
+            }
+
+            if (hasCtrl)
+            {
+                evt.StopPropagation();
+                OnSendClicked();
+            }
         }
 
         private void OnSendClicked()
@@ -2193,7 +2228,42 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
 
                 _messagesList.ScrollTo(content[content.childCount - 1]);
+                SetDisplay(_scrollBottomBtn, DisplayStyle.None);
             });
+        }
+
+        private void OnScrollBottomClicked()
+        {
+            ScrollTranscriptToBottom();
+        }
+
+        private void UpdateScrollBottomButton()
+        {
+            if (_scrollBottomBtn == null || _messagesList == null)
+                return;
+            if (_chatPanel == null || _chatPanel.style.display == DisplayStyle.None)
+            {
+                SetDisplay(_scrollBottomBtn, DisplayStyle.None);
+                return;
+            }
+
+            var content = _messagesList.contentContainer;
+            var viewport = _messagesList.contentViewport;
+            if (content == null || viewport == null)
+                return;
+
+            float viewportHeight = viewport.worldBound.height;
+            float contentHeight = content.worldBound.height;
+            if (viewportHeight <= 0f || contentHeight <= 0f)
+            {
+                SetDisplay(_scrollBottomBtn, DisplayStyle.None);
+                return;
+            }
+
+            float maxScroll = Mathf.Max(0f, contentHeight - viewportHeight);
+            float scrollY = _messagesList.scrollOffset.y;
+            bool isAtBottom = maxScroll <= 1f || scrollY >= maxScroll - 1f;
+            SetDisplay(_scrollBottomBtn, isAtBottom ? DisplayStyle.None : DisplayStyle.Flex);
         }
 
         private static IReadOnlyList<ChatMessage> BuildPendingMessages(
@@ -3480,6 +3550,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             RegisterToggleChanged(_settingsHistory,      _ => SaveSettings());
             RegisterToggleChanged(_settingsStreaming,     _ => SaveSettings());
+            RegisterToggleChanged(_settingsEnterToSend,   _ => SaveSettings());
             RegisterToggleChanged(_settingsSystemPrompt, _ => SaveSettings());
             RegisterToggleChanged(_settingsVoiceIo,      _ => { SaveSettings(); RefreshVoiceControls(); });
             RegisterToggleChanged(_settingsEncryptKeys,  _ => SaveSettings());
@@ -3741,6 +3812,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 _settingsHistory?.SetValueWithoutNotify(s.saveChatHistory);
                 _settingsStreaming?.SetValueWithoutNotify(s.streaming);
+                _settingsEnterToSend?.SetValueWithoutNotify(s.enterToSend);
                 _settingsSystemPrompt?.SetValueWithoutNotify(s.useSystemPrompt);
                 _settingsVoiceIo?.SetValueWithoutNotify(s.voiceIOEnabled);
                 _settingsEncryptKeys?.SetValueWithoutNotify(s.encryptKeys);
@@ -3872,6 +3944,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_settingsHistory != null)      s.saveChatHistory     = _settingsHistory.value;
                 if (_settingsStreaming != null)     s.streaming           = _settingsStreaming.value;
+                if (_settingsEnterToSend != null)   s.enterToSend        = _settingsEnterToSend.value;
                 if (_settingsSystemPrompt != null)  s.useSystemPrompt     = _settingsSystemPrompt.value;
                 if (_settingsVoiceIo != null)       s.voiceIOEnabled      = _settingsVoiceIo.value;
                 if (_settingsEncryptKeys != null)   s.encryptKeys         = _settingsEncryptKeys.value;
@@ -5481,6 +5554,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = ClearAllDataAsync();
         }
 
+        private void OnClearChatsClicked()
+        {
+            _ = ClearChatsOnlyAsync();
+        }
+
         private void ResetClearDataConfirmation()
         {
             _clearDataConfirmResetSchedule?.Pause();
@@ -5559,6 +5637,29 @@ namespace NeonCompanion.Runtime.UI.UITK
             catch (Exception ex)
             {
                 ResetClearDataConfirmation();
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private async Task ClearChatsOnlyAsync()
+        {
+            try
+            {
+                var app = await GetAppAsync();
+                if (app == null)
+                    return;
+
+                app.Chats.SaveAll(new List<ChatSession>());
+                _currentSessionId = string.Empty;
+                _currentSessionTitle = string.Empty;
+                RenderMessages(null);
+                ShowHistoryState(LocalizationExtensions.Get("history.empty.first_session", "История пуста. Начните чат, чтобы появилась первая сессия."), isError: false);
+                if (_sessionsList != null) _sessionsList.Clear();
+                if (_historySessionsList != null) _historySessionsList.Clear();
+                if (_navChatCount != null) _navChatCount.text = "0";
+            }
+            catch (Exception ex)
+            {
                 NeonLogger.LogError(ex.ToString());
             }
         }
