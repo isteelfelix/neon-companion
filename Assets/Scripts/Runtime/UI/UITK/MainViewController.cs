@@ -1191,6 +1191,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_streamingLabel != null)
                 _streamingLabel.text += token;
+            ScrollTranscriptToBottom();
         }
 
         private void SetSending(bool isSending)
