@@ -458,13 +458,15 @@
     background-color: transparent;
     padding: 8px 10px;
     margin-bottom: 4px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .history__row {
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
     margin-bottom: 2px;
+    min-width: 0;
 }
 
 .history__item:hover {
@@ -490,7 +492,7 @@
 .history__provider {
     color: var(--accent-2);
     background-color: var(--accent-soft);
-    border-radius: 999px;
+    border-radius: 6px;
     padding: 2px 8px;
     font-size: 10px;
     -unity-font-style: bold;
@@ -521,6 +523,7 @@
     font-size: 14px;
     display: none;
     flex-shrink: 0;
+    margin-left: auto;
     align-items: center;
     justify-content: center;
 }

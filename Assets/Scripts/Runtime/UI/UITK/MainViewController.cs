@@ -68,11 +68,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         private float _resizeStartWidth;
         private const float MinAvatarWidth = 180f;
         private const float MaxAvatarWidth = 520f;
+        private VisualElement _railResizeHandle;
+        private VisualElement _railElement;
+        private bool _isRailResizing;
+        private float _railResizeStartX;
+        private float _railResizeStartWidth;
+        private const float MinRailWidth = 160f;
+        private const float MaxRailWidth = 400f;
         private VisualElement _topbarSep;
         private VisualElement _typingIndicator;
 
         // ===== Settings page =====
-        private DropdownField _settingsLanguage;
+        private NeonDropdown _settingsLanguage;
         private Toggle _settingsHistory;
         private Toggle _settingsStreaming;
         private Toggle _settingsSystemPrompt;
@@ -186,7 +193,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Label _topbarTitle;
         private Label _topbarSubtitle;
-        private DropdownField _topbarModelPicker;
+        private NeonDropdown _topbarModelPicker;
         private Label _placeholderTitle;
         private Label _placeholderBody;
         private Label _subtitleRole;
@@ -249,10 +256,15 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextField _editBaseUrl;
         private TextField _editApiKey;
         private TextField _editModel;
-        private DropdownField _editModelPreset;
+        private NeonDropdown _editModelPreset;
         private VisualElement _editModelCustomWrap;
         private TextField _editMaxTokens;
         private Slider _editTemperature;
+        private VisualElement _modelPickerOverlay;
+        private VisualElement _modelPickerDialog;
+        private ScrollView _modelPickerScroll;
+        private Label _modelPickerStatus;
+        private bool _isApplyingModelSwitch;
         private VisualElement _providerEditPanel;
         private readonly Dictionary<string, string> _modelPresetByLabel = new Dictionary<string, string>();
         private bool _syncingModelPresetUi;
@@ -261,6 +273,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IReadOnlyList<string> _discoveredModels;
         private IVisualElementScheduledItem _autoDiscoverSchedule;
         private CancellationTokenSource _autoDiscoverCts;
+        private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
 
         private CompanionApp _app;
         private ChatService _chatService;
@@ -479,12 +492,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _composer = root.Q<VisualElement>("composer");
             _resizeHandle = root.Q<VisualElement>("resize-handle");
             _avatarPanel  = root.Q<VisualElement>("avatar-panel");
+            _railElement = root.Q<VisualElement>("rail");
+            _railResizeHandle = root.Q<VisualElement>("rail-resize-handle");
             _topbarSep = root.Q<VisualElement>("topbar-sep");
             _typingIndicator = root.Q<VisualElement>("typing-indicator");
 
             _topbarTitle = root.Q<Label>("topbar-title");
             _topbarSubtitle = root.Q<Label>("topbar-subtitle");
-            _topbarModelPicker = root.Q<DropdownField>("topbar-model-picker");
+            _topbarModelPicker = root.Q<NeonDropdown>("topbar-model-picker");
             _placeholderTitle = root.Q<Label>("placeholder-title");
             _placeholderBody = root.Q<Label>("placeholder-body");
             _subtitleRole = root.Q<Label>("subtitle-role");
@@ -500,6 +515,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editorProviderStatus = root.Q<Label>("editor-provider-status");
 
             _messageInput = root.Q<TextField>("message-input");
+            if (_messageInput != null)
+            {
+                _messageInput.multiline = true;
+                _messageInput.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            }
             _sendButton = root.Q<Button>("send-button");
             _summarizeButton = root.Q<Button>("summarize-btn");
             _searchButton = root.Q<Button>("search-btn");
@@ -543,7 +563,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editBaseUrl = root.Q<TextField>("edit-baseurl");
             _editApiKey = root.Q<TextField>("edit-apikey");
             _editModel = root.Q<TextField>("edit-model");
-            _editModelPreset = root.Q<DropdownField>("edit-model-preset");
+            _editModelPreset = root.Q<NeonDropdown>("edit-model-preset");
             _editModelCustomWrap = root.Q<VisualElement>("edit-model-custom-wrap");
             _editMaxTokens = root.Q<TextField>("edit-maxtokens");
             _editTemperature = root.Q<Slider>("edit-temperature");
@@ -567,7 +587,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _testRowLabel    = root.Q<Label>("test-row-label");
 
             // Settings page controls
-            _settingsLanguage    = root.Q<DropdownField>("settings-language");
+            _settingsLanguage    = root.Q<NeonDropdown>("settings-language");
             _settingsHistory     = root.Q<Toggle>("settings-save-history");
             _settingsStreaming    = root.Q<Toggle>("settings-streaming");
             _settingsSystemPrompt = root.Q<Toggle>("settings-system-prompt");
@@ -716,7 +736,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editModelPreset != null)
                 _editModelPreset.RegisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
             if (_topbarModelPicker != null)
-                _topbarModelPicker.RegisterCallback<ChangeEvent<string>>(OnTopbarModelChanged);
+                _topbarModelPicker.TriggerClicked += OnTopbarModelPickerTriggered;
             if (_editName != null)
                 _editName.RegisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
@@ -738,6 +758,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _resizeHandle.RegisterCallback<PointerDownEvent>(OnResizePointerDown);
                 _resizeHandle.RegisterCallback<PointerMoveEvent>(OnResizePointerMove);
                 _resizeHandle.RegisterCallback<PointerUpEvent>(OnResizePointerUp);
+            }
+
+            if (_railResizeHandle != null)
+            {
+                _railResizeHandle.RegisterCallback<PointerDownEvent>(OnRailResizePointerDown);
+                _railResizeHandle.RegisterCallback<PointerMoveEvent>(OnRailResizePointerMove);
+                _railResizeHandle.RegisterCallback<PointerUpEvent>(OnRailResizePointerUp);
             }
 
             RegisterSettingsCallbacks();
@@ -807,7 +834,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editModelPreset != null)
                 _editModelPreset.UnregisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
             if (_topbarModelPicker != null)
-                _topbarModelPicker.UnregisterCallback<ChangeEvent<string>>(OnTopbarModelChanged);
+                _topbarModelPicker.TriggerClicked -= OnTopbarModelPickerTriggered;
             if (_editName != null)
                 _editName.UnregisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
             if (_editBaseUrl != null)
@@ -827,6 +854,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _resizeHandle.UnregisterCallback<PointerDownEvent>(OnResizePointerDown);
                 _resizeHandle.UnregisterCallback<PointerMoveEvent>(OnResizePointerMove);
                 _resizeHandle.UnregisterCallback<PointerUpEvent>(OnResizePointerUp);
+            }
+
+            if (_railResizeHandle != null)
+            {
+                _railResizeHandle.UnregisterCallback<PointerDownEvent>(OnRailResizePointerDown);
+                _railResizeHandle.UnregisterCallback<PointerMoveEvent>(OnRailResizePointerMove);
+                _railResizeHandle.UnregisterCallback<PointerUpEvent>(OnRailResizePointerUp);
             }
 
             _typingSchedule?.Pause();
@@ -919,7 +953,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string GetProviderStatusText()
         {
             var provider = _chatService?.CurrentProvider;
+            var currentModel = _chatService?.CurrentSessionModel;
             if (provider == null) return LocalizationExtensions.Get("provider.status.none", "нет провайдера");
+            if (!string.IsNullOrWhiteSpace(currentModel))
+                return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {currentModel}";
             if (!string.IsNullOrWhiteSpace(provider.defaultModel))
                 return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {provider.defaultModel}";
             return provider.displayName ?? LocalizationExtensions.Get("provider.status.configured", "настроен");
@@ -1009,10 +1046,19 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task SendCurrentMessageAsync()
         {
-            if (_isSending || _messageInput == null || string.IsNullOrWhiteSpace(_messageInput.value))
+            bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
+            if (_isSending || _messageInput == null || (string.IsNullOrWhiteSpace(_messageInput.value) && !hasPendingAttachments))
                 return;
 
-            string message = _messageInput.value.Trim();
+            string composerText = (_messageInput.value ?? string.Empty).Trim();
+            if (await TryHandleModelCommandAsync(composerText))
+            {
+                _messageInput.value = string.Empty;
+                return;
+            }
+
+            var pendingAttachments = CloneAttachments(_pendingComposerAttachments);
+            string message = StripAttachmentTokens(composerText, pendingAttachments);
             _messageInput.value = string.Empty;
             SetSending(true);
 
@@ -1028,25 +1074,28 @@ namespace NeonCompanion.Runtime.UI.UITK
                 bool streaming = _settingsStreaming?.value ?? false;
                 chat.UseStreaming = streaming;
 
-                RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message));
+                RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message, pendingAttachments));
 
                 if (streaming)
                 {
                     AddStreamingBubble();
-                    await chat.SendMessageAsync(message, OnStreamToken);
+                    await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken);
                     _streamingLabel = null;
                 }
                 else
                 {
-                    await chat.SendMessageAsync(message);
+                    await chat.SendMessageAsync(message, pendingAttachments);
                 }
 
+                ClearPendingComposerAttachments();
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 TriggerAvatarSmile();
             }
             catch (Exception ex)
             {
+                _messageInput.value = composerText;
+                RestorePendingComposerAttachments(pendingAttachments);
                 AddSystemMessage(LocalizationExtensions.Get("system.chat.send_failed", "Не удалось отправить сообщение. Попробуй ещё раз."));
                 NeonLogger.LogError(ex.ToString());
                 TriggerAvatarConfused();
@@ -1055,6 +1104,32 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 SetSending(false);
             }
+        }
+
+        private async Task<bool> TryHandleModelCommandAsync(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return false;
+
+            string trimmed = message.Trim();
+            if (string.Equals(trimmed, "/model", StringComparison.OrdinalIgnoreCase))
+            {
+                await OpenModelPickerAsync();
+                return true;
+            }
+
+            if (!trimmed.StartsWith("/model ", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string requestedModel = trimmed.Substring("/model ".Length).Trim();
+            if (string.IsNullOrWhiteSpace(requestedModel))
+            {
+                await OpenModelPickerAsync();
+                return true;
+            }
+
+            await ApplyModelSelectionAsync(requestedModel, closePickerOnSuccess: false);
+            return true;
         }
 
         private void AddStreamingBubble()
@@ -1330,6 +1405,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (string.IsNullOrEmpty(path)) return;
 
                 string fileName = System.IO.Path.GetFileName(path);
+                _pendingComposerAttachments.Add(new ChatAttachment
+                {
+                    kind = "image",
+                    name = fileName,
+                    path = path,
+                    mediaType = GuessImageMediaType(path)
+                });
+
                 string token = $"[attachment: {fileName}]";
                 string current = _messageInput.value ?? string.Empty;
                 _messageInput.value = string.IsNullOrWhiteSpace(current)
@@ -1360,6 +1443,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 await chat.StartNewSessionAsync();
                 _currentSessionId = chat.CurrentSessionId ?? string.Empty;
                 _currentSessionTitle = string.Empty;
+                ClearPendingComposerAttachments();
+                if (_messageInput != null)
+                    _messageInput.value = string.Empty;
+                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 ShowChat();
@@ -1392,7 +1479,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (!_isBound || chat == null) return;
                 await EnsureVoicePipelineAsync(chat);
 
-                SetProviderHeader(chat.CurrentProvider);
+                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 await RefreshProvidersListAsync();
@@ -1715,6 +1802,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _currentSessionTitle = string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
                     ? string.Empty
                     : session.title;
+                ClearPendingComposerAttachments();
+                if (_messageInput != null)
+                    _messageInput.value = string.Empty;
+                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 ShowChat();
@@ -1738,6 +1829,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     _currentSessionId = chat.CurrentSessionId ?? string.Empty;
                     _currentSessionTitle = string.Empty;
+                    SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                     RenderMessages(chat.CurrentChatViewModel?.Messages);
                 }
 
@@ -1775,8 +1867,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 for (int i = messages.Count - 1; i >= 0; i--)
                 {
                     var msg = messages[i];
-                    if (msg == null || string.IsNullOrWhiteSpace(msg.content)) continue;
-                    if (msg.role != "user") { text = msg.content; break; }
+                    if (!HasRenderableMessageContent(msg)) continue;
+                    if (msg.role != "user")
+                    {
+                        text = !string.IsNullOrWhiteSpace(msg.content)
+                            ? msg.content
+                            : $"[image] {GetAttachmentDisplayName(msg.attachments != null && msg.attachments.Count > 0 ? msg.attachments[0] : null)}";
+                        break;
+                    }
                 }
             }
 
@@ -1800,7 +1898,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             for (int i = 0; i < messages.Count; i++)
             {
                 var message = messages[i];
-                if (message == null || string.IsNullOrWhiteSpace(message.content))
+                if (!HasRenderableMessageContent(message))
                     continue;
 
                 _messagesList.Add(CreateMessageElement(message));
@@ -1850,16 +1948,62 @@ namespace NeonCompanion.Runtime.UI.UITK
             var roleLabel = new Label(DisplayRole(role));
             roleLabel.AddToClassList("transcript__role");
 
+            Label modelLabel = null;
+            if (role == "assistant" && !string.IsNullOrWhiteSpace(message.model))
+            {
+                modelLabel = new Label(message.model);
+                modelLabel.style.fontSize = 11f;
+                modelLabel.style.color = new Color(0.62f, 0.66f, 0.78f, 1f);
+                modelLabel.style.marginLeft = 6f;
+                modelLabel.style.paddingLeft = 6f;
+                modelLabel.style.paddingRight = 6f;
+                modelLabel.style.paddingTop = 1f;
+                modelLabel.style.paddingBottom = 1f;
+                modelLabel.style.backgroundColor = new Color(0.18f, 0.2f, 0.28f, 0.9f);
+                modelLabel.style.borderTopLeftRadius = 8f;
+                modelLabel.style.borderTopRightRadius = 8f;
+                modelLabel.style.borderBottomLeftRadius = 8f;
+                modelLabel.style.borderBottomRightRadius = 8f;
+            }
+
             var timeLabel = new Label(FormatMessageTime(message.unixTimeSeconds));
             timeLabel.AddToClassList("transcript__time");
 
-            var body = new Label(message.content);
-            body.AddToClassList("transcript__body");
-
             meta.Add(roleLabel);
+            if (modelLabel != null)
+                meta.Add(modelLabel);
             meta.Add(timeLabel);
             bubble.Add(meta);
-            bubble.Add(body);
+
+            if (!string.IsNullOrWhiteSpace(message.content))
+            {
+                var body = new Label(message.content);
+                body.AddToClassList("transcript__body");
+                bubble.Add(body);
+            }
+
+            if (message.attachments != null && message.attachments.Count > 0)
+            {
+                var attachmentWrap = new VisualElement();
+                attachmentWrap.style.flexDirection = FlexDirection.Column;
+                attachmentWrap.style.marginTop = 6f;
+
+                for (int i = 0; i < message.attachments.Count; i++)
+                {
+                    var attachment = message.attachments[i];
+                    if (attachment == null)
+                        continue;
+
+                    var attachmentLabel = new Label($"[image] {GetAttachmentDisplayName(attachment)}");
+                    attachmentLabel.AddToClassList("transcript__body");
+                    attachmentLabel.style.fontSize = 11f;
+                    attachmentLabel.style.color = new Color(0.76f, 0.8f, 0.92f, 0.92f);
+                    attachmentWrap.Add(attachmentLabel);
+                }
+
+                if (attachmentWrap.childCount > 0)
+                    bubble.Add(attachmentWrap);
+            }
             row.Add(bubble);
 
             return row;
@@ -1880,7 +2024,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             });
         }
 
-        private static IReadOnlyList<ChatMessage> BuildPendingMessages(IReadOnlyList<ChatMessage> currentMessages, string pendingText)
+        private static IReadOnlyList<ChatMessage> BuildPendingMessages(
+            IReadOnlyList<ChatMessage> currentMessages,
+            string pendingText,
+            IReadOnlyList<ChatAttachment> pendingAttachments)
         {
             var messages = new List<ChatMessage>();
 
@@ -1897,10 +2044,126 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 role = "user",
                 content = pendingText,
+                attachments = CloneAttachments(pendingAttachments),
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             });
 
             return messages;
+        }
+
+        private static bool HasRenderableMessageContent(ChatMessage message)
+        {
+            return message != null &&
+                   (!string.IsNullOrWhiteSpace(message.content) ||
+                    (message.attachments != null && message.attachments.Count > 0));
+        }
+
+        private static string GetAttachmentDisplayName(ChatAttachment attachment)
+        {
+            if (!string.IsNullOrWhiteSpace(attachment?.name))
+                return attachment.name;
+
+            if (!string.IsNullOrWhiteSpace(attachment?.path))
+                return System.IO.Path.GetFileName(attachment.path);
+
+            return "image";
+        }
+
+        private static List<ChatAttachment> CloneAttachments(IReadOnlyList<ChatAttachment> attachments)
+        {
+            var clone = new List<ChatAttachment>();
+            if (attachments == null)
+                return clone;
+
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                var attachment = attachments[i];
+                if (attachment == null)
+                    continue;
+
+                clone.Add(new ChatAttachment
+                {
+                    kind = string.IsNullOrWhiteSpace(attachment.kind) ? "image" : attachment.kind,
+                    name = attachment.name,
+                    path = attachment.path,
+                    mediaType = attachment.mediaType
+                });
+            }
+
+            return clone;
+        }
+
+        private void ClearPendingComposerAttachments()
+        {
+            _pendingComposerAttachments.Clear();
+        }
+
+        private void RestorePendingComposerAttachments(IReadOnlyList<ChatAttachment> attachments)
+        {
+            _pendingComposerAttachments.Clear();
+            var restored = CloneAttachments(attachments);
+            for (int i = 0; i < restored.Count; i++)
+                _pendingComposerAttachments.Add(restored[i]);
+        }
+
+        private static string StripAttachmentTokens(string composerText, IReadOnlyList<ChatAttachment> attachments)
+        {
+            string text = composerText ?? string.Empty;
+            if (attachments != null)
+            {
+                for (int i = 0; i < attachments.Count; i++)
+                {
+                    string name = attachments[i]?.name;
+                    if (string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    string token = $"[attachment: {name}]";
+                    text = text.Replace(token, string.Empty);
+                }
+            }
+
+            return CollapseWhitespace(text).Trim();
+        }
+
+        private static string CollapseWhitespace(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            var sb = new StringBuilder(value.Length);
+            bool previousWasWhitespace = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (char.IsWhiteSpace(c))
+                {
+                    if (!previousWasWhitespace)
+                        sb.Append(' ');
+                    previousWasWhitespace = true;
+                }
+                else
+                {
+                    sb.Append(c);
+                    previousWasWhitespace = false;
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        private static string GuessImageMediaType(string path)
+        {
+            string extension = System.IO.Path.GetExtension(path)?.ToLowerInvariant();
+            return extension switch
+            {
+                ".png" => "image/png",
+                ".jpg" => "image/jpeg",
+                ".jpeg" => "image/jpeg",
+                ".webp" => "image/webp",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                _ => "application/octet-stream"
+            };
         }
 
         private static string NormalizeRole(string role)
@@ -2061,8 +2324,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var chat = await GetChatServiceAsync();
                 if (chat?.CurrentProvider?.id == draft.id)
                 {
-                    await chat.ApplyProviderConfigAsync(draft);
-                    SetProviderHeader(chat.CurrentProvider);
+                    bool resetRemoteSession = _editingProviderSource != null &&
+                                              (!string.Equals(_editingProviderSource.baseUrl, draft.baseUrl, StringComparison.Ordinal) ||
+                                               !string.Equals(_editingProviderSource.apiKey, draft.apiKey, StringComparison.Ordinal) ||
+                                               !string.Equals(_editingProviderSource.defaultModel, draft.defaultModel, StringComparison.Ordinal));
+                    await chat.ApplyProviderConfigAsync(draft, resetRemoteSession);
+                    SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 }
                 else if (_editingProviderSource?.id == draft.id)
                 {
@@ -2321,66 +2588,279 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editModel.SetValueWithoutNotify(modelId ?? string.Empty);
         }
 
-        private void OnTopbarModelChanged(ChangeEvent<string> evt)
+        private void OnTopbarModelPickerTriggered()
         {
-            if (evt == null || _topbarModelPicker == null) return;
-
-            string selectedModel = evt.newValue ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(selectedModel)) return;
-
-            _ = ApplyTopbarModelSwitchAsync(selectedModel);
+            _ = OpenModelPickerAsync();
         }
 
-        private async System.Threading.Tasks.Task ApplyTopbarModelSwitchAsync(string modelId)
+        private async Task OpenModelPickerAsync()
         {
             try
             {
                 var app = await GetAppAsync();
-                if (app == null) return;
+                var chat = await GetChatServiceAsync();
+                var provider = chat?.CurrentProvider;
+                if (app == null || chat == null || provider == null)
+                {
+                    AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
+                    return;
+                }
 
-                var providers = await app.Providers.GetAllAsync();
-                if (providers == null || providers.Count == 0) return;
+                EnsureModelPickerOverlay();
+                if (_modelPickerScroll == null || _modelPickerStatus == null || _modelPickerOverlay == null)
+                    return;
 
-                var activeProvider = providers[0];
-                if (activeProvider == null) return;
+                _modelPickerScroll.Clear();
+                _modelPickerStatus.text = LocalizationExtensions.Get("providers.test.checking", "Проверяем соединение…");
+                if (_modelPickerOverlay.parent == null)
+                    _root.Add(_modelPickerOverlay);
 
-                activeProvider.defaultModel = modelId;
-                await app.Providers.SaveAllAsync(providers);
+                var result = await app.AiClient.TestConnectionAsync(provider);
+                var models = new List<string>();
+                if (result?.DiscoveredModels != null)
+                {
+                    foreach (var model in result.DiscoveredModels)
+                    {
+                        if (!string.IsNullOrWhiteSpace(model) && !models.Contains(model))
+                            models.Add(model);
+                    }
+                }
 
-                if (_providerModel != null)
-                    _providerModel.text = modelId;
-                if (_railProviderModel != null)
-                    _railProviderModel.text = modelId;
+                string currentModel = chat.CurrentSessionModel;
+                if (!string.IsNullOrWhiteSpace(currentModel) && !models.Contains(currentModel))
+                    models.Add(currentModel);
+
+                if (models.Count == 0 && !string.IsNullOrWhiteSpace(currentModel))
+                    models.Add(currentModel);
+
+                if (models.Count == 0)
+                {
+                    _modelPickerStatus.text = LocalizationExtensions.Get(
+                        "providers.models.empty",
+                        "Сервер не вернул список моделей.");
+                    return;
+                }
+
+                PopulateModelPicker(models, currentModel);
+                _modelPickerStatus.text = result?.Success == false
+                    ? result.Message ?? LocalizationExtensions.Get("providers.test.failed", "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа.")
+                    : LocalizationExtensions.Get("providers.models.pick_hint", "Выбери модель. Для Hermes дождёмся подтверждения переключения перед отправкой.");
             }
             catch (Exception ex)
             {
-                NeonLogger.LogWarning($"Topbar model switch failed: {ex.Message}");
+                if (_modelPickerStatus != null)
+                    _modelPickerStatus.text = ex.Message;
+                NeonLogger.LogError(ex.ToString());
             }
+        }
+
+        private async Task ApplyModelSelectionAsync(string modelId, bool closePickerOnSuccess)
+        {
+            if (_isApplyingModelSwitch || string.IsNullOrWhiteSpace(modelId))
+                return;
+
+            _isApplyingModelSwitch = true;
+            if (_modelPickerDialog != null)
+                _modelPickerDialog.SetEnabled(false);
+
+            try
+            {
+                var chat = await GetChatServiceAsync();
+                if (chat == null)
+                    return;
+
+                if (_modelPickerStatus != null)
+                    _modelPickerStatus.text = $"Применяем модель: {modelId}";
+
+                var result = await chat.SetCurrentSessionModelAsync(modelId);
+                if (!result.Success)
+                {
+                    string failure = string.IsNullOrWhiteSpace(result.Message)
+                        ? LocalizationExtensions.Get("providers.model_switch_failed", "Не удалось применить модель.")
+                        : result.Message;
+                    if (_modelPickerStatus != null)
+                        _modelPickerStatus.text = failure;
+                    AddSystemMessage(failure);
+                    return;
+                }
+
+                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
+                await LoadSessionsAsync(chat);
+
+                if (closePickerOnSuccess)
+                    CloseModelPicker();
+            }
+            catch (Exception ex)
+            {
+                if (_modelPickerStatus != null)
+                    _modelPickerStatus.text = ex.Message;
+                AddSystemMessage(ex.Message);
+                NeonLogger.LogError(ex.ToString());
+            }
+            finally
+            {
+                _isApplyingModelSwitch = false;
+                if (_modelPickerDialog != null)
+                    _modelPickerDialog.SetEnabled(true);
+            }
+        }
+
+        private void EnsureModelPickerOverlay()
+        {
+            if (_modelPickerOverlay != null)
+                return;
+
+            _modelPickerOverlay = new VisualElement();
+            _modelPickerOverlay.AddToClassList("modal-overlay");
+            _modelPickerOverlay.pickingMode = PickingMode.Position;
+            _modelPickerOverlay.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == _modelPickerOverlay)
+                    CloseModelPicker();
+            });
+
+            _modelPickerDialog = new VisualElement();
+            _modelPickerDialog.AddToClassList("modal");
+            _modelPickerDialog.AddToClassList("model-picker");
+
+            var headerRow = new VisualElement();
+            headerRow.AddToClassList("model-picker__header");
+
+            var titleWrap = new VisualElement();
+            titleWrap.AddToClassList("model-picker__title-wrap");
+
+            var title = new Label(LocalizationExtensions.Get("model_picker.title", "Выбор модели"));
+            title.AddToClassList("model-picker__title");
+
+            var subtitle = new Label(LocalizationExtensions.Get("model_picker.subtitle", "Выберите модель для текущей сессии. Применяется сразу."));
+            subtitle.AddToClassList("model-picker__subtitle");
+
+            var closeButton = new Button(CloseModelPicker) { text = LocalizationExtensions.Get("common.close", "Закрыть") };
+            closeButton.AddToClassList("btn");
+
+            titleWrap.Add(title);
+            titleWrap.Add(subtitle);
+            headerRow.Add(titleWrap);
+            headerRow.Add(closeButton);
+
+            _modelPickerStatus = new Label(string.Empty);
+            _modelPickerStatus.AddToClassList("model-picker__status");
+
+            _modelPickerScroll = new ScrollView(ScrollViewMode.Vertical);
+            _modelPickerScroll.AddToClassList("model-picker__scroll");
+
+            _modelPickerDialog.Add(headerRow);
+            _modelPickerDialog.Add(_modelPickerStatus);
+            _modelPickerDialog.Add(_modelPickerScroll);
+            _modelPickerOverlay.Add(_modelPickerDialog);
+        }
+
+        private void PopulateModelPicker(IReadOnlyList<string> models, string currentModel)
+        {
+            if (_modelPickerScroll == null)
+                return;
+
+            _modelPickerScroll.Clear();
+
+            var grouped = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var model in models)
+            {
+                string providerKey = GetModelProviderKey(model);
+                if (!grouped.TryGetValue(providerKey, out var providerModels))
+                {
+                    providerModels = new List<string>();
+                    grouped[providerKey] = providerModels;
+                }
+                if (!providerModels.Contains(model))
+                    providerModels.Add(model);
+            }
+
+            foreach (var providerName in grouped.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+            {
+                var providerModels = grouped[providerName];
+                providerModels.Sort(StringComparer.OrdinalIgnoreCase);
+
+                bool hasActive = providerModels.Exists(m => string.Equals(m, currentModel, StringComparison.Ordinal));
+                bool expanded = hasActive;
+
+                // Items container
+                var itemsWrap = new VisualElement();
+                itemsWrap.AddToClassList("model-picker__items");
+                if (!expanded)
+                    itemsWrap.AddToClassList("is-hidden");
+
+                // Group header button
+                var groupBtn = new Button();
+                groupBtn.AddToClassList("model-picker__group");
+
+                var arrow = new Label(expanded ? "▼" : "▶");
+                arrow.AddToClassList("model-picker__group-arrow");
+
+                var groupLabel = new Label($"{providerName.ToUpperInvariant()}  ({providerModels.Count})");
+                groupLabel.AddToClassList("model-picker__group-label");
+
+                groupBtn.Add(arrow);
+                groupBtn.Add(groupLabel);
+                groupBtn.RegisterCallback<ClickEvent>(_ =>
+                {
+                    bool isExpanded = !itemsWrap.ClassListContains("is-hidden");
+                    if (isExpanded)
+                    {
+                        itemsWrap.AddToClassList("is-hidden");
+                        arrow.text = "▶";
+                    }
+                    else
+                    {
+                        itemsWrap.RemoveFromClassList("is-hidden");
+                        arrow.text = "▼";
+                    }
+                });
+
+                foreach (var model in providerModels)
+                {
+                    bool isSelected = string.Equals(model, currentModel, StringComparison.Ordinal);
+                    var captured = model;
+                    var modelBtn = new Button(() => _ = ApplyModelSelectionAsync(captured, closePickerOnSuccess: true))
+                    {
+                        text = model
+                    };
+                    modelBtn.AddToClassList("model-picker__item");
+                    if (isSelected)
+                        modelBtn.AddToClassList("model-picker__item--selected");
+                    itemsWrap.Add(modelBtn);
+                }
+
+                _modelPickerScroll.Add(groupBtn);
+                _modelPickerScroll.Add(itemsWrap);
+            }
+        }
+
+        private void CloseModelPicker()
+        {
+            _modelPickerOverlay?.RemoveFromHierarchy();
+        }
+
+        private static string GetModelProviderKey(string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId))
+                return "Other";
+
+            int slashIndex = modelId.IndexOf('/');
+            if (slashIndex <= 0)
+                return "General";
+
+            return modelId.Substring(0, slashIndex);
         }
 
         private void SyncTopbarModelPicker(string currentModel)
         {
             if (_topbarModelPicker == null) return;
 
-            if (_discoveredModels == null || _discoveredModels.Count == 0)
-            {
-                _topbarModelPicker.choices = new List<string> { currentModel };
-                _topbarModelPicker.SetValueWithoutNotify(currentModel);
-                return;
-            }
+            string target = string.IsNullOrWhiteSpace(currentModel)
+                ? LocalizationExtensions.Get("providers.models.choose", "Выбрать модель")
+                : currentModel;
 
-            var choices = new List<string>(_discoveredModels.Count);
-            foreach (var m in _discoveredModels)
-            {
-                if (!string.IsNullOrWhiteSpace(m))
-                    choices.Add(m);
-            }
-            _topbarModelPicker.choices = choices;
-
-            string target = currentModel;
-            if (!string.IsNullOrWhiteSpace(currentModel) && !choices.Contains(currentModel))
-                target = choices.Count > 0 ? choices[0] : currentModel;
-
+            _topbarModelPicker.choices = new List<string> { target };
             _topbarModelPicker.SetValueWithoutNotify(target);
         }
 
@@ -2592,7 +3072,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 _currentSessionId = chat.CurrentSessionId ?? string.Empty;
                 _currentSessionTitle = string.Empty;
-                SetProviderHeader(provider);
+                SetProviderHeader(provider, chat.CurrentSessionModel);
                 UpdateEditorStatus();
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
@@ -2689,9 +3169,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             body.Add(nameRow);
             body.Add(urlLabel);
 
-            var modelLabel = new Label(provider.defaultModel ?? string.Empty);
-            modelLabel.AddToClassList("chip");
-            modelLabel.AddToClassList("provider__model");
+            if (!string.IsNullOrWhiteSpace(provider.defaultModel))
+            {
+                var modelLabel = new Label(provider.defaultModel);
+                modelLabel.AddToClassList("provider__model");
+                body.Add(modelLabel);
+            }
 
             var meta = new VisualElement();
             meta.AddToClassList("provider__meta");
@@ -2728,7 +3211,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             container.Add(logo);
             container.Add(body);
-            container.Add(modelLabel);
             container.Add(meta);
             container.Add(actions);
             container.Add(toggle);
@@ -2736,14 +3218,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             return container;
         }
 
-        private void SetProviderHeader(ProviderConfig provider)
+        private void SetProviderHeader(ProviderConfig provider, string currentModel = null)
         {
             if (provider == null)
                 return;
 
             string shortName = BuildProviderShort(provider);
             string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? LocalizationExtensions.Get("common.dash", "—") : provider.displayName;
-            string model = string.IsNullOrWhiteSpace(provider.defaultModel) ? string.Empty : provider.defaultModel;
+            string model = string.IsNullOrWhiteSpace(currentModel)
+                ? (string.IsNullOrWhiteSpace(provider.defaultModel) ? string.Empty : provider.defaultModel)
+                : currentModel;
 
             if (_providerShort != null)
                 _providerShort.text = shortName;
@@ -5208,6 +5692,41 @@ namespace NeonCompanion.Runtime.UI.UITK
             _resizeHandle?.RemoveFromClassList("resize-handle--active");
             if (_resizeHandle != null && _resizeHandle.HasPointerCapture(evt.pointerId))
                 _resizeHandle.ReleasePointer(evt.pointerId);
+            evt.StopPropagation();
+        }
+
+        // ============================================================
+        // Rail resize handle — drag right edge of rail to resize
+        // ============================================================
+
+        private void OnRailResizePointerDown(PointerDownEvent evt)
+        {
+            if (evt.button != 0) return;
+            _isRailResizing = true;
+            _railResizeStartX = evt.position.x;
+            _railResizeStartWidth = _railElement?.resolvedStyle.width ?? 232f;
+            _railResizeHandle.CapturePointer(evt.pointerId);
+            _railResizeHandle?.AddToClassList("resize-handle--active");
+            evt.StopPropagation();
+        }
+
+        private void OnRailResizePointerMove(PointerMoveEvent evt)
+        {
+            if (!_isRailResizing) return;
+            float delta = evt.position.x - _railResizeStartX;
+            float newWidth = Mathf.Clamp(_railResizeStartWidth + delta, MinRailWidth, MaxRailWidth);
+            if (_railElement != null)
+                _railElement.style.width = newWidth;
+            evt.StopPropagation();
+        }
+
+        private void OnRailResizePointerUp(PointerUpEvent evt)
+        {
+            if (!_isRailResizing) return;
+            _isRailResizing = false;
+            _railResizeHandle?.RemoveFromClassList("resize-handle--active");
+            if (_railResizeHandle != null && _railResizeHandle.HasPointerCapture(evt.pointerId))
+                _railResizeHandle.ReleasePointer(evt.pointerId);
             evt.StopPropagation();
         }
     }

@@ -134,8 +134,13 @@
 }
 
 .provider__model {
-    max-width: 245px;
-    margin-left: 12px;
+    font-size: 11px;
+    color: var(--text-3);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .provider__meta {
@@ -161,10 +166,12 @@
 .provider__actions {
     flex-direction: row;
     margin-left: 12px;
+    flex-shrink: 0;
 }
 
 .provider__actions > Button {
     margin-left: 6px;
+    padding: 0 10px;
 }
 
 /* ============== Editor (right column) ============== */

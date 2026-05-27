@@ -31,6 +31,9 @@ namespace NeonCompanion.Runtime.Chat
         public ProviderConfig CurrentProvider => _currentProvider;
         public ChatViewModel CurrentChatViewModel => _currentChatViewModel;
         public string CurrentSessionId => _currentSession?.sessionId;
+        public string CurrentSessionModel => _currentChatViewModel?.SelectedModel
+            ?? _currentSession?.selectedModel
+            ?? _currentProvider?.defaultModel;
 
         public ChatService(
             IAiClient aiClient,
@@ -50,6 +53,8 @@ namespace NeonCompanion.Runtime.Chat
             _currentProvider = await ResolveProviderAsync(preferredProviderId);
             SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
+            _currentChatViewModel.ProviderSessionId = _currentSession?.providerSessionId;
+            _currentChatViewModel.SelectedModel = _currentSession?.selectedModel ?? _currentProvider?.defaultModel;
             ApplyGenerationSettings();
 
             await LoadLatestSessionAsync(preferredProviderId);
@@ -104,6 +109,10 @@ namespace NeonCompanion.Runtime.Chat
             SyncFromProvider(_currentProvider);
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
+            _currentChatViewModel.ProviderSessionId = session.providerSessionId;
+            _currentChatViewModel.SelectedModel = string.IsNullOrWhiteSpace(session.selectedModel)
+                ? _currentProvider?.defaultModel
+                : session.selectedModel;
             ApplyGenerationSettings();
 
             _currentChatViewModel.Messages.Clear();
@@ -124,6 +133,9 @@ namespace NeonCompanion.Runtime.Chat
             if (_currentSession != null)
             {
                 _currentSession.messages.Clear();
+                _currentSession.providerSessionId = null;
+                if (_currentChatViewModel != null)
+                    _currentChatViewModel.ProviderSessionId = null;
                 SaveCurrentSession();
             }
 
@@ -139,17 +151,19 @@ namespace NeonCompanion.Runtime.Chat
             _currentProvider = newProvider;
             SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
+            _currentChatViewModel.SelectedModel = _currentProvider?.defaultModel;
             ApplyGenerationSettings();
 
             await StartNewSessionAsync();
             NeonLogger.Log($"Switched to provider: {newProvider.displayName}");
         }
 
-        public Task ApplyProviderConfigAsync(ProviderConfig updatedProvider)
+        public Task ApplyProviderConfigAsync(ProviderConfig updatedProvider, bool resetRemoteSession = false)
         {
             if (updatedProvider == null || _currentProvider == null || _currentProvider.id != updatedProvider.id)
                 return Task.CompletedTask;
 
+            string previousDefaultModel = _currentProvider.defaultModel;
             _currentProvider.displayName = updatedProvider.displayName;
             _currentProvider.baseUrl = updatedProvider.baseUrl;
             _currentProvider.apiKey = updatedProvider.apiKey;
@@ -158,7 +172,27 @@ namespace NeonCompanion.Runtime.Chat
             _currentProvider.maxTokens = updatedProvider.maxTokens;
             _currentProvider.isEnabled = updatedProvider.isEnabled;
 
+            if (resetRemoteSession)
+                ResetRemoteSessionState();
+
             SyncFromProvider(_currentProvider);
+            if (_currentChatViewModel != null)
+            {
+                if (string.IsNullOrWhiteSpace(_currentChatViewModel.SelectedModel) ||
+                    string.Equals(_currentChatViewModel.SelectedModel, previousDefaultModel, StringComparison.Ordinal))
+                {
+                    _currentChatViewModel.SelectedModel = updatedProvider.defaultModel;
+                }
+            }
+
+            if (_currentSession != null)
+            {
+                if (string.IsNullOrWhiteSpace(_currentSession.selectedModel) ||
+                    string.Equals(_currentSession.selectedModel, previousDefaultModel, StringComparison.Ordinal))
+                {
+                    _currentSession.selectedModel = updatedProvider.defaultModel;
+                }
+            }
             ApplyGenerationSettings();
             SaveCurrentSession();
             return Task.CompletedTask;
@@ -170,12 +204,16 @@ namespace NeonCompanion.Runtime.Chat
                 _currentProvider = await ResolveProviderAsync();
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
+            _currentChatViewModel.ProviderSessionId = null;
+            _currentChatViewModel.SelectedModel = _currentProvider?.defaultModel;
             ApplyGenerationSettings();
 
             _currentSession = new ChatSession
             {
                 sessionId = Guid.NewGuid().ToString(),
                 providerId = _currentProvider?.id,
+                providerSessionId = null,
+                selectedModel = _currentProvider?.defaultModel,
                 title = "New chat",
                 updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 messages = new List<ChatMessage>()
@@ -197,7 +235,15 @@ namespace NeonCompanion.Runtime.Chat
             SaveCurrentSession();
         }
 
-        public async Task SendMessageAsync(string message, Action<string> onStreamToken = null)
+        public Task SendMessageAsync(string message, Action<string> onStreamToken = null)
+        {
+            return SendMessageAsync(message, null, onStreamToken);
+        }
+
+        public async Task SendMessageAsync(
+            string message,
+            IReadOnlyList<ChatAttachment> attachments,
+            Action<string> onStreamToken = null)
         {
             if (_currentChatViewModel == null)
             {
@@ -206,10 +252,66 @@ namespace NeonCompanion.Runtime.Chat
 
             _currentChatViewModel.UseStreaming = UseStreaming;
             _currentChatViewModel.InputMessage = message;
+            _currentChatViewModel.PendingAttachments.Clear();
+            if (attachments != null)
+            {
+                for (int i = 0; i < attachments.Count; i++)
+                {
+                    var attachment = attachments[i];
+                    if (attachment == null)
+                        continue;
+
+                    _currentChatViewModel.PendingAttachments.Add(new ChatAttachment
+                    {
+                        kind = string.IsNullOrWhiteSpace(attachment.kind) ? "image" : attachment.kind,
+                        name = attachment.name,
+                        path = attachment.path,
+                        mediaType = attachment.mediaType
+                    });
+                }
+            }
             await _currentChatViewModel.SendAsync(UseStreaming ? onStreamToken : null);
             EmitLatestAssistantResponse();
 
             SaveCurrentSession();
+        }
+
+        public async Task<ModelSwitchResult> SetCurrentSessionModelAsync(string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId))
+                throw new ArgumentException("Model is required.", nameof(modelId));
+
+            if (_currentChatViewModel == null)
+                await GetOrCreateChatAsync();
+
+            if (_currentProvider == null || _currentChatViewModel == null || _currentSession == null)
+                throw new InvalidOperationException("Chat session is not ready.");
+
+            string requestedModel = modelId.Trim();
+            string previousModel = CurrentSessionModel;
+            string previousProviderSessionId = _currentChatViewModel.ProviderSessionId;
+
+            ModelSwitchResult result = await _aiClient.ApplySessionModelAsync(
+                _currentProvider,
+                requestedModel,
+                previousProviderSessionId);
+
+            if (!result.Success)
+                return result;
+
+            _currentChatViewModel.SelectedModel = requestedModel;
+            _currentChatViewModel.ProviderSessionId = result.IsHermes
+                ? result.ProviderSessionId
+                : null;
+
+            _currentSession.selectedModel = requestedModel;
+            _currentSession.providerSessionId = _currentChatViewModel.ProviderSessionId;
+            SaveCurrentSession();
+
+            NeonLogger.Log(
+                $"Session model applied: provider={_currentProvider.id}, old={previousModel}, new={requestedModel}, providerSessionId={_currentChatViewModel.ProviderSessionId ?? "<null>"}");
+
+            return result;
         }
 
         private void EmitLatestAssistantResponse()
@@ -247,13 +349,15 @@ namespace NeonCompanion.Runtime.Chat
             for (int i = start; i < sourceMessages.Count; i++)
             {
                 var message = sourceMessages[i];
-                if (message == null || string.IsNullOrWhiteSpace(message.role) || string.IsNullOrWhiteSpace(message.content))
+                bool hasText = !string.IsNullOrWhiteSpace(message?.content);
+                bool hasAttachments = message?.attachments != null && message.attachments.Count > 0;
+                if (message == null || string.IsNullOrWhiteSpace(message.role) || (!hasText && !hasAttachments))
                     continue;
 
                 requestMessages.Add(new AiChatMessage
                 {
                     role = message.role,
-                    content = message.content
+                    content = hasText ? message.content : "[image]"
                 });
             }
 
@@ -268,7 +372,8 @@ namespace NeonCompanion.Runtime.Chat
 
             var request = new AiChatRequest
             {
-                model = provider.defaultModel,
+                model = CurrentSessionModel ?? provider.defaultModel,
+                providerSessionId = _currentChatViewModel?.ProviderSessionId,
                 temperature = 0.2f,
                 maxTokens = 140,
                 systemPrompt = LocalizationExtensions.Get("chat.summary.system_prompt", "Ты помощник, который кратко и точно суммирует переписку на русском языке."),
@@ -297,6 +402,7 @@ namespace NeonCompanion.Runtime.Chat
             _currentChatViewModel.MaxTokens = MaxTokens;
             _currentChatViewModel.SystemPrompt = SystemPrompt;
         }
+
 
         private async Task LoadLatestSessionAsync(string preferredProviderId = null)
         {
@@ -342,6 +448,8 @@ namespace NeonCompanion.Runtime.Chat
             _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
             _currentSession.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             _currentSession.providerId = _currentProvider?.id ?? _currentSession.providerId;
+            _currentSession.providerSessionId = _currentChatViewModel.ProviderSessionId;
+            _currentSession.selectedModel = _currentChatViewModel.SelectedModel;
             _currentSession.title = BuildSessionTitle(_currentSession);
 
             var sessions = _sessionRepository.GetAll();
@@ -382,6 +490,15 @@ namespace NeonCompanion.Runtime.Chat
 
             var title = firstUserMessage.content.Trim();
             return title.Length <= 48 ? title : title.Substring(0, 48) + "...";
+        }
+
+        private void ResetRemoteSessionState()
+        {
+            if (_currentSession != null)
+                _currentSession.providerSessionId = null;
+
+            if (_currentChatViewModel != null)
+                _currentChatViewModel.ProviderSessionId = null;
         }
     }
 }

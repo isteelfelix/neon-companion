@@ -90,26 +90,6 @@
 .settings-dropdown {
     min-width: 160px;
 }
-.settings-dropdown > .unity-base-popup-field__input {
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    padding: 0 12px;
-    color: var(--text-1);
-    font-size: 13px;
-    height: 32px;
-}
-.settings-dropdown > .unity-base-popup-field__input:hover {
-    border-color: var(--line-3);
-}
-.settings-dropdown .unity-base-popup-field__text {
-    color: var(--text-1);
-    font-size: 13px;
-}
-.settings-dropdown .unity-base-popup-field__arrow {
-    -unity-background-image-tint-color: var(--text-3);
-}
 
 /* ---- toggle (Unity native, restyled as pill) ---- */
 .settings-toggle {

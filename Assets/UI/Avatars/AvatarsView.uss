@@ -94,7 +94,7 @@
     flex-direction: row;
     align-items: center;
     padding: 0 12px;
-    border-radius: 999px;
+    border-radius: 8px;
     background-color: var(--bg-2);
     border-width: 1px;
     border-color: var(--line-2);
@@ -355,7 +355,7 @@
     background-color: var(--accent-soft);
     border-width: 1px;
     border-color: var(--accent);
-    border-radius: 999px;
+    border-radius: 6px;
     padding: 2px 8px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Medium.ttf");
 }

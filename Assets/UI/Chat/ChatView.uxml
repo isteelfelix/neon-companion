@@ -28,7 +28,7 @@
             <ui:VisualElement name="composer" class="composer">
                 <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить токен вложения" />
                 <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />
-                <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." />
+                <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." multiline="true" />
                 <ui:VisualElement class="composer__hint">
                     <ui:Label text="⌘" class="kbd" />
                     <ui:Label text="↵" class="kbd" />

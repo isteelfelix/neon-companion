@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:nc="NeonCompanion.Runtime.UI.UITK">
     <ui:Style src="../Theme/Tokens.uss" />
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="SettingsView.uss" />
@@ -26,7 +26,7 @@
                         <ui:Label text="Язык" class="settings-row__name" />
                         <ui:Label text="Язык интерфейса. Применяется сразу." class="settings-row__sub" />
                     </ui:VisualElement>
-                    <ui:DropdownField name="settings-language" choices="Русский,English" index="0" class="settings-dropdown" />
+                    <nc:NeonDropdown name="settings-language" choices-csv="Русский,English" class="settings-dropdown" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="settings-row">

@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:nc="NeonCompanion.Runtime.UI.UITK">
     <ui:Style src="../Theme/Tokens.uss" />
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="ProvidersView.uss" />
@@ -45,7 +45,7 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="field">
                     <ui:Label text="Модель по умолчанию" class="label" />
-                    <ui:DropdownField name="edit-model-preset" class="input" />
+                    <nc:NeonDropdown name="edit-model-preset" class="input" />
                 </ui:VisualElement>
                 <ui:VisualElement name="edit-model-custom-wrap" class="field" style="display: none;">
                     <ui:Label text="ID модели (вручную)" class="label" />
