@@ -69,6 +69,6 @@
 ## Публикация (M4)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| P-01 | itch.io / GitHub Releases | ✅ | M4 | BuildScript.cs, build.sh, release.sh, VERSION, .gitignore |
+| P-01 | itch.io / GitHub Releases | ✅ | M4 | Ручная публикация через GitHub Releases; VERSION файл |
 | P-02 | Документация для контрибьюторов | ✅ | M4 | docs/10_Contribution.md |
 | P-03 | Донат-система | ✅ | M4 | IDonationService, DonationService, Settings: кнопка «Поддержать» |

@@ -137,14 +137,9 @@ MonoImporter:
 - Push directly to `main` without committing clean, reviewed diffs
 - Merge two unrelated feature changes in one commit
 
-## Build & Release
+## Build
 
-```bash
-scripts/build.sh --target windows --version X.Y.Z --unity "/path/to/Unity"
-scripts/release.sh X.Y.Z --unity "/path/to/Unity"
-```
-
-Build artifacts go to `Builds/`. Release script creates GitHub Release with all platform artifacts. Version is in the `VERSION` file at project root.
+No CI/CD. Felix builds locally via Unity Editor (`File → Build Settings`). Version is in the `VERSION` file at project root.
 
 ## Documentation
 

@@ -13,5 +13,8 @@
 3. Выбрать целевую платформу
 4. Собрать
 
-## CI/CD (будущее)
-Планируется настроить GitHub Actions для автоматической сборки под Windows и Android.
+### Версионирование
+Версия хранится в файле `VERSION` в корне проекта (формат `MAJOR.MINOR.PATCH`).
+
+### Публикация
+Релизы публикуются вручную через GitHub Releases: https://github.com/isteelfelix/neon-companion/releases
