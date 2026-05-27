@@ -60,6 +60,14 @@
                     </ui:VisualElement>
                     <ui:Toggle name="settings-voice-io" class="settings-toggle" value="true" />
                 </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row settings-row--last">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Горячая клавиша закрытия" class="settings-row__name" />
+                        <ui:Label text="Нажми кнопку, затем клавишу или комбинацию." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Button name="settings-hotkey-capture" text="Escape" class="btn btn--hotkey-capture" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- ===== Security ===== -->

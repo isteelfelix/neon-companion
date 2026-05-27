@@ -242,5 +242,12 @@
   "common.loading": "Загрузка...",
   "common.error": "Ошибка",
   "common.ok": "ОК",
-  "common.cancel": "Отмена"
+  "common.cancel": "Отмена",
+  "nav.close": "Закрыть",
+  "quit.dialog.title": "Закрыть приложение?",
+  "quit.dialog.body": "Активные соединения будут прерваны.",
+  "quit.confirm": "Закрыть",
+  "settings.close.hotkey.title": "Горячая клавиша закрытия",
+  "settings.close.hotkey.subtitle": "Нажми кнопку, затем клавишу или комбинацию.",
+  "settings.hotkey.capturing": "Нажми клавишу…"
 }

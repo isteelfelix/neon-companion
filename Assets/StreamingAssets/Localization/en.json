@@ -242,5 +242,12 @@
   "common.loading": "Loading...",
   "common.error": "Error",
   "common.ok": "OK",
-  "common.cancel": "Cancel"
+  "common.cancel": "Cancel",
+  "nav.close": "Close",
+  "quit.dialog.title": "Close application?",
+  "quit.dialog.body": "Active connections will be interrupted.",
+  "quit.confirm": "Close",
+  "settings.close.hotkey.title": "Close hotkey",
+  "settings.close.hotkey.subtitle": "Click the button, then press a key or combination.",
+  "settings.hotkey.capturing": "Press a key…"
 }

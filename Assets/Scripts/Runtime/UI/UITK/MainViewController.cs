@@ -78,6 +78,19 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _topbarSep;
         private VisualElement _typingIndicator;
 
+        // ===== Quit / close =====
+        private Button _navCloseButton;
+        private Label _navCloseLabel;
+        private VisualElement _quitOverlay;
+        private Label _quitDialogTitle;
+        private Label _quitDialogBody;
+        private Button _quitConfirmBtn;
+        private Button _quitCancelBtn;
+        private Button _settingsHotkeyCaptureBtn;
+        private bool _isCapturingHotkey;
+        private bool _quitDialogVisible;
+        private string _closeHotkey = "Escape";
+
         // ===== Settings page =====
         private NeonDropdown _settingsLanguage;
         private Toggle _settingsHistory;
@@ -414,6 +427,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             Add("tooltip.attach", "Добавить токен вложения", "Insert attachment token");
             Add("tooltip.voice.input", "Голосовой ввод", "Voice input");
 
+            Add("quit.dialog.title", "Закрыть приложение?", "Close application?");
+            Add("quit.dialog.body",  "Активные соединения будут прерваны.", "Active connections will be interrupted.");
+            Add("nav.close",         "Закрыть", "Close");
+            Add("common.cancel",     "Отмена", "Cancel");
+            Add("settings.close.hotkey.title",    "Горячая клавиша закрытия", "Close hotkey");
+            Add("settings.close.hotkey.subtitle", "Нажми кнопку, затем клавишу или комбинацию.", "Click the button, then press a key or combination.");
+
             return map;
         }
 
@@ -677,6 +697,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _typingDot3 = dots.Count > 2 ? dots[2] : null;
             }
 
+            _navCloseButton = root.Q<Button>("nav-close");
+            _navCloseLabel  = root.Q<Label>("nav-close-label");
+            _quitOverlay    = root.Q<VisualElement>("quit-overlay");
+            _quitDialogTitle = root.Q<Label>("quit-dialog-title");
+            _quitDialogBody  = root.Q<Label>("quit-dialog-body");
+            _quitConfirmBtn  = root.Q<Button>("quit-confirm-btn");
+            _quitCancelBtn   = root.Q<Button>("quit-cancel-btn");
+            _settingsHotkeyCaptureBtn = root.Q<Button>("settings-hotkey-capture");
+            SetDisplay(_quitOverlay, DisplayStyle.None);
+
             SetDisplay(_providerEditPanel, DisplayStyle.None);
             SetSending(false);
             UpdateClearDataButtonState();
@@ -766,6 +796,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _railResizeHandle.RegisterCallback<PointerMoveEvent>(OnRailResizePointerMove);
                 _railResizeHandle.RegisterCallback<PointerUpEvent>(OnRailResizePointerUp);
             }
+
+            RegisterClick(_navCloseButton, OnNavCloseClicked);
+            RegisterClick(_quitConfirmBtn, OnQuitConfirmed);
+            RegisterClick(_quitCancelBtn,  OnQuitCanceled);
+            RegisterClick(_settingsHotkeyCaptureBtn, OnHotkeyCaptureClicked);
+            if (_root != null)
+                _root.RegisterCallback<KeyDownEvent>(OnGlobalKeyDown, TrickleDown.TrickleDown);
 
             RegisterSettingsCallbacks();
             RegisterAvatarGalleryCallbacks();
@@ -862,6 +899,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _railResizeHandle.UnregisterCallback<PointerMoveEvent>(OnRailResizePointerMove);
                 _railResizeHandle.UnregisterCallback<PointerUpEvent>(OnRailResizePointerUp);
             }
+
+            UnregisterClick(_navCloseButton, OnNavCloseClicked);
+            UnregisterClick(_quitConfirmBtn, OnQuitConfirmed);
+            UnregisterClick(_quitCancelBtn,  OnQuitCanceled);
+            UnregisterClick(_settingsHotkeyCaptureBtn, OnHotkeyCaptureClicked);
+            if (_root != null)
+                _root.UnregisterCallback<KeyDownEvent>(OnGlobalKeyDown, TrickleDown.TrickleDown);
 
             _typingSchedule?.Pause();
             _breathSchedule?.Pause();
@@ -1230,6 +1274,131 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnMoreClicked()
         {
             ShowSettings();
+        }
+
+        // ===== Quit / close =====
+
+        private void OnNavCloseClicked() => ShowQuitDialog();
+
+        private void ShowQuitDialog()
+        {
+            if (_quitDialogVisible || _quitOverlay == null) return;
+            _quitDialogVisible = true;
+            if (_quitDialogTitle != null)
+                _quitDialogTitle.text = LocalizationExtensions.Get("quit.dialog.title", "Закрыть приложение?");
+            if (_quitDialogBody != null)
+                _quitDialogBody.text = LocalizationExtensions.Get("quit.dialog.body", "Активные соединения будут прерваны.");
+            if (_quitConfirmBtn != null)
+                _quitConfirmBtn.Q<Label>()?.Localize("nav.close");
+            _quitCancelBtn?.Localize("common.cancel");
+            SetDisplay(_quitOverlay, DisplayStyle.Flex);
+        }
+
+        private void HideQuitDialog()
+        {
+            if (!_quitDialogVisible || _quitOverlay == null) return;
+            _quitDialogVisible = false;
+            SetDisplay(_quitOverlay, DisplayStyle.None);
+        }
+
+        private void OnQuitConfirmed()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        private void OnQuitCanceled() => HideQuitDialog();
+
+        private void OnGlobalKeyDown(KeyDownEvent evt)
+        {
+            if (_isCapturingHotkey)
+            {
+                if (IsPureModifier(evt.keyCode)) return;
+                string captured = BuildHotkeyString(evt);
+                _closeHotkey = captured;
+                ExitCaptureMode(captured);
+                SaveSettings();
+                evt.StopPropagation();
+                return;
+            }
+
+            if (_quitDialogVisible)
+            {
+                bool isEnter = evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
+                if (isEnter) OnQuitConfirmed();
+                else HideQuitDialog();
+                evt.StopPropagation();
+                return;
+            }
+
+            if (MatchesHotkey(evt, _closeHotkey))
+            {
+                ShowQuitDialog();
+                evt.StopPropagation();
+            }
+        }
+
+        private void OnHotkeyCaptureClicked()
+        {
+            if (_isCapturingHotkey) { ExitCaptureMode(_closeHotkey); return; }
+            EnterCaptureMode();
+        }
+
+        private void EnterCaptureMode()
+        {
+            _isCapturingHotkey = true;
+            if (_settingsHotkeyCaptureBtn != null)
+            {
+                _settingsHotkeyCaptureBtn.text = LocalizationExtensions.Get("settings.hotkey.capturing", "Нажми клавишу…");
+                _settingsHotkeyCaptureBtn.AddToClassList("btn--hotkey-capture--active");
+            }
+        }
+
+        private void ExitCaptureMode(string hotkey)
+        {
+            _isCapturingHotkey = false;
+            if (_settingsHotkeyCaptureBtn != null)
+            {
+                _settingsHotkeyCaptureBtn.text = hotkey;
+                _settingsHotkeyCaptureBtn.RemoveFromClassList("btn--hotkey-capture--active");
+            }
+        }
+
+        private static bool IsPureModifier(KeyCode key)
+        {
+            return key == KeyCode.LeftControl  || key == KeyCode.RightControl
+                || key == KeyCode.LeftAlt      || key == KeyCode.RightAlt
+                || key == KeyCode.LeftShift    || key == KeyCode.RightShift
+                || key == KeyCode.LeftCommand  || key == KeyCode.RightCommand
+                || key == KeyCode.LeftWindows  || key == KeyCode.RightWindows;
+        }
+
+        private static string BuildHotkeyString(KeyDownEvent evt)
+        {
+            var parts = new List<string>(4);
+            if ((evt.modifiers & EventModifiers.Control) != 0) parts.Add("Control");
+            if ((evt.modifiers & EventModifiers.Alt)     != 0) parts.Add("Alt");
+            if ((evt.modifiers & EventModifiers.Shift)   != 0) parts.Add("Shift");
+            parts.Add(evt.keyCode.ToString());
+            return string.Join("+", parts);
+        }
+
+        private static bool MatchesHotkey(KeyDownEvent evt, string hotkey)
+        {
+            if (string.IsNullOrWhiteSpace(hotkey)) return false;
+            var parts = hotkey.Split('+');
+            string keyName = parts[parts.Length - 1];
+            if (!Enum.TryParse<KeyCode>(keyName, out KeyCode keyCode) || evt.keyCode != keyCode)
+                return false;
+            bool needsCtrl  = Array.IndexOf(parts, "Control") >= 0;
+            bool needsAlt   = Array.IndexOf(parts, "Alt")     >= 0;
+            bool needsShift = Array.IndexOf(parts, "Shift")   >= 0;
+            return needsCtrl  == ((evt.modifiers & EventModifiers.Control) != 0)
+                && needsAlt   == ((evt.modifiers & EventModifiers.Alt)     != 0)
+                && needsShift == ((evt.modifiers & EventModifiers.Shift)   != 0);
         }
 
         private void OnListenClicked()
@@ -3332,6 +3501,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navHistoryLabel?.Localize("chat.history");
             _navThemesLabel?.Localize("settings.themes");
             _navSettingsLabel?.Localize("tab.settings");
+            _navCloseLabel?.Localize("nav.close");
             _testRowLabel?.Localize("providers.test.hint");
             ApplyStaticTemplateLocalization();
         }
@@ -3607,6 +3777,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 await SyncActiveAvatarSystemPromptAsync(app, s);
+                _closeHotkey = s.closeHotkey ?? "Escape";
+                if (_settingsHotkeyCaptureBtn != null)
+                    _settingsHotkeyCaptureBtn.text = _closeHotkey;
+
                 RefreshVoiceControls();
             }
             catch (Exception ex)
@@ -3706,6 +3880,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 s.avatarShape    = _avatarShape;
                 s.activeAvatarId = _activeAvatarId;
                 s.activeProviderId = _chatService?.CurrentProvider?.id ?? s.activeProviderId;
+                s.closeHotkey    = _closeHotkey;
 
                 app.Settings.Save(s);
 

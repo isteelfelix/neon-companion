@@ -57,6 +57,7 @@
 .icon--sparkle    { background-image: url("project://database/Assets/UI/Icons/sparkle.svg"); }
 .icon--upload     { background-image: url("project://database/Assets/UI/Icons/upload.svg"); }
 .icon--user       { background-image: url("project://database/Assets/UI/Icons/user.svg"); }
+.icon--power      { background-image: url("project://database/Assets/UI/Icons/power.svg"); }
 
 /* ============== Rail ============== */
 
@@ -537,4 +538,62 @@
     background-color: rgba(239, 100, 100, 0.15);
     border-color: rgba(239, 100, 100, 0.30);
     color: #ef6464;
+}
+
+/* ============== Nav close button ============== */
+
+.nav__item--close {
+    margin-top: 2px;
+    opacity: 0.55;
+}
+
+.nav__item--close:hover {
+    opacity: 1.0;
+}
+
+/* ============== Quit confirmation overlay ============== */
+
+.quit-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+}
+
+.quit-dialog {
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 14px;
+    padding: 24px 28px;
+    min-width: 300px;
+    max-width: 380px;
+}
+
+.quit-dialog__title {
+    font-size: 16px;
+    color: var(--text-0);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    margin-bottom: 8px;
+}
+
+.quit-dialog__body {
+    font-size: 13px;
+    color: var(--text-3);
+    margin-bottom: 22px;
+    white-space: normal;
+}
+
+.quit-dialog__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.quit-dialog__actions > Button {
+    margin-left: 8px;
 }

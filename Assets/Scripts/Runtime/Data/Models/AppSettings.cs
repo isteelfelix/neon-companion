@@ -17,5 +17,6 @@ namespace NeonCompanion.Runtime.Data.Models
         public bool showHalo = true;
         public bool breathingAnimation = true;
         public string language = "ru";
+        public string closeHotkey = "Escape";
     }
 }

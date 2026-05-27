@@ -65,6 +65,11 @@
             </ui:VisualElement>
             <ui:ScrollView name="sessions-list" class="rail__sessions-list" />
 
+            <ui:Button name="nav-close" class="nav__item nav__item--close">
+                <ui:VisualElement class="nav__icon icon icon--power" />
+                <ui:Label name="nav-close-label" text="Закрыть" class="nav__label" />
+            </ui:Button>
+
             <ui:VisualElement class="rail__footer">
                 <ui:VisualElement class="dot--status" />
                 <ui:VisualElement class="rail__footer-text">
@@ -119,6 +124,19 @@
                 <ui:VisualElement name="placeholder-area" class="panel">
                     <ui:Label name="placeholder-title" text="Раздел недоступен" class="page__title" />
                     <ui:Label name="placeholder-body" text="Содержимое для этого раздела сейчас не отображается." class="page__subtitle" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="quit-overlay" class="quit-overlay">
+            <ui:VisualElement name="quit-dialog" class="quit-dialog">
+                <ui:Label name="quit-dialog-title" text="Закрыть приложение?" class="quit-dialog__title" />
+                <ui:Label name="quit-dialog-body" text="Активные соединения будут прерваны." class="quit-dialog__body" />
+                <ui:VisualElement class="quit-dialog__actions">
+                    <ui:Button name="quit-cancel-btn" text="Отмена" class="btn btn--ghost" />
+                    <ui:Button name="quit-confirm-btn" class="btn btn--danger">
+                        <ui:VisualElement class="icon icon--power btn__icon" />
+                        <ui:Label text="Закрыть" />
+                    </ui:Button>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

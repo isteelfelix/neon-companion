@@ -227,6 +227,27 @@
     padding: 3px 0;
 }
 
+/* ---- Hotkey capture button ---- */
+
+.btn--hotkey-capture {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 12px;
+    min-width: 90px;
+    justify-content: center;
+}
+
+.btn--hotkey-capture--active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background-color: var(--accent-soft);
+}
+
+/* ---- Last row in a card (no bottom border) ---- */
+
+.settings-row--last {
+    border-bottom-width: 0;
+}
+
 /* ---- Page-specific icons ---- */
 
 .icon--globe    { background-image: url("project://database/Assets/UI/Icons/globe.svg"); }
