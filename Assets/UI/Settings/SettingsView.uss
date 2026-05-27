@@ -140,7 +140,7 @@
 
 .settings-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
     background-color: rgb(255, 255, 255);
-    translate: 16px 0;
+    translate: 16px 0px;
 }
 
 .settings-toggle .unity-toggle__text {

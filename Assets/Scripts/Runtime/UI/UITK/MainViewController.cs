@@ -1106,9 +1106,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _messageInput.value = string.Empty;
             SetSending(true);
 
+            ChatService chat = null;
             try
             {
-                var chat = await GetChatServiceAsync();
+                chat = await GetChatServiceAsync();
                 if (chat == null)
                 {
                     AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
@@ -1140,7 +1141,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _messageInput.value = composerText;
                 RestorePendingComposerAttachments(pendingAttachments);
-                AddSystemMessage(LocalizationExtensions.Get("system.chat.send_failed", "Не удалось отправить сообщение. Попробуй ещё раз."));
+                RenderMessages(chat?.CurrentChatViewModel?.Messages);
+                AddSystemMessage(ex.Message);
                 NeonLogger.LogError(ex.ToString());
                 TriggerAvatarConfused();
             }

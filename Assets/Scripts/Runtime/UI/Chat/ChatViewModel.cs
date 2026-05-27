@@ -156,9 +156,21 @@ namespace NeonCompanion.Runtime.UI.Chat
                     AddAssistantMessage(response);
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                AddAssistantMessage(new AiChatResponse { content = $"[Error] {ex.Message}" });
+                if (Messages.Count > 0)
+                {
+                    var last = Messages[Messages.Count - 1];
+                    bool isEmptyAssistantPlaceholder = last != null &&
+                                                      string.Equals(last.role, "assistant", StringComparison.OrdinalIgnoreCase) &&
+                                                      string.IsNullOrWhiteSpace(last.content) &&
+                                                      string.IsNullOrWhiteSpace(last.model) &&
+                                                      (last.attachments == null || last.attachments.Count == 0);
+                    if (isEmptyAssistantPlaceholder)
+                        Messages.RemoveAt(Messages.Count - 1);
+                }
+
+                throw;
             }
         }
 

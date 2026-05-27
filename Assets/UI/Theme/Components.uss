@@ -527,5 +527,5 @@
 }
 .toggle--on > .toggle__knob {
     background-color: rgb(255, 255, 255);
-    translate: 16px 0;
+    translate: 16px 0px;
 }

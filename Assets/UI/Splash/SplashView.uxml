@@ -1,0 +1,57 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="../Theme/Tokens.uss" />
+    <ui:Style src="SplashView.uss" />
+
+    <ui:VisualElement name="splash-root" class="splash">
+
+        <!-- HUD corner brackets -->
+        <ui:VisualElement class="splash__corner splash__corner--tl" />
+        <ui:VisualElement class="splash__corner splash__corner--tr" />
+        <ui:VisualElement class="splash__corner splash__corner--bl" />
+        <ui:VisualElement class="splash__corner splash__corner--br" />
+
+        <!-- Build info — top right -->
+        <ui:Label name="splash-version" text="V0.2 | BUILD 20260527" class="splash__build-label" />
+
+        <!-- Center column -->
+        <ui:VisualElement class="splash__center">
+
+            <!-- Logo -->
+            <ui:VisualElement class="splash__logo-area">
+                <!-- Radial glow behind icon -->
+                <ui:VisualElement class="splash__logo-bg-glow" />
+                <!-- Neon glow rings: innermost bright → outermost soft -->
+                <ui:VisualElement class="splash__glow-ring splash__glow-ring--1" />
+                <ui:VisualElement class="splash__glow-ring splash__glow-ring--2" />
+                <ui:VisualElement class="splash__glow-ring splash__glow-ring--3" />
+                <ui:VisualElement class="splash__glow-ring splash__glow-ring--4" />
+                <!-- App icon -->
+                <ui:VisualElement class="splash__logo-img" />
+            </ui:VisualElement>
+
+            <!-- Title + tagline -->
+            <ui:VisualElement class="splash__title-area">
+                <ui:Label text="NEON COMPANION" class="splash__title" />
+                <ui:Label text="AI  ·  VOICE  ·  COMPANION" class="splash__tagline" />
+            </ui:VisualElement>
+
+            <!-- Boot log -->
+            <ui:VisualElement class="splash__log-section">
+                <ui:VisualElement name="log-list" class="splash__log-list" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- Bottom bar: label | progress | percentage -->
+        <ui:VisualElement class="splash__bottom-bar">
+            <ui:Label text="SYSTEM BOOT" class="splash__status-left" />
+            <ui:VisualElement class="splash__progress-track">
+                <ui:VisualElement name="progress-fill" class="splash__progress-fill">
+                    <ui:VisualElement class="splash__progress-dot" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="progress-pct" text="0%" class="splash__status-right" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

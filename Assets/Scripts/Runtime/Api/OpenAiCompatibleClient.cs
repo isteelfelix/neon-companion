@@ -216,36 +216,12 @@ namespace NeonCompanion.Runtime.Api
                     isHermes: true);
             }
 
-            var switchResponse = await SendHermesModelSwitchAsync(
-                provider,
-                hermesProxyModel,
-                requestedModel,
-                providerSessionId,
-                cancellationToken);
-
-            string resolvedSessionId = switchResponse?.providerSessionId;
-            if (string.IsNullOrWhiteSpace(resolvedSessionId))
-                resolvedSessionId = providerSessionId?.Trim();
-
-            string currentModel = await QueryHermesCurrentModelAsync(
-                provider,
-                hermesProxyModel,
-                resolvedSessionId,
-                cancellationToken);
-
-            bool applied = DoesHermesModelMatch(requestedModel, currentModel);
-            string message = applied
-                ? null
-                : string.IsNullOrWhiteSpace(currentModel)
-                    ? $"Hermes не подтвердил переключение на модель \"{requestedModel}\"."
-                    : $"Hermes не смог переключиться на \"{requestedModel}\". Текущая модель: {currentModel}.";
-
             return new ModelSwitchResult(
-                success: applied,
+                success: false,
                 requestedModel: requestedModel,
-                appliedModel: string.IsNullOrWhiteSpace(currentModel) ? requestedModel : currentModel,
-                providerSessionId: resolvedSessionId,
-                message: message,
+                appliedModel: hermesProxyModel,
+                providerSessionId: null,
+                message: "Этот Hermes работает в proxy-режиме и экспортирует только hermes-agent. Безопасное переключение внутренних моделей из Neon отключено, чтобы не менять глобальный state сервера.",
                 isHermes: true);
         }
 
@@ -663,7 +639,7 @@ namespace NeonCompanion.Runtime.Api
             if (string.IsNullOrWhiteSpace(providerSessionId))
             {
                 throw new InvalidOperationException(
-                    $"Для модели \"{requestedModel}\" в Hermes сначала открой /model и дождись подтверждения переключения.");
+                    $"Этот Hermes экспортирует только hermes-agent. Безопасное переключение модели \"{requestedModel}\" из Neon отключено, чтобы не менять глобальный state сервера.");
             }
 
             return new RequestRoutingInfo
@@ -702,7 +678,17 @@ namespace NeonCompanion.Runtime.Api
                     return null;
 
                 var discoveredModels = ParseModelIds(webRequest.downloadHandler?.text);
-                return ContainsModel(discoveredModels, "hermes-agent") ? "hermes-agent" : null;
+                if (!ContainsModel(discoveredModels, "hermes-agent"))
+                    return null;
+
+                // Hermes can operate in two different surfaces:
+                // 1. proxy mode: only advertises `hermes-agent`, model switching must happen inside Hermes.
+                // 2. direct catalog mode: advertises the full provider/model inventory via /v1/models.
+                // In the second case Neon must behave like a normal OpenAI-compatible client and send the
+                // selected model directly instead of forcing hidden `/model` commands.
+                return discoveredModels != null && discoveredModels.Count == 1
+                    ? "hermes-agent"
+                    : null;
             }
         }
 
