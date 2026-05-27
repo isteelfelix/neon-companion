@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(ls \"D:\\\\dw\\\\Neon Assistent-handoff.zip\")",
-      "PowerShell(ffprobe -v quiet -print_format json -show_streams \"C:\\\\Users\\\\iFlex\\\\Downloads\\\\animation.mp4\" 2>&1)"
+      "PowerShell(ffprobe -v quiet -print_format json -show_streams \"C:\\\\Users\\\\iFlex\\\\Downloads\\\\animation.mp4\" 2>&1)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'feat: move typing indicator into response bubble, remove status clutter *)"
     ]
   }
 }

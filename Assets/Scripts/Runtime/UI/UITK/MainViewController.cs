@@ -194,6 +194,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IVisualElementScheduledItem _typingSchedule;
         private int _typingFrame;
 
+        // ===== Inline streaming typing dots =====
+        private VisualElement _streamingTypingDots;
+        private IVisualElementScheduledItem _inlineTypingSchedule;
+        private int _inlineTypingFrame;
+
         // ===== Breathing animation =====
         private IVisualElementScheduledItem _breathSchedule;
         private long _breathStartMs;
@@ -1172,6 +1177,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                     AddStreamingBubble();
                     await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken);
                     _streamingLabel = null;
+                    StopInlineTypingAnimation();
+                    if (_streamingTypingDots != null)
+                    {
+                        _streamingTypingDots.RemoveFromHierarchy();
+                        _streamingTypingDots = null;
+                    }
                 }
                 else
                 {
@@ -1229,12 +1240,44 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_messagesList == null) return;
             var placeholder = CreateMessageElement(new ChatMessage { role = "assistant", content = "" });
             _messagesList.Add(placeholder);
+
+            var bubble = placeholder.Q<VisualElement>(className: "transcript__bubble");
+
+            // Ensure the body label exists so OnStreamToken can append to it
             _streamingLabel = placeholder.Q<Label>(className: "transcript__body");
+            if (_streamingLabel == null && bubble != null)
+            {
+                _streamingLabel = new Label("");
+                _streamingLabel.AddToClassList("transcript__body");
+                bubble.Add(_streamingLabel);
+            }
+
+            // Create typing dots inside the streaming bubble
+            _streamingTypingDots = new VisualElement();
+            _streamingTypingDots.AddToClassList("typing--inline");
+            for (int i = 0; i < 3; i++)
+            {
+                var dot = new VisualElement();
+                dot.AddToClassList("typing__dot");
+                if (i == 1) dot.AddToClassList("typing__dot--delay-1");
+                if (i == 2) dot.AddToClassList("typing__dot--delay-2");
+                _streamingTypingDots.Add(dot);
+            }
+            if (bubble != null)
+                bubble.Insert(1, _streamingTypingDots); // after meta row, before body label
+
+            StartInlineTypingAnimation();
             ScrollTranscriptToBottom();
         }
 
         private void OnStreamToken(string token)
         {
+            if (_streamingTypingDots != null)
+            {
+                StopInlineTypingAnimation();
+                _streamingTypingDots.RemoveFromHierarchy();
+                _streamingTypingDots = null;
+            }
             if (_streamingLabel != null)
                 _streamingLabel.text += token;
             ScrollTranscriptToBottom();
@@ -1246,16 +1289,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_sendButton != null)
                 _sendButton.SetEnabled(!isSending);
 
-            if (_connectionStatus != null)
-                _connectionStatus.text = isSending
-                    ? LocalizationExtensions.Get("provider.status.generating", "генерация…")
-                    : GetProviderStatusText();
-
-            SetDisplay(_typingIndicator, isSending ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_subtitleBody, isSending ? DisplayStyle.None : DisplayStyle.Flex);
-
-            if (isSending) StartTypingAnimation();
-            else StopTypingAnimation();
 
             RefreshAvatarMotionState();
         }
@@ -1749,8 +1783,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _subtitleRole.text = LocalizationExtensions.Get("chat.role.system", "Система");
             if (_sendButton != null)
                 _sendButton.SetEnabled(false);
-            if (_connectionStatus != null)
-                _connectionStatus.text = LocalizationExtensions.Get("provider.status.none", "нет провайдера");
         }
 
         private async Task<CompanionApp> GetAppAsync()
@@ -5467,6 +5499,34 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ============================================================
+        // Inline typing dots animation (inside streaming bubble)
+        // ============================================================
+
+        private void StartInlineTypingAnimation()
+        {
+            if (_streamingTypingDots == null || _streamingTypingDots.childCount < 3) return;
+            _inlineTypingFrame = 0;
+            _inlineTypingSchedule?.Pause();
+            _inlineTypingSchedule = _streamingTypingDots.schedule.Execute(TickInlineTyping).Every(380);
+        }
+
+        private void StopInlineTypingAnimation()
+        {
+            _inlineTypingSchedule?.Pause();
+            _inlineTypingSchedule = null;
+        }
+
+        private void TickInlineTyping()
+        {
+            if (_streamingTypingDots == null || _streamingTypingDots.childCount < 3) return;
+            int step = _inlineTypingFrame % 3;
+            SetDotOpacity(_streamingTypingDots[0], step == 0 ? 1f : 0.3f);
+            SetDotOpacity(_streamingTypingDots[1], step == 1 ? 1f : 0.3f);
+            SetDotOpacity(_streamingTypingDots[2], step == 2 ? 1f : 0.3f);
+            _inlineTypingFrame++;
+        }
+
+        // ============================================================
         // Breathing animation
         // ============================================================
 
@@ -5764,6 +5824,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                         AddStreamingBubble();
                         await chat.RegenerateAsync(OnStreamToken);
                         _streamingLabel = null;
+                        StopInlineTypingAnimation();
+                        if (_streamingTypingDots != null)
+                        {
+                            _streamingTypingDots.RemoveFromHierarchy();
+                            _streamingTypingDots = null;
+                        }
                     }
                     else
                     {

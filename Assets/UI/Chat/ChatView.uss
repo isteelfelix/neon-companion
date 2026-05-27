@@ -611,3 +611,28 @@
     border-color: rgba(239, 100, 100, 0.30);
     color: #ef6464;
 }
+
+/* ---- Inline typing dots (inside streaming bubble) ---- */
+
+.typing--inline {
+    flex-direction: row;
+    padding: 8px 12px;
+}
+
+.typing--inline .typing__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.4);
+    margin-right: 4px;
+    transition-property: opacity;
+    transition-duration: 0.4s;
+}
+
+.typing--inline .typing__dot--delay-1 {
+    opacity: 0.3;
+}
+
+.typing--inline .typing__dot--delay-2 {
+    opacity: 0.15;
+}
