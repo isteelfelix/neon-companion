@@ -225,6 +225,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _sendButton;
         private Button _summarizeButton;
         private Button _searchButton;
+        private Button _toggleLeftPanelBtn;
+        private Button _toggleRightPanelBtn;
         private Button _moreButton;
         private Button _newSessionButton;
         private Button _settingsOpenFolderBtn;
@@ -267,6 +269,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _attachButton;
         private Button _avatarUploadBtn;
         private Button _avatarOpenFolderBtn;
+        private bool _leftPanelVisible = true;
+        private bool _rightPanelVisible = true;
         private VisualElement _avatarUploadTile;
         private TextField _editName;
         private TextField _editBaseUrl;
@@ -550,6 +554,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sendButton = root.Q<Button>("send-button");
             _summarizeButton = root.Q<Button>("summarize-btn");
             _searchButton = root.Q<Button>("search-btn");
+            _toggleLeftPanelBtn = root.Q<Button>("toggle-left-panel-btn");
+            _toggleRightPanelBtn = root.Q<Button>("toggle-right-panel-btn");
             _moreButton = root.Q<Button>("more-btn");
             _newSessionButton = root.Q<Button>("new-session-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
@@ -570,6 +576,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _historyPanelSearchBtn = root.Q<Button>("history-panel-search-btn");
             _historyPanelSearchClear = root.Q<Button>("history-panel-search-clear");
             _historyPanelNewSessionButton = root.Q<Button>("history-panel-new-session-btn");
+            UpdatePanelToggleTooltips();
 
             _providersList = root.Q<ScrollView>("providers-list");
             _addProviderButton    = root.Q<Button>("add-provider-btn");
@@ -743,6 +750,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_sendButton, OnSendClicked);
             RegisterClick(_summarizeButton, OnSummarizeClicked);
             RegisterClick(_searchButton, OnSearchClicked);
+            RegisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
+            RegisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
             RegisterClick(_moreButton, OnMoreClicked);
             RegisterClick(_newSessionButton, OnNewSessionClicked);
             RegisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
@@ -854,6 +863,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_sendButton, OnSendClicked);
             UnregisterClick(_summarizeButton, OnSummarizeClicked);
             UnregisterClick(_searchButton, OnSearchClicked);
+            UnregisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
+            UnregisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
             UnregisterClick(_moreButton, OnMoreClicked);
             UnregisterClick(_newSessionButton, OnNewSessionClicked);
             UnregisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
@@ -1312,6 +1323,39 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnMoreClicked()
         {
             ShowSettings();
+        }
+
+        private void OnToggleLeftPanel()
+        {
+            _leftPanelVisible = !_leftPanelVisible;
+            SetDisplay(_railElement, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_railResizeHandle, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+            UpdatePanelToggleTooltips();
+        }
+
+        private void OnToggleRightPanel()
+        {
+            _rightPanelVisible = !_rightPanelVisible;
+            SetDisplay(_avatarPanel, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_resizeHandle, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+            UpdatePanelToggleTooltips();
+        }
+
+        private void UpdatePanelToggleTooltips()
+        {
+            if (_toggleLeftPanelBtn != null)
+            {
+                _toggleLeftPanelBtn.tooltip = _leftPanelVisible
+                    ? LocalizationExtensions.Get("tooltip.panel.left.hide", "Скрыть панель сессий")
+                    : LocalizationExtensions.Get("tooltip.panel.left.show", "Показать панель сессий");
+            }
+
+            if (_toggleRightPanelBtn != null)
+            {
+                _toggleRightPanelBtn.tooltip = _rightPanelVisible
+                    ? LocalizationExtensions.Get("tooltip.panel.right.hide", "Скрыть панель настроек")
+                    : LocalizationExtensions.Get("tooltip.panel.right.show", "Показать панель настроек");
+            }
         }
 
         // ===== Quit / close =====
@@ -3577,6 +3621,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navSettingsLabel?.Localize("tab.settings");
             _navCloseLabel?.Localize("nav.close");
             _testRowLabel?.Localize("providers.test.hint");
+            UpdatePanelToggleTooltips();
             ApplyStaticTemplateLocalization();
         }
 
