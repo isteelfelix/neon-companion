@@ -131,3 +131,4 @@ NeonCompanion.Editor.csproj.lscache
 *.apk
 .voice-brief.txt
 .brief-*.txt
+.claude/
