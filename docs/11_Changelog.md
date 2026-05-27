@@ -2,11 +2,9 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-27
+
 ### Added
-- Базовая структура проекта
-- Документация
-- План MVP
-- Avatar motion research: 2D sprite-sheet baseline для weak PC/mobile и desktop-first 3D realtime path
 - ModelDiscoveryService: кэшированное обнаружение моделей по эндпоинту провайдера
 - NeonDropdown: кастомный UITK компонент, замена DropdownField
 - Модель-пикер в чате (topbar NeonDropdown + overlay-диалог)
@@ -18,11 +16,22 @@
 - Масштабируемый рельс сайдбара (160–400px)
 - Режимы отображения аватара: `AvatarViewMode` (Static, Animated, Volume3D)
 - Обновлённый формат `motion_pack.json` (formatVersion, spriteSheetPath, frameRate, pingPong)
-- Локализация для авто-обнаружения моделей (en/ru)
+- Спрайтшиты для neon: idle, thinking, talking, listening, smile, confused
+- Система плагинов (IPlugin, PluginManager, DLL loading)
+- Донат-система (Buy Me a Coffee, GitHub Sponsors)
+- Диалог подтверждения выхода с настраиваемой горячей клавишей
+- AGENTS.md для AI-агентов
 
 ### Changed
 - Зафиксирован MVP contract для 2D avatar motion: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
-- Документация приведена к одному vocabulary для continuous states и one-shot reactions
+- Убраны неиспользуемые build-скрипты (scripts/build.sh, scripts/release.sh, BuildScript.cs)
+- bundleVersion синхронизирован с VERSION файлом (0.2.0)
+- Company Name: iSteelFelix
+
+### Fixed
+- Авто-обнаружение моделей при открытии редактора провайдера с предзаполненными значениями
+- Сравнение несохранённых изменений через SameText
+- Тест соединения использует TestConnectionAsync для получения моделей
 
 ## [0.1.0] - 2026-05-XX
 
