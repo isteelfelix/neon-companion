@@ -195,33 +195,11 @@ namespace NeonCompanion.Runtime.Api
             if (string.IsNullOrWhiteSpace(requestedModel))
                 throw new ArgumentException("Target model is required.", nameof(targetModel));
 
-            string hermesProxyModel = await TryGetHermesProxyModelAsync(provider, cancellationToken);
-            if (string.IsNullOrWhiteSpace(hermesProxyModel))
-            {
-                return new ModelSwitchResult(
-                    success: true,
-                    requestedModel: requestedModel,
-                    appliedModel: requestedModel,
-                    providerSessionId: null,
-                    isHermes: false);
-            }
-
-            if (string.Equals(requestedModel, hermesProxyModel, StringComparison.OrdinalIgnoreCase))
-            {
-                return new ModelSwitchResult(
-                    success: true,
-                    requestedModel: requestedModel,
-                    appliedModel: hermesProxyModel,
-                    providerSessionId: null,
-                    isHermes: true);
-            }
-
             return new ModelSwitchResult(
                 success: true,
                 requestedModel: requestedModel,
                 appliedModel: requestedModel,
-                providerSessionId: providerSessionId,
-                isHermes: true);
+                providerSessionId: null);
         }
 
         private static IReadOnlyList<string> ParseModelIds(string json)
@@ -604,41 +582,10 @@ namespace NeonCompanion.Runtime.Api
             AiChatRequest request,
             CancellationToken cancellationToken)
         {
-            string requestedModel = request?.model?.Trim();
-            string providerSessionId = request?.providerSessionId?.Trim();
-
-            if (string.IsNullOrWhiteSpace(requestedModel))
-            {
-                return new RequestRoutingInfo
-                {
-                    Model = request?.model,
-                    ProviderSessionId = providerSessionId
-                };
-            }
-
-            string hermesProxyModel = await TryGetHermesProxyModelAsync(provider, cancellationToken);
-            if (string.IsNullOrWhiteSpace(hermesProxyModel))
-            {
-                return new RequestRoutingInfo
-                {
-                    Model = request.model,
-                    ProviderSessionId = providerSessionId
-                };
-            }
-
-            if (string.Equals(requestedModel, hermesProxyModel, StringComparison.OrdinalIgnoreCase))
-            {
-                return new RequestRoutingInfo
-                {
-                    Model = hermesProxyModel,
-                    ProviderSessionId = providerSessionId
-                };
-            }
-
             return new RequestRoutingInfo
             {
-                Model = hermesProxyModel,
-                ProviderSessionId = providerSessionId
+                Model = request.model,
+                ProviderSessionId = request?.providerSessionId?.Trim()
             };
         }
 
