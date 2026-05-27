@@ -3756,9 +3756,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _settingsStoragePath.text = Application.persistentDataPath;
 
                 if (_settingsVersion != null)
-                    _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
+                    _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.2.0" : Application.version;
                 if (_brandVersion != null)
-                    _brandVersion.text = string.IsNullOrEmpty(Application.version) ? "0.1.0" : Application.version;
+                    _brandVersion.text = string.IsNullOrEmpty(Application.version) ? "0.2.0" : Application.version;
                 RefreshPluginStatus(app);
 
                 SetAvatarShape(s.avatarShape ?? "round", save: false);

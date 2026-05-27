@@ -159,7 +159,7 @@
 
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Версия" class="settings-row__name" />
-                    <ui:Label name="settings-version" text="0.1.0" class="settings-row__value-mono" />
+                    <ui:Label name="settings-version" text="0.2.0" class="settings-row__value-mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Лицензия" class="settings-row__name" />
