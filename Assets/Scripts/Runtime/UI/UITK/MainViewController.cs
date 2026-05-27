@@ -12,7 +12,6 @@ using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Donation;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
-using NeonCompanion.Runtime.Plugins;
 using NeonCompanion.Runtime.UI.Avatars;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
@@ -70,39 +69,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _typingIndicator;
 
         // ===== Quit / close =====
-        private Button _navCloseButton;
         private Label _navCloseLabel;
-        private VisualElement _quitOverlay;
-        private Label _quitDialogTitle;
-        private Label _quitDialogBody;
-        private Button _quitConfirmBtn;
-        private Button _quitCancelBtn;
-        private Button _settingsHotkeyCaptureBtn;
-        private bool _isCapturingHotkey;
-        private bool _quitDialogVisible;
-        private string _closeHotkey = "Escape";
 
-        // ===== Settings page =====
-        private NeonDropdown _settingsLanguage;
-        private Toggle _settingsHistory;
-        private Toggle _settingsStreaming;
-        private Toggle _settingsEnterToSend;
-        private Toggle _settingsSystemPrompt;
-        private Toggle _settingsVoiceIo;
-        private Toggle _settingsEncryptKeys;
-        private Toggle _settingsMaskLogs;
-        private Label _settingsStoragePath;
-        private Label _settingsVersion;
-        private Label _settingsPluginsSummary;
-        private Label _settingsPluginsConfig;
-        private VisualElement _settingsPluginsList;
-        private Label _brandVersion;
-        private Button _shapeRound;
-        private Button _shapeSquare;
-        private Button _shapeHex;
-        private Toggle _settingsShowHalo;
-        private Toggle _settingsBreathing;
-        private string _avatarShape = "round";
+        private readonly SettingsController _settingsController = new SettingsController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -195,17 +164,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _thinkingText;
         private readonly ToolCallUiHelper _toolCallUiHelper = new ToolCallUiHelper();
 
-        // ===== Breathing animation =====
-        private IVisualElementScheduledItem _breathSchedule;
-        private long _breathStartMs;
-        private IVisualElementScheduledItem _clearDataConfirmResetSchedule;
-
-        // ===== Themes preview =====
-        private VisualElement _themesPreviewHalo;
-        private VisualElement _themesPreviewAvatar;
-        private long _themesBreathStartMs;
-        private IVisualElementScheduledItem _themesBreathSchedule;
-
         private Label _topbarTitle;
         private Label _topbarSubtitle;
         private NeonDropdown _topbarModelPicker;
@@ -230,15 +188,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _toggleRightPanelBtn;
         private Button _moreButton;
         private Button _newSessionButton;
-        private Button _settingsOpenFolderBtn;
-        private Button _settingsExportBtn;
-        private Button _settingsClearChatsBtn;
-        private Button _settingsClearBtn;
         private Button _scrollBottomBtn;
-        private Label _settingsClearBtnText;
-        private Button _settingsGithubBtn;
-        private Button _settingsDocsBtn;
-        private Button _settingsDonateBtn;
         private Button _testProviderBtn;
         private VisualElement _testRow;
         private Label _testRowLabel;
@@ -301,8 +251,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ProviderConfig _editingProvider;
         private ProviderConfig _editingProviderSource;
         private bool _cancelPending;
-        private bool _clearDataConfirmPending;
-        private long _clearDataConfirmExpiresAtMs;
         private string _chatSubtitle = string.Empty;
         private string _currentSessionId = string.Empty;
         private string _currentSessionTitle = string.Empty;
@@ -316,8 +264,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IVoiceService _voiceService;
         private VoiceInputManager _voiceInputManager;
         private VoiceOutputManager _voiceOutputManager;
-        private IDonationService _donationService;
-        private ILocalizationService _localizationService;
         private bool _isRefreshingLocalizedUi;
         private bool _voiceBoundToChat;
         private AvatarMotionState _avatarMotionState = AvatarMotionState.Idle;
@@ -457,7 +403,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             Bind(document.rootVisualElement);
             RegisterCallbacks();
-            _ = BindLocalizationEventsAsync();
+            _ = _settingsController.BindLocalizationEventsAsync();
             ShowChat();
 
             _ = RefreshAsync();
@@ -472,13 +418,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_voiceBoundToChat && _chatService != null && _voiceOutputManager != null)
                 _voiceOutputManager.UnbindChat(_chatService);
             _voiceBoundToChat = false;
-            UnbindLocalizationEvents();
+            _settingsController.UnbindLocalizationEvents();
             _avatarAnimator?.Stop();
             _avatar3DService?.Unload();
-            _clearDataConfirmResetSchedule?.Pause();
-            _clearDataConfirmResetSchedule = null;
-            _themesBreathSchedule?.Pause();
-            _themesBreathSchedule = null;
             foreach (var tex in _customTextures.Values)
                 if (tex != null) UnityEngine.Object.Destroy(tex);
             _customTextures.Clear();
@@ -607,43 +549,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             ApplyLocalizedStaticTexts();
 
-            // Settings action buttons
-            _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
-            _settingsExportBtn     = root.Q<Button>("settings-export-btn");
-            _settingsClearChatsBtn = root.Q<Button>("settings-clear-chats-btn");
-            _settingsClearBtn      = root.Q<Button>("settings-clear-btn");
-            _settingsClearBtnText  = _settingsClearBtn?.Q<Label>();
-            _settingsGithubBtn     = root.Q<Button>("settings-github-btn");
-            _settingsDocsBtn       = root.Q<Button>("settings-docs-btn");
-            _settingsDonateBtn     = root.Q<Button>("settings-donate-btn");
-            _donationService = null;
-            if (_app != null)
-                _app.Services.TryGet(out _donationService);
-            _settingsDonateBtn?.SetEnabled(_donationService?.IsDonationSupported == true);
             _testProviderBtn = root.Q<Button>("test-provider-btn");
             _testRow         = root.Q<VisualElement>("test-row");
             _testRowLabel    = root.Q<Label>("test-row-label");
-
-            // Settings page controls
-            _settingsLanguage    = root.Q<NeonDropdown>("settings-language");
-            _settingsHistory     = root.Q<Toggle>("settings-save-history");
-            _settingsStreaming    = root.Q<Toggle>("settings-streaming");
-            _settingsEnterToSend = root.Q<Toggle>("settings-enter-to-send");
-            _settingsSystemPrompt = root.Q<Toggle>("settings-system-prompt");
-            _settingsVoiceIo = root.Q<Toggle>("settings-voice-io");
-            _settingsEncryptKeys = root.Q<Toggle>("settings-encrypt-keys");
-            _settingsMaskLogs    = root.Q<Toggle>("settings-mask-logs");
-            _settingsStoragePath = root.Q<Label>("settings-storage-path");
-            _settingsVersion     = root.Q<Label>("settings-version");
-            _settingsPluginsSummary = root.Q<Label>("settings-plugins-summary");
-            _settingsPluginsConfig = root.Q<Label>("settings-plugins-config");
-            _settingsPluginsList = root.Q<VisualElement>("settings-plugins-list");
-            _brandVersion       = root.Q<Label>("brand-version");
-            _shapeRound  = root.Q<Button>("shape-round");
-            _shapeSquare = root.Q<Button>("shape-square");
-            _shapeHex    = root.Q<Button>("shape-hex");
-            _settingsShowHalo   = root.Q<Toggle>("settings-show-halo");
-            _settingsBreathing  = root.Q<Toggle>("settings-breathing");
 
             // Avatar elements
             _avatarArt       = root.Q<VisualElement>("avatar-art");
@@ -655,8 +563,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarShade     = _avatarCircle?.Q<VisualElement>(className: "avatar__shade");
             _avatarLetter    = _avatarCircle?.Q<Label>(className: "avatar__letter");
             _previewHero  = root.Q<VisualElement>("preview-hero");
-            _themesPreviewHalo   = root.Q<VisualElement>("themes-preview-halo");
-            _themesPreviewAvatar = root.Q<VisualElement>("themes-preview-avatar");
             _previewTitle   = root.Q<Label>("preview-title");
             _previewTag     = root.Q<Label>("preview-tag");
             _previewPersona = root.Q<Label>("preview-persona");
@@ -718,21 +624,49 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _typingDot3 = dots.Count > 2 ? dots[2] : null;
             }
 
-            _navCloseButton = root.Q<Button>("nav-close");
-            _navCloseLabel  = root.Q<Label>("nav-close-label");
-            _quitOverlay    = root.Q<VisualElement>("quit-overlay");
-            _quitDialogTitle = root.Q<Label>("quit-dialog-title");
-            _quitDialogBody  = root.Q<Label>("quit-dialog-body");
-            _quitConfirmBtn  = root.Q<Button>("quit-confirm-btn");
-            _quitCancelBtn   = root.Q<Button>("quit-cancel-btn");
-            _settingsHotkeyCaptureBtn = root.Q<Button>("settings-hotkey-capture");
-            SetDisplay(_quitOverlay, DisplayStyle.None);
+            _navCloseLabel = root.Q<Label>("nav-close-label");
+
+            _settingsController.Init(root, BuildSettingsControllerDeps(), _avatarCircle);
 
             SetDisplay(_providerEditPanel, DisplayStyle.None);
             SetSending(false);
-            UpdateClearDataButtonState();
-            _ = LoadSettingsAsync();
             _isBound = true;
+        }
+
+        private SettingsControllerDeps BuildSettingsControllerDeps()
+        {
+            return new SettingsControllerDeps
+            {
+                GetApp            = GetAppAsync,
+                GetChatService    = GetChatServiceAsync,
+                GetChatServiceSync = () => _chatService,
+                IsActiveAndEnabled = () => isActiveAndEnabled,
+                IsBound           = () => _isBound,
+                GetActiveAvatarId = () => _activeAvatarId,
+                SetActiveAvatarId = id => _activeAvatarId = id,
+                RefreshVoiceControls  = RefreshVoiceControls,
+                RequestRefreshLocalizedUi = RefreshLocalizedUiAsync,
+                RefreshCustomAvatarGallery   = RefreshCustomAvatarGallery,
+                RefreshBuiltInAvatarTileLabels = RefreshBuiltInAvatarTileLabels,
+                ApplyAvatarFilter    = ApplyAvatarFilter,
+                ApplyAvatarArt       = ApplyAvatarArt,
+                SyncGallerySelection = SyncGallerySelection,
+                ShowHistoryState     = ShowHistoryState,
+                RequestRenderMessages = () => RenderMessages(null),
+                AddSystemMessage    = AddSystemMessage,
+                SetNoProviderState  = SetNoProviderState,
+                ResetServiceCache   = () => { _app = null; _chatService = null; },
+                ClearSessionsListUi = () =>
+                {
+                    _sessionsList?.Clear();
+                    _historySessionsList?.Clear();
+                    if (_navChatCount != null) _navChatCount.text = "0";
+                },
+                ResetProvidersCountUi = () => { if (_navProvidersCount != null) _navProvidersCount.text = "0"; },
+                SetCurrentSessionId   = id => _currentSessionId = id,
+                SetCurrentSessionTitle = title => _currentSessionTitle = title,
+                SetSubtitleBody = text => { if (_subtitleBody != null) _subtitleBody.text = text; }
+            };
         }
 
         private void AddNav(VisualElement navItem)
@@ -771,14 +705,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_importProviderButton, OnImportProviderClicked);
             RegisterClick(_saveProviderButton, OnSaveProviderClicked);
             RegisterClick(_cancelEditButton, OnCancelEditClicked);
-            RegisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
-            RegisterClick(_settingsExportBtn, OnExportChatsClicked);
-            RegisterClick(_settingsClearChatsBtn, OnClearChatsClicked);
-            RegisterClick(_settingsClearBtn, OnClearDataClicked);
             RegisterClick(_scrollBottomBtn, OnScrollBottomClicked);
-            RegisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
-            RegisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
-            RegisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
             RegisterClick(_testProviderBtn, OnTestProviderClicked);
             RegisterClick(_copyButton, OnCopyLastMessageClicked);
             RegisterClick(_regenerateButton, OnRegenerateClicked);
@@ -815,15 +742,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _panelResizeHandler.RegisterCallbacks();
+            _settingsController.RegisterCallbacks();
 
-            RegisterClick(_navCloseButton, OnNavCloseClicked);
-            RegisterClick(_quitConfirmBtn, OnQuitConfirmed);
-            RegisterClick(_quitCancelBtn,  OnQuitCanceled);
-            RegisterClick(_settingsHotkeyCaptureBtn, OnHotkeyCaptureClicked);
-            if (_root != null)
-                _root.RegisterCallback<KeyDownEvent>(OnGlobalKeyDown, TrickleDown.TrickleDown);
-
-            RegisterSettingsCallbacks();
             RegisterAvatarGalleryCallbacks();
             RegisterClick(_previewApplyBtn, OnPreviewApplyClicked);
             RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
@@ -867,14 +787,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_addProviderButton, OnAddProviderClicked);
             UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
-            UnregisterClick(_settingsOpenFolderBtn, OnOpenFolderClicked);
-            UnregisterClick(_settingsExportBtn, OnExportChatsClicked);
-            UnregisterClick(_settingsClearChatsBtn, OnClearChatsClicked);
-            UnregisterClick(_settingsClearBtn, OnClearDataClicked);
             UnregisterClick(_scrollBottomBtn, OnScrollBottomClicked);
-            UnregisterClick(_settingsGithubBtn, OnSettingsGitHubClicked);
-            UnregisterClick(_settingsDocsBtn, OnSettingsDocsClicked);
-            UnregisterClick(_settingsDonateBtn, OnSettingsDonateClicked);
             UnregisterClick(_testProviderBtn, OnTestProviderClicked);
             UnregisterClick(_listenButton, OnListenClicked);
             UnregisterClick(_attachButton, OnAttachClicked);
@@ -903,23 +816,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editApiKey.UnregisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
             if (_editModel != null)
                 _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
-            if (_settingsLanguage != null)
-                _settingsLanguage.UnregisterCallback<ChangeEvent<string>>(OnSettingsLanguageChanged);
-
             if (_messageInput != null)
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
 
             _panelResizeHandler.UnregisterCallbacks();
-
-            UnregisterClick(_navCloseButton, OnNavCloseClicked);
-            UnregisterClick(_quitConfirmBtn, OnQuitConfirmed);
-            UnregisterClick(_quitCancelBtn,  OnQuitCanceled);
-            UnregisterClick(_settingsHotkeyCaptureBtn, OnHotkeyCaptureClicked);
-            if (_root != null)
-                _root.UnregisterCallback<KeyDownEvent>(OnGlobalKeyDown, TrickleDown.TrickleDown);
+            _settingsController.UnregisterCallbacks();
 
             _typingSchedule?.Pause();
-            _breathSchedule?.Pause();
             _scrollBottomButtonSchedule?.Pause();
             _scrollBottomButtonSchedule = null;
         }
@@ -1092,7 +995,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
                 return;
 
-            bool enterToSend = _settingsEnterToSend == null || _settingsEnterToSend.value;
+            bool enterToSend = _settingsController.EnterToSend;
             bool hasCtrl = evt.ctrlKey || evt.commandKey;
 
             if (enterToSend)
@@ -1142,7 +1045,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
                 }
 
-                bool streaming = _settingsStreaming?.value ?? false;
+                bool streaming = _settingsController.UseStreaming;
                 chat.UseStreaming = streaming;
 
                 RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message, pendingAttachments));
@@ -1409,131 +1312,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        // ===== Quit / close =====
-
-        private void OnNavCloseClicked() => ShowQuitDialog();
-
-        private void ShowQuitDialog()
-        {
-            if (_quitDialogVisible || _quitOverlay == null) return;
-            _quitDialogVisible = true;
-            if (_quitDialogTitle != null)
-                _quitDialogTitle.text = LocalizationExtensions.Get("quit.dialog.title", "Закрыть приложение?");
-            if (_quitDialogBody != null)
-                _quitDialogBody.text = LocalizationExtensions.Get("quit.dialog.body", "Активные соединения будут прерваны.");
-            if (_quitConfirmBtn != null)
-                _quitConfirmBtn.Q<Label>()?.Localize("nav.close");
-            _quitCancelBtn?.Localize("common.cancel");
-            SetDisplay(_quitOverlay, DisplayStyle.Flex);
-        }
-
-        private void HideQuitDialog()
-        {
-            if (!_quitDialogVisible || _quitOverlay == null) return;
-            _quitDialogVisible = false;
-            SetDisplay(_quitOverlay, DisplayStyle.None);
-        }
-
-        private void OnQuitConfirmed()
-        {
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
-        }
-
-        private void OnQuitCanceled() => HideQuitDialog();
-
-        private void OnGlobalKeyDown(KeyDownEvent evt)
-        {
-            if (_isCapturingHotkey)
-            {
-                if (IsPureModifier(evt.keyCode)) return;
-                string captured = BuildHotkeyString(evt);
-                _closeHotkey = captured;
-                ExitCaptureMode(captured);
-                SaveSettings();
-                evt.StopPropagation();
-                return;
-            }
-
-            if (_quitDialogVisible)
-            {
-                bool isEnter = evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
-                if (isEnter) OnQuitConfirmed();
-                else HideQuitDialog();
-                evt.StopPropagation();
-                return;
-            }
-
-            if (MatchesHotkey(evt, _closeHotkey))
-            {
-                ShowQuitDialog();
-                evt.StopPropagation();
-            }
-        }
-
-        private void OnHotkeyCaptureClicked()
-        {
-            if (_isCapturingHotkey) { ExitCaptureMode(_closeHotkey); return; }
-            EnterCaptureMode();
-        }
-
-        private void EnterCaptureMode()
-        {
-            _isCapturingHotkey = true;
-            if (_settingsHotkeyCaptureBtn != null)
-            {
-                _settingsHotkeyCaptureBtn.text = LocalizationExtensions.Get("settings.hotkey.capturing", "Нажми клавишу…");
-                _settingsHotkeyCaptureBtn.AddToClassList("btn--hotkey-capture--active");
-            }
-        }
-
-        private void ExitCaptureMode(string hotkey)
-        {
-            _isCapturingHotkey = false;
-            if (_settingsHotkeyCaptureBtn != null)
-            {
-                _settingsHotkeyCaptureBtn.text = hotkey;
-                _settingsHotkeyCaptureBtn.RemoveFromClassList("btn--hotkey-capture--active");
-            }
-        }
-
-        private static bool IsPureModifier(KeyCode key)
-        {
-            return key == KeyCode.LeftControl  || key == KeyCode.RightControl
-                || key == KeyCode.LeftAlt      || key == KeyCode.RightAlt
-                || key == KeyCode.LeftShift    || key == KeyCode.RightShift
-                || key == KeyCode.LeftCommand  || key == KeyCode.RightCommand
-                || key == KeyCode.LeftWindows  || key == KeyCode.RightWindows;
-        }
-
-        private static string BuildHotkeyString(KeyDownEvent evt)
-        {
-            var parts = new List<string>(4);
-            if ((evt.modifiers & EventModifiers.Control) != 0) parts.Add("Control");
-            if ((evt.modifiers & EventModifiers.Alt)     != 0) parts.Add("Alt");
-            if ((evt.modifiers & EventModifiers.Shift)   != 0) parts.Add("Shift");
-            parts.Add(evt.keyCode.ToString());
-            return string.Join("+", parts);
-        }
-
-        private static bool MatchesHotkey(KeyDownEvent evt, string hotkey)
-        {
-            if (string.IsNullOrWhiteSpace(hotkey)) return false;
-            var parts = hotkey.Split('+');
-            string keyName = parts[parts.Length - 1];
-            if (!Enum.TryParse<KeyCode>(keyName, out KeyCode keyCode) || evt.keyCode != keyCode)
-                return false;
-            bool needsCtrl  = Array.IndexOf(parts, "Control") >= 0;
-            bool needsAlt   = Array.IndexOf(parts, "Alt")     >= 0;
-            bool needsShift = Array.IndexOf(parts, "Shift")   >= 0;
-            return needsCtrl  == ((evt.modifiers & EventModifiers.Control) != 0)
-                && needsAlt   == ((evt.modifiers & EventModifiers.Alt)     != 0)
-                && needsShift == ((evt.modifiers & EventModifiers.Shift)   != 0);
-        }
-
         private void OnListenClicked()
         {
             var messages = _chatService?.CurrentChatViewModel?.Messages;
@@ -1614,7 +1392,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private bool IsVoiceEnabledBySettings()
         {
-            return _settingsVoiceIo?.value ?? false;
+            return _settingsController.VoiceIoEnabled;
         }
 
         private void RefreshVoiceControls()
@@ -1765,10 +1543,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 var app = await GetAppAsync();
                 if (!_isBound || app == null) return;
-                await BindLocalizationEventsAsync();
-                if (_donationService == null)
-                    app.Services.TryGet(out _donationService);
-                _settingsDonateBtn?.SetEnabled(_donationService?.IsDonationSupported == true);
+                await _settingsController.BindLocalizationEventsAsync();
+                IDonationService donationService = null;
+                app.Services.TryGet(out donationService);
+                _settingsController.SetDonationService(donationService);
 
                 var providers = await app.ProviderManager.GetAllProvidersAsync();
                 if (providers.Count == 0)
@@ -3402,7 +3180,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 else
                 {
-                    await SaveSettingsAsync();
+                    _settingsController.SaveSettings();
                 }
 
                 _currentSessionId = chat.CurrentSessionId ?? string.Empty;
@@ -3631,35 +3409,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             return LocalizationExtensions.Get("providers.location.remote", "удалённо");
         }
 
-        // ============================================================
-        // Settings page
-        // ============================================================
-
-        private void RegisterSettingsCallbacks()
-        {
-            RegisterClick(_shapeRound,  () => SetAvatarShape("round"));
-            RegisterClick(_shapeSquare, () => SetAvatarShape("square"));
-            RegisterClick(_shapeHex,    () => SetAvatarShape("hex"));
-
-            RegisterToggleChanged(_settingsHistory,      _ => SaveSettings());
-            RegisterToggleChanged(_settingsStreaming,     _ => SaveSettings());
-            RegisterToggleChanged(_settingsEnterToSend,   _ => SaveSettings());
-            RegisterToggleChanged(_settingsSystemPrompt, _ => SaveSettings());
-            RegisterToggleChanged(_settingsVoiceIo,      _ => { SaveSettings(); RefreshVoiceControls(); });
-            RegisterToggleChanged(_settingsEncryptKeys,  _ => SaveSettings());
-            RegisterToggleChanged(_settingsMaskLogs,     _ => SaveSettings());
-            RegisterToggleChanged(_settingsShowHalo,    v => { ApplyHaloVisibility(v); SaveSettings(); });
-            RegisterToggleChanged(_settingsBreathing,   v => { ApplyBreathingAnimation(v); SaveSettings(); });
-
-            if (_settingsLanguage != null)
-                _settingsLanguage.RegisterCallback<ChangeEvent<string>>(OnSettingsLanguageChanged);
-        }
-
-        private void OnSettingsLanguageChanged(ChangeEvent<string> evt)
-        {
-            OnLanguageSettingChanged(evt?.newValue);
-        }
-
         private void ApplyLocalizedStaticTexts()
         {
             _navChatLabel?.Localize("tab.chat");
@@ -3674,62 +3423,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             ApplyStaticTemplateLocalization();
         }
 
-        private void OnLanguageSettingChanged(string selectedValue)
-        {
-            string languageCode = ResolveLanguageCode(selectedValue);
-            _ = ApplyLanguageRuntimeAsync(languageCode);
-            SaveSettings();
-        }
-
-        private async Task ApplyLanguageRuntimeAsync(string languageCode)
-        {
-            var app = await GetAppAsync();
-            if (app == null)
-                return;
-
-            if (app.Services.TryGet<ILocalizationService>(out var localization) && localization != null)
-            {
-                localization.SetLanguage(languageCode);
-                LocalizationExtensions.SetLocalizationService(localization);
-                await RefreshLocalizedUiAsync();
-            }
-        }
-
-        private async Task BindLocalizationEventsAsync()
-        {
-            var app = await GetAppAsync();
-            if (app == null)
-                return;
-
-            if (!app.Services.TryGet<ILocalizationService>(out var localization) || localization == null)
-                return;
-
-            if (ReferenceEquals(_localizationService, localization))
-                return;
-
-            UnbindLocalizationEvents();
-            _localizationService = localization;
-            LocalizationExtensions.SetLocalizationService(localization);
-            _localizationService.LanguageChanged += OnLocalizationLanguageChanged;
-        }
-
-        private void UnbindLocalizationEvents()
-        {
-            if (_localizationService == null)
-                return;
-
-            _localizationService.LanguageChanged -= OnLocalizationLanguageChanged;
-            _localizationService = null;
-        }
-
-        private void OnLocalizationLanguageChanged()
-        {
-            if (!isActiveAndEnabled || !_isBound)
-                return;
-
-            _ = RefreshLocalizedUiAsync();
-        }
-
         private async Task RefreshLocalizedUiAsync()
         {
             if (!_isBound || _isRefreshingLocalizedUi)
@@ -3741,13 +3434,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ApplyLocalizedStaticTexts();
                 ApplyStaticTemplateLocalization();
 
-                if (_settingsLanguage != null)
-                {
-                    string currentLanguage = _localizationService?.CurrentLanguage ?? ResolveLanguageCode(_settingsLanguage.value);
-                    _settingsLanguage.SetValueWithoutNotify(currentLanguage == "en"
-                        ? LocalizationExtensions.Get("settings.language.english", "English")
-                        : LocalizationExtensions.Get("settings.language.russian", "Русский"));
-                }
+                _settingsController.RefreshLanguageDropdown();
 
                 if (_previewPersona != null)
                     _previewPersona.text = AvatarPersonaText(_activeAvatarId);
@@ -3755,14 +3442,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 UpdateAvatarActionButtons(_activeAvatarId);
                 RefreshBuiltInAvatarTileLabels();
                 UpdateAvatarFilterCounts();
-                UpdateClearDataButtonState();
+                _settingsController.UpdateClearDataButtonState();
 
                 var app = await GetAppAsync();
                 if (!_isBound)
                     return;
 
                 if (app != null)
-                    RefreshPluginStatus(app);
+                    _settingsController.RefreshPluginStatus(app);
 
                 var chat = await GetChatServiceAsync();
                 if (!_isBound)
@@ -3871,278 +3558,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             return LocalizationExtensions.Get(key, currentText);
         }
 
-        private static string ResolveLanguageCode(string languageValue)
-        {
-            if (string.IsNullOrWhiteSpace(languageValue))
-                return "ru";
-
-            return languageValue.Trim().Equals("english", StringComparison.OrdinalIgnoreCase)
-                ? "en"
-                : "ru";
-        }
-
-        private static void RegisterToggleChanged(Toggle toggle, Action<bool> handler)
-        {
-            if (toggle != null)
-                toggle.RegisterCallback<ChangeEvent<bool>>(evt => handler(evt.newValue));
-        }
-
-        private async Task LoadSettingsAsync()
-        {
-            try
-            {
-                var app = await GetAppAsync();
-                if (!_isBound || app == null) return;
-
-                var s = app.Settings.Load() ?? new AppSettings();
-                var availableAvatars = app.Avatars.GetAll();
-                string resolvedAvatarId = string.IsNullOrEmpty(s.activeAvatarId) ? "neon" : s.activeAvatarId;
-                bool knownAvatar = Array.IndexOf(BuiltInAvatarIds, resolvedAvatarId) >= 0 ||
-                                   availableAvatars.Any(a => a != null && a.id == resolvedAvatarId);
-                if (!knownAvatar)
-                    resolvedAvatarId = "neon";
-
-                _activeAvatarId = resolvedAvatarId;
-
-                _settingsHistory?.SetValueWithoutNotify(s.saveChatHistory);
-                _settingsStreaming?.SetValueWithoutNotify(s.streaming);
-                _settingsEnterToSend?.SetValueWithoutNotify(s.enterToSend);
-                _settingsSystemPrompt?.SetValueWithoutNotify(s.useSystemPrompt);
-                _settingsVoiceIo?.SetValueWithoutNotify(s.voiceIOEnabled);
-                _settingsEncryptKeys?.SetValueWithoutNotify(s.encryptKeys);
-                _settingsMaskLogs?.SetValueWithoutNotify(s.maskLogs);
-                _settingsShowHalo?.SetValueWithoutNotify(s.showHalo);
-                _settingsBreathing?.SetValueWithoutNotify(s.breathingAnimation);
-
-                if (_settingsLanguage != null)
-                    _settingsLanguage.SetValueWithoutNotify(s.language == "en"
-                        ? LocalizationExtensions.Get("settings.language.english", "English")
-                        : LocalizationExtensions.Get("settings.language.russian", "Русский"));
-
-                await ApplyLanguageRuntimeAsync(s.language == "en" ? "en" : "ru");
-
-                if (_settingsStoragePath != null)
-                    _settingsStoragePath.text = Application.persistentDataPath;
-
-                if (_settingsVersion != null)
-                    _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.2.0" : Application.version;
-                if (_brandVersion != null)
-                    _brandVersion.text = string.IsNullOrEmpty(Application.version) ? "0.2.0" : Application.version;
-                RefreshPluginStatus(app);
-
-                SetAvatarShape(s.avatarShape ?? "round", save: false);
-                ApplyHaloVisibility(s.showHalo);
-                RefreshCustomAvatarGallery(app);
-                RefreshBuiltInAvatarTileLabels();
-                ApplyAvatarFilter();
-                ApplyAvatarArt(_activeAvatarId);
-                SyncGallerySelection(_activeAvatarId);
-                ApplyBreathingAnimation(s.breathingAnimation);
-
-                if (!string.Equals(s.activeAvatarId, _activeAvatarId, StringComparison.Ordinal))
-                {
-                    s.activeAvatarId = _activeAvatarId;
-                    app.Settings.Save(s);
-                }
-
-                await SyncActiveAvatarSystemPromptAsync(app, s);
-                _closeHotkey = s.closeHotkey ?? "Escape";
-                if (_settingsHotkeyCaptureBtn != null)
-                    _settingsHotkeyCaptureBtn.text = _closeHotkey;
-
-                RefreshVoiceControls();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void SaveSettings()
-        {
-            _ = SaveSettingsAsync();
-        }
-
-        private void RefreshPluginStatus(CompanionApp app)
-        {
-            if (app == null)
-                return;
-
-            if (!app.Services.TryGet<PluginManager>(out var pluginManager) || pluginManager == null)
-            {
-                if (_settingsPluginsSummary != null) _settingsPluginsSummary.text = LocalizationExtensions.Get("plugins.status.not_initialized", "не инициализирован");
-                if (_settingsPluginsConfig != null) _settingsPluginsConfig.text = LocalizationExtensions.Get("plugins.status.no_data", "нет данных");
-                _settingsPluginsList?.Clear();
-                return;
-            }
-
-            var plugins = pluginManager.Plugins;
-            int loaded = 0;
-            int failed = 0;
-            int skipped = 0;
-
-            for (int i = 0; i < plugins.Count; i++)
-            {
-                switch (plugins[i].Status)
-                {
-                    case PluginManager.PluginRuntimeStatus.Loaded:
-                        loaded++;
-                        break;
-                    case PluginManager.PluginRuntimeStatus.Failed:
-                        failed++;
-                        break;
-                    default:
-                        skipped++;
-                        break;
-                }
-            }
-
-            if (_settingsPluginsSummary != null)
-                _settingsPluginsSummary.text = $"loaded={loaded} failed={failed} skipped={skipped}";
-            if (_settingsPluginsConfig != null)
-                _settingsPluginsConfig.text = pluginManager.HasAnyPluginConfigFiles
-                    ? LocalizationExtensions.Get("plugins.config.found", "обнаружены")
-                    : LocalizationExtensions.Get("plugins.config.not_found", "не найдены");
-
-            if (_settingsPluginsList == null)
-                return;
-
-            _settingsPluginsList.Clear();
-            if (plugins.Count == 0)
-            {
-                var empty = new Label(LocalizationExtensions.Get("plugins.empty", "Плагины не найдены в persistentDataPath/Plugins."));
-                empty.AddToClassList("settings-plugin-item");
-                _settingsPluginsList.Add(empty);
-                return;
-            }
-
-            for (int i = 0; i < plugins.Count; i++)
-            {
-                var p = plugins[i];
-                string status = p.Status == PluginManager.PluginRuntimeStatus.Loaded ? "loaded" :
-                    (p.Status == PluginManager.PluginRuntimeStatus.Failed ? "failed" : "skipped");
-                var label = new Label($"{p.Name} ({p.Version}) [{status}] config={(p.HasConfig ? "yes" : "no")}");
-                label.AddToClassList("settings-plugin-item");
-                _settingsPluginsList.Add(label);
-            }
-        }
-
-        private async Task SaveSettingsAsync()
-        {
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null) return;
-
-                var s = app.Settings.Load() ?? new AppSettings();
-
-                if (_settingsHistory != null)      s.saveChatHistory     = _settingsHistory.value;
-                if (_settingsStreaming != null)     s.streaming           = _settingsStreaming.value;
-                if (_settingsEnterToSend != null)   s.enterToSend        = _settingsEnterToSend.value;
-                if (_settingsSystemPrompt != null)  s.useSystemPrompt     = _settingsSystemPrompt.value;
-                if (_settingsVoiceIo != null)       s.voiceIOEnabled      = _settingsVoiceIo.value;
-                if (_settingsEncryptKeys != null)   s.encryptKeys         = _settingsEncryptKeys.value;
-                if (_settingsMaskLogs != null)      s.maskLogs            = _settingsMaskLogs.value;
-                if (_settingsShowHalo != null)      s.showHalo            = _settingsShowHalo.value;
-                if (_settingsBreathing != null)     s.breathingAnimation  = _settingsBreathing.value;
-                if (_settingsLanguage != null)      s.language            = ResolveLanguageCode(_settingsLanguage.value);
-
-                s.avatarShape    = _avatarShape;
-                s.activeAvatarId = _activeAvatarId;
-                s.activeProviderId = _chatService?.CurrentProvider?.id ?? s.activeProviderId;
-                s.closeHotkey    = _closeHotkey;
-
-                app.Settings.Save(s);
-
-                // Propagate runtime flags to services immediately
-                if (_chatService != null)
-                    _chatService.SaveChatHistory = s.saveChatHistory;
-
-                await SyncActiveAvatarSystemPromptAsync(app, s);
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private async Task SyncActiveAvatarSystemPromptAsync(CompanionApp app = null, AppSettings settings = null)
-        {
-            if (_chatService == null)
-                return;
-
-            app ??= await GetAppAsync();
-            if (app == null)
-                return;
-
-            settings ??= app.Settings.Load() ?? new AppSettings();
-            var avatarProfiles = app.Avatars.GetAll();
-            string prompt = app.AvatarService.GetSystemPrompt(_activeAvatarId, avatarProfiles);
-            _chatService.SystemPrompt = settings.useSystemPrompt ? prompt : null;
-        }
-
-        private void SetAvatarShape(string shape, bool save = true)
-        {
-            _avatarShape = shape;
-
-            _shapeRound?.EnableInClassList("seg__btn--active",  shape == "round");
-            _shapeSquare?.EnableInClassList("seg__btn--active", shape == "square");
-            _shapeHex?.EnableInClassList("seg__btn--active",    shape == "hex");
-
-            if (_avatarCircle != null)
-            {
-                _avatarCircle.EnableInClassList("avatar--square", shape == "square");
-                _avatarCircle.EnableInClassList("avatar--hex",    shape == "hex");
-            }
-
-            if (_themesPreviewAvatar != null)
-            {
-                _themesPreviewAvatar.EnableInClassList("themes-preview__avatar--square", shape == "square");
-                _themesPreviewAvatar.EnableInClassList("themes-preview__avatar--hex",    shape == "hex");
-            }
-
-            if (save) SaveSettings();
-        }
-
-        private void ApplyHaloVisibility(bool visible)
-        {
-            var halo = _root?.Q<VisualElement>("avatar-glow");
-            SetDisplay(halo, visible ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_themesPreviewHalo, visible ? DisplayStyle.Flex : DisplayStyle.None);
-        }
-
-        private void ApplyBreathingAnimation(bool enabled)
-        {
-            if (enabled) StartBreathing();
-            else StopBreathing();
-            ApplyThemesPreviewBreathing(enabled);
-        }
-
-        private void ApplyThemesPreviewBreathing(bool enabled)
-        {
-            _themesBreathSchedule?.Pause();
-            _themesBreathSchedule = null;
-
-            if (_themesPreviewAvatar == null) return;
-
-            if (!enabled)
-            {
-                _themesPreviewAvatar.style.scale = new StyleScale(new Scale(new Vector3(1f, 1f, 1f)));
-                return;
-            }
-
-            _themesBreathStartMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            _themesBreathSchedule = _themesPreviewAvatar.schedule.Execute(TickThemesBreath).Every(33);
-        }
-
-        private void TickThemesBreath()
-        {
-            if (_themesPreviewAvatar == null) return;
-            float elapsed = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _themesBreathStartMs) / 1000f;
-            float s = 1f + 0.015f * (float)Math.Sin(elapsed * (2f * (float)Math.PI / 5f));
-            _themesPreviewAvatar.style.scale = new StyleScale(new Scale(new Vector3(s, s, 1f)));
-        }
-
         // ============================================================
         // Avatar gallery
         // ============================================================
@@ -4171,7 +3586,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 SyncGallerySelection("neon");
                 ApplyAvatarArt("neon");
-                SaveSettings();
+                _settingsController.SaveSettings();
             }
             else
             {
@@ -4234,7 +3649,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ? _chatSubtitle.Substring(0, _chatSubtitle.LastIndexOf('·') + 2) + name
                 : _chatSubtitle;
             if (_topbarSubtitle != null) _topbarSubtitle.text = _chatSubtitle;
-            SaveSettings();
+            _settingsController.SaveSettings();
         }
 
         private void OnPreviewApplyClicked()
@@ -4249,9 +3664,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await GetAppAsync();
                 if (app == null) return;
 
-                await SyncActiveAvatarSystemPromptAsync(app);
+                await _settingsController.SyncActiveAvatarSystemPromptAsync(app);
 
-                SaveSettings();
+                _settingsController.SaveSettings();
                 ShowChat();
             }
             catch (Exception ex)
@@ -4328,7 +3743,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _previewPersona.text = AvatarPersonaText(_activeAvatarId);
                 UpdatePersonaStateUi(_activeAvatarId);
 
-                await SyncActiveAvatarSystemPromptAsync(app);
+                await _settingsController.SyncActiveAvatarSystemPromptAsync(app);
 
                 ClosePersonaEditor();
             }
@@ -4372,7 +3787,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _activeAvatarId = string.Empty;
                 SelectAvatar("neon");
 
-                await SyncActiveAvatarSystemPromptAsync(app);
+                await _settingsController.SyncActiveAvatarSystemPromptAsync(app);
 
                 AddSystemMessage(LocalizationExtensions.GetFormat("avatar.delete.success", "Аватар «{0}» удалён.", removedName));
             }
@@ -5103,7 +4518,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 UpdatePersonaStateUi(_activeAvatarId);
                 UpdateAvatarActionButtons(_activeAvatarId);
 
-                await SyncActiveAvatarSystemPromptAsync(app);
+                await _settingsController.SyncActiveAvatarSystemPromptAsync(app);
             }
             catch (Exception ex)
             {
@@ -5544,249 +4959,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ============================================================
-        // Breathing animation
-        // ============================================================
-
-        private void StartBreathing()
-        {
-            if (_avatarCircle == null) return;
-            _breathStartMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            _breathSchedule?.Pause();
-            _breathSchedule = _avatarCircle.schedule.Execute(TickBreath).Every(33); // ~30 fps
-        }
-
-        private void StopBreathing()
-        {
-            _breathSchedule?.Pause();
-            _breathSchedule = null;
-            if (_avatarCircle != null)
-                _avatarCircle.style.scale = new StyleScale(new Scale(new Vector3(1f, 1f, 1f)));
-        }
-
-        private void TickBreath()
-        {
-            if (_avatarCircle == null) return;
-            float elapsed = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _breathStartMs) / 1000f;
-            // Slow sine wave: period ~5 s, amplitude ±1.5%
-            float s = 1f + 0.015f * (float)Math.Sin(elapsed * (2f * (float)Math.PI / 5f));
-            _avatarCircle.style.scale = new StyleScale(new Scale(new Vector3(s, s, 1f)));
-        }
-
-        // ============================================================
-        // Settings action buttons
-        // ============================================================
-
-        private void OnOpenFolderClicked()
-        {
-            OpenPath(Application.persistentDataPath);
-        }
-
-        private static void OpenPath(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return;
-
-#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            System.Diagnostics.Process.Start("explorer.exe", path.Replace('/', '\\'));
-#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-            System.Diagnostics.Process.Start("open", path);
-#elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
-            System.Diagnostics.Process.Start("xdg-open", path);
-#else
-            Application.OpenURL("file://" + path);
-#endif
-        }
-
-        private void OnExportChatsClicked()
-        {
-            _ = ExportChatsAsync();
-        }
-
-        private void OnSettingsGitHubClicked()
-        {
-            OpenExternalUrl("https://github.com/isteelfelix/neon-companion");
-            AddSystemMessage(LocalizationExtensions.Get("system.open.github", "Открыт GitHub репозитория."));
-        }
-
-        private void OnSettingsDocsClicked()
-        {
-            OpenExternalUrl("https://github.com/isteelfelix/neon-companion/tree/main/docs");
-            AddSystemMessage(LocalizationExtensions.Get("system.open.docs", "Открыта папка docs."));
-        }
-
-        private void OnSettingsDonateClicked()
-        {
-            if (_donationService?.IsDonationSupported == true)
-            {
-                _donationService.OpenDonationPage();
-                AddSystemMessage(LocalizationExtensions.Get("system.open.donate", "Открыта страница поддержки проекта."));
-                return;
-            }
-
-            AddSystemMessage(LocalizationExtensions.Get("system.donate.unavailable", "Поддержка проекта пока недоступна."));
-        }
-
-        private static void OpenExternalUrl(string url)
-        {
-            if (string.IsNullOrWhiteSpace(url))
-                return;
-
-            Application.OpenURL(url);
-        }
-
-        private async Task ExportChatsAsync()
-        {
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null) return;
-
-                var sessions = await chat.GetAllSessionsAsync();
-                string json = JsonUtility.ToJson(new ChatSessionCollection { items = sessions }, true);
-                string path = System.IO.Path.Combine(Application.persistentDataPath, $"export_{DateTime.Now:yyyyMMdd_HHmmss}.json");
-                System.IO.File.WriteAllText(path, json);
-                string fileName = System.IO.Path.GetFileName(path);
-
-                if (_subtitleBody != null)
-                    _subtitleBody.text = LocalizationExtensions.GetFormat("system.export.subtitle", "Экспортировано: {0}", fileName);
-
-                AddSystemMessage(LocalizationExtensions.GetFormat("system.export.chats", "Чаты экспортированы в {0}.", fileName));
-                OpenPath(path);
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void OnClearDataClicked()
-        {
-            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (!_clearDataConfirmPending || nowMs > _clearDataConfirmExpiresAtMs)
-            {
-                _clearDataConfirmPending = true;
-                _clearDataConfirmExpiresAtMs = nowMs + 7000;
-                ArmClearDataConfirmationReset();
-                UpdateClearDataButtonState();
-                AddSystemMessage(LocalizationExtensions.Get("system.clear.confirm_hint", "Нажми «Подтвердить» ещё раз в течение 7 секунд, чтобы удалить все данные."));
-                return;
-            }
-
-            ResetClearDataConfirmation();
-            _ = ClearAllDataAsync();
-        }
-
-        private void OnClearChatsClicked()
-        {
-            _ = ClearChatsOnlyAsync();
-        }
-
-        private void ResetClearDataConfirmation()
-        {
-            _clearDataConfirmResetSchedule?.Pause();
-            _clearDataConfirmResetSchedule = null;
-            _clearDataConfirmPending = false;
-            _clearDataConfirmExpiresAtMs = 0;
-            UpdateClearDataButtonState();
-        }
-
-        private void ArmClearDataConfirmationReset()
-        {
-            _clearDataConfirmResetSchedule?.Pause();
-            if (_settingsClearBtn == null)
-                return;
-
-            _clearDataConfirmResetSchedule = _settingsClearBtn.schedule
-                .Execute(() =>
-                {
-                    _clearDataConfirmResetSchedule = null;
-                    ResetClearDataConfirmation();
-                })
-                .StartingIn(7000);
-        }
-
-        private void UpdateClearDataButtonState()
-        {
-            if (_clearDataConfirmPending && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > _clearDataConfirmExpiresAtMs)
-            {
-                _clearDataConfirmPending = false;
-                _clearDataConfirmExpiresAtMs = 0;
-            }
-
-            bool armed = _clearDataConfirmPending;
-
-            if (_settingsClearBtnText != null)
-                _settingsClearBtnText.text = armed
-                    ? LocalizationExtensions.Get("settings.clear.confirm", "Подтвердить")
-                    : LocalizationExtensions.Get("chat.clear", "Очистить");
-
-            _settingsClearBtn?.EnableInClassList("btn--danger-armed", armed);
-        }
-
-        private async Task ClearAllDataAsync()
-        {
-            try
-            {
-                ResetClearDataConfirmation();
-                var app = await GetAppAsync();
-                if (app == null) return;
-
-                // Clear all chat sessions
-                app.Chats.SaveAll(new System.Collections.Generic.List<ChatSession>());
-
-                // Delete all providers
-                var providers = await app.ProviderManager.GetAllProvidersAsync();
-                foreach (var p in providers)
-                    await app.ProviderManager.DeleteProviderAsync(p.id);
-
-                // Reset settings
-                app.Settings.Save(new AppSettings());
-
-                // Reset service cache and session identity so next call reinitialises
-                _app = null;
-                _chatService = null;
-                _currentSessionId = string.Empty;
-                _currentSessionTitle = string.Empty;
-
-                RenderMessages(null);
-                SetNoProviderState();
-                if (_sessionsList != null) _sessionsList.Clear();
-                if (_historySessionsList != null) _historySessionsList.Clear();
-                ShowHistoryState(LocalizationExtensions.Get("history.empty.first_session", "История пуста. Начните чат, чтобы появилась первая сессия."), isError: false);
-                if (_navChatCount != null) _navChatCount.text = "0";
-                if (_navProvidersCount != null) _navProvidersCount.text = "0";
-            }
-            catch (Exception ex)
-            {
-                ResetClearDataConfirmation();
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private async Task ClearChatsOnlyAsync()
-        {
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null)
-                    return;
-
-                app.Chats.SaveAll(new List<ChatSession>());
-                _currentSessionId = string.Empty;
-                _currentSessionTitle = string.Empty;
-                RenderMessages(null);
-                ShowHistoryState(LocalizationExtensions.Get("history.empty.first_session", "История пуста. Начните чат, чтобы появилась первая сессия."), isError: false);
-                if (_sessionsList != null) _sessionsList.Clear();
-                if (_historySessionsList != null) _historySessionsList.Clear();
-                if (_navChatCount != null) _navChatCount.text = "0";
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        // ============================================================
         // Chat action buttons: Copy, Regenerate
         // ============================================================
 
@@ -5831,7 +5003,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetSending(true);
                 try
                 {
-                    bool streaming = _settingsStreaming?.value ?? false;
+                    bool streaming = _settingsController.UseStreaming;
                     chat.UseStreaming = streaming;
 
                     RenderMessages(chat.CurrentChatViewModel?.Messages);
