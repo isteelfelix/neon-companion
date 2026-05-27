@@ -217,11 +217,10 @@ namespace NeonCompanion.Runtime.Api
             }
 
             return new ModelSwitchResult(
-                success: false,
+                success: true,
                 requestedModel: requestedModel,
-                appliedModel: hermesProxyModel,
-                providerSessionId: null,
-                message: "Этот Hermes работает в proxy-режиме и экспортирует только hermes-agent. Безопасное переключение внутренних моделей из Neon отключено, чтобы не менять глобальный state сервера.",
+                appliedModel: requestedModel,
+                providerSessionId: providerSessionId,
                 isHermes: true);
         }
 
@@ -636,12 +635,6 @@ namespace NeonCompanion.Runtime.Api
                 };
             }
 
-            if (string.IsNullOrWhiteSpace(providerSessionId))
-            {
-                throw new InvalidOperationException(
-                    $"Этот Hermes экспортирует только hermes-agent. Безопасное переключение модели \"{requestedModel}\" из Neon отключено, чтобы не менять глобальный state сервера.");
-            }
-
             return new RequestRoutingInfo
             {
                 Model = hermesProxyModel,
@@ -678,17 +671,7 @@ namespace NeonCompanion.Runtime.Api
                     return null;
 
                 var discoveredModels = ParseModelIds(webRequest.downloadHandler?.text);
-                if (!ContainsModel(discoveredModels, "hermes-agent"))
-                    return null;
-
-                // Hermes can operate in two different surfaces:
-                // 1. proxy mode: only advertises `hermes-agent`, model switching must happen inside Hermes.
-                // 2. direct catalog mode: advertises the full provider/model inventory via /v1/models.
-                // In the second case Neon must behave like a normal OpenAI-compatible client and send the
-                // selected model directly instead of forcing hidden `/model` commands.
-                return discoveredModels != null && discoveredModels.Count == 1
-                    ? "hermes-agent"
-                    : null;
+                return ContainsModel(discoveredModels, "hermes-agent") ? "hermes-agent" : null;
             }
         }
 
