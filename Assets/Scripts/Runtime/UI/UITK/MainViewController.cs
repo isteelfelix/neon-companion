@@ -72,6 +72,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _navCloseLabel;
 
         private readonly SettingsController _settingsController = new SettingsController();
+        private readonly NavigationController _navigationController = new NavigationController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -405,7 +406,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             Bind(document.rootVisualElement);
             RegisterCallbacks();
             _ = _settingsController.BindLocalizationEventsAsync();
-            ShowChat();
+            _navigationController.ShowChat();
 
             _ = RefreshAsync();
         }
@@ -629,6 +630,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navCloseLabel = root.Q<Label>("nav-close-label");
 
             _settingsController.Init(root, BuildSettingsControllerDeps(), _avatarCircle);
+            _navigationController.Init(root, BuildNavigationControllerDeps());
 
             SetDisplay(_providerEditPanel, DisplayStyle.None);
             SetSending(false);
@@ -671,22 +673,32 @@ namespace NeonCompanion.Runtime.UI.UITK
             };
         }
 
-        private void AddNav(VisualElement navItem)
+        private NavigationControllerDeps BuildNavigationControllerDeps()
         {
-            if (navItem != null)
-                _navItems.Add(navItem);
+            return new NavigationControllerDeps
+            {
+                CanLeaveProviderEditor = CanLeaveProviderEditor,
+                SetTopbar = (title, sub) => SetTopbar(title, sub),
+                ShowArea = ShowArea,
+                RefreshProvidersListAsync = () => { _ = RefreshProvidersListAsync(); return System.Threading.Tasks.Task.CompletedTask; },
+                RefreshSessionsFromCacheAsync = () => RefreshSessionsFromCacheAsync(),
+                GetChatTitle = GetChatTitle,
+                GetChatSubtitle = () => _chatSubtitle,
+                AvatarDisplayName = AvatarDisplayName,
+                GetAvatarTotalCount = () => BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0),
+                GetActiveAvatarId = () => _activeAvatarId,
+                GetSessionSearchQuery = () => _sessionSearchQuery,
+                ChatPanel = _chatPanel,
+                HistoryPanel = _historyPanel,
+                ProvidersPanel = _providersPanel,
+                AvatarsPanel = _avatarsPanel,
+                ThemesPanel = _themesPanel,
+                SettingsPanel = _settingsPanel
+            };
         }
 
         private void RegisterCallbacks()
         {
-            RegisterClick(_navChat, OnNavChatClicked);
-            RegisterClick(_navAvatars, OnNavAvatarsClicked);
-            RegisterClick(_navProviders, OnNavProvidersClicked);
-            RegisterClick(_navHistory, OnNavHistoryClicked);
-            RegisterClick(_navThemes, OnNavThemesClicked);
-            RegisterClick(_navSettings, OnNavSettingsClicked);
-            RegisterClick(_providerTag, OnProviderTagClicked);
-
             RegisterClick(_sendButton, OnSendClicked);
             RegisterClick(_summarizeButton, OnSummarizeClicked);
             RegisterClick(_searchButton, OnSearchClicked);
@@ -767,13 +779,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void UnregisterCallbacks()
         {
-            UnregisterClick(_navChat, OnNavChatClicked);
-            UnregisterClick(_navAvatars, OnNavAvatarsClicked);
-            UnregisterClick(_navProviders, OnNavProvidersClicked);
-            UnregisterClick(_navHistory, OnNavHistoryClicked);
-            UnregisterClick(_navThemes, OnNavThemesClicked);
-            UnregisterClick(_navSettings, OnNavSettingsClicked);
-            UnregisterClick(_providerTag, OnProviderTagClicked);
+
 
             UnregisterClick(_sendButton, OnSendClicked);
             UnregisterClick(_summarizeButton, OnSummarizeClicked);
@@ -857,57 +863,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 button.clicked -= handler;
         }
 
-        private void OnNavChatClicked(ClickEvent evt) => ShowChat();
-        private void OnNavAvatarsClicked(ClickEvent evt) => ShowAvatars();
-        private void OnNavProvidersClicked(ClickEvent evt) => ShowProviders();
-        private void OnNavHistoryClicked(ClickEvent evt) => ShowHistory();
-        private void OnNavThemesClicked(ClickEvent evt) => ShowThemes();
-        private void OnNavSettingsClicked(ClickEvent evt) => ShowSettings();
-        private void OnProviderTagClicked(ClickEvent evt) => ShowProviders();
+        // Navigation callbacks moved to NavigationController
 
-        private void ShowChat()
-        {
-            if (!CanLeaveProviderEditor())
-                return;
-
-            SetActiveNav(_navChat);
-            SetTopbar(GetChatTitle(), _chatSubtitle);
-            ShowArea(_chatPanel);
-        }
-
-        private void ShowAvatars()
-        {
-            if (!CanLeaveProviderEditor())
-                return;
-
-            SetActiveNav(_navAvatars);
-            int total = BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0);
-            SetTopbar(LocalizationExtensions.Get("topbar.avatars.title", "Аватары"),
-                LocalizationExtensions.GetFormat("topbar.avatars.subtitle", "{0} образов · {1}", total, AvatarDisplayName(_activeAvatarId)));
-            ShowArea(_avatarsPanel);
-        }
-
-        private void ShowProviders()
-        {
-            SetActiveNav(_navProviders);
-            SetTopbar(LocalizationExtensions.Get("topbar.providers.title", "Провайдеры"), LocalizationExtensions.Get("topbar.providers.subtitle", "OpenAI-совместимые провайдеры"));
-            ShowArea(_providersPanel);
-            _ = RefreshProvidersListAsync();
-        }
-
-        private void ShowHistory()
-        {
-            if (!CanLeaveProviderEditor())
-                return;
-
-            SetActiveNav(_navHistory);
-            SetTopbar(LocalizationExtensions.Get("topbar.history.title", "История чатов"),
-                string.IsNullOrWhiteSpace(_sessionSearchQuery)
-                    ? LocalizationExtensions.Get("topbar.history.subtitle.saved", "Сохранённые сессии")
-                    : LocalizationExtensions.GetFormat("topbar.history.subtitle.search", "Поиск: {0}", _sessionSearchQuery));
-            ShowArea(_historyPanel);
-            _ = RefreshSessionsFromCacheAsync();
-        }
+        // ShowChat, ShowAvatars, ShowProviders, ShowHistory, ShowThemes, ShowSettings
+        // moved to NavigationController
 
         private string GetChatTitle()
         {
@@ -926,26 +885,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!string.IsNullOrWhiteSpace(provider.defaultModel))
                 return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {provider.defaultModel}";
             return provider.displayName ?? LocalizationExtensions.Get("provider.status.configured", "настроен");
-        }
-
-        private void ShowThemes()
-        {
-            if (!CanLeaveProviderEditor())
-                return;
-
-            SetActiveNav(_navThemes);
-            SetTopbar(LocalizationExtensions.Get("topbar.themes.title", "Темы"), LocalizationExtensions.Get("topbar.themes.subtitle", "Форма, ореол и дыхание для аватара"));
-            ShowArea(_themesPanel);
-        }
-
-        private void ShowSettings()
-        {
-            if (!CanLeaveProviderEditor())
-                return;
-
-            SetActiveNav(_navSettings);
-            SetTopbar(LocalizationExtensions.Get("topbar.settings.title", "Настройки"), string.Empty);
-            ShowArea(_settingsPanel);
         }
 
         private void SetPlaceholder(string title, string body)
@@ -982,12 +921,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             SetDisplay(_topbarSep, hasSubtitle ? DisplayStyle.Flex : DisplayStyle.None);
-        }
-
-        private void SetActiveNav(VisualElement active)
-        {
-            foreach (var navItem in _navItems)
-                navItem.EnableInClassList(ActiveNavClass, navItem == active);
         }
 
         private static void SetDisplay(VisualElement element, DisplayStyle display)
@@ -1285,7 +1218,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_isBound)
                     RenderSessionList(allSessions, providers);
 
-                ShowHistory();
+                _navigationController.ShowHistory();
             }
             catch (Exception ex)
             {
@@ -1296,7 +1229,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnMoreClicked()
         {
-            ShowSettings();
+            _navigationController.ShowSettings();
         }
 
         private void OnToggleLeftPanel()
@@ -1549,7 +1482,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
-                ShowChat();
+                _navigationController.ShowChat();
             }
             catch (Exception ex)
             {
@@ -1906,7 +1839,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
-                ShowChat();
+                _navigationController.ShowChat();
             }
             catch (Exception ex)
             {
@@ -3214,7 +3147,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await LoadSessionsAsync(chat);
                 await RefreshProvidersListAsync();
-                ShowChat();
+                _navigationController.ShowChat();
             }
             catch (Exception ex)
             {
@@ -3691,7 +3624,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 await _settingsController.SyncActiveAvatarSystemPromptAsync(app);
 
                 _settingsController.SaveSettings();
-                ShowChat();
+                _navigationController.ShowChat();
             }
             catch (Exception ex)
             {
