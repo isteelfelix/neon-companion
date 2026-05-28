@@ -84,6 +84,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly SessionHistoryController _sessionHistoryController = new SessionHistoryController();
         private readonly ProvidersController _providersController = new ProvidersController();
         private readonly AvatarGalleryController _avatarGalleryController = new AvatarGalleryController();
+        private readonly VoiceController _voiceController = new VoiceController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -222,14 +223,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private SpriteSheetAnimator _avatarAnimator;
         private Avatar3DRenderer _avatar3DRenderer;
         private IAvatar3DService _avatar3DService;
-        private IVoiceService _voiceService;
-        private VoiceInputManager _voiceInputManager;
-        private VoiceOutputManager _voiceOutputManager;
         private bool _isRefreshingLocalizedUi;
-        private bool _voiceBoundToChat;
         private AvatarMotionState _avatarMotionState = AvatarMotionState.Idle;
-        private bool _isVoicePlaying;
-        private bool _isVoiceRecording;
         private IVisualElementScheduledItem _scrollBottomButtonSchedule;
 
         private static Dictionary<string, string> BuildStaticTemplateTextMap()
@@ -365,11 +360,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnDisable()
         {
             UnregisterCallbacks();
-            UnbindVoiceAnimationEvents();
+            _voiceController.OnDisable();
             _avatarMotionState = AvatarMotionState.Idle;
-            if (_voiceBoundToChat && _chatService != null && _voiceOutputManager != null)
-                _voiceOutputManager.UnbindChat(_chatService);
-            _voiceBoundToChat = false;
             _settingsController.UnbindLocalizationEvents();
             _avatarGalleryController.OnDisable();
             _avatarAnimator?.Stop();
@@ -561,6 +553,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarGalleryController.SetDeps(BuildAvatarGalleryControllerDeps());
             _avatarGalleryController.Init();
             _avatarGalleryController.RegisterCallbacks();
+            _voiceController.SetDeps(BuildVoiceControllerDeps());
+            _voiceController.Init();
+            _voiceController.RegisterCallbacks();
 
             _chatController.InitState();
             _isBound = true;
@@ -765,8 +760,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 AddSystemMessage = AddSystemMessage,
                 IsChatSending = () => _chatController.IsSending,
                 IsChatStreamingResponse = () => _chatController.IsStreamingResponse,
-                GetIsVoicePlaying = () => _isVoicePlaying,
-                GetIsVoiceRecording = () => _isVoiceRecording,
+                GetIsVoicePlaying = () => _voiceController.IsVoicePlaying,
+                GetIsVoiceRecording = () => _voiceController.IsVoiceRecording,
                 GetAppAsync = GetAppAsync,
                 GetAppSync = () => _app,
                 IsBound = () => _isBound,
@@ -791,6 +786,22 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return _avatar3DRenderer;
                 },
                 ModelParent = transform
+            };
+        }
+
+        private VoiceController.Deps BuildVoiceControllerDeps()
+        {
+            return new VoiceController.Deps
+            {
+                gameObject = gameObject,
+                MicButton = _micButton,
+                IsVoiceEnabledBySettings = IsVoiceEnabledBySettings,
+                SendVoiceMessageAsync = SendVoiceMessageAsync,
+                OnVoiceRecordingStarted = OnVoiceRecordingStarted,
+                RefreshAvatarMotionState = RefreshAvatarMotionState,
+                GetChatServiceAsync = GetChatServiceAsync,
+                GetChatServiceSync = () => _chatService,
+                IsBound = () => _isBound
             };
         }
 
@@ -871,6 +882,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _panelResizeHandler.UnregisterCallbacks();
             _settingsController.UnregisterCallbacks();
+            _voiceController.UnregisterCallbacks();
             _providersController.UnregisterCallbacks();
 
             _typingSchedule?.Pause();
@@ -1055,7 +1067,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var msg = messages[i];
                 if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
                 {
-                    _voiceOutputManager?.EnqueueResponse(msg.content);
+                    _voiceController.EnqueueVoiceResponse(msg.content);
                     return;
                 }
             }
@@ -1063,50 +1075,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             AddSystemMessage(LocalizationExtensions.Get("system.voice.no_assistant_reply", "Нет ответа ассистента для озвучивания."));
         }
 
-        private async Task EnsureVoicePipelineAsync(ChatService chat)
-        {
-            if (chat == null)
-                return;
+        private async Task EnsureVoicePipelineAsync(ChatService chat) => await _voiceController.EnsureVoicePipelineAsync(chat);
 
-            if (_voiceService == null)
-            {
-                _voiceService = GetComponent<WebSpeechBridge>();
-                if (_voiceService == null)
-                    _voiceService = gameObject.AddComponent<WebSpeechBridge>();
-            }
-
-            if (_voiceOutputManager == null)
-            {
-                _voiceOutputManager = GetComponent<VoiceOutputManager>();
-                if (_voiceOutputManager == null)
-                    _voiceOutputManager = gameObject.AddComponent<VoiceOutputManager>();
-                _voiceOutputManager.Initialize(_voiceService, IsVoiceEnabledBySettings, () => _voiceInputManager != null && _voiceInputManager.IsRecording);
-            }
-
-            if (_voiceInputManager == null)
-            {
-                _voiceInputManager = GetComponent<VoiceInputManager>();
-                if (_voiceInputManager == null)
-                    _voiceInputManager = gameObject.AddComponent<VoiceInputManager>();
-                _voiceInputManager.Initialize(_voiceService, _micButton, IsVoiceEnabledBySettings, SendVoiceMessageAsync, OnVoiceRecordingStarted);
-            }
-
-            BindVoiceAnimationEvents();
-
-            if (!_voiceBoundToChat)
-            {
-                _voiceOutputManager.BindChat(chat);
-                _voiceBoundToChat = true;
-            }
-
-            RefreshVoiceControls();
-            await Task.CompletedTask;
-        }
-
-        private void OnVoiceRecordingStarted()
-        {
-            _voiceOutputManager?.StopSpeakingAndClear();
-        }
+        private void OnVoiceRecordingStarted() => _voiceController.OnVoiceRecordingStarted();
 
         private async Task SendVoiceMessageAsync(string text)
         {
@@ -1124,78 +1095,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             return _settingsController.VoiceIoEnabled;
         }
 
-        private void RefreshVoiceControls()
-        {
-            _voiceInputManager?.RefreshState();
-            if (!IsVoiceEnabledBySettings())
-            {
-                _voiceOutputManager?.StopSpeakingAndClear();
-                _isVoicePlaying = false;
-                _isVoiceRecording = false;
-                RefreshAvatarMotionState();
-            }
-        }
+        private void RefreshVoiceControls() => _voiceController.RefreshVoiceControls();
 
-        private void BindVoiceAnimationEvents()
-        {
-            if (_voiceOutputManager != null)
-            {
-                _voiceOutputManager.OnPlaybackStarted -= HandleVoicePlaybackStarted;
-                _voiceOutputManager.OnPlaybackCompleted -= HandleVoicePlaybackCompleted;
-                _voiceOutputManager.OnPlaybackStarted += HandleVoicePlaybackStarted;
-                _voiceOutputManager.OnPlaybackCompleted += HandleVoicePlaybackCompleted;
-            }
+        private void BindVoiceAnimationEvents() => _voiceController.BindVoiceAnimationEvents();
 
-            if (_voiceInputManager != null)
-            {
-                _voiceInputManager.OnRecordingStarted -= HandleVoiceRecordingStarted;
-                _voiceInputManager.OnRecordingStopped -= HandleVoiceRecordingStopped;
-                _voiceInputManager.OnRecordingStarted += HandleVoiceRecordingStarted;
-                _voiceInputManager.OnRecordingStopped += HandleVoiceRecordingStopped;
-            }
-        }
-
-        private void UnbindVoiceAnimationEvents()
-        {
-            if (_voiceOutputManager != null)
-            {
-                _voiceOutputManager.OnPlaybackStarted -= HandleVoicePlaybackStarted;
-                _voiceOutputManager.OnPlaybackCompleted -= HandleVoicePlaybackCompleted;
-            }
-
-            if (_voiceInputManager != null)
-            {
-                _voiceInputManager.OnRecordingStarted -= HandleVoiceRecordingStarted;
-                _voiceInputManager.OnRecordingStopped -= HandleVoiceRecordingStopped;
-            }
-
-            _isVoicePlaying = false;
-            _isVoiceRecording = false;
-        }
-
-        private void HandleVoicePlaybackStarted(string _)
-        {
-            _isVoicePlaying = true;
-            RefreshAvatarMotionState();
-        }
-
-        private void HandleVoicePlaybackCompleted()
-        {
-            _isVoicePlaying = false;
-            RefreshAvatarMotionState();
-        }
-
-        private void HandleVoiceRecordingStarted()
-        {
-            _isVoiceRecording = true;
-            RefreshAvatarMotionState();
-        }
-
-        private void HandleVoiceRecordingStopped()
-        {
-            _isVoiceRecording = false;
-            RefreshAvatarMotionState();
-        }
+        private void UnbindVoiceAnimationEvents() => _voiceController.UnbindVoiceAnimationEvents();
 
         private async Task RefreshAsync()
         {
@@ -2256,13 +2160,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_avatarAnimator != null && _avatarAnimator.IsPlayingOneShot)
                 return;
 
-            if (_isVoiceRecording)
+            if (_voiceController.IsVoiceRecording)
             {
                 SetAvatarMotionState(AvatarMotionState.Listening);
                 return;
             }
 
-            if (_isVoicePlaying)
+            if (_voiceController.IsVoicePlaying)
             {
                 SetAvatarMotionState(AvatarMotionState.Talking);
                 return;
