@@ -19,6 +19,14 @@ using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK
 {
+    internal enum AvatarMotionState
+    {
+        Idle,
+        Thinking,
+        Talking,
+        Listening
+    }
+
     [RequireComponent(typeof(UIDocument))]
     public sealed class MainViewController : MonoBehaviour
     {
@@ -73,6 +81,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private readonly SettingsController _settingsController = new SettingsController();
         private readonly NavigationController _navigationController = new NavigationController();
+        private readonly ChatController _chatController = new ChatController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -116,7 +125,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _previewPersonaStateBadge;
         private Label _previewPersonaStateHelp;
         private VisualElement _previewPersonaStateRow;
-        private Label _streamingLabel;
         private Button _previewApplyBtn;
         private Button _previewEditPersonaBtn;
         private Button _previewResetPersonaBtn;
@@ -156,14 +164,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private int _typingFrame;
 
         // ===== Inline streaming typing dots =====
-        private VisualElement _streamingTypingDots;
-        private IVisualElementScheduledItem _inlineTypingSchedule;
-        private int _inlineTypingFrame;
 
         // ===== Tool progress UI =====
         private VisualElement _thinkingBubble;
         private Label _thinkingText;
-        private readonly ToolCallUiHelper _toolCallUiHelper = new ToolCallUiHelper();
 
         private Label _topbarTitle;
         private Label _topbarSubtitle;
@@ -207,7 +211,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _historyPanelSearchBtn;
         private Button _historyPanelSearchClear;
         private Button _historyPanelNewSessionButton;
-        private string _sessionSearchQuery = string.Empty;
 
         private ScrollView _providersList;
         private Button _addProviderButton;
@@ -245,19 +248,15 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IReadOnlyList<string> _discoveredModels;
         private IVisualElementScheduledItem _autoDiscoverSchedule;
         private CancellationTokenSource _autoDiscoverCts;
-        private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
 
         private CompanionApp _app;
         private ChatService _chatService;
         private ProviderConfig _editingProvider;
         private ProviderConfig _editingProviderSource;
         private bool _cancelPending;
-        private string _chatSubtitle = string.Empty;
         private string _currentSessionId = string.Empty;
         private string _currentSessionTitle = string.Empty;
         private bool _isBound;
-        private bool _isSending;
-        private bool _isStreamingResponse;
         private Image _avatarArtImage;
         private Image _avatar3DImage;
         private SpriteSheetAnimator _avatarAnimator;
@@ -272,14 +271,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
         private IVisualElementScheduledItem _scrollBottomButtonSchedule;
-
-        private enum AvatarMotionState
-        {
-            Idle,
-            Thinking,
-            Talking,
-            Listening
-        }
 
         private static Dictionary<string, string> BuildStaticTemplateTextMap()
         {
@@ -415,8 +406,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             UnregisterCallbacks();
             UnbindVoiceAnimationEvents();
-            _isSending = false;
-            _isStreamingResponse = false;
             _avatarMotionState = AvatarMotionState.Idle;
             if (_voiceBoundToChat && _chatService != null && _voiceOutputManager != null)
                 _voiceOutputManager.UnbindChat(_chatService);
@@ -631,9 +620,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _settingsController.Init(root, BuildSettingsControllerDeps(), _avatarCircle);
             _navigationController.Init(root, BuildNavigationControllerDeps());
+            _chatController.SetDeps(BuildChatControllerDeps());
+            _chatController.RegisterCallbacks();
 
             SetDisplay(_providerEditPanel, DisplayStyle.None);
-            SetSending(false);
+            _chatController.InitState();
             _isBound = true;
         }
 
@@ -683,11 +674,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RefreshProvidersListAsync = () => { _ = RefreshProvidersListAsync(); return System.Threading.Tasks.Task.CompletedTask; },
                 RefreshSessionsFromCacheAsync = () => RefreshSessionsFromCacheAsync(),
                 GetChatTitle = GetChatTitle,
-                GetChatSubtitle = () => _chatSubtitle,
+                GetChatSubtitle = () => _chatController.ChatSubtitle,
                 AvatarDisplayName = AvatarDisplayName,
                 GetAvatarTotalCount = () => BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0),
                 GetActiveAvatarId = () => _activeAvatarId,
-                GetSessionSearchQuery = () => _sessionSearchQuery,
+                GetSessionSearchQuery = () => _chatController.SessionSearchQuery,
                 ChatPanel = _chatPanel,
                 HistoryPanel = _historyPanel,
                 ProvidersPanel = _providersPanel,
@@ -697,16 +688,54 @@ namespace NeonCompanion.Runtime.UI.UITK
             };
         }
 
+        private ChatController.Deps BuildChatControllerDeps()
+        {
+            return new ChatController.Deps
+            {
+                MessageInput = _messageInput,
+                SendButton = _sendButton,
+                SummarizeButton = _summarizeButton,
+                SearchButton = _searchButton,
+                AttachButton = _attachButton,
+                CopyButton = _copyButton,
+                RegenerateButton = _regenerateButton,
+                NewSessionButton = _newSessionButton,
+                MessagesList = _messagesList,
+                ScrollBottomBtn = _scrollBottomBtn,
+                Composer = _composer,
+                ThinkingBubble = _thinkingBubble,
+                ThinkingText = _thinkingText,
+                TopbarSubtitle = _topbarSubtitle,
+                SubtitleBody = _subtitleBody,
+                SubtitleRole = _subtitleRole,
+                NavChatCount = _navChatCount,
+                GetAvatarAnimator = () => _avatarAnimator,
+                SetAvatarMotionState = SetAvatarMotionState,
+                RefreshAvatarMotionState = RefreshAvatarMotionState,
+                TriggerAvatarSmile = TriggerAvatarSmile,
+                TriggerAvatarConfused = TriggerAvatarConfused,
+                GetChatServiceAsync = GetChatServiceAsync,
+                GetAppAsync = GetAppAsync,
+                LoadSessionsAsync = () => LoadSessionsAsync(_chatService),
+                ShowSystemMessage = AddSystemMessage,
+                ShowHistory = _navigationController.ShowHistory,
+                ShowChat = _navigationController.ShowChat,
+                EnterToSend = () => _settingsController.EnterToSend,
+                UseStreaming = () => _settingsController.UseStreaming,
+                RenderSessionList = RenderSessionList,
+                RenderMessages = RenderMessages,
+                ApplyModelSelectionAsync = ApplyModelSelectionAsync,
+                OpenModelPickerAsync = OpenModelPickerAsync,
+                GetAvatarDisplayName = () => AvatarDisplayName(_activeAvatarId)
+            };
+        }
+
         private void RegisterCallbacks()
         {
-            RegisterClick(_sendButton, OnSendClicked);
-            RegisterClick(_summarizeButton, OnSummarizeClicked);
-            RegisterClick(_searchButton, OnSearchClicked);
             RegisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
             RegisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
             RegisterClick(_moreButton, OnMoreClicked);
-            RegisterClick(_newSessionButton, OnNewSessionClicked);
-            RegisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
+            RegisterClick(_historyPanelNewSessionButton, OnHistoryPanelNewSessionClicked);
             RegisterClick(_historySearchBtn, OnHistorySearchToggled);
             RegisterClick(_historySearchClear, OnHistorySearchCleared);
             RegisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
@@ -719,12 +748,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_importProviderButton, OnImportProviderClicked);
             RegisterClick(_saveProviderButton, OnSaveProviderClicked);
             RegisterClick(_cancelEditButton, OnCancelEditClicked);
-            RegisterClick(_scrollBottomBtn, OnScrollBottomClicked);
             RegisterClick(_testProviderBtn, OnTestProviderClicked);
-            RegisterClick(_copyButton, OnCopyLastMessageClicked);
-            RegisterClick(_regenerateButton, OnRegenerateClicked);
             RegisterClick(_listenButton, OnListenClicked);
-            RegisterClick(_attachButton, OnAttachClicked);
             RegisterClick(_avatarUploadBtn, OnAvatarUploadClicked);
             RegisterClick(_avatarOpenFolderBtn, OnAvatarOpenFolderClicked);
             if (_avatarUploadTile != null)
@@ -741,14 +766,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editApiKey.RegisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
             if (_editModel != null)
                 _editModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
-
-            if (_messageInput != null)
-            {
-                _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
-                _messageInput.RegisterCallback<FocusEvent>(_ => _composer?.AddToClassList("composer--focused"));
-                _messageInput.RegisterCallback<BlurEvent>(_ => _composer?.RemoveFromClassList("composer--focused"));
-                _messageInput.RegisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
-            }
 
             if (_messagesList != null)
             {
@@ -779,16 +796,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void UnregisterCallbacks()
         {
+            _chatController.UnregisterCallbacks();
 
-
-            UnregisterClick(_sendButton, OnSendClicked);
-            UnregisterClick(_summarizeButton, OnSummarizeClicked);
-            UnregisterClick(_searchButton, OnSearchClicked);
             UnregisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
             UnregisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
             UnregisterClick(_moreButton, OnMoreClicked);
-            UnregisterClick(_newSessionButton, OnNewSessionClicked);
-            UnregisterClick(_historyPanelNewSessionButton, OnNewSessionClicked);
+            UnregisterClick(_historyPanelNewSessionButton, OnHistoryPanelNewSessionClicked);
             UnregisterClick(_historySearchBtn, OnHistorySearchToggled);
             UnregisterClick(_historySearchClear, OnHistorySearchCleared);
             UnregisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
@@ -796,10 +809,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_addProviderButton, OnAddProviderClicked);
             UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
             UnregisterClick(_cancelEditButton, OnCancelEditClicked);
-            UnregisterClick(_scrollBottomBtn, OnScrollBottomClicked);
             UnregisterClick(_testProviderBtn, OnTestProviderClicked);
             UnregisterClick(_listenButton, OnListenClicked);
-            UnregisterClick(_attachButton, OnAttachClicked);
             UnregisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
             UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
             UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
@@ -825,11 +836,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _editApiKey.UnregisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
             if (_editModel != null)
                 _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
-            if (_messageInput != null)
-            {
-                _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
-                _messageInput.UnregisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
-            }
 
             _panelResizeHandler.UnregisterCallbacks();
             _settingsController.UnregisterCallbacks();
@@ -929,307 +935,36 @@ namespace NeonCompanion.Runtime.UI.UITK
                 element.style.display = display;
         }
 
-        private void OnInputKeyDown(KeyDownEvent evt)
+        private void OnMoreClicked()
         {
-            if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
-                return;
-
-            bool enterToSend = _settingsController.EnterToSend;
-            bool hasCtrl = evt.ctrlKey || evt.commandKey;
-
-            if (enterToSend)
-            {
-                evt.StopPropagation();
-                OnSendClicked();
-                return;
-            }
-
-            if (hasCtrl)
-            {
-                evt.StopPropagation();
-                OnSendClicked();
-            }
+            _navigationController.ShowSettings();
         }
 
-        private void OnComposerTextChanged(ChangeEvent<string> evt)
+        private void OnHistoryPanelNewSessionClicked()
         {
-            if (_isSending || _isVoiceRecording)
-                return;
-
-            bool hasText = !string.IsNullOrWhiteSpace(evt.newValue);
-            if (hasText && _avatarAnimator != null && _avatarAnimator.HasAnyClips)
-                SetAvatarMotionState(AvatarMotionState.Listening);
+            _ = _chatController.StartNewSessionAsync();
         }
 
-        private void OnSendClicked()
+        // ===== ChatController wrappers (thin delegates) =====
+
+        private void RenderMessages(IReadOnlyList<ChatMessage> messages)
         {
-            _ = SendCurrentMessageAsync();
+            _chatController.RenderMessages(messages);
         }
 
-        private async Task SendCurrentMessageAsync()
+        private void AddSystemMessage(string text)
         {
-            bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
-            if (_isSending || _messageInput == null || (string.IsNullOrWhiteSpace(_messageInput.value) && !hasPendingAttachments))
-                return;
-
-            string composerText = (_messageInput.value ?? string.Empty).Trim();
-            if (await TryHandleModelCommandAsync(composerText))
-            {
-                _messageInput.value = string.Empty;
-                return;
-            }
-
-            var pendingAttachments = CloneAttachments(_pendingComposerAttachments);
-            string message = StripAttachmentTokens(composerText, pendingAttachments);
-            _messageInput.value = string.Empty;
-            SetSending(true);
-
-            ChatService chat = null;
-            try
-            {
-                chat = await GetChatServiceAsync();
-                if (chat == null)
-                {
-                    AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
-                    return;
-                }
-
-                bool streaming = _settingsController.UseStreaming;
-                chat.UseStreaming = streaming;
-
-                RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message, pendingAttachments));
-
-                if (streaming)
-                {
-                    AddStreamingBubble();
-                    await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken, OnToolProgress);
-                    ClearThinkingBubble();
-                    _toolCallUiHelper.Clear();
-                    _streamingLabel = null;
-                    StopInlineTypingAnimation();
-                    if (_streamingTypingDots != null)
-                    {
-                        _streamingTypingDots.RemoveFromHierarchy();
-                        _streamingTypingDots = null;
-                    }
-                }
-                else
-                {
-                    await chat.SendMessageAsync(message, pendingAttachments);
-                }
-
-                ClearPendingComposerAttachments();
-                RenderMessages(chat.CurrentChatViewModel?.Messages);
-                await LoadSessionsAsync(chat);
-                TriggerAvatarSmile();
-            }
-            catch (Exception ex)
-            {
-                _messageInput.value = composerText;
-                RestorePendingComposerAttachments(pendingAttachments);
-                RenderMessages(chat?.CurrentChatViewModel?.Messages);
-                AddSystemMessage(ex.Message);
-                NeonLogger.LogError(ex.ToString());
-                TriggerAvatarConfused();
-            }
-            finally
-            {
-                SetSending(false);
-            }
-        }
-
-        private async Task<bool> TryHandleModelCommandAsync(string message)
-        {
-            if (string.IsNullOrWhiteSpace(message))
-                return false;
-
-            string trimmed = message.Trim();
-            if (string.Equals(trimmed, "/model", StringComparison.OrdinalIgnoreCase))
-            {
-                await OpenModelPickerAsync();
-                return true;
-            }
-
-            if (!trimmed.StartsWith("/model ", StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            string requestedModel = trimmed.Substring("/model ".Length).Trim();
-            if (string.IsNullOrWhiteSpace(requestedModel))
-            {
-                await OpenModelPickerAsync();
-                return true;
-            }
-
-            await ApplyModelSelectionAsync(requestedModel, closePickerOnSuccess: false);
-            return true;
-        }
-
-        private void AddStreamingBubble()
-        {
-            if (_messagesList == null) return;
-            var placeholder = CreateMessageElement(new ChatMessage { role = "assistant", content = "" });
-            _messagesList.Add(placeholder);
-
-            var bubble = placeholder.Q<VisualElement>(className: "transcript__bubble");
-
-            // Ensure the body label exists so OnStreamToken can append to it
-            _streamingLabel = placeholder.Q<Label>(className: "transcript__body");
-            if (_streamingLabel == null && bubble != null)
-            {
-                _streamingLabel = new Label("");
-                _streamingLabel.AddToClassList("transcript__body");
-                bubble.Add(_streamingLabel);
-            }
-
-            // Create typing dots inside the streaming bubble
-            _streamingTypingDots = new VisualElement();
-            _streamingTypingDots.AddToClassList("typing--inline");
-            for (int i = 0; i < 3; i++)
-            {
-                var dot = new VisualElement();
-                dot.AddToClassList("typing__dot");
-                if (i == 1) dot.AddToClassList("typing__dot--delay-1");
-                if (i == 2) dot.AddToClassList("typing__dot--delay-2");
-                _streamingTypingDots.Add(dot);
-            }
-            if (bubble != null)
-                bubble.Insert(1, _streamingTypingDots); // after meta row, before body label
-
-            _toolCallUiHelper.SetBubble(bubble);
-            StartInlineTypingAnimation();
-            ScrollTranscriptToBottom();
-        }
-
-        private void OnStreamToken(string token)
-        {
-            if (_streamingTypingDots != null)
-            {
-                StopInlineTypingAnimation();
-                _streamingTypingDots.RemoveFromHierarchy();
-                _streamingTypingDots = null;
-                _isStreamingResponse = true;
-                RefreshAvatarMotionState();
-            }
-            if (_streamingLabel != null)
-                _streamingLabel.text += token;
-            ScrollTranscriptToBottom();
-        }
-
-        private void OnToolProgress(string tool, string label, string emoji, string status)
-        {
-            if (_thinkingBubble != null && _thinkingText != null)
-            {
-                string displayText = string.IsNullOrEmpty(label) ? GetThinkingText(tool) : label;
-                if (displayText.Length > 40)
-                    displayText = displayText.Substring(0, 40) + "...";
-                _thinkingText.text = displayText;
-                SetDisplay(_thinkingBubble, DisplayStyle.Flex);
-            }
-
-            _toolCallUiHelper.OnToolProgress(tool, label, emoji, status);
-        }
-
-        private static string GetThinkingText(string tool)
-        {
-            if (string.IsNullOrWhiteSpace(tool))
-                return LocalizationExtensions.Get("thinking.default", "Thinking...");
-
-            string lower = tool.ToLowerInvariant();
-            if (lower.Contains("terminal") || lower.Contains("bash") || lower.Contains("shell"))
-                return LocalizationExtensions.Get("thinking.parsing", "Running...");
-            if (lower.Contains("search") || lower.Contains("grep"))
-                return LocalizationExtensions.Get("thinking.searching", "Searching...");
-            if (lower.Contains("read"))
-                return LocalizationExtensions.Get("thinking.reading", "Reading...");
-            if (lower.Contains("write") || lower.Contains("edit"))
-                return LocalizationExtensions.Get("thinking.writing", "Writing...");
-            return LocalizationExtensions.Get("thinking.default", "Thinking...");
-        }
-
-        private void ClearThinkingBubble()
-        {
-            if (_thinkingBubble != null)
-                SetDisplay(_thinkingBubble, DisplayStyle.None);
-            if (_thinkingText != null)
-                _thinkingText.text = string.Empty;
+            _chatController.ShowSystemMessage(text);
         }
 
         private void SetSending(bool isSending)
         {
-            _isSending = isSending;
-            if (!isSending)
-                _isStreamingResponse = false;
-            if (_sendButton != null)
-                _sendButton.SetEnabled(!isSending);
-
-            SetDisplay(_subtitleBody, isSending ? DisplayStyle.None : DisplayStyle.Flex);
-
-            RefreshAvatarMotionState();
+            // Delegated to ChatController; keep wrapper for rare external calls
         }
 
-        private void OnSummarizeClicked()
+        private async System.Threading.Tasks.Task SendCurrentMessageAsync()
         {
-            _ = SummarizeCurrentConversationAsync();
-        }
-
-        private async Task SummarizeCurrentConversationAsync()
-        {
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null)
-                {
-                    AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
-                    return;
-                }
-
-                string summary = await chat.SummarizeCurrentConversationAsync();
-                AddSystemMessage(summary);
-            }
-            catch (Exception ex)
-            {
-                AddSystemMessage(LocalizationExtensions.Get("system.chat.summary_failed", "Не удалось получить сводку диалога. Попробуй позже."));
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void OnSearchClicked()
-        {
-            _ = SearchSessionsFromComposerAsync();
-        }
-
-        private async Task SearchSessionsFromComposerAsync()
-        {
-            try
-            {
-                _sessionSearchQuery = _messageInput?.value?.Trim() ?? string.Empty;
-                if (_historySearchInput != null)
-                    _historySearchInput.SetValueWithoutNotify(_sessionSearchQuery);
-                if (_historyPanelSearchInput != null)
-                    _historyPanelSearchInput.SetValueWithoutNotify(_sessionSearchQuery);
-
-                var chat = await GetChatServiceAsync();
-                if (chat == null)
-                    return;
-
-                var allSessions = await chat.GetAllSessionsAsync();
-                var app = await GetAppAsync();
-                var providers = app != null ? await app.ProviderManager.GetAllProvidersAsync() : new List<ProviderConfig>();
-                if (_isBound)
-                    RenderSessionList(allSessions, providers);
-
-                _navigationController.ShowHistory();
-            }
-            catch (Exception ex)
-            {
-                AddSystemMessage(LocalizationExtensions.Get("system.chat.search_failed", "Не удалось выполнить поиск по чатам. Попробуй ещё раз."));
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void OnMoreClicked()
-        {
-            _navigationController.ShowSettings();
+            await _chatController.SendCurrentMessageAsync();
         }
 
         private void OnToggleLeftPanel()
@@ -1334,7 +1069,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task SendVoiceMessageAsync(string text)
         {
-            if (string.IsNullOrWhiteSpace(text) || _isSending)
+            if (string.IsNullOrWhiteSpace(text) || _chatController.IsSending)
                 return;
 
             if (_messageInput != null)
@@ -1419,75 +1154,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _isVoiceRecording = false;
             RefreshAvatarMotionState();
-        }
-
-        private void OnAttachClicked()
-        {
-            _ = AttachImageTokenAsync();
-        }
-
-        private async Task AttachImageTokenAsync()
-        {
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null || _messageInput == null) return;
-
-                var filePicker = app.Services.GetRequired<IFilePickerService>();
-                string path = await filePicker.PickImagePathAsync();
-                if (string.IsNullOrEmpty(path)) return;
-
-                string fileName = System.IO.Path.GetFileName(path);
-                _pendingComposerAttachments.Add(new ChatAttachment
-                {
-                    kind = "image",
-                    name = fileName,
-                    path = path,
-                    mediaType = GuessImageMediaType(path)
-                });
-
-                string token = $"[attachment: {fileName}]";
-                string current = _messageInput.value ?? string.Empty;
-                _messageInput.value = string.IsNullOrWhiteSpace(current)
-                    ? token
-                    : $"{current.TrimEnd()} {token}";
-                _messageInput.Focus();
-            }
-            catch (Exception ex)
-            {
-                AddSystemMessage(LocalizationExtensions.Get("system.chat.attachment_failed", "Не удалось добавить вложение к сообщению."));
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void OnNewSessionClicked()
-        {
-            _ = StartNewSessionAsync();
-        }
-
-        private async Task StartNewSessionAsync()
-        {
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null)
-                    return;
-
-                await chat.StartNewSessionAsync();
-                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
-                _currentSessionTitle = string.Empty;
-                ClearPendingComposerAttachments();
-                if (_messageInput != null)
-                    _messageInput.value = string.Empty;
-                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
-                RenderMessages(chat.CurrentChatViewModel?.Messages);
-                await LoadSessionsAsync(chat);
-                _navigationController.ShowChat();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
         }
 
         private async Task RefreshAsync()
@@ -1626,17 +1292,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             _historySessionsList?.Clear();
             _sessionItems.Clear();
 
-            var sessions = string.IsNullOrWhiteSpace(_sessionSearchQuery)
+            var sessions = string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
                 ? allSessions
                 : allSessions.FindAll(s =>
-                    (s.title ?? string.Empty).IndexOf(_sessionSearchQuery, StringComparison.OrdinalIgnoreCase) >= 0);
+                    (s.title ?? string.Empty).IndexOf(_chatController.SessionSearchQuery, StringComparison.OrdinalIgnoreCase) >= 0);
 
             AddSessionHeader(_sessionsList, sessions.Count);
             AddSessionHeader(_historySessionsList, sessions.Count);
 
             if (sessions.Count == 0)
             {
-                string emptyText = string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                string emptyText = string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
                     ? LocalizationExtensions.Get("history.empty.saved_sessions", "Сохранённых сессий пока нет.")
                     : LocalizationExtensions.Get("history.empty.search", "По этому запросу ничего не найдено.");
                 var railEmpty = new Label(emptyText);
@@ -1646,7 +1312,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var historyEmpty = new Label(emptyText);
                 historyEmpty.AddToClassList("history__meta");
                 _historySessionsList?.Add(historyEmpty);
-                ShowHistoryState(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                ShowHistoryState(string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
                     ? LocalizationExtensions.Get("history.empty.first_session", "История пуста. Начните чат, чтобы появилась первая сессия.")
                     : LocalizationExtensions.Get("history.search.try_another", "Попробуйте изменить поисковый запрос."), isError: false);
                 return;
@@ -1689,7 +1355,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnHistorySearchCleared()
         {
-            _sessionSearchQuery = string.Empty;
+            _chatController.SetSessionSearchQuery(string.Empty);
             if (_historySearchInput != null)
                 _historySearchInput.SetValueWithoutNotify(string.Empty);
             if (_historyPanelSearchInput != null)
@@ -1701,11 +1367,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnHistorySearchChanged(ChangeEvent<string> evt)
         {
-            _sessionSearchQuery = evt.newValue ?? string.Empty;
+            _chatController.SetSessionSearchQuery(evt.newValue ?? string.Empty);
             if (_historySearchInput != null && _historySearchInput != evt.target)
-                _historySearchInput.SetValueWithoutNotify(_sessionSearchQuery);
+                _historySearchInput.SetValueWithoutNotify(_chatController.SessionSearchQuery);
             if (_historyPanelSearchInput != null && _historyPanelSearchInput != evt.target)
-                _historyPanelSearchInput.SetValueWithoutNotify(_sessionSearchQuery);
+                _historyPanelSearchInput.SetValueWithoutNotify(_chatController.SessionSearchQuery);
             _ = RefreshSessionsFromCacheAsync();
         }
 
@@ -1731,7 +1397,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void AddSessionHeader(ScrollView target, int sessionsCount)
         {
             if (target == null) return;
-            var groupLabel = new Label(string.IsNullOrWhiteSpace(_sessionSearchQuery)
+            var groupLabel = new Label(string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
                 ? LocalizationExtensions.Get("history.group.recent", "Недавние")
                 : LocalizationExtensions.GetFormat("history.group.results", "Результаты: {0}", sessionsCount));
             groupLabel.AddToClassList("history__group");
@@ -1872,195 +1538,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private void RenderMessages(IReadOnlyList<ChatMessage> messages)
-        {
-            int count = messages?.Count ?? 0;
-            string avatarName = AvatarDisplayName(_activeAvatarId);
-            _chatSubtitle = $"{MessageCountText(count)} · {avatarName}";
-
-            if (_topbarSubtitle != null)
-                _topbarSubtitle.text = _chatSubtitle;
-
-            if (_navChatCount != null)
-                _navChatCount.text = count.ToString();
-
-            if (_subtitleRole != null)
-                _subtitleRole.text = avatarName;
-
-            RenderTranscript(messages);
-
-            if (_subtitleBody == null)
-                return;
-
-            string text = LocalizationExtensions.Get("chat.subtitle.ready", "Готова помочь. С чего начнём?");
-            if (messages != null)
-            {
-                for (int i = messages.Count - 1; i >= 0; i--)
-                {
-                    var msg = messages[i];
-                    if (!HasRenderableMessageContent(msg)) continue;
-                    if (msg.role != "user")
-                    {
-                        text = !string.IsNullOrWhiteSpace(msg.content)
-                            ? msg.content
-                            : $"[image] {GetAttachmentDisplayName(msg.attachments != null && msg.attachments.Count > 0 ? msg.attachments[0] : null)}";
-                        break;
-                    }
-                }
-            }
-
-            _subtitleBody.text = TrimForSubtitle(text);
-        }
-
-        private void RenderTranscript(IReadOnlyList<ChatMessage> messages)
-        {
-            if (_messagesList == null)
-                return;
-
-            _messagesList.Clear();
-
-            if (messages == null || messages.Count == 0)
-            {
-                _messagesList.Add(CreateEmptyTranscript());
-                return;
-            }
-
-            bool hasVisibleMessages = false;
-            for (int i = 0; i < messages.Count; i++)
-            {
-                var message = messages[i];
-                if (!HasRenderableMessageContent(message))
-                    continue;
-
-                _messagesList.Add(CreateMessageElement(message));
-                hasVisibleMessages = true;
-            }
-
-            if (!hasVisibleMessages)
-            {
-                _messagesList.Add(CreateEmptyTranscript());
-                return;
-            }
-
-            ScrollTranscriptToBottom();
-        }
-
-        private static VisualElement CreateEmptyTranscript()
-        {
-            var container = new VisualElement();
-            container.AddToClassList("transcript__empty");
-
-            var title = new Label(LocalizationExtensions.Get("chat.empty.title", "Пока нет сообщений"));
-            title.AddToClassList("transcript__empty-title");
-
-            var body = new Label(LocalizationExtensions.Get("chat.empty.body", "Начни диалог ниже, и здесь появится полная история текущей сессии."));
-            body.AddToClassList("transcript__empty-body");
-
-            container.Add(title);
-            container.Add(body);
-            return container;
-        }
-
-        private static VisualElement CreateMessageElement(ChatMessage message)
-        {
-            string role = NormalizeRole(message.role);
-
-            var row = new VisualElement();
-            row.AddToClassList("transcript__row");
-            row.AddToClassList($"transcript__row--{role}");
-
-            var bubble = new VisualElement();
-            bubble.AddToClassList("transcript__bubble");
-            bubble.AddToClassList($"transcript__bubble--{role}");
-
-            var meta = new VisualElement();
-            meta.AddToClassList("transcript__meta");
-
-            var roleLabel = new Label(DisplayRole(role));
-            roleLabel.AddToClassList("transcript__role");
-
-            Label modelLabel = null;
-            if (role == "assistant" && !string.IsNullOrWhiteSpace(message.model))
-            {
-                modelLabel = new Label(message.model);
-                modelLabel.style.fontSize = 11f;
-                modelLabel.style.color = new Color(0.62f, 0.66f, 0.78f, 1f);
-                modelLabel.style.marginLeft = 6f;
-                modelLabel.style.paddingLeft = 6f;
-                modelLabel.style.paddingRight = 6f;
-                modelLabel.style.paddingTop = 1f;
-                modelLabel.style.paddingBottom = 1f;
-                modelLabel.style.backgroundColor = new Color(0.18f, 0.2f, 0.28f, 0.9f);
-                modelLabel.style.borderTopLeftRadius = 8f;
-                modelLabel.style.borderTopRightRadius = 8f;
-                modelLabel.style.borderBottomLeftRadius = 8f;
-                modelLabel.style.borderBottomRightRadius = 8f;
-            }
-
-            var timeLabel = new Label(FormatMessageTime(message.unixTimeSeconds));
-            timeLabel.AddToClassList("transcript__time");
-
-            meta.Add(roleLabel);
-            if (modelLabel != null)
-                meta.Add(modelLabel);
-            meta.Add(timeLabel);
-            bubble.Add(meta);
-
-            if (!string.IsNullOrWhiteSpace(message.content))
-            {
-                var body = new Label(message.content);
-                body.AddToClassList("transcript__body");
-                bubble.Add(body);
-            }
-
-            if (message.attachments != null && message.attachments.Count > 0)
-            {
-                var attachmentWrap = new VisualElement();
-                attachmentWrap.style.flexDirection = FlexDirection.Column;
-                attachmentWrap.style.marginTop = 6f;
-
-                for (int i = 0; i < message.attachments.Count; i++)
-                {
-                    var attachment = message.attachments[i];
-                    if (attachment == null)
-                        continue;
-
-                    var attachmentLabel = new Label($"[image] {GetAttachmentDisplayName(attachment)}");
-                    attachmentLabel.AddToClassList("transcript__body");
-                    attachmentLabel.style.fontSize = 11f;
-                    attachmentLabel.style.color = new Color(0.76f, 0.8f, 0.92f, 0.92f);
-                    attachmentWrap.Add(attachmentLabel);
-                }
-
-                if (attachmentWrap.childCount > 0)
-                    bubble.Add(attachmentWrap);
-            }
-            row.Add(bubble);
-
-            return row;
-        }
-
-        private void ScrollTranscriptToBottom()
-        {
-            if (_messagesList == null)
-                return;
-
-            _messagesList.schedule.Execute(() =>
-            {
-                var content = _messagesList?.contentContainer;
-                if (content == null || content.childCount == 0)
-                    return;
-
-                _messagesList.ScrollTo(content[content.childCount - 1]);
-                SetDisplay(_scrollBottomBtn, DisplayStyle.None);
-            });
-        }
-
-        private void OnScrollBottomClicked()
-        {
-            ScrollTranscriptToBottom();
-        }
-
         private void UpdateScrollBottomButton()
         {
             if (_scrollBottomBtn == null || _messagesList == null)
@@ -2088,217 +1565,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             float scrollY = _messagesList.scrollOffset.y;
             bool isAtBottom = maxScroll <= 1f || scrollY >= maxScroll - 1f;
             SetDisplay(_scrollBottomBtn, isAtBottom ? DisplayStyle.None : DisplayStyle.Flex);
-        }
-
-        private static IReadOnlyList<ChatMessage> BuildPendingMessages(
-            IReadOnlyList<ChatMessage> currentMessages,
-            string pendingText,
-            IReadOnlyList<ChatAttachment> pendingAttachments)
-        {
-            var messages = new List<ChatMessage>();
-
-            if (currentMessages != null)
-            {
-                for (int i = 0; i < currentMessages.Count; i++)
-                {
-                    if (currentMessages[i] != null)
-                        messages.Add(currentMessages[i]);
-                }
-            }
-
-            messages.Add(new ChatMessage
-            {
-                role = "user",
-                content = pendingText,
-                attachments = CloneAttachments(pendingAttachments),
-                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-            });
-
-            return messages;
-        }
-
-        private static bool HasRenderableMessageContent(ChatMessage message)
-        {
-            return message != null &&
-                   (!string.IsNullOrWhiteSpace(message.content) ||
-                    (message.attachments != null && message.attachments.Count > 0));
-        }
-
-        private static string GetAttachmentDisplayName(ChatAttachment attachment)
-        {
-            if (!string.IsNullOrWhiteSpace(attachment?.name))
-                return attachment.name;
-
-            if (!string.IsNullOrWhiteSpace(attachment?.path))
-                return System.IO.Path.GetFileName(attachment.path);
-
-            return "image";
-        }
-
-        private static List<ChatAttachment> CloneAttachments(IReadOnlyList<ChatAttachment> attachments)
-        {
-            var clone = new List<ChatAttachment>();
-            if (attachments == null)
-                return clone;
-
-            for (int i = 0; i < attachments.Count; i++)
-            {
-                var attachment = attachments[i];
-                if (attachment == null)
-                    continue;
-
-                clone.Add(new ChatAttachment
-                {
-                    kind = string.IsNullOrWhiteSpace(attachment.kind) ? "image" : attachment.kind,
-                    name = attachment.name,
-                    path = attachment.path,
-                    mediaType = attachment.mediaType
-                });
-            }
-
-            return clone;
-        }
-
-        private void ClearPendingComposerAttachments()
-        {
-            _pendingComposerAttachments.Clear();
-        }
-
-        private void RestorePendingComposerAttachments(IReadOnlyList<ChatAttachment> attachments)
-        {
-            _pendingComposerAttachments.Clear();
-            var restored = CloneAttachments(attachments);
-            for (int i = 0; i < restored.Count; i++)
-                _pendingComposerAttachments.Add(restored[i]);
-        }
-
-        private static string StripAttachmentTokens(string composerText, IReadOnlyList<ChatAttachment> attachments)
-        {
-            string text = composerText ?? string.Empty;
-            if (attachments != null)
-            {
-                for (int i = 0; i < attachments.Count; i++)
-                {
-                    string name = attachments[i]?.name;
-                    if (string.IsNullOrWhiteSpace(name))
-                        continue;
-
-                    string token = $"[attachment: {name}]";
-                    text = text.Replace(token, string.Empty);
-                }
-            }
-
-            return CollapseWhitespace(text).Trim();
-        }
-
-        private static string CollapseWhitespace(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            var sb = new StringBuilder(value.Length);
-            bool previousWasWhitespace = false;
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                if (char.IsWhiteSpace(c))
-                {
-                    if (!previousWasWhitespace)
-                        sb.Append(' ');
-                    previousWasWhitespace = true;
-                }
-                else
-                {
-                    sb.Append(c);
-                    previousWasWhitespace = false;
-                }
-            }
-
-            return sb.ToString();
-        }
-
-        private static string GuessImageMediaType(string path)
-        {
-            string extension = System.IO.Path.GetExtension(path)?.ToLowerInvariant();
-            return extension switch
-            {
-                ".png" => "image/png",
-                ".jpg" => "image/jpeg",
-                ".jpeg" => "image/jpeg",
-                ".webp" => "image/webp",
-                ".gif" => "image/gif",
-                ".bmp" => "image/bmp",
-                _ => "application/octet-stream"
-            };
-        }
-
-        private static string NormalizeRole(string role)
-        {
-            if (string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
-                return "user";
-
-            if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
-                return "system";
-
-            return "assistant";
-        }
-
-        private static string DisplayRole(string role)
-        {
-            switch (role)
-            {
-                case "user":
-                    return LocalizationExtensions.Get("chat.role.you", "Ты");
-                case "system":
-                    return LocalizationExtensions.Get("chat.role.system", "Система");
-                default:
-                    return LocalizationExtensions.Get("chat.role.neon", "Neon");
-            }
-        }
-
-        private static string FormatMessageTime(long unixTimeSeconds)
-        {
-            if (unixTimeSeconds <= 0)
-                return string.Empty;
-
-            return DateTimeOffset
-                .FromUnixTimeSeconds(unixTimeSeconds)
-                .ToLocalTime()
-                .ToString("HH:mm");
-        }
-
-        private static string MessageCountText(int count)
-        {
-            int mod100 = count % 100;
-            int mod10 = count % 10;
-            string word;
-
-            if (mod100 >= 11 && mod100 <= 14)
-                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
-            else if (mod10 == 1)
-                word = LocalizationExtensions.Get("chat.messages.one", "сообщение");
-            else if (mod10 >= 2 && mod10 <= 4)
-                word = LocalizationExtensions.Get("chat.messages.few", "сообщения");
-            else
-                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
-
-            return $"{count} {word}";
-        }
-
-        private static string TrimForSubtitle(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return string.Empty;
-
-            string normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
-            return normalized.Length <= 320 ? normalized : normalized.Substring(0, 317) + "...";
-        }
-
-        private void AddSystemMessage(string text)
-        {
-            SetSending(false);
-            if (_subtitleBody != null)
-                _subtitleBody.text = text;
         }
 
         private void OnAddProviderClicked()
@@ -3432,7 +2698,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_chatPanel != null && _chatPanel.style.display != DisplayStyle.None)
             {
-                SetTopbar(GetChatTitle(), _chatSubtitle);
+                SetTopbar(GetChatTitle(), _chatController.ChatSubtitle);
                 return;
             }
 
@@ -3453,9 +2719,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_historyPanel != null && _historyPanel.style.display != DisplayStyle.None)
             {
                 SetTopbar(LocalizationExtensions.Get("topbar.history.title", "История чатов"),
-                    string.IsNullOrWhiteSpace(_sessionSearchQuery)
+                    string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
                         ? LocalizationExtensions.Get("topbar.history.subtitle.saved", "Сохранённые сессии")
-                        : LocalizationExtensions.GetFormat("topbar.history.subtitle.search", "Поиск: {0}", _sessionSearchQuery));
+                        : LocalizationExtensions.GetFormat("topbar.history.subtitle.search", "Поиск: {0}", _chatController.SessionSearchQuery));
                 return;
             }
 
@@ -3602,10 +2868,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             ApplyAvatarArt(avatarId);
             string name = AvatarDisplayName(avatarId);
             if (_subtitleRole != null) _subtitleRole.text = name;
-            _chatSubtitle = _chatSubtitle.Contains("·")
-                ? _chatSubtitle.Substring(0, _chatSubtitle.LastIndexOf('·') + 2) + name
-                : _chatSubtitle;
-            if (_topbarSubtitle != null) _topbarSubtitle.text = _chatSubtitle;
+            _chatController.ChatSubtitle = _chatController.ChatSubtitle.Contains("·")
+                ? _chatController.ChatSubtitle.Substring(0, _chatController.ChatSubtitle.LastIndexOf('·') + 2) + name
+                : _chatController.ChatSubtitle;
+            if (_topbarSubtitle != null) _topbarSubtitle.text = _chatController.ChatSubtitle;
             _settingsController.SaveSettings();
         }
 
@@ -4324,9 +3590,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            if (_isSending)
+            if (_chatController.IsSending)
             {
-                SetAvatarMotionState(_isStreamingResponse ? AvatarMotionState.Talking : AvatarMotionState.Thinking);
+                SetAvatarMotionState(_chatController.IsStreamingResponse ? AvatarMotionState.Talking : AvatarMotionState.Thinking);
                 return;
             }
 
@@ -4888,118 +4154,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ============================================================
-        // Inline typing dots animation (inside streaming bubble)
-        // ============================================================
-
-        private void StartInlineTypingAnimation()
-        {
-            if (_streamingTypingDots == null || _streamingTypingDots.childCount < 3) return;
-            _inlineTypingFrame = 0;
-            _inlineTypingSchedule?.Pause();
-            _inlineTypingSchedule = _streamingTypingDots.schedule.Execute(TickInlineTyping).Every(380);
-        }
-
-        private void StopInlineTypingAnimation()
-        {
-            _inlineTypingSchedule?.Pause();
-            _inlineTypingSchedule = null;
-        }
-
-        private void TickInlineTyping()
-        {
-            if (_streamingTypingDots == null || _streamingTypingDots.childCount < 3) return;
-            int step = _inlineTypingFrame % 3;
-            SetDotOpacity(_streamingTypingDots[0], step == 0 ? 1f : 0.3f);
-            SetDotOpacity(_streamingTypingDots[1], step == 1 ? 1f : 0.3f);
-            SetDotOpacity(_streamingTypingDots[2], step == 2 ? 1f : 0.3f);
-            _inlineTypingFrame++;
-        }
-
-        // ============================================================
         // Chat action buttons: Copy, Regenerate
         // ============================================================
-
-        private void OnCopyLastMessageClicked()
-        {
-            var messages = _chatService?.CurrentChatViewModel?.Messages;
-            if (messages == null || messages.Count == 0) return;
-
-            for (int i = messages.Count - 1; i >= 0; i--)
-            {
-                var msg = messages[i];
-                if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
-                {
-                    GUIUtility.systemCopyBuffer = msg.content;
-                    AddSystemMessage(LocalizationExtensions.Get("system.copy.success", "Скопировано в буфер обмена."));
-                    return;
-                }
-            }
-        }
-
-        private void OnRegenerateClicked()
-        {
-            _ = RegenerateLastAsync();
-        }
-
-        private async Task RegenerateLastAsync()
-        {
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null || _isSending) return;
-
-                var messages = chat.CurrentChatViewModel?.Messages;
-                if (messages == null || messages.Count == 0) return;
-
-                // Remove the last assistant reply so it gets regenerated
-                if (messages[messages.Count - 1].role == "assistant")
-                    messages.RemoveAt(messages.Count - 1);
-
-                if (messages.Count == 0) return;
-
-                SetSending(true);
-                try
-                {
-                    bool streaming = _settingsController.UseStreaming;
-                    chat.UseStreaming = streaming;
-
-                    RenderMessages(chat.CurrentChatViewModel?.Messages);
-
-                    if (streaming)
-                    {
-                        AddStreamingBubble();
-                        await chat.RegenerateAsync(OnStreamToken, OnToolProgress);
-                        ClearThinkingBubble();
-                        _toolCallUiHelper.Clear();
-                        _streamingLabel = null;
-                        StopInlineTypingAnimation();
-                        if (_streamingTypingDots != null)
-                        {
-                            _streamingTypingDots.RemoveFromHierarchy();
-                            _streamingTypingDots = null;
-                        }
-                    }
-                    else
-                    {
-                        await chat.RegenerateAsync();
-                    }
-
-                    RenderMessages(chat.CurrentChatViewModel?.Messages);
-                    await LoadSessionsAsync(chat);
-                    TriggerAvatarSmile();
-                }
-                finally
-                {
-                    SetSending(false);
-                }
-            }
-            catch (Exception ex)
-            {
-                AddSystemMessage(LocalizationExtensions.Get("system.regenerate.failed", "Не удалось пересоздать последний ответ."));
-                NeonLogger.LogError(ex.ToString());
-                TriggerAvatarConfused();
-            }
-        }
 
         // ============================================================
         // Provider import
