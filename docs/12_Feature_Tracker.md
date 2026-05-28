@@ -74,6 +74,17 @@
 | V-03 | 3D аватары | ✅ | M2 | IAvatar3DService, Avatar3DLoader (GLB/GLTF), Avatar3DRenderer (orbit, pinch-zoom), Avatar3DService, AvatarProfile.is3D |
 | V-04 | Desktop realtime avatar layer | 📋 | M2+ | 3D-first realtime path: blendshapes/visemes/live lipsync; separate from 2D mobile baseline |
 
+## Рефакторинг (M2)
+| # | Фича | Статус | Спринт | Заметки |
+|---|------|--------|--------|---------|
+| R-01 | Рефакторинг MainViewController — NavigationController | 🔧 | M2 | Вынос nav-элементов и навигации (~200 строк) |
+| R-02 | MainViewController — LayoutController | 📋 | M2 | Resize handles, panel toggles (~150 строк) |
+| R-03 | MainViewController — VoiceController | 📋 | M2 | Mic/listen, voice managers (~200 строк) |
+| R-04 | MainViewController — SessionHistoryController | 📋 | M2 | History panel, session list, search (~500 строк) |
+| R-05 | MainViewController — ChatController | 📋 | M2 | Composer, send, streaming, messages (~700 строк) |
+| R-06 | MainViewController — ProvidersController | 📋 | M2 | Provider CRUD, model picker, discovery (~800 строк) |
+| R-07 | MainViewController — AvatarGalleryController | 📋 | M2 | Avatar gallery, 2D/3D, motion state (~600 строк) |
+
 ## VR (M3+)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
