@@ -7,7 +7,8 @@
 - **Core** — базовая логика, управление сессиями, конфигурация провайдеров
 - **ModelDiscoveryService** — кэшированное обнаружение моделей по эндпоинту провайдера (ключ: `baseUrl|apiKey`), авто-обнаружение при открытии редактора и при изменении baseUrl/apiKey
 - **API Layer** — работа с OpenAI-совместимыми API
-- **OpenAiCompatibleClient** — расширенный клиент: маршрутизация запросов, Hermes inventory endpoint, сессионная маршрутизация моделей, пропагация заголовков сессии (`X-Hermes-Session-Id`)
+  - **Provider Adapter** — провайдер-специфичная логика (заголовки, discovery, смена модели, capabilities) через `IProviderAdapter`. Две реализации: `HermesAdapter` и `GenericOpenAiAdapter`. Factory по `ProviderConfig.backendType`. Подробности — [14_Provider_Adapter.md](14_Provider_Adapter.md)
+- **OpenAiCompatibleClient** — HTTP-транспорт + SSE парсинг. Делегирует провайдер-специфику адаптеру
 - **Avatar System** — управление 2D аватарами, sprite-sheet motion packs для low-end/mobile, state mapper (`idle` / `thinking` / `talking` / `listening`) и one-shot reactions (`smile` / `confused`), подготовка к desktop-first 3D realtime аватарам
 - **UI Layer** — интерфейс чата и настроек
 - **NeonDropdown** — кастомный UITK компонент (`INotifyValueChanged<string>`), заменяет `DropdownField` во всём интерфейсе (пикер моделей, пресет в редакторе провайдера, язык в настройках). Поддерживает `choicesCsv` атрибут, popup overlay, программный API

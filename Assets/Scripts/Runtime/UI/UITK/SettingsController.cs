@@ -302,9 +302,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         internal void RegisterCallbacks()
         {
+<<<<<<< HEAD
             RegisterClick(_shapeRound,  _ => SetAvatarShape("round"));
             RegisterClick(_shapeSquare, _ => SetAvatarShape("square"));
             RegisterClick(_shapeHex,    _ => SetAvatarShape("hex"));
+=======
+            RegisterClick(_shapeRound,  () => SetAvatarShape("round"));
+            RegisterClick(_shapeSquare, () => SetAvatarShape("square"));
+            RegisterClick(_shapeHex,    () => SetAvatarShape("hex"));
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
 
             RegisterToggleChanged(_settingsHistory,      _ => SaveSettings());
             RegisterToggleChanged(_settingsStreaming,     _ => SaveSettings());
@@ -655,7 +661,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Hotkey capture / quit dialog
         // ============================================================
 
+<<<<<<< HEAD
         private void OnNavCloseClicked(ClickEvent _) { ShowQuitDialog(); }
+=======
+        private void OnNavCloseClicked() { ShowQuitDialog(); }
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
 
         private void ShowQuitDialog()
         {
@@ -678,7 +688,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_quitOverlay, DisplayStyle.None);
         }
 
+<<<<<<< HEAD
         private void OnQuitConfirmed(ClickEvent _ = null)
+=======
+        private void OnQuitConfirmed()
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
@@ -687,7 +701,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 #endif
         }
 
+<<<<<<< HEAD
         private void OnQuitCanceled(ClickEvent _) { HideQuitDialog(); }
+=======
+        private void OnQuitCanceled() { HideQuitDialog(); }
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
 
         private void OnGlobalKeyDown(KeyDownEvent evt)
         {
@@ -718,7 +736,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+<<<<<<< HEAD
         private void OnHotkeyCaptureClicked(ClickEvent _)
+=======
+        private void OnHotkeyCaptureClicked()
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
         {
             if (_isCapturingHotkey) { ExitCaptureMode(_closeHotkey); return; }
             EnterCaptureMode();
@@ -782,7 +804,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Settings action buttons
         // ============================================================
 
+<<<<<<< HEAD
         private void OnOpenFolderClicked(ClickEvent _)
+=======
+        private void OnOpenFolderClicked()
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
         {
             OpenPath(Application.persistentDataPath);
         }
@@ -801,7 +827,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 #endif
         }
 
+<<<<<<< HEAD
         private void OnExportChatsClicked(ClickEvent e) { _ = ExportChatsAsync(); }
+=======
+        private void OnExportChatsClicked() { _ = ExportChatsAsync(); }
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
 
         private async Task ExportChatsAsync()
         {
@@ -829,19 +859,31 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+<<<<<<< HEAD
         private void OnSettingsGitHubClicked(ClickEvent _)
+=======
+        private void OnSettingsGitHubClicked()
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
         {
             OpenExternalUrl("https://github.com/isteelfelix/neon-companion");
             _deps.AddSystemMessage?.Invoke(LocalizationExtensions.Get("system.open.github", "Открыт GitHub репозитория."));
         }
 
+<<<<<<< HEAD
         private void OnSettingsDocsClicked(ClickEvent _)
+=======
+        private void OnSettingsDocsClicked()
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
         {
             OpenExternalUrl("https://github.com/isteelfelix/neon-companion/tree/main/docs");
             _deps.AddSystemMessage?.Invoke(LocalizationExtensions.Get("system.open.docs", "Открыта папка docs."));
         }
 
+<<<<<<< HEAD
         private void OnSettingsDonateClicked(ClickEvent _)
+=======
+        private void OnSettingsDonateClicked()
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
         {
             if (_donationService?.IsDonationSupported == true)
             {
@@ -862,7 +904,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Clear data
         // ============================================================
 
+<<<<<<< HEAD
         private void OnClearDataClicked(ClickEvent e)
+=======
+        private void OnClearDataClicked()
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
         {
             long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (!_clearDataConfirmPending || nowMs > _clearDataConfirmExpiresAtMs)
@@ -879,7 +925,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = ClearAllDataAsync();
         }
 
+<<<<<<< HEAD
         private void OnClearChatsClicked(ClickEvent e) { _ = ClearChatsOnlyAsync(); }
+=======
+        private void OnClearChatsClicked() { _ = ClearChatsOnlyAsync(); }
+>>>>>>> 7acc813ce066c78fb0e4da240b48a54d04b014ed
 
         private void ResetClearDataConfirmation()
         {

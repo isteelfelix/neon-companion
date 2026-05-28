@@ -20,6 +20,7 @@
 | C-07 | Модель-пикер в чате | ✅ | M1 | NeonDropdown в topbar + overlay-диалог, `ApplySessionModelAsync` |
 | C-08 | Вложения в чате | ✅ | M1 | `ChatAttachment`, `AiChatAttachment` |
 | C-09 | Сессионная маршрутизация моделей | ✅ | M1 | `X-Hermes-Session-Id`, `ProviderSessionId`, Hermes inventory |
+| C-10 | Provider Adapter архитектура | 📋 | M2 | `IProviderAdapter` + `HermesAdapter` + `GenericOpenAiAdapter`, `ProviderConfig.backendType`. Подробности — [14_Provider_Adapter.md](14_Provider_Adapter.md) |
 
 ## История и сессии
 | # | Фича | Статус | Спринт | Заметки |
