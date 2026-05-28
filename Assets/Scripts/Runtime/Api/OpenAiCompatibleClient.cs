@@ -183,7 +183,7 @@ namespace NeonCompanion.Runtime.Api
             }
         }
 
-        public async Task<ModelSwitchResult> ApplySessionModelAsync(
+        public Task<ModelSwitchResult> ApplySessionModelAsync(
             ProviderConfig provider,
             string targetModel,
             string providerSessionId = null,
@@ -195,11 +195,11 @@ namespace NeonCompanion.Runtime.Api
             if (string.IsNullOrWhiteSpace(requestedModel))
                 throw new ArgumentException("Target model is required.", nameof(targetModel));
 
-            return new ModelSwitchResult(
+            return Task.FromResult(new ModelSwitchResult(
                 success: true,
                 requestedModel: requestedModel,
                 appliedModel: requestedModel,
-                providerSessionId: null);
+                providerSessionId: null));
         }
 
         private static IReadOnlyList<string> ParseModelIds(string json)
@@ -577,16 +577,16 @@ namespace NeonCompanion.Runtime.Api
             return new AiChatResponse { content = content, receivedAtUtc = DateTime.UtcNow };
         }
 
-        private async Task<RequestRoutingInfo> ResolveRequestRoutingAsync(
+        private Task<RequestRoutingInfo> ResolveRequestRoutingAsync(
             ProviderConfig provider,
             AiChatRequest request,
             CancellationToken cancellationToken)
         {
-            return new RequestRoutingInfo
+            return Task.FromResult(new RequestRoutingInfo
             {
                 Model = request.model,
                 ProviderSessionId = request?.providerSessionId?.Trim()
-            };
+            });
         }
 
         private async Task<string> TryGetHermesProxyModelAsync(

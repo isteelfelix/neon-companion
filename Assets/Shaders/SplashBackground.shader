@@ -19,6 +19,15 @@ Shader "NeonCompanion/SplashBackground"
         _PurpleStrength("Purple Strength",      Float)  = 0.26
         _PulseSpeed    ("Pulse Speed",          Float)  = 1.4
         _PulseAmp      ("Pulse Amplitude",      Float)  = 0.12
+
+        // ── Conic blob behind the icon ────────────────────────────────
+        _ConicColor1   ("Conic Colour 1 (cyan)",    Color)  = (0.30, 0.78, 0.92, 1)
+        _ConicColor2   ("Conic Colour 2 (indigo)",  Color)  = (0.49, 0.48, 0.93, 1)
+        _ConicColor3   ("Conic Colour 3 (magenta)", Color)  = (0.88, 0.45, 0.78, 1)
+        _ConicCenter   ("Conic Centre (UV)",        Vector) = (0.50, 0.62, 0, 0)
+        _ConicRadius   ("Conic Radius (UV-aspect)", Float)  = 0.20
+        _ConicStrength ("Conic Strength",           Float)  = 0.55
+        _ConicSpeed    ("Conic Rotation Speed",     Float)  = 0.35
     }
 
     SubShader
@@ -33,7 +42,10 @@ Shader "NeonCompanion/SplashBackground"
         Pass
         {
             Name "SplashBG"
-            Tags { "LightMode" = "UniversalForward" }
+            // Universal2D — required tag so URP 2D Renderer actually
+            // dispatches this pass. UniversalForward would render only on
+            // the 3D forward renderer; the project uses Renderer2D.asset.
+            Tags { "LightMode" = "Universal2D" }
 
             ZWrite Off
             ZTest  Always
@@ -57,6 +69,13 @@ Shader "NeonCompanion/SplashBackground"
                 float  _PurpleStrength;
                 float  _PulseSpeed;
                 float  _PulseAmp;
+                half4  _ConicColor1;
+                half4  _ConicColor2;
+                half4  _ConicColor3;
+                float4 _ConicCenter;
+                float  _ConicRadius;
+                float  _ConicStrength;
+                float  _ConicSpeed;
             CBUFFER_END
 
             struct Attributes
@@ -81,7 +100,14 @@ Shader "NeonCompanion/SplashBackground"
 
             half4 Frag(Varyings i) : SV_Target
             {
-                float2 uv = i.uv;
+                // SCREEN-space UV (0..1 across viewport), NOT mesh UV.
+                // The BackgroundQuad is 40×40 world units but the camera only
+                // sees a 17.78×10 slice — mesh UV maps to the whole quad, so
+                // UV.y=0.62 would end up near the top of the visible viewport.
+                // positionCS.xy / _ScreenParams gives true screen UV [0,1].
+                // URP fragment shader's positionCS is already Y-up (Y=0 at
+                // bottom) — no flip needed.
+                float2 uv = i.positionCS.xy / _ScreenParams.xy;
 
                 // Aspect-ratio correction so glows are round, not oval
                 float aspect = _ScreenParams.x / max(_ScreenParams.y, 1.0);
@@ -105,6 +131,27 @@ Shader "NeonCompanion/SplashBackground"
                 half3 col = _BaseColor.rgb;
                 col += _TealColor.rgb   * (teal   * pulse1);
                 col += _PurpleColor.rgb * (purple * pulse2);
+
+                // ── Conic blob behind the icon ────────────────────────
+                // 3-stop conic loop (c1 → c2 → c3 → c1) with rotation +
+                // gaussian radial falloff so it fades to nothing past the
+                // icon. Cheap: one atan2, one exp, three lerps.
+                float2 conicCentreA = float2(_ConicCenter.x * aspect, _ConicCenter.y);
+                float2 toConic      = uvA - conicCentreA;
+                float  conicDist    = length(toConic) / max(_ConicRadius, 0.001);
+                // Tight gaussian (factor 4.0) keeps the blob localised to the
+                // icon area instead of bleeding across the whole viewport.
+                float  conicFall    = exp(-conicDist * conicDist * 4.0) * _ConicStrength;
+
+                float angle  = atan2(toConic.y, toConic.x) + _Time.y * _ConicSpeed;
+                float angleT = frac(angle / 6.2831853 + 0.5);   // [0,1] from atan2 range
+
+                half3 conicCol;
+                if      (angleT < 0.3333) conicCol = lerp(_ConicColor1.rgb, _ConicColor2.rgb,  angleT          * 3.0);
+                else if (angleT < 0.6667) conicCol = lerp(_ConicColor2.rgb, _ConicColor3.rgb, (angleT - 0.3333) * 3.0);
+                else                      conicCol = lerp(_ConicColor3.rgb, _ConicColor1.rgb, (angleT - 0.6667) * 3.0);
+
+                col += conicCol * conicFall;
 
                 return half4(col, 1.0);
             }
