@@ -4,6 +4,7 @@
 
 ### Fixed
 - A-10: Avatar animation — all 6 clips now trigger correctly. Talking plays during AI streaming, listening on composer input, confused on provider/model errors
+- U-08: Exit button added to settings panel (triggers quit confirmation dialog)
 
 ## [0.2.0] - 2026-05-27
 

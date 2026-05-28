@@ -77,6 +77,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _settingsGithubBtn;
         private Button _settingsDocsBtn;
         private Button _settingsDonateBtn;
+        private Button _settingsExitBtn;
 
         // ===== Hotkey / quit dialog =====
         private Button _navCloseButton;
@@ -161,6 +162,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsDocsBtn       = root.Q<Button>("settings-docs-btn");
             _settingsDonateBtn     = root.Q<Button>("settings-donate-btn");
             _settingsDonateBtn?.SetEnabled(false);
+            _settingsExitBtn       = root.Q<Button>("settings-exit-btn");
 
             // Hotkey / quit dialog
             _navCloseButton   = root.Q<Button>("nav-close");
@@ -326,6 +328,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_settingsGithubBtn,      OnSettingsGitHubClicked);
             RegisterClick(_settingsDocsBtn,        OnSettingsDocsClicked);
             RegisterClick(_settingsDonateBtn,      OnSettingsDonateClicked);
+            RegisterClick(_settingsExitBtn,         OnSettingsExitClicked);
 
             RegisterClick(_navCloseButton,         OnNavCloseClicked);
             RegisterClick(_quitConfirmBtn,         OnQuitConfirmed);
@@ -348,6 +351,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_settingsGithubBtn,      OnSettingsGitHubClicked);
             UnregisterClick(_settingsDocsBtn,        OnSettingsDocsClicked);
             UnregisterClick(_settingsDonateBtn,      OnSettingsDonateClicked);
+            UnregisterClick(_settingsExitBtn,         OnSettingsExitClicked);
 
             UnregisterClick(_navCloseButton,         OnNavCloseClicked);
             UnregisterClick(_quitConfirmBtn,         OnQuitConfirmed);
@@ -851,6 +855,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             _deps.AddSystemMessage?.Invoke(LocalizationExtensions.Get("system.donate.unavailable", "Поддержка проекта пока недоступна."));
         }
+
+        private void OnSettingsExitClicked(ClickEvent _) { ShowQuitDialog(); }
 
         private static void OpenExternalUrl(string url)
         {

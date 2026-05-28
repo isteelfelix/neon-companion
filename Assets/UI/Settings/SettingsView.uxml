@@ -201,6 +201,9 @@
                         <ui:VisualElement class="icon icon--heart btn__icon" />
                         <ui:Label text="Поддержать" />
                     </ui:Button>
+                    <ui:Button name="settings-exit-btn" class="btn btn--danger">
+                        <ui:Label text="Выход" />
+                    </ui:Button>
                 </ui:VisualElement>
             </ui:VisualElement>
 
