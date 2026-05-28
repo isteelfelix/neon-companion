@@ -82,6 +82,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly SettingsController _settingsController = new SettingsController();
         private readonly NavigationController _navigationController = new NavigationController();
         private readonly ChatController _chatController = new ChatController();
+        private readonly SessionHistoryController _sessionHistoryController = new SessionHistoryController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -622,6 +623,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navigationController.Init(root, BuildNavigationControllerDeps());
             _chatController.SetDeps(BuildChatControllerDeps());
             _chatController.RegisterCallbacks();
+            _sessionHistoryController.SetDeps(BuildSessionHistoryControllerDeps());
 
             SetDisplay(_providerEditPanel, DisplayStyle.None);
             _chatController.InitState();
@@ -727,6 +729,41 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ApplyModelSelectionAsync = ApplyModelSelectionAsync,
                 OpenModelPickerAsync = OpenModelPickerAsync,
                 GetAvatarDisplayName = () => AvatarDisplayName(_activeAvatarId)
+            };
+        }
+
+
+        private SessionHistoryController.Deps BuildSessionHistoryControllerDeps()
+        {
+            return new SessionHistoryController.Deps
+            {
+                SessionsList = _sessionsList,
+                HistorySessionsList = _historySessionsList,
+                SessionItems = _sessionItems,
+                HistoryState = _historyState,
+                HistorySearchBar = _historySearchBar,
+                HistoryPanelSearchBar = _historyPanelSearchBar,
+                HistorySearchInput = _historySearchInput,
+                HistoryPanelSearchInput = _historyPanelSearchInput,
+                NavChatCount = _navChatCount,
+                TopbarTitle = _topbarTitle,
+                ChatPanel = _chatPanel,
+                GetChatServiceAsync = GetChatServiceAsync,
+                GetAppAsync = GetAppAsync,
+                IsBound = () => _isBound,
+                GetCurrentSessionId = () => _currentSessionId,
+                GetChatTitle = GetChatTitle,
+                GetSessionSearchQuery = () => _chatController.SessionSearchQuery,
+                SetSessionSearchQuery = value => _chatController.SetSessionSearchQuery(value),
+                SetCurrentSession = (id, title) => { _currentSessionId = id; _currentSessionTitle = title; },
+                SetTopbar = (title, sub) => SetTopbar(title, sub),
+                RenderMessages = () => RenderMessages(null),
+                ShowSystemMessage = AddSystemMessage,
+                ShowHistoryState = ShowHistoryState,
+                ShowChat = _navigationController.ShowChat,
+                ClearPendingComposerAttachments = () => _chatController.ClearPendingComposerAttachments(),
+                GetMessageInput = () => _messageInput,
+                SetProviderHeader = (provider, model) => SetProviderHeader(provider as NeonCompanion.Runtime.Data.Models.ProviderConfig, model as string)
             };
         }
 
@@ -966,6 +1003,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             await _chatController.SendCurrentMessageAsync();
         }
+
+
+        // ===== SessionHistoryController wrappers =====
+
+        private void ShowHistoryState(string message, bool isError) => _sessionHistoryController.ShowHistoryState(message, isError);
+        private void OnHistorySearchToggled() => _sessionHistoryController.OnHistorySearchToggled();
+        private void OnHistorySearchCleared() => _sessionHistoryController.OnHistorySearchCleared();
+        private void OnHistorySearchChanged(ChangeEvent<string> evt) => _sessionHistoryController.OnHistorySearchChanged(evt);
+        private System.Threading.Tasks.Task RefreshSessionsFromCacheAsync() => _sessionHistoryController.RefreshSessionsFromCacheAsync();
+        private void RenderSessionList(System.Collections.Generic.List<NeonCompanion.Runtime.Chat.ChatSession> allSessions, System.Collections.Generic.List<NeonCompanion.Runtime.Data.Models.ProviderConfig> providers) => _sessionHistoryController.RenderSessionList(allSessions, providers);
 
         private void OnToggleLeftPanel()
         {
@@ -1238,304 +1285,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (string.IsNullOrEmpty(_currentSessionId))
                 _currentSessionId = _chatService.CurrentSessionId ?? string.Empty;
             return _chatService;
-        }
-
-        private async Task LoadSessionsAsync(ChatService chat)
-        {
-            if (_sessionsList == null && _historySessionsList == null)
-                return;
-
-            ShowHistoryState(LocalizationExtensions.Get("history.loading", "Загрузка истории…"), isError: false);
-            var allSessions = await chat.GetAllSessionsAsync();
-            var providers = new List<ProviderConfig>();
-            var app = await GetAppAsync();
-            if (app != null)
-                providers = await app.ProviderManager.GetAllProvidersAsync();
-            if (!_isBound)
-                return;
-
-            // Sync session identity from service if not yet captured (covers refresh/init)
-            if (string.IsNullOrEmpty(_currentSessionId))
-                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
-
-            // Sync display title from the actual current session (covers reload/refresh case)
-            if (!string.IsNullOrEmpty(_currentSessionId))
-            {
-                var active = allSessions.Find(s => s.sessionId == _currentSessionId);
-                if (active != null)
-                {
-                    _currentSessionTitle = string.IsNullOrWhiteSpace(active.title) || active.title == "New chat"
-                        ? string.Empty
-                        : active.title;
-                }
-                else
-                {
-                    _currentSessionId = string.Empty;
-                    _currentSessionTitle = string.Empty;
-                }
-            }
-
-            if (_navChatCount != null)
-                _navChatCount.text = allSessions.Count.ToString();
-
-            if (_topbarTitle != null && _chatPanel != null && _chatPanel.style.display != DisplayStyle.None)
-                _topbarTitle.text = GetChatTitle();
-
-            RenderSessionList(allSessions, providers);
-        }
-
-        private void RenderSessionList(List<ChatSession> allSessions, List<ProviderConfig> providers)
-        {
-            if (_sessionsList == null && _historySessionsList == null) return;
-
-            _sessionsList?.Clear();
-            _historySessionsList?.Clear();
-            _sessionItems.Clear();
-
-            var sessions = string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
-                ? allSessions
-                : allSessions.FindAll(s =>
-                    (s.title ?? string.Empty).IndexOf(_chatController.SessionSearchQuery, StringComparison.OrdinalIgnoreCase) >= 0);
-
-            AddSessionHeader(_sessionsList, sessions.Count);
-            AddSessionHeader(_historySessionsList, sessions.Count);
-
-            if (sessions.Count == 0)
-            {
-                string emptyText = string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
-                    ? LocalizationExtensions.Get("history.empty.saved_sessions", "Сохранённых сессий пока нет.")
-                    : LocalizationExtensions.Get("history.empty.search", "По этому запросу ничего не найдено.");
-                var railEmpty = new Label(emptyText);
-                railEmpty.AddToClassList("history__meta");
-                _sessionsList?.Add(railEmpty);
-
-                var historyEmpty = new Label(emptyText);
-                historyEmpty.AddToClassList("history__meta");
-                _historySessionsList?.Add(historyEmpty);
-                ShowHistoryState(string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
-                    ? LocalizationExtensions.Get("history.empty.first_session", "История пуста. Начните чат, чтобы появилась первая сессия.")
-                    : LocalizationExtensions.Get("history.search.try_another", "Попробуйте изменить поисковый запрос."), isError: false);
-                return;
-            }
-
-            ShowHistoryState(string.Empty, isError: false);
-            for (int i = 0; i < sessions.Count; i++)
-            {
-                bool isActive = IsActiveSession(sessions[i], i);
-                var railItem = CreateSessionItem(sessions[i], isActive, providers);
-                var historyItem = CreateSessionItem(sessions[i], isActive, providers);
-                _sessionsList?.Add(railItem);
-                _historySessionsList?.Add(historyItem);
-                _sessionItems.Add(railItem);
-                _sessionItems.Add(historyItem);
-            }
-        }
-
-        private bool IsActiveSession(ChatSession session, int index)
-        {
-            if (!string.IsNullOrEmpty(_currentSessionId))
-                return session.sessionId == _currentSessionId;
-            return index == 0;
-        }
-
-        // ---- History search ----
-
-        private void OnHistorySearchToggled()
-        {
-            bool railVisible = _historySearchBar != null && _historySearchBar.style.display == DisplayStyle.Flex;
-            bool panelVisible = _historyPanelSearchBar != null && _historyPanelSearchBar.style.display == DisplayStyle.Flex;
-            bool isVisible = railVisible || panelVisible;
-            SetDisplay(_historySearchBar, isVisible ? DisplayStyle.None : DisplayStyle.Flex);
-            SetDisplay(_historyPanelSearchBar, isVisible ? DisplayStyle.None : DisplayStyle.Flex);
-            if (!isVisible)
-                (_historyPanelSearchInput ?? _historySearchInput)?.Focus();
-            if (isVisible)
-                OnHistorySearchCleared();
-        }
-
-        private void OnHistorySearchCleared()
-        {
-            _chatController.SetSessionSearchQuery(string.Empty);
-            if (_historySearchInput != null)
-                _historySearchInput.SetValueWithoutNotify(string.Empty);
-            if (_historyPanelSearchInput != null)
-                _historyPanelSearchInput.SetValueWithoutNotify(string.Empty);
-            SetDisplay(_historySearchBar, DisplayStyle.None);
-            SetDisplay(_historyPanelSearchBar, DisplayStyle.None);
-            _ = RefreshSessionsFromCacheAsync();
-        }
-
-        private void OnHistorySearchChanged(ChangeEvent<string> evt)
-        {
-            _chatController.SetSessionSearchQuery(evt.newValue ?? string.Empty);
-            if (_historySearchInput != null && _historySearchInput != evt.target)
-                _historySearchInput.SetValueWithoutNotify(_chatController.SessionSearchQuery);
-            if (_historyPanelSearchInput != null && _historyPanelSearchInput != evt.target)
-                _historyPanelSearchInput.SetValueWithoutNotify(_chatController.SessionSearchQuery);
-            _ = RefreshSessionsFromCacheAsync();
-        }
-
-        private async Task RefreshSessionsFromCacheAsync()
-        {
-            var chat = await GetChatServiceAsync();
-            if (chat == null) return;
-            try
-            {
-                ShowHistoryState(LocalizationExtensions.Get("history.loading", "Загрузка истории…"), isError: false);
-                var allSessions = await chat.GetAllSessionsAsync();
-                var app = await GetAppAsync();
-                var providers = app != null ? await app.ProviderManager.GetAllProvidersAsync() : new List<ProviderConfig>();
-                if (_isBound) RenderSessionList(allSessions, providers);
-            }
-            catch (Exception ex)
-            {
-                ShowHistoryState(LocalizationExtensions.Get("history.load_failed", "Не удалось загрузить историю чатов."), isError: true);
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void AddSessionHeader(ScrollView target, int sessionsCount)
-        {
-            if (target == null) return;
-            var groupLabel = new Label(string.IsNullOrWhiteSpace(_chatController.SessionSearchQuery)
-                ? LocalizationExtensions.Get("history.group.recent", "Недавние")
-                : LocalizationExtensions.GetFormat("history.group.results", "Результаты: {0}", sessionsCount));
-            groupLabel.AddToClassList("history__group");
-            target.Add(groupLabel);
-        }
-
-        private void ShowHistoryState(string message, bool isError)
-        {
-            if (_historyState == null)
-                return;
-
-            _historyState.text = message ?? string.Empty;
-            bool hasMessage = !string.IsNullOrWhiteSpace(_historyState.text);
-            SetDisplay(_historyState, hasMessage ? DisplayStyle.Flex : DisplayStyle.None);
-            _historyState.EnableInClassList("history-panel__state--error", hasMessage && isError);
-        }
-
-        private VisualElement CreateSessionItem(ChatSession session, bool isActive, List<ProviderConfig> providers)
-        {
-            var container = new VisualElement();
-            container.AddToClassList("history__item");
-            container.EnableInClassList(ActiveSessionClass, isActive);
-
-            var headerRow = new VisualElement();
-            headerRow.AddToClassList("history__row");
-
-            var titleLabel = new Label(string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
-                ? LocalizationExtensions.Get("chat.new", "Новый чат")
-                : session.title);
-            titleLabel.AddToClassList("history__title");
-
-            var providerLabel = new Label(BuildSessionProviderLabel(session, providers));
-            providerLabel.AddToClassList("history__provider");
-
-            int count = session.messages?.Count ?? 0;
-            var metaLabel = new Label(ChatController.MessageCountText(count));
-            metaLabel.AddToClassList("history__meta");
-
-            var deleteBtn = new Button { text = "\u00d7" };
-            deleteBtn.AddToClassList("history__delete-btn");
-            bool deletePending = false;
-            deleteBtn.RegisterCallback<ClickEvent>(evt =>
-            {
-                evt.StopPropagation();
-                if (!deletePending)
-                {
-                    deletePending = true;
-                    deleteBtn.text = "\u2713";
-                    deleteBtn.AddToClassList("history__delete-btn--confirm");
-                    return;
-                }
-                _ = DeleteSessionAndRefreshAsync(session.sessionId);
-            });
-
-            headerRow.Add(titleLabel);
-            headerRow.Add(providerLabel);
-            headerRow.Add(deleteBtn);
-
-            container.Add(headerRow);
-            container.Add(metaLabel);
-            container.RegisterCallback<ClickEvent>(evt => { _ = SwitchSessionAsync(session, container); });
-
-            return container;
-        }
-
-        private static string BuildSessionProviderLabel(ChatSession session, List<ProviderConfig> providers)
-        {
-            if (session == null)
-                return LocalizationExtensions.Get("history.provider.none", "Провайдер: —");
-
-            if (string.IsNullOrWhiteSpace(session.providerId))
-                return LocalizationExtensions.Get("history.provider.default", "Провайдер: default");
-
-            var provider = providers?.Find(p => p != null && p.id == session.providerId);
-            if (provider != null && !string.IsNullOrWhiteSpace(provider.displayName))
-                return LocalizationExtensions.GetFormat("history.provider.named", "Провайдер: {0}", provider.displayName);
-
-            return LocalizationExtensions.GetFormat("history.provider.named", "Провайдер: {0}", ShortProviderId(session.providerId));
-        }
-
-        private static string ShortProviderId(string providerId)
-        {
-            if (string.IsNullOrWhiteSpace(providerId))
-                return "—";
-
-            return providerId.Length <= 8 ? providerId : providerId.Substring(0, 8);
-        }
-
-        private async Task SwitchSessionAsync(ChatSession session, VisualElement item)
-        {
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null)
-                    return;
-
-                await chat.SwitchToSessionAsync(session);
-                _currentSessionId = session.sessionId;
-                _currentSessionTitle = string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
-                    ? string.Empty
-                    : session.title;
-                _chatController.ClearPendingComposerAttachments();
-                if (_messageInput != null)
-                    _messageInput.value = string.Empty;
-                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
-                RenderMessages(chat.CurrentChatViewModel?.Messages);
-                await LoadSessionsAsync(chat);
-                _navigationController.ShowChat();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private async Task DeleteSessionAndRefreshAsync(string sessionId)
-        {
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null) return;
-
-                await chat.DeleteSessionAsync(sessionId);
-
-                if (_currentSessionId == sessionId)
-                {
-                    _currentSessionId = chat.CurrentSessionId ?? string.Empty;
-                    _currentSessionTitle = string.Empty;
-                    SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
-                    RenderMessages(chat.CurrentChatViewModel?.Messages);
-                }
-
-                await LoadSessionsAsync(chat);
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
         }
 
         private void UpdateScrollBottomButton()
