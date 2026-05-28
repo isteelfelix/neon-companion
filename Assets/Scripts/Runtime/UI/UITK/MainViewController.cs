@@ -1433,7 +1433,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             providerLabel.AddToClassList("history__provider");
 
             int count = session.messages?.Count ?? 0;
-            var metaLabel = new Label(MessageCountText(count));
+            var metaLabel = new Label(ChatController.MessageCountText(count));
             metaLabel.AddToClassList("history__meta");
 
             var deleteBtn = new Button { text = "\u00d7" };
@@ -1499,7 +1499,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _currentSessionTitle = string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
                     ? string.Empty
                     : session.title;
-                ClearPendingComposerAttachments();
+                _chatController.ClearPendingComposerAttachments();
                 if (_messageInput != null)
                     _messageInput.value = string.Empty;
                 SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);

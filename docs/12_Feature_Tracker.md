@@ -77,7 +77,7 @@
 ## Рефакторинг (M2)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| R-01 | Рефакторинг MainViewController — NavigationController | 🔧 | M2 | Вынос nav-элементов и навигации (~200 строк) |
+| R-01 | Рефакторинг MainViewController — NavigationController | ✅ | M2 | 317 строк, deps-based. MainViewController: 5271 → 5202 (-69) |
 | R-02 | MainViewController — LayoutController | 📋 | M2 | Resize handles, panel toggles (~150 строк) |
 | R-03 | MainViewController — VoiceController | 📋 | M2 | Mic/listen, voice managers (~200 строк) |
 | R-04 | MainViewController — SessionHistoryController | 📋 | M2 | History panel, session list, search (~500 строк) |

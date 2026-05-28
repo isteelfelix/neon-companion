@@ -485,7 +485,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private void ClearPendingComposerAttachments()
+        public void ClearPendingComposerAttachments()
         {
             _pendingComposerAttachments.Clear();
         }
@@ -906,7 +906,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 .ToString("HH:mm");
         }
 
-        private static string MessageCountText(int count)
+        internal static string MessageCountText(int count)
         {
             int mod100 = count % 100;
             int mod10 = count % 10;
