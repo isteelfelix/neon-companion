@@ -83,6 +83,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly ChatController _chatController = new ChatController();
         private readonly SessionHistoryController _sessionHistoryController = new SessionHistoryController();
         private readonly ProvidersController _providersController = new ProvidersController();
+        private readonly AvatarGalleryController _avatarGalleryController = new AvatarGalleryController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -370,6 +371,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _voiceOutputManager.UnbindChat(_chatService);
             _voiceBoundToChat = false;
             _settingsController.UnbindLocalizationEvents();
+            _avatarGalleryController.OnDisable();
             _avatarAnimator?.Stop();
             _avatar3DService?.Unload();
             foreach (var tex in _customTextures.Values)
@@ -556,6 +558,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _providersController.SetDeps(BuildProvidersControllerDeps());
             _providersController.Init();
             _providersController.RegisterCallbacks();
+            _avatarGalleryController.SetDeps(BuildAvatarGalleryControllerDeps());
+            _avatarGalleryController.Init();
+            _avatarGalleryController.RegisterCallbacks();
 
             _chatController.InitState();
             _isBound = true;
@@ -745,6 +750,50 @@ namespace NeonCompanion.Runtime.UI.UITK
             };
         }
 
+        private AvatarGalleryController.Deps BuildAvatarGalleryControllerDeps()
+        {
+            return new AvatarGalleryController.Deps
+            {
+                Root = _root,
+                SaveSettings = () => _settingsController.SaveSettings(),
+                SyncActiveAvatarSystemPromptAsync = (app) => _settingsController.SyncActiveAvatarSystemPromptAsync(app),
+                ShowChat = _navigationController.ShowChat,
+                GetChatSubtitle = () => _chatController.ChatSubtitle,
+                SetChatSubtitle = (text) => { _chatController.ChatSubtitle = text; },
+                SetTopbarSubtitle = (text) => { if (_topbarSubtitle != null) _topbarSubtitle.text = text; },
+                SetSubtitleRole = (text) => { if (_subtitleRole != null) _subtitleRole.text = text; },
+                AddSystemMessage = AddSystemMessage,
+                IsChatSending = () => _chatController.IsSending,
+                IsChatStreamingResponse = () => _chatController.IsStreamingResponse,
+                GetIsVoicePlaying = () => _isVoicePlaying,
+                GetIsVoiceRecording = () => _isVoiceRecording,
+                GetAppAsync = GetAppAsync,
+                GetAppSync = () => _app,
+                IsBound = () => _isBound,
+                GetOrCreateAnimator = () =>
+                {
+                    if (_avatarAnimator == null)
+                    {
+                        _avatarAnimator = gameObject.GetComponent<SpriteSheetAnimator>();
+                        if (_avatarAnimator == null)
+                            _avatarAnimator = gameObject.AddComponent<SpriteSheetAnimator>();
+                    }
+                    return _avatarAnimator;
+                },
+                GetOrCreateAvatar3DRenderer = () =>
+                {
+                    if (_avatar3DRenderer == null)
+                    {
+                        _avatar3DRenderer = gameObject.GetComponent<Avatar3DRenderer>();
+                        if (_avatar3DRenderer == null)
+                            _avatar3DRenderer = gameObject.AddComponent<Avatar3DRenderer>();
+                    }
+                    return _avatar3DRenderer;
+                },
+                ModelParent = transform
+            };
+        }
+
         private void RegisterCallbacks()
         {
             RegisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
@@ -795,6 +844,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void UnregisterCallbacks()
         {
             _chatController.UnregisterCallbacks();
+            _avatarGalleryController.UnregisterCallbacks();
 
             UnregisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
             UnregisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
