@@ -69,6 +69,7 @@
     border-right-color: var(--line-1);
     flex-direction: column;
     padding: 14px 12px;
+    overflow: hidden;
 }
 
 .rail__brand {
@@ -159,6 +160,7 @@
     font-size: 13px;
     color: var(--text-2);
     flex-grow: 1;
+    overflow: hidden;
 }
 
 .nav__item:hover .nav__label {
