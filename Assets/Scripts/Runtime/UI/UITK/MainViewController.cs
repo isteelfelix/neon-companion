@@ -56,7 +56,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _navThemesLabel;
         private Label _navSettingsLabel;
         private Label _navChatCount;
-        private Label _navProvidersCount;
 
         private VisualElement _root;
 
@@ -83,6 +82,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly NavigationController _navigationController = new NavigationController();
         private readonly ChatController _chatController = new ChatController();
         private readonly SessionHistoryController _sessionHistoryController = new SessionHistoryController();
+        private readonly ProvidersController _providersController = new ProvidersController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -172,20 +172,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Label _topbarTitle;
         private Label _topbarSubtitle;
-        private NeonDropdown _topbarModelPicker;
         private Label _placeholderTitle;
         private Label _placeholderBody;
         private Label _subtitleRole;
         private Label _subtitleBody;
-        private Label _connectionStatus;
-        private Label _providerShort;
-        private Label _providerName;
-        private Label _providerModel;
-        private Label _railProviderName;
-        private Label _railProviderModel;
-        private Label _editorProviderShort;
-        private Label _editorProviderName;
-        private Label _editorProviderStatus;
 
         private Button _sendButton;
         private Button _summarizeButton;
@@ -195,9 +185,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _moreButton;
         private Button _newSessionButton;
         private Button _scrollBottomBtn;
-        private Button _testProviderBtn;
-        private VisualElement _testRow;
-        private Label _testRowLabel;
         private TextField _messageInput;
         private ScrollView _messagesList;
         private ScrollView _sessionsList;
@@ -213,11 +200,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _historyPanelSearchClear;
         private Button _historyPanelNewSessionButton;
 
-        private ScrollView _providersList;
-        private Button _addProviderButton;
-        private Button _saveProviderButton;
-        private Button _cancelEditButton;
-        private Button _importProviderButton;
         private Button _copyButton;
         private Button _regenerateButton;
         private Button _listenButton;
@@ -228,33 +210,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _leftPanelVisible = true;
         private bool _rightPanelVisible = true;
         private VisualElement _avatarUploadTile;
-        private TextField _editName;
-        private TextField _editBaseUrl;
-        private TextField _editApiKey;
-        private TextField _editModel;
-        private NeonDropdown _editModelPreset;
-        private VisualElement _editModelCustomWrap;
-        private TextField _editMaxTokens;
-        private Slider _editTemperature;
-        private VisualElement _modelPickerOverlay;
-        private VisualElement _modelPickerDialog;
-        private ScrollView _modelPickerScroll;
-        private Label _modelPickerStatus;
-        private bool _isApplyingModelSwitch;
-        private VisualElement _providerEditPanel;
-        private readonly Dictionary<string, string> _modelPresetByLabel = new Dictionary<string, string>();
-        private bool _syncingModelPresetUi;
-        private string _lastCustomModel = string.Empty;
-        private bool _editModelUsesCustomMode;
-        private IReadOnlyList<string> _discoveredModels;
-        private IVisualElementScheduledItem _autoDiscoverSchedule;
-        private CancellationTokenSource _autoDiscoverCts;
 
         private CompanionApp _app;
         private ChatService _chatService;
-        private ProviderConfig _editingProvider;
-        private ProviderConfig _editingProviderSource;
-        private bool _cancelPending;
         private string _currentSessionId = string.Empty;
         private string _currentSessionTitle = string.Empty;
         private bool _isBound;
@@ -447,7 +405,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navThemesLabel = root.Q<Label>("nav-themes-label");
             _navSettingsLabel = root.Q<Label>("nav-settings-label");
             _navChatCount = root.Q<Label>("nav-chat-count");
-            _navProvidersCount = root.Q<Label>("nav-providers-count");
 
             _chatPanel = root.Q<VisualElement>("chat-panel");
             _historyPanel = root.Q<VisualElement>("history-panel");
@@ -467,20 +424,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _topbarTitle = root.Q<Label>("topbar-title");
             _topbarSubtitle = root.Q<Label>("topbar-subtitle");
-            _topbarModelPicker = root.Q<NeonDropdown>("topbar-model-picker");
             _placeholderTitle = root.Q<Label>("placeholder-title");
             _placeholderBody = root.Q<Label>("placeholder-body");
             _subtitleRole = root.Q<Label>("subtitle-role");
             _subtitleBody = root.Q<Label>("subtitle-body");
-            _connectionStatus = root.Q<Label>("connection-status");
-            _providerShort = root.Q<Label>("provider-short");
-            _providerName = root.Q<Label>("provider-name");
-            _providerModel = root.Q<Label>("provider-model");
-            _railProviderName = root.Q<Label>("rail-provider-name");
-            _railProviderModel = root.Q<Label>("rail-provider-model");
-            _editorProviderShort = root.Q<Label>("editor-provider-short");
-            _editorProviderName = root.Q<Label>("editor-provider-name");
-            _editorProviderStatus = root.Q<Label>("editor-provider-status");
 
             _messageInput = root.Q<TextField>("message-input");
             if (_messageInput != null)
@@ -515,11 +462,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _historyPanelNewSessionButton = root.Q<Button>("history-panel-new-session-btn");
             UpdatePanelToggleTooltips();
 
-            _providersList = root.Q<ScrollView>("providers-list");
-            _addProviderButton    = root.Q<Button>("add-provider-btn");
-            _importProviderButton = root.Q<Button>("import-provider-btn");
-            _saveProviderButton   = root.Q<Button>("save-provider-btn");
-            _cancelEditButton     = root.Q<Button>("cancel-edit-btn");
             _copyButton       = root.Q<Button>("copy-btn");
             _regenerateButton = root.Q<Button>("refresh-btn");
             _listenButton = root.Q<Button>("listen-btn");
@@ -530,21 +472,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarUploadTile     = root.Q<VisualElement>("avtile-upload");
             _galleryContainer     = _avatarsPanel?.Q<VisualElement>(className: "gallery");
             _navAvatarsCount      = _navAvatars?.Q<Label>(className: "nav__count");
-            _providerEditPanel = root.Q<VisualElement>("provider-edit-panel");
-            _editName = root.Q<TextField>("edit-name");
-            _editBaseUrl = root.Q<TextField>("edit-baseurl");
-            _editApiKey = root.Q<TextField>("edit-apikey");
-            _editModel = root.Q<TextField>("edit-model");
-            _editModelPreset = root.Q<NeonDropdown>("edit-model-preset");
-            _editModelCustomWrap = root.Q<VisualElement>("edit-model-custom-wrap");
-            _editMaxTokens = root.Q<TextField>("edit-maxtokens");
-            _editTemperature = root.Q<Slider>("edit-temperature");
 
             ApplyLocalizedStaticTexts();
-
-            _testProviderBtn = root.Q<Button>("test-provider-btn");
-            _testRow         = root.Q<VisualElement>("test-row");
-            _testRowLabel    = root.Q<Label>("test-row-label");
 
             // Avatar elements
             _avatarArt       = root.Q<VisualElement>("avatar-art");
@@ -624,8 +553,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _chatController.SetDeps(BuildChatControllerDeps());
             _chatController.RegisterCallbacks();
             _sessionHistoryController.SetDeps(BuildSessionHistoryControllerDeps());
+            _providersController.SetDeps(BuildProvidersControllerDeps());
+            _providersController.Init();
+            _providersController.RegisterCallbacks();
 
-            SetDisplay(_providerEditPanel, DisplayStyle.None);
             _chatController.InitState();
             _isBound = true;
         }
@@ -659,7 +590,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _historySessionsList?.Clear();
                     if (_navChatCount != null) _navChatCount.text = "0";
                 },
-                ResetProvidersCountUi = () => { if (_navProvidersCount != null) _navProvidersCount.text = "0"; },
+                ResetProvidersCountUi = () => _providersController.ResetNavProvidersCount(),
                 SetCurrentSessionId   = id => _currentSessionId = id,
                 SetCurrentSessionTitle = title => _currentSessionTitle = title,
                 SetSubtitleBody = text => { if (_subtitleBody != null) _subtitleBody.text = text; }
@@ -670,10 +601,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             return new NavigationControllerDeps
             {
-                CanLeaveProviderEditor = CanLeaveProviderEditor,
+                CanLeaveProviderEditor = _providersController.CanLeaveProviderEditor,
                 SetTopbar = (title, sub) => SetTopbar(title, sub),
                 ShowArea = ShowArea,
-                RefreshProvidersListAsync = () => { _ = RefreshProvidersListAsync(); return System.Threading.Tasks.Task.CompletedTask; },
+                RefreshProvidersListAsync = () => { _ = _providersController.RefreshProvidersListAsync(); },
                 RefreshSessionsFromCacheAsync = () => RefreshSessionsFromCacheAsync(),
                 GetChatTitle = GetChatTitle,
                 GetChatSubtitle = () => _chatController.ChatSubtitle,
@@ -726,8 +657,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 UseStreaming = () => _settingsController.UseStreaming,
                 RenderSessionList = RenderSessionList,
                 RenderMessages = RenderMessages,
-                ApplyModelSelectionAsync = ApplyModelSelectionAsync,
-                OpenModelPickerAsync = OpenModelPickerAsync,
+                ApplyModelSelectionAsync = (id, close) => _providersController.ApplyModelSelectionAsync(id, close),
+                OpenModelPickerAsync = () => _providersController.OpenModelPickerAsync(),
                 GetAvatarDisplayName = () => AvatarDisplayName(_activeAvatarId)
             };
         }
@@ -763,7 +694,54 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ShowChat = _navigationController.ShowChat,
                 ClearPendingComposerAttachments = () => _chatController.ClearPendingComposerAttachments(),
                 GetMessageInput = () => _messageInput,
-                SetProviderHeader = (provider, model) => SetProviderHeader(provider as NeonCompanion.Runtime.Data.Models.ProviderConfig, model as string)
+                SetProviderHeader = (provider, model) => _providersController.SetProviderHeader(provider as NeonCompanion.Runtime.Data.Models.ProviderConfig, model as string)
+            };
+        }
+
+        private ProvidersController.Deps BuildProvidersControllerDeps()
+        {
+            return new ProvidersController.Deps
+            {
+                ProvidersList        = _root.Q<ScrollView>("providers-list"),
+                ProviderEditPanel    = _root.Q<VisualElement>("provider-edit-panel"),
+                AddProviderButton    = _root.Q<Button>("add-provider-btn"),
+                SaveProviderButton   = _root.Q<Button>("save-provider-btn"),
+                CancelEditButton     = _root.Q<Button>("cancel-edit-btn"),
+                ImportProviderButton = _root.Q<Button>("import-provider-btn"),
+                TestProviderBtn      = _root.Q<Button>("test-provider-btn"),
+                TestRow              = _root.Q<VisualElement>("test-row"),
+                TestRowLabel         = _root.Q<Label>("test-row-label"),
+                EditName             = _root.Q<TextField>("edit-name"),
+                EditBaseUrl          = _root.Q<TextField>("edit-baseurl"),
+                EditApiKey           = _root.Q<TextField>("edit-apikey"),
+                EditModel            = _root.Q<TextField>("edit-model"),
+                EditModelPreset      = _root.Q<NeonDropdown>("edit-model-preset"),
+                EditModelCustomWrap  = _root.Q<VisualElement>("edit-model-custom-wrap"),
+                EditMaxTokens        = _root.Q<TextField>("edit-maxtokens"),
+                EditTemperature      = _root.Q<Slider>("edit-temperature"),
+                EditorProviderShort  = _root.Q<Label>("editor-provider-short"),
+                EditorProviderName   = _root.Q<Label>("editor-provider-name"),
+                EditorProviderStatus = _root.Q<Label>("editor-provider-status"),
+                NavProvidersCount    = _root.Q<Label>("nav-providers-count"),
+                TopbarModelPicker    = _root.Q<NeonDropdown>("topbar-model-picker"),
+                ProviderShort        = _root.Q<Label>("provider-short"),
+                ProviderName         = _root.Q<Label>("provider-name"),
+                ProviderModel        = _root.Q<Label>("provider-model"),
+                RailProviderName     = _root.Q<Label>("rail-provider-name"),
+                RailProviderModel    = _root.Q<Label>("rail-provider-model"),
+                Root                 = _root,
+                GetAppAsync          = GetAppAsync,
+                GetChatServiceAsync  = GetChatServiceAsync,
+                GetChatServiceSync   = () => _chatService,
+                IsBound              = () => _isBound,
+                SaveSettings         = () => _settingsController.SaveSettings(),
+                LoadSessionsAsync    = () => LoadSessionsAsync(_chatService),
+                RenderMessages       = () => RenderMessages(null),
+                AddSystemMessage     = AddSystemMessage,
+                TriggerAvatarConfused = TriggerAvatarConfused,
+                ShowChat             = _navigationController.ShowChat,
+                SetCurrentSessionId  = id => _currentSessionId = id,
+                SetCurrentSessionTitle = title => _currentSessionTitle = title
             };
         }
 
@@ -781,28 +759,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _historySearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
             if (_historyPanelSearchInput != null)
                 _historyPanelSearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
-            RegisterClick(_addProviderButton, OnAddProviderClicked);
-            RegisterClick(_importProviderButton, OnImportProviderClicked);
-            RegisterClick(_saveProviderButton, OnSaveProviderClicked);
-            RegisterClick(_cancelEditButton, OnCancelEditClicked);
-            RegisterClick(_testProviderBtn, OnTestProviderClicked);
             RegisterClick(_listenButton, OnListenClicked);
             RegisterClick(_avatarUploadBtn, OnAvatarUploadClicked);
             RegisterClick(_avatarOpenFolderBtn, OnAvatarOpenFolderClicked);
             if (_avatarUploadTile != null)
                 _avatarUploadTile.RegisterCallback<ClickEvent>(_ => OnAvatarUploadClicked());
-            if (_editModelPreset != null)
-                _editModelPreset.RegisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
-            if (_topbarModelPicker != null)
-                _topbarModelPicker.TriggerClicked += OnTopbarModelPickerTriggered;
-            if (_editName != null)
-                _editName.RegisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
-            if (_editBaseUrl != null)
-                _editBaseUrl.RegisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
-            if (_editApiKey != null)
-                _editApiKey.RegisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
-            if (_editModel != null)
-                _editModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
 
             if (_messagesList != null)
             {
@@ -843,10 +804,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_historySearchClear, OnHistorySearchCleared);
             UnregisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
             UnregisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
-            UnregisterClick(_addProviderButton, OnAddProviderClicked);
-            UnregisterClick(_saveProviderButton, OnSaveProviderClicked);
-            UnregisterClick(_cancelEditButton, OnCancelEditClicked);
-            UnregisterClick(_testProviderBtn, OnTestProviderClicked);
             UnregisterClick(_listenButton, OnListenClicked);
             UnregisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
             UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
@@ -861,21 +818,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
             UnregisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
             UnregisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
-            if (_editModelPreset != null)
-                _editModelPreset.UnregisterCallback<ChangeEvent<string>>(OnModelPresetChanged);
-            if (_topbarModelPicker != null)
-                _topbarModelPicker.TriggerClicked -= OnTopbarModelPickerTriggered;
-            if (_editName != null)
-                _editName.UnregisterCallback<ChangeEvent<string>>(OnProviderNameChanged);
-            if (_editBaseUrl != null)
-                _editBaseUrl.UnregisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
-            if (_editApiKey != null)
-                _editApiKey.UnregisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
-            if (_editModel != null)
-                _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
 
             _panelResizeHandler.UnregisterCallbacks();
             _settingsController.UnregisterCallbacks();
+            _providersController.UnregisterCallbacks();
 
             _typingSchedule?.Pause();
             _scrollBottomButtonSchedule?.Pause();
@@ -916,18 +862,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             return !string.IsNullOrWhiteSpace(_currentSessionTitle)
                 ? _currentSessionTitle
                 : LocalizationExtensions.Get("chat.new", "Новый чат");
-        }
-
-        private string GetProviderStatusText()
-        {
-            var provider = _chatService?.CurrentProvider;
-            var currentModel = _chatService?.CurrentSessionModel;
-            if (provider == null) return LocalizationExtensions.Get("provider.status.none", "нет провайдера");
-            if (!string.IsNullOrWhiteSpace(currentModel))
-                return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {currentModel}";
-            if (!string.IsNullOrWhiteSpace(provider.defaultModel))
-                return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {provider.defaultModel}";
-            return provider.displayName ?? LocalizationExtensions.Get("provider.status.configured", "настроен");
         }
 
         private void SetPlaceholder(string title, string body)
@@ -1007,11 +941,21 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== SessionHistoryController wrappers =====
 
-        private void ShowHistoryState(string message, bool isError) => _sessionHistoryController.ShowHistoryState(message, isError);
+        private void ShowHistoryState(string message, bool isError)
+        {
+            if (_historyState == null)
+                return;
+            _historyState.text = message ?? string.Empty;
+            bool hasMessage = !string.IsNullOrWhiteSpace(_historyState.text);
+            SetDisplay(_historyState, hasMessage ? DisplayStyle.Flex : DisplayStyle.None);
+            _historyState.EnableInClassList("history-panel__state--error", hasMessage && isError);
+        }
+
         private void OnHistorySearchToggled() => _sessionHistoryController.OnHistorySearchToggled();
         private void OnHistorySearchCleared() => _sessionHistoryController.OnHistorySearchCleared();
         private void OnHistorySearchChanged(ChangeEvent<string> evt) => _sessionHistoryController.OnHistorySearchChanged(evt);
         private System.Threading.Tasks.Task RefreshSessionsFromCacheAsync() => _sessionHistoryController.RefreshSessionsFromCacheAsync();
+        private System.Threading.Tasks.Task LoadSessionsAsync(ChatService chat) => _sessionHistoryController.LoadSessionsAsync(chat);
         private void RenderSessionList(System.Collections.Generic.List<NeonCompanion.Runtime.Chat.ChatSession> allSessions, System.Collections.Generic.List<NeonCompanion.Runtime.Data.Models.ProviderConfig> providers) => _sessionHistoryController.RenderSessionList(allSessions, providers);
 
         private void OnToggleLeftPanel()
@@ -1225,10 +1169,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (!_isBound || chat == null) return;
                 await EnsureVoicePipelineAsync(chat);
 
-                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
+                _providersController.SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 RenderMessages(chat.CurrentChatViewModel?.Messages);
-                await LoadSessionsAsync(chat);
-                await RefreshProvidersListAsync();
+                await _sessionHistoryController.LoadSessionsAsync(chat);
+                await _providersController.RefreshProvidersListAsync();
             }
             catch (Exception ex)
             {
@@ -1316,1070 +1260,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_scrollBottomBtn, isAtBottom ? DisplayStyle.None : DisplayStyle.Flex);
         }
 
-        private void OnAddProviderClicked()
-        {
-            if (!CanLeaveProviderEditor())
-                return;
-
-            _cancelPending = false;
-            _editingProviderSource = null;
-            _editingProvider = ProviderConfig.CreateDefault(LocalizationExtensions.Get("providers.new_provider", "Новый провайдер"), "https://api.openai.com/v1");
-            _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
-            _editModelUsesCustomMode = false;
-            _discoveredModels = null;
-            ShowProviderEditPanel();
-        }
-
-        private void StartEditingProvider(ProviderConfig provider)
-        {
-            if (provider == null)
-                return;
-
-            if (!CanSwitchEditingProvider(provider))
-                return;
-
-            _cancelPending = false;
-            _editingProviderSource = provider;
-            _editingProvider = CloneProvider(provider);
-            _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
-            _editModelUsesCustomMode = false;
-            _discoveredModels = null;
-            ShowProviderEditPanel();
-        }
-
-        private void ShowProviderEditPanel()
-        {
-            if (_providerEditPanel == null || _editingProvider == null)
-                return;
-
-            if (_editorProviderShort != null)
-                _editorProviderShort.text = BuildProviderShort(_editingProvider);
-            if (_editorProviderName != null)
-                _editorProviderName.text = string.IsNullOrWhiteSpace(_editingProvider.displayName) ? "—" : _editingProvider.displayName;
-            UpdateEditorStatus();
-            if (_editName != null)
-                _editName.SetValueWithoutNotify(_editingProvider.displayName ?? string.Empty);
-            if (_editBaseUrl != null)
-                _editBaseUrl.SetValueWithoutNotify(_editingProvider.baseUrl ?? string.Empty);
-            if (_editApiKey != null)
-                _editApiKey.SetValueWithoutNotify(_editingProvider.apiKey ?? string.Empty);
-            if (_editModel != null)
-                _editModel.SetValueWithoutNotify(_editingProvider.defaultModel ?? string.Empty);
-            SyncModelPresetUi(_editingProvider.defaultModel ?? string.Empty);
-            if (_editTemperature != null)
-                _editTemperature.SetValueWithoutNotify(_editingProvider.temperature);
-            if (_editMaxTokens != null)
-                _editMaxTokens.SetValueWithoutNotify(_editingProvider.maxTokens.ToString());
-
-            SetTestRow(null, string.Empty);
-            _providerEditPanel.style.display = DisplayStyle.Flex;
-            _ = RefreshProvidersListAsync();
-
-            // Auto-discover models if endpoint is already configured
-            if (!string.IsNullOrWhiteSpace(_editingProvider.baseUrl))
-                _ = AutoDiscoverModelsAsync();
-        }
-
-        private void OnSaveProviderClicked()
-        {
-            _ = SaveProviderAsync();
-        }
-
-        private async Task SaveProviderAsync()
-        {
-            if (_editingProvider == null)
-                return;
-
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null)
-                    return;
-
-                var draft = BuildProviderDraftFromEditor();
-                if (draft == null)
-                    return;
-
-                await app.ProviderManager.SaveProviderAsync(draft);
-
-                var chat = await GetChatServiceAsync();
-                if (chat?.CurrentProvider?.id == draft.id)
-                {
-                    bool resetRemoteSession = _editingProviderSource != null &&
-                                              (!string.Equals(_editingProviderSource.baseUrl, draft.baseUrl, StringComparison.Ordinal) ||
-                                               !string.Equals(_editingProviderSource.apiKey, draft.apiKey, StringComparison.Ordinal) ||
-                                               !string.Equals(_editingProviderSource.defaultModel, draft.defaultModel, StringComparison.Ordinal));
-                    await chat.ApplyProviderConfigAsync(draft, resetRemoteSession);
-                    SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
-                }
-                else if (_editingProviderSource?.id == draft.id)
-                {
-                    SetProviderHeader(draft);
-                }
-
-                UpdateEditorStatus();
-
-                _cancelPending = false;
-                _editingProviderSource = draft;
-                _editingProvider = CloneProvider(draft);
-                ShowProviderEditPanel();
-                await RefreshProvidersListAsync();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void OnTestProviderClicked()
-        {
-            _ = TestProviderConnectionAsync();
-        }
-
-        private async Task TestProviderConnectionAsync()
-        {
-            if (_editingProvider == null) return;
-
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null) return;
-
-                if (_testProviderBtn != null) _testProviderBtn.SetEnabled(false);
-                SetTestRow(null, LocalizationExtensions.Get("providers.test.checking", "Проверяем соединение…"));
-
-                var draft = BuildProviderDraftFromEditor();
-                if (draft == null)
-                {
-                    SetTestRow(false, LocalizationExtensions.Get("providers.test.build_failed", "Не удалось собрать настройки провайдера."));
-                    TriggerAvatarConfused();
-                    return;
-                }
-
-                var result = await app.AiClient.TestConnectionAsync(draft);
-                SetTestRow(result.Success, result.Message);
-
-                if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
-                    SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
-            }
-            catch (Exception ex)
-            {
-                SetTestRow(false, LocalizationExtensions.Get("providers.test.failed", "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа."));
-                TriggerAvatarConfused();
-                NeonLogger.LogError(ex.ToString());
-            }
-            finally
-            {
-                if (_testProviderBtn != null) _testProviderBtn.SetEnabled(true);
-            }
-        }
-
-        private void SetTestRow(bool? success, string message)
-        {
-            if (_testRowLabel != null)
-                _testRowLabel.text = message ?? string.Empty;
-
-            if (_testRow == null) return;
-
-            _testRow.EnableInClassList("testrow--ok",    success == true);
-            _testRow.EnableInClassList("testrow--error", success == false);
-        }
-
-        private void OnCancelEditClicked()
-        {
-            if (HasUnsavedChanges() && !_cancelPending)
-            {
-                _cancelPending = true;
-                SetTestRow(false, LocalizationExtensions.Get("providers.unsaved.press_cancel_again", "Изменения не сохранены. Нажми «Отмена» ещё раз, чтобы сбросить."));
-                return;
-            }
-
-            _cancelPending = false;
-            _editingProvider = null;
-            _editingProviderSource = null;
-            SetDisplay(_providerEditPanel, DisplayStyle.None);
-            _ = RefreshProvidersListAsync();
-        }
-
-        // ---- Draft editing helpers ----
-
-        private static ProviderConfig CloneProvider(ProviderConfig source)
-        {
-            if (source == null) return null;
-            return new ProviderConfig
-            {
-                id           = source.id,
-                displayName  = source.displayName,
-                baseUrl      = source.baseUrl,
-                apiKey       = source.apiKey,
-                defaultModel = source.defaultModel,
-                temperature  = source.temperature,
-                maxTokens    = source.maxTokens,
-                isEnabled    = source.isEnabled
-            };
-        }
-
-        private ProviderConfig BuildProviderDraftFromEditor()
-        {
-            if (_editingProvider == null) return null;
-
-            var draft = CloneProvider(_editingProvider);
-            if (_editName != null)        draft.displayName  = _editName.value;
-            if (_editBaseUrl != null)     draft.baseUrl      = _editBaseUrl.value;
-            if (_editApiKey != null)      draft.apiKey       = _editApiKey.value;
-            draft.defaultModel = GetCurrentModelValue();
-            if (_editTemperature != null) draft.temperature  = _editTemperature.value;
-            if (_editMaxTokens != null && int.TryParse(_editMaxTokens.value, out int tokens))
-                draft.maxTokens = tokens;
-            return draft;
-        }
-
-        private bool HasUnsavedChanges()
-        {
-            if (_providerEditPanel?.style.display != DisplayStyle.Flex) return false;
-            if (_editingProvider == null) return false;
-
-            // New provider not yet saved — treat as dirty so navigation is blocked.
-            if (_editingProviderSource == null) return true;
-
-            var draft = BuildProviderDraftFromEditor();
-            if (draft == null) return false;
-
-            static bool SameText(string left, string right)
-            {
-                return string.Equals(left ?? string.Empty, right ?? string.Empty, StringComparison.Ordinal);
-            }
-
-            return !SameText(draft.displayName, _editingProviderSource.displayName)
-                || !SameText(draft.baseUrl, _editingProviderSource.baseUrl)
-                || !SameText(draft.apiKey, _editingProviderSource.apiKey)
-                || !SameText(draft.defaultModel, _editingProviderSource.defaultModel)
-                || Math.Abs(draft.temperature - _editingProviderSource.temperature) > 0.001f
-                || draft.maxTokens    != _editingProviderSource.maxTokens;
-        }
-
-        private bool CanLeaveProviderEditor()
-        {
-            if (!HasUnsavedChanges()) return true;
-            SetTestRow(false, LocalizationExtensions.Get("providers.unsaved.save_or_cancel", "Есть несохранённые изменения. Сначала сохрани или отмени."));
-            return false;
-        }
-
-        private bool CanSwitchEditingProvider(ProviderConfig target)
-        {
-            if (_editingProviderSource?.id == target?.id) return true;
-            if (!HasUnsavedChanges()) return true;
-            SetTestRow(false, LocalizationExtensions.Get("providers.unsaved.save_or_cancel", "Есть несохранённые изменения. Сначала сохрани или отмени."));
-            return false;
-        }
-
-        private void OnProviderNameChanged(ChangeEvent<string> _)
-        {
-            if (_syncingModelPresetUi) return;
-            if (_editorProviderName != null)
-                _editorProviderName.text = string.IsNullOrWhiteSpace(_editName?.value) ? "—" : _editName.value;
-        }
-
-        private void OnBaseUrlChanged(ChangeEvent<string> _)
-        {
-            if (_syncingModelPresetUi) return;
-            _discoveredModels = null;
-            SyncModelPresetUi(GetCurrentModelValue());
-        }
-
-        private void OnProviderEndpointChanged(ChangeEvent<string> _)
-        {
-            if (_syncingModelPresetUi)
-                return;
-
-            // Update model presets from static heuristics first
-            SyncModelPresetUi(GetCurrentModelValue());
-
-            // Then debounce-fetch live models from the endpoint
-            _autoDiscoverSchedule?.Pause();
-            _autoDiscoverSchedule = _providerEditPanel?.schedule.Execute(StartAutoDiscoverModels).StartingIn(800);
-        }
-
-        private void StartAutoDiscoverModels()
-        {
-            _ = AutoDiscoverModelsAsync();
-        }
-
-        private async System.Threading.Tasks.Task AutoDiscoverModelsAsync()
-        {
-            _autoDiscoverCts?.Cancel();
-            _autoDiscoverCts = new CancellationTokenSource();
-            var ct = _autoDiscoverCts.Token;
-
-            var currentDraft = BuildProviderDraftFromEditor();
-            if (currentDraft == null || string.IsNullOrWhiteSpace(currentDraft.baseUrl))
-                return;
-
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null || ct.IsCancellationRequested) return;
-
-                // TestConnectionAsync has Hermes picker inventory logic
-                var result = await app.AiClient.TestConnectionAsync(currentDraft, ct);
-                if (ct.IsCancellationRequested) return;
-
-                if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
-                {
-                    SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
-                    SyncTopbarModelPicker(GetCurrentModelValue());
-                }
-            }
-            catch (System.OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                NeonLogger.LogWarning($"Auto-discover models failed: {ex.Message}");
-            }
-        }
-
-        private void OnManualModelChanged(ChangeEvent<string> evt)
-        {
-            if (_syncingModelPresetUi)
-                return;
-
-            if (string.Equals(_editModelPreset?.value, CustomModelPresetValue, StringComparison.Ordinal))
-                _lastCustomModel = evt?.newValue ?? string.Empty;
-        }
-
-        private void OnModelPresetChanged(ChangeEvent<string> evt)
-        {
-            if (_syncingModelPresetUi)
-                return;
-
-            if (evt == null)
-                return;
-
-            string selectedLabel = evt.newValue ?? string.Empty;
-            bool isCustom = string.Equals(selectedLabel, CustomModelPresetValue, StringComparison.Ordinal);
-            SetDisplay(_editModelCustomWrap, isCustom ? DisplayStyle.Flex : DisplayStyle.None);
-
-            if (isCustom)
-            {
-                if (_editModel != null)
-                    _editModel.SetValueWithoutNotify(_lastCustomModel ?? string.Empty);
-                _editModelUsesCustomMode = true;
-                return;
-            }
-
-            _editModelUsesCustomMode = false;
-            if (_modelPresetByLabel.TryGetValue(selectedLabel, out string modelId) && _editModel != null)
-                _editModel.SetValueWithoutNotify(modelId ?? string.Empty);
-        }
-
-        private void OnTopbarModelPickerTriggered()
-        {
-            _ = OpenModelPickerAsync();
-        }
-
-        private async Task OpenModelPickerAsync()
-        {
-            try
-            {
-                var app = await GetAppAsync();
-                var chat = await GetChatServiceAsync();
-                var provider = chat?.CurrentProvider;
-                if (app == null || chat == null || provider == null)
-                {
-                    AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
-                    return;
-                }
-
-                EnsureModelPickerOverlay();
-                if (_modelPickerScroll == null || _modelPickerStatus == null || _modelPickerOverlay == null)
-                    return;
-
-                _modelPickerScroll.Clear();
-                _modelPickerStatus.text = LocalizationExtensions.Get("providers.test.checking", "Проверяем соединение…");
-                if (_modelPickerOverlay.parent == null)
-                    _root.Add(_modelPickerOverlay);
-
-                var result = await app.AiClient.TestConnectionAsync(provider);
-                var models = new List<string>();
-                if (result?.DiscoveredModels != null)
-                {
-                    foreach (var model in result.DiscoveredModels)
-                    {
-                        if (!string.IsNullOrWhiteSpace(model) && !models.Contains(model))
-                            models.Add(model);
-                    }
-                }
-
-                string currentModel = chat.CurrentSessionModel;
-                if (!string.IsNullOrWhiteSpace(currentModel) && !models.Contains(currentModel))
-                    models.Add(currentModel);
-
-                if (models.Count == 0 && !string.IsNullOrWhiteSpace(currentModel))
-                    models.Add(currentModel);
-
-                if (models.Count == 0)
-                {
-                    _modelPickerStatus.text = LocalizationExtensions.Get(
-                        "providers.models.empty",
-                        "Сервер не вернул список моделей.");
-                    return;
-                }
-
-                PopulateModelPicker(models, currentModel);
-                _modelPickerStatus.text = result?.Success == false
-                    ? result.Message ?? LocalizationExtensions.Get("providers.test.failed", "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа.")
-                    : LocalizationExtensions.Get("providers.models.pick_hint", "Выбери модель. Для Hermes дождёмся подтверждения переключения перед отправкой.");
-            }
-            catch (Exception ex)
-            {
-                if (_modelPickerStatus != null)
-                    _modelPickerStatus.text = ex.Message;
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private async Task ApplyModelSelectionAsync(string modelId, bool closePickerOnSuccess)
-        {
-            if (_isApplyingModelSwitch || string.IsNullOrWhiteSpace(modelId))
-                return;
-
-            _isApplyingModelSwitch = true;
-            if (_modelPickerDialog != null)
-                _modelPickerDialog.SetEnabled(false);
-
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null)
-                    return;
-
-                if (_modelPickerStatus != null)
-                    _modelPickerStatus.text = $"Применяем модель: {modelId}";
-
-                var result = await chat.SetCurrentSessionModelAsync(modelId);
-                if (!result.Success)
-                {
-                    string failure = string.IsNullOrWhiteSpace(result.Message)
-                        ? LocalizationExtensions.Get("providers.model_switch_failed", "Не удалось применить модель.")
-                        : result.Message;
-                    if (_modelPickerStatus != null)
-                        _modelPickerStatus.text = failure;
-                    AddSystemMessage(failure);
-                    TriggerAvatarConfused();
-                    return;
-                }
-
-                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
-                await LoadSessionsAsync(chat);
-
-                if (closePickerOnSuccess)
-                    CloseModelPicker();
-            }
-            catch (Exception ex)
-            {
-                if (_modelPickerStatus != null)
-                    _modelPickerStatus.text = ex.Message;
-                AddSystemMessage(ex.Message);
-                TriggerAvatarConfused();
-                NeonLogger.LogError(ex.ToString());
-            }
-            finally
-            {
-                _isApplyingModelSwitch = false;
-                if (_modelPickerDialog != null)
-                    _modelPickerDialog.SetEnabled(true);
-            }
-        }
-
-        private void EnsureModelPickerOverlay()
-        {
-            if (_modelPickerOverlay != null)
-                return;
-
-            _modelPickerOverlay = new VisualElement();
-            _modelPickerOverlay.AddToClassList("modal-overlay");
-            _modelPickerOverlay.pickingMode = PickingMode.Position;
-            _modelPickerOverlay.RegisterCallback<ClickEvent>(evt =>
-            {
-                if (evt.target == _modelPickerOverlay)
-                    CloseModelPicker();
-            });
-
-            _modelPickerDialog = new VisualElement();
-            _modelPickerDialog.AddToClassList("modal");
-            _modelPickerDialog.AddToClassList("model-picker");
-
-            var headerRow = new VisualElement();
-            headerRow.AddToClassList("model-picker__header");
-
-            var titleWrap = new VisualElement();
-            titleWrap.AddToClassList("model-picker__title-wrap");
-
-            var title = new Label(LocalizationExtensions.Get("model_picker.title", "Выбор модели"));
-            title.AddToClassList("model-picker__title");
-
-            var subtitle = new Label(LocalizationExtensions.Get("model_picker.subtitle", "Выберите модель для текущей сессии. Применяется сразу."));
-            subtitle.AddToClassList("model-picker__subtitle");
-
-            var closeButton = new Button(CloseModelPicker) { text = LocalizationExtensions.Get("common.close", "Закрыть") };
-            closeButton.AddToClassList("btn");
-
-            titleWrap.Add(title);
-            titleWrap.Add(subtitle);
-            headerRow.Add(titleWrap);
-            headerRow.Add(closeButton);
-
-            _modelPickerStatus = new Label(string.Empty);
-            _modelPickerStatus.AddToClassList("model-picker__status");
-
-            _modelPickerScroll = new ScrollView(ScrollViewMode.Vertical);
-            _modelPickerScroll.AddToClassList("model-picker__scroll");
-
-            _modelPickerDialog.Add(headerRow);
-            _modelPickerDialog.Add(_modelPickerStatus);
-            _modelPickerDialog.Add(_modelPickerScroll);
-            _modelPickerOverlay.Add(_modelPickerDialog);
-        }
-
-        private void PopulateModelPicker(IReadOnlyList<string> models, string currentModel)
-        {
-            if (_modelPickerScroll == null)
-                return;
-
-            _modelPickerScroll.Clear();
-
-            var grouped = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var model in models)
-            {
-                string providerKey = GetModelProviderKey(model);
-                if (!grouped.TryGetValue(providerKey, out var providerModels))
-                {
-                    providerModels = new List<string>();
-                    grouped[providerKey] = providerModels;
-                }
-                if (!providerModels.Contains(model))
-                    providerModels.Add(model);
-            }
-
-            foreach (var providerName in grouped.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
-            {
-                var providerModels = grouped[providerName];
-                providerModels.Sort(StringComparer.OrdinalIgnoreCase);
-
-                bool hasActive = providerModels.Exists(m => string.Equals(m, currentModel, StringComparison.Ordinal));
-                bool expanded = hasActive;
-
-                // Items container
-                var itemsWrap = new VisualElement();
-                itemsWrap.AddToClassList("model-picker__items");
-                if (!expanded)
-                    itemsWrap.AddToClassList("is-hidden");
-
-                // Group header button
-                var groupBtn = new Button();
-                groupBtn.AddToClassList("model-picker__group");
-
-                var arrow = new Label(expanded ? "▼" : "▶");
-                arrow.AddToClassList("model-picker__group-arrow");
-
-                var groupLabel = new Label($"{providerName.ToUpperInvariant()}  ({providerModels.Count})");
-                groupLabel.AddToClassList("model-picker__group-label");
-
-                groupBtn.Add(arrow);
-                groupBtn.Add(groupLabel);
-                groupBtn.RegisterCallback<ClickEvent>(_ =>
-                {
-                    bool isExpanded = !itemsWrap.ClassListContains("is-hidden");
-                    if (isExpanded)
-                    {
-                        itemsWrap.AddToClassList("is-hidden");
-                        arrow.text = "▶";
-                    }
-                    else
-                    {
-                        itemsWrap.RemoveFromClassList("is-hidden");
-                        arrow.text = "▼";
-                    }
-                });
-
-                foreach (var model in providerModels)
-                {
-                    bool isSelected = string.Equals(model, currentModel, StringComparison.Ordinal);
-                    var captured = model;
-                    var modelBtn = new Button(() => _ = ApplyModelSelectionAsync(captured, closePickerOnSuccess: true))
-                    {
-                        text = model
-                    };
-                    modelBtn.AddToClassList("model-picker__item");
-                    if (isSelected)
-                        modelBtn.AddToClassList("model-picker__item--selected");
-                    itemsWrap.Add(modelBtn);
-                }
-
-                _modelPickerScroll.Add(groupBtn);
-                _modelPickerScroll.Add(itemsWrap);
-            }
-        }
-
-        private void CloseModelPicker()
-        {
-            _modelPickerOverlay?.RemoveFromHierarchy();
-        }
-
-        private static string GetModelProviderKey(string modelId)
-        {
-            if (string.IsNullOrWhiteSpace(modelId))
-                return "Other";
-
-            int slashIndex = modelId.IndexOf('/');
-            if (slashIndex <= 0)
-                return "General";
-
-            return modelId.Substring(0, slashIndex);
-        }
-
-        private void SyncTopbarModelPicker(string currentModel)
-        {
-            if (_topbarModelPicker == null) return;
-
-            string target = string.IsNullOrWhiteSpace(currentModel)
-                ? LocalizationExtensions.Get("providers.models.choose", "Выбрать модель")
-                : currentModel;
-
-            _topbarModelPicker.choices = new List<string> { target };
-            _topbarModelPicker.SetValueWithoutNotify(target);
-        }
-
-        private string GetCurrentModelValue()
-        {
-            if (string.Equals(_editModelPreset?.value, CustomModelPresetValue, StringComparison.Ordinal))
-                return _editModel?.value ?? string.Empty;
-
-            string selected = _editModelPreset?.value ?? string.Empty;
-            if (_modelPresetByLabel.TryGetValue(selected, out string presetModel))
-                return presetModel ?? string.Empty;
-
-            return _editModel?.value ?? string.Empty;
-        }
-
-        private void SyncModelPresetUi(string currentModel)
-        {
-            if (_editModelPreset == null)
-                return;
-
-            if (_discoveredModels != null && _discoveredModels.Count > 0)
-            {
-                SyncModelPresetFromDiscovery(_discoveredModels, currentModel);
-                return;
-            }
-
-            // Before discovery: only "Custom / manual" — no guessed presets
-            _syncingModelPresetUi = true;
-            _modelPresetByLabel.Clear();
-            _editModelPreset.choices = new List<string> { CustomModelPresetValue };
-            _lastCustomModel = currentModel ?? string.Empty;
-            _editModelPreset.SetValueWithoutNotify(CustomModelPresetValue);
-            _editModelUsesCustomMode = true;
-            SetDisplay(_editModelCustomWrap, DisplayStyle.Flex);
-            if (_editModel != null)
-                _editModel.SetValueWithoutNotify(_lastCustomModel);
-            _syncingModelPresetUi = false;
-        }
-
-        private void UpdateEditorStatus()
-        {
-            if (_editorProviderStatus == null)
-                return;
-
-            if (_editingProviderSource == null)
-            {
-                _editorProviderStatus.text = LocalizationExtensions.Get("providers.editor.status.new_draft", "Новый черновик");
-                _editorProviderStatus.EnableInClassList("editor__status--active", false);
-                _editorProviderStatus.EnableInClassList("editor__status--inactive", false);
-                _editorProviderStatus.EnableInClassList("editor__status--draft", true);
-                return;
-            }
-
-            bool isActive = string.Equals(_chatService?.CurrentProvider?.id, _editingProviderSource.id, StringComparison.Ordinal);
-            _editorProviderStatus.text = isActive
-                ? LocalizationExtensions.Get("providers.editor.status.active", "В редакторе: активный провайдер")
-                : LocalizationExtensions.Get("providers.editor.status.inactive", "В редакторе: неактивный провайдер");
-            _editorProviderStatus.EnableInClassList("editor__status--active", isActive);
-            _editorProviderStatus.EnableInClassList("editor__status--inactive", !isActive);
-            _editorProviderStatus.EnableInClassList("editor__status--draft", false);
-        }
-
-        private void SyncModelPresetFromDiscovery(IReadOnlyList<string> discoveredModels, string currentModel)
-        {
-            if (_editModelPreset == null || discoveredModels == null || discoveredModels.Count == 0)
-                return;
-
-            _discoveredModels = discoveredModels;
-            _syncingModelPresetUi = true;
-            _modelPresetByLabel.Clear();
-            var choices = new List<string>(discoveredModels.Count + 1);
-            foreach (var modelId in discoveredModels)
-            {
-                if (string.IsNullOrWhiteSpace(modelId)) continue;
-                _modelPresetByLabel[modelId] = modelId;
-                choices.Add(modelId);
-            }
-            choices.Add(CustomModelPresetValue);
-            _editModelPreset.choices = choices;
-
-            // Preserve current model if available.
-            // If it's not in discovered list, keep it as custom/manual instead of overwriting it.
-            string targetChoice = CustomModelPresetValue;
-            if (!string.IsNullOrWhiteSpace(currentModel) && _modelPresetByLabel.ContainsKey(currentModel))
-                targetChoice = currentModel;
-            else if (string.IsNullOrWhiteSpace(currentModel) && discoveredModels.Count > 0 && !string.IsNullOrWhiteSpace(discoveredModels[0]))
-                targetChoice = discoveredModels[0];
-
-            bool showCustom = string.Equals(targetChoice, CustomModelPresetValue, StringComparison.Ordinal);
-            if (showCustom)
-                _lastCustomModel = currentModel ?? string.Empty;
-            _editModelUsesCustomMode = showCustom;
-
-            _editModelPreset.SetValueWithoutNotify(targetChoice);
-            SetDisplay(_editModelCustomWrap, showCustom ? DisplayStyle.Flex : DisplayStyle.None);
-            if (_editModel != null)
-                _editModel.SetValueWithoutNotify(showCustom ? (_lastCustomModel ?? string.Empty) : (targetChoice ?? string.Empty));
-
-            _syncingModelPresetUi = false;
-        }
-
-        private readonly struct ModelPreset
-        {
-            public readonly string Label;
-            public readonly string ModelId;
-
-            public ModelPreset(string label, string modelId)
-            {
-                Label = label;
-                ModelId = modelId;
-            }
-        }
-
-        private static List<ModelPreset> BuildModelPresets(string nameHint, string baseUrlHint)
-        {
-            string hint = $"{nameHint} {baseUrlHint}".ToLowerInvariant();
-            if (hint.Contains("anthropic"))
-                return new List<ModelPreset> { new ModelPreset("Claude Sonnet 4.5", "claude-sonnet-4-5"), new ModelPreset("Claude 3.7 Sonnet", "claude-3-7-sonnet-latest"), new ModelPreset("Claude 3.5 Haiku", "claude-3-5-haiku-latest") };
-            if (hint.Contains("gemini") || hint.Contains("googleapis.com"))
-                return new List<ModelPreset> { new ModelPreset("Gemini 2.5 Pro", "gemini-2.5-pro"), new ModelPreset("Gemini 2.5 Flash", "gemini-2.5-flash"), new ModelPreset("Gemini 2.0 Flash", "gemini-2.0-flash") };
-            if (hint.Contains("x.ai") || hint.Contains("grok") || hint.Contains("xai"))
-                return new List<ModelPreset> { new ModelPreset("Grok 3", "grok-3"), new ModelPreset("Grok 3 Mini", "grok-3-mini"), new ModelPreset("Grok 2", "grok-2-latest") };
-            if (hint.Contains("openrouter"))
-                return new List<ModelPreset> { new ModelPreset("OpenAI GPT-4.1", "openai/gpt-4.1"), new ModelPreset("Anthropic Sonnet 4.5", "anthropic/claude-sonnet-4-5"), new ModelPreset("Google Gemini 2.5 Pro", "google/gemini-2.5-pro") };
-            if (hint.Contains("localhost") || hint.Contains("127.0.0.1") || hint.Contains("ollama"))
-                return new List<ModelPreset> { new ModelPreset("Llama 3.1 8B (Ollama)", "llama3.1:8b"), new ModelPreset("Qwen 2.5 7B (Ollama)", "qwen2.5:7b"), new ModelPreset("Mistral 7B (Ollama)", "mistral:7b") };
-            if (hint.Contains("openai"))
-                return new List<ModelPreset> { new ModelPreset("GPT-4.1", "gpt-4.1"), new ModelPreset("GPT-4o", "gpt-4o"), new ModelPreset("GPT-4o mini", "gpt-4o-mini") };
-            return new List<ModelPreset> { new ModelPreset("GPT-4.1", "gpt-4.1"), new ModelPreset("Claude Sonnet 4.5", "claude-sonnet-4-5"), new ModelPreset("Gemini 2.5 Flash", "gemini-2.5-flash") };
-        }
-
-        private void DeleteProvider(ProviderConfig provider)
-        {
-            _ = DeleteProviderAsync(provider);
-        }
-
-        private async Task DeleteProviderAsync(ProviderConfig provider)
-        {
-            if (provider == null)
-                return;
-
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null)
-                    return;
-
-                var deletedCurrent = string.Equals(_chatService?.CurrentProvider?.id, provider.id, StringComparison.Ordinal);
-                await app.ProviderManager.DeleteProviderAsync(provider.id);
-
-                if (_editingProvider?.id == provider.id)
-                {
-                    _cancelPending = false;
-                    _editingProvider = null;
-                    _editingProviderSource = null;
-                    SetDisplay(_providerEditPanel, DisplayStyle.None);
-                }
-
-                if (deletedCurrent)
-                {
-                    // ProviderManager materializes a default provider if the repository became empty.
-                    var fallbackProvider = await app.ProviderManager.GetActiveProviderAsync();
-                    await SwitchProviderAsync(fallbackProvider);
-                    return;
-                }
-
-                var settings = app.Settings.Load() ?? new AppSettings();
-                if (string.Equals(settings.activeProviderId, provider.id, StringComparison.Ordinal))
-                {
-                    var fallbackProvider = await app.ProviderManager.GetActiveProviderAsync();
-                    settings.activeProviderId = fallbackProvider?.id ?? settings.activeProviderId;
-                    app.Settings.Save(settings);
-                }
-
-                await RefreshProvidersListAsync();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private void SwitchProvider(ProviderConfig provider)
-        {
-            _ = SwitchProviderAsync(provider);
-        }
-
-        private async Task SwitchProviderAsync(ProviderConfig provider)
-        {
-            try
-            {
-                var chat = await GetChatServiceAsync();
-                if (chat == null)
-                    return;
-
-                await chat.SwitchProviderAsync(provider);
-
-                var app = await GetAppAsync();
-                if (app != null)
-                {
-                    var s = app.Settings.Load() ?? new AppSettings();
-                    s.activeProviderId = chat.CurrentProvider?.id ?? provider?.id ?? s.activeProviderId;
-                    app.Settings.Save(s);
-                }
-                else
-                {
-                    _settingsController.SaveSettings();
-                }
-
-                _currentSessionId = chat.CurrentSessionId ?? string.Empty;
-                _currentSessionTitle = string.Empty;
-                SetProviderHeader(provider, chat.CurrentSessionModel);
-                UpdateEditorStatus();
-                RenderMessages(chat.CurrentChatViewModel?.Messages);
-                await LoadSessionsAsync(chat);
-                await RefreshProvidersListAsync();
-                _navigationController.ShowChat();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private async Task RefreshProvidersListAsync()
-        {
-            if (_providersList == null)
-                return;
-
-            _providersList.Clear();
-
-            var app = await GetAppAsync();
-            if (!_isBound || app == null)
-            {
-                _providersList.Add(new Label(LocalizationExtensions.Get("providers.manager.not_ready", "Менеджер провайдеров не готов.")));
-                return;
-            }
-
-            var providers = await app.ProviderManager.GetAllProvidersAsync();
-            if (_navProvidersCount != null)
-                _navProvidersCount.text = providers.Count.ToString();
-
-            if (providers.Count == 0)
-            {
-                _providersList.Add(new Label(LocalizationExtensions.Get("providers.empty", "Провайдеры не настроены.")));
-                return;
-            }
-
-            var chat = await GetChatServiceAsync();
-            string activeProviderId = chat?.CurrentProvider?.id;
-
-            for (int i = 0; i < providers.Count; i++)
-            {
-                var provider = providers[i];
-                bool isActive = string.IsNullOrEmpty(activeProviderId) ? i == 0 : provider.id == activeProviderId;
-                _providersList.Add(CreateProviderListItem(provider, isActive));
-
-                if (_editingProvider == null && isActive)
-                    StartEditingProvider(provider);
-            }
-
-            if (_editingProvider == null)
-                StartEditingProvider(providers[0]);
-        }
-
-        private VisualElement CreateProviderListItem(ProviderConfig provider, bool isActive)
-        {
-            var container = new VisualElement();
-            container.AddToClassList("provider");
-            container.EnableInClassList(ActiveProviderClass, isActive);
-            bool isEditing = _editingProviderSource != null && _editingProviderSource.id == provider.id;
-            container.EnableInClassList(EditingProviderClass, isEditing);
-            container.RegisterCallback<ClickEvent>(evt => StartEditingProvider(provider));
-
-            var logo = new VisualElement();
-            logo.AddToClassList("provider__logo");
-            logo.Add(new Label(BuildProviderShort(provider)));
-
-            var body = new VisualElement();
-            body.AddToClassList("provider__body");
-
-            var nameRow = new VisualElement();
-            nameRow.AddToClassList("provider__name-row");
-
-            var nameLabel = new Label(string.IsNullOrWhiteSpace(provider.displayName) ? LocalizationExtensions.Get("providers.default_name", "Провайдер") : provider.displayName);
-            nameLabel.AddToClassList("provider__name");
-            nameRow.Add(nameLabel);
-
-            if (isActive)
-            {
-                var chip = new Label(LocalizationExtensions.Get("providers.chip.active", "активен"));
-                chip.AddToClassList("chip");
-                chip.AddToClassList("chip--accent");
-                nameRow.Add(chip);
-            }
-            if (isEditing)
-            {
-                var chip = new Label(LocalizationExtensions.Get("providers.chip.editing", "в редакторе"));
-                chip.AddToClassList("chip");
-                nameRow.Add(chip);
-            }
-
-            var urlLabel = new Label(provider.baseUrl ?? string.Empty);
-            urlLabel.AddToClassList("provider__url");
-
-            body.Add(nameRow);
-            body.Add(urlLabel);
-
-            if (!string.IsNullOrWhiteSpace(provider.defaultModel))
-            {
-                var modelLabel = new Label(provider.defaultModel);
-                modelLabel.AddToClassList("provider__model");
-                body.Add(modelLabel);
-            }
-
-            var meta = new VisualElement();
-            meta.AddToClassList("provider__meta");
-            var metaLabel = new Label(LocalizationExtensions.Get("providers.source", "Источник"));
-            metaLabel.AddToClassList("provider__meta-label");
-            var metaValue = new Label(BuildProviderLocationText(provider));
-            metaValue.AddToClassList("provider__meta-value");
-            meta.Add(metaLabel);
-            meta.Add(metaValue);
-
-            var actions = new VisualElement();
-            actions.AddToClassList("provider__actions");
-            var useButton = new Button(() => SwitchProvider(provider)) { text = LocalizationExtensions.Get("providers.action.use", "Использовать") };
-            var editButton = new Button(() => StartEditingProvider(provider)) { text = LocalizationExtensions.Get("providers.action.edit", "Изменить") };
-            var deleteButton = new Button(() => DeleteProvider(provider)) { text = LocalizationExtensions.Get("providers.action.delete", "Удалить") };
-            useButton.AddToClassList("btn");
-            editButton.AddToClassList("btn");
-            deleteButton.AddToClassList("btn");
-            actions.Add(useButton);
-            actions.Add(editButton);
-            actions.Add(deleteButton);
-
-            var toggle = new VisualElement();
-            toggle.AddToClassList("toggle");
-            if (isActive) toggle.AddToClassList("toggle--on");
-            var knob = new VisualElement();
-            knob.AddToClassList("toggle__knob");
-            toggle.Add(knob);
-            toggle.RegisterCallback<ClickEvent>(evt =>
-            {
-                evt.StopPropagation();
-                SwitchProvider(provider);
-            });
-
-            container.Add(logo);
-            container.Add(body);
-            container.Add(meta);
-            container.Add(actions);
-            container.Add(toggle);
-
-            return container;
-        }
-
-        private void SetProviderHeader(ProviderConfig provider, string currentModel = null)
-        {
-            if (provider == null)
-                return;
-
-            string shortName = BuildProviderShort(provider);
-            string displayName = string.IsNullOrWhiteSpace(provider.displayName) ? LocalizationExtensions.Get("common.dash", "—") : provider.displayName;
-            string model = string.IsNullOrWhiteSpace(currentModel)
-                ? (string.IsNullOrWhiteSpace(provider.defaultModel) ? string.Empty : provider.defaultModel)
-                : currentModel;
-
-            if (_providerShort != null)
-                _providerShort.text = shortName;
-            if (_providerName != null)
-                _providerName.text = displayName;
-            if (_providerModel != null)
-                _providerModel.text = model;
-            if (_railProviderName != null)
-                _railProviderName.text = displayName;
-            if (_railProviderModel != null)
-                _railProviderModel.text = model;
-            SyncTopbarModelPicker(model);
-        }
-
-        private static string BuildProviderShort(ProviderConfig provider)
-        {
-            string name = provider?.displayName;
-            if (string.IsNullOrWhiteSpace(name))
-                return "API";
-
-            string lower = name.ToLowerInvariant();
-            if (lower.Contains("openai"))
-                return "OAI";
-            if (lower.Contains("grok"))
-                return "GRK";
-            if (lower.Contains("openrouter"))
-                return "OR";
-            if (lower.Contains("ollama"))
-                return "OL";
-
-            string compact = string.Empty;
-            for (int i = 0; i < name.Length && compact.Length < 3; i++)
-            {
-                if (char.IsLetterOrDigit(name[i]))
-                    compact += char.ToUpperInvariant(name[i]);
-            }
-
-            return string.IsNullOrEmpty(compact) ? "API" : compact;
-        }
-
-        private static string BuildProviderLocationText(ProviderConfig provider)
-        {
-            string baseUrl = provider?.baseUrl;
-            if (string.IsNullOrWhiteSpace(baseUrl))
-            return LocalizationExtensions.Get("providers.location.unknown", "неизвестно");
-
-            if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
-            {
-                string host = uri.Host;
-                if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase))
-                {
-                    return LocalizationExtensions.Get("providers.location.local", "локально");
-                }
-
-                return LocalizationExtensions.Get("providers.location.remote", "удалённо");
-            }
-
-            if (baseUrl.IndexOf("localhost", StringComparison.OrdinalIgnoreCase) >= 0
-                || baseUrl.IndexOf("127.0.0.1", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return LocalizationExtensions.Get("providers.location.local", "локально");
-            }
-
-            return LocalizationExtensions.Get("providers.location.remote", "удалённо");
-        }
 
         private void ApplyLocalizedStaticTexts()
         {
@@ -2390,7 +1270,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navThemesLabel?.Localize("settings.themes");
             _navSettingsLabel?.Localize("tab.settings");
             _navCloseLabel?.Localize("nav.close");
-            _testRowLabel?.Localize("providers.test.hint");
             UpdatePanelToggleTooltips();
             ApplyStaticTemplateLocalization();
         }
@@ -2433,8 +1312,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     await LoadSessionsAsync(chat);
                 }
 
-                await RefreshProvidersListAsync();
-                UpdateEditorStatus();
+                await _providersController.RefreshProvidersListAsync();
+                _providersController.UpdateEditorStatus();
                 UpdateCurrentTopbarTexts();
             }
             finally
@@ -3902,57 +2781,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (dot != null) dot.style.opacity = opacity;
         }
 
-        // ============================================================
-        // Chat action buttons: Copy, Regenerate
-        // ============================================================
-
-        // ============================================================
-        // Provider import
-        // ============================================================
-
-        private void OnImportProviderClicked()
-        {
-            _ = ImportProvidersAsync();
-        }
-
-        private async Task ImportProvidersAsync()
-        {
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null) return;
-
-                var filePicker = app.Services.GetRequired<IFilePickerService>();
-                string path = await filePicker.PickFileAsync("json");
-                if (string.IsNullOrEmpty(path)) return;
-
-                string json = System.IO.File.ReadAllText(path);
-                var imported = JsonUtility.FromJson<ProviderConfigCollection>(json);
-                if (imported?.items == null || imported.items.Count == 0)
-                {
-                    AddSystemMessage(LocalizationExtensions.Get("providers.import.empty", "Файл не содержит провайдеров."));
-                    return;
-                }
-
-                foreach (var p in imported.items)
-                {
-                    if (!string.IsNullOrEmpty(p?.id))
-                        await app.ProviderManager.SaveProviderAsync(p);
-                }
-
-                await RefreshProvidersListAsync();
-                AddSystemMessage(LocalizationExtensions.GetFormat("providers.import.success", "Импортировано: {0} провайдер(ов).", imported.items.Count));
-            }
-            catch (Exception ex)
-            {
-                AddSystemMessage(LocalizationExtensions.Get("providers.import.failed", "Не удалось импортировать провайдеров из файла."));
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        // ============================================================
-        // Avatar upload
-        // ============================================================
 
         private void OnAvatarUploadClicked()
         {
