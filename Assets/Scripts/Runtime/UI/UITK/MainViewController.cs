@@ -85,6 +85,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly ProvidersController _providersController = new ProvidersController();
         private readonly AvatarGalleryController _avatarGalleryController = new AvatarGalleryController();
         private readonly VoiceController _voiceController = new VoiceController();
+        private readonly LayoutController _layoutController = new LayoutController();
 
         // ===== Avatar gallery =====
         private static readonly string[] BuiltInAvatarIds =
@@ -182,8 +183,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _sendButton;
         private Button _summarizeButton;
         private Button _searchButton;
-        private Button _toggleLeftPanelBtn;
-        private Button _toggleRightPanelBtn;
         private Button _moreButton;
         private Button _newSessionButton;
         private Button _scrollBottomBtn;
@@ -209,8 +208,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _attachButton;
         private Button _avatarUploadBtn;
         private Button _avatarOpenFolderBtn;
-        private bool _leftPanelVisible = true;
-        private bool _rightPanelVisible = true;
         private VisualElement _avatarUploadTile;
 
         private CompanionApp _app;
@@ -364,6 +361,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarMotionState = AvatarMotionState.Idle;
             _settingsController.UnbindLocalizationEvents();
             _avatarGalleryController.OnDisable();
+            _layoutController.OnDisable();
             _avatarAnimator?.Stop();
             _avatar3DService?.Unload();
             foreach (var tex in _customTextures.Values)
@@ -412,7 +410,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarPanel  = root.Q<VisualElement>("avatar-panel");
             _railElement = root.Q<VisualElement>("rail");
             _railResizeHandle = root.Q<VisualElement>("rail-resize-handle");
-            _panelResizeHandler.Init(_resizeHandle, _avatarPanel, _railResizeHandle, _railElement);
             _topbarSep = root.Q<VisualElement>("topbar-sep");
             _typingIndicator = root.Q<VisualElement>("typing-indicator");
 
@@ -432,8 +429,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sendButton = root.Q<Button>("send-button");
             _summarizeButton = root.Q<Button>("summarize-btn");
             _searchButton = root.Q<Button>("search-btn");
-            _toggleLeftPanelBtn = root.Q<Button>("toggle-left-panel-btn");
-            _toggleRightPanelBtn = root.Q<Button>("toggle-right-panel-btn");
             _moreButton = root.Q<Button>("more-btn");
             _newSessionButton = root.Q<Button>("new-session-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
@@ -454,7 +449,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _historyPanelSearchBtn = root.Q<Button>("history-panel-search-btn");
             _historyPanelSearchClear = root.Q<Button>("history-panel-search-clear");
             _historyPanelNewSessionButton = root.Q<Button>("history-panel-new-session-btn");
-            UpdatePanelToggleTooltips();
 
             _copyButton       = root.Q<Button>("copy-btn");
             _regenerateButton = root.Q<Button>("refresh-btn");
@@ -556,6 +550,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _voiceController.SetDeps(BuildVoiceControllerDeps());
             _voiceController.Init();
             _voiceController.RegisterCallbacks();
+            _layoutController.SetDeps(BuildLayoutControllerDeps());
+            _layoutController.Init();
+            _layoutController.RegisterCallbacks();
 
             _chatController.InitState();
             _isBound = true;
@@ -805,10 +802,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             };
         }
 
+        private LayoutController.Deps BuildLayoutControllerDeps()
+        {
+            return new LayoutController.Deps
+            {
+                Root = _root,
+                RailElement = _railElement,
+                RailResizeHandle = _railResizeHandle,
+                AvatarPanel = _avatarPanel,
+                ResizeHandle = _resizeHandle,
+                ChatPanel = _chatPanel,
+                HistoryPanel = _historyPanel,
+                ProvidersPanel = _providersPanel,
+                AvatarsPanel = _avatarsPanel,
+                ThemesPanel = _themesPanel,
+                PlaceholderArea = _placeholderArea,
+                SettingsPanel = _settingsPanel,
+                PanelResizeHandler = _panelResizeHandler
+            };
+        }
+
         private void RegisterCallbacks()
         {
-            RegisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
-            RegisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
             RegisterClick(_moreButton, OnMoreClicked);
             RegisterClick(_historyPanelNewSessionButton, OnHistoryPanelNewSessionClicked);
             RegisterClick(_historySearchBtn, OnHistorySearchToggled);
@@ -831,7 +846,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _scrollBottomButtonSchedule = _messagesList.schedule.Execute(UpdateScrollBottomButton).Every(200);
             }
 
-            _panelResizeHandler.RegisterCallbacks();
             _settingsController.RegisterCallbacks();
 
             RegisterAvatarGalleryCallbacks();
@@ -857,8 +871,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _chatController.UnregisterCallbacks();
             _avatarGalleryController.UnregisterCallbacks();
 
-            UnregisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
-            UnregisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
             UnregisterClick(_moreButton, OnMoreClicked);
             UnregisterClick(_historyPanelNewSessionButton, OnHistoryPanelNewSessionClicked);
             UnregisterClick(_historySearchBtn, OnHistorySearchToggled);
@@ -880,7 +892,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
             UnregisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
 
-            _panelResizeHandler.UnregisterCallbacks();
             _settingsController.UnregisterCallbacks();
             _voiceController.UnregisterCallbacks();
             _providersController.UnregisterCallbacks();
@@ -936,16 +947,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             ShowArea(_placeholderArea);
         }
 
-        private void ShowArea(VisualElement visible)
-        {
-            SetDisplay(_chatPanel, visible == _chatPanel ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_historyPanel, visible == _historyPanel ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_providersPanel, visible == _providersPanel ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_avatarsPanel, visible == _avatarsPanel ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_themesPanel, visible == _themesPanel ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_placeholderArea, visible == _placeholderArea ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_settingsPanel, visible == _settingsPanel ? DisplayStyle.Flex : DisplayStyle.None);
-        }
+        private void ShowArea(VisualElement visible) => _layoutController.ShowArea(visible);
 
         private void SetTopbar(string title, string subtitle)
         {
@@ -1020,38 +1022,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private System.Threading.Tasks.Task LoadSessionsAsync(ChatService chat) => _sessionHistoryController.LoadSessionsAsync(chat);
         private void RenderSessionList(System.Collections.Generic.List<NeonCompanion.Runtime.Chat.ChatSession> allSessions, System.Collections.Generic.List<NeonCompanion.Runtime.Data.Models.ProviderConfig> providers) => _sessionHistoryController.RenderSessionList(allSessions, providers);
 
-        private void OnToggleLeftPanel()
-        {
-            _leftPanelVisible = !_leftPanelVisible;
-            SetDisplay(_railElement, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_railResizeHandle, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
-            UpdatePanelToggleTooltips();
-        }
+        private void OnToggleLeftPanel() => _layoutController.OnToggleLeftPanel();
 
-        private void OnToggleRightPanel()
-        {
-            _rightPanelVisible = !_rightPanelVisible;
-            SetDisplay(_avatarPanel, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_resizeHandle, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
-            UpdatePanelToggleTooltips();
-        }
+        private void OnToggleRightPanel() => _layoutController.OnToggleRightPanel();
 
-        private void UpdatePanelToggleTooltips()
-        {
-            if (_toggleLeftPanelBtn != null)
-            {
-                _toggleLeftPanelBtn.tooltip = _leftPanelVisible
-                    ? LocalizationExtensions.Get("tooltip.panel.left.hide", "Скрыть панель сессий")
-                    : LocalizationExtensions.Get("tooltip.panel.left.show", "Показать панель сессий");
-            }
-
-            if (_toggleRightPanelBtn != null)
-            {
-                _toggleRightPanelBtn.tooltip = _rightPanelVisible
-                    ? LocalizationExtensions.Get("tooltip.panel.right.hide", "Скрыть панель настроек")
-                    : LocalizationExtensions.Get("tooltip.panel.right.show", "Показать панель настроек");
-            }
-        }
+        private void UpdatePanelToggleTooltips() => _layoutController.UpdatePanelToggleTooltips();
 
         private void OnListenClicked()
         {
