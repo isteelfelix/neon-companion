@@ -41,7 +41,7 @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Idle + talking clips через SpriteSheetAnimator, auto-switch при отправке |
 || A-07 | 2D motion-pack MVP contract | ✅ | M1 | Fixed action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`; continuous + one-shot split; `motion_pack.json` format |
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | Исследование внешней генерации/подготовки motion clips без runtime-зависимости клиента; see docs/13_Avatar_Motion_Research.md |
-| A-09 | Загрузка спрайтшитов — производительность | 🔧 | M2 | ~10 сек зависание при открытии вкладки анимации. Нужна фоновая загрузка / pooling |
+| A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Preload during splash screen via PreloadManifestCoroutine, live progress in boot log |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | 🔧 | M2 | Видны только 3 из 6 клипов (idle, smile, thinking). Доработать отображение всех action'ов |
 | A-11 | Система триггерных анимаций | 📋 | M2 | Персонаж всегда в idle. Триггер запускает одну анимацию, она проигрывается (все не-loop анимации — ping-pong), затем возврат в idle. Game-like state machine |
 
