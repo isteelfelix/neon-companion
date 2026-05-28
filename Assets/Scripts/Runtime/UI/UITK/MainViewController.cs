@@ -256,6 +256,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _currentSessionTitle = string.Empty;
         private bool _isBound;
         private bool _isSending;
+        private bool _isStreamingResponse;
         private Image _avatarArtImage;
         private Image _avatar3DImage;
         private SpriteSheetAnimator _avatarAnimator;
@@ -414,6 +415,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterCallbacks();
             UnbindVoiceAnimationEvents();
             _isSending = false;
+            _isStreamingResponse = false;
             _avatarMotionState = AvatarMotionState.Idle;
             if (_voiceBoundToChat && _chatService != null && _voiceOutputManager != null)
                 _voiceOutputManager.UnbindChat(_chatService);
@@ -733,6 +735,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _messageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
                 _messageInput.RegisterCallback<FocusEvent>(_ => _composer?.AddToClassList("composer--focused"));
                 _messageInput.RegisterCallback<BlurEvent>(_ => _composer?.RemoveFromClassList("composer--focused"));
+                _messageInput.RegisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
             }
 
             if (_messagesList != null)
@@ -817,7 +820,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_editModel != null)
                 _editModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
             if (_messageInput != null)
+            {
                 _messageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
+                _messageInput.UnregisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
+            }
 
             _panelResizeHandler.UnregisterCallbacks();
             _settingsController.UnregisterCallbacks();
@@ -1012,6 +1018,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        private void OnComposerTextChanged(ChangeEvent<string> evt)
+        {
+            if (_isSending || _isVoiceRecording)
+                return;
+
+            bool hasText = !string.IsNullOrWhiteSpace(evt.newValue);
+            if (hasText && _avatarAnimator != null && _avatarAnimator.HasAnyClips)
+                SetAvatarMotionState(AvatarMotionState.Listening);
+        }
+
         private void OnSendClicked()
         {
             _ = SendCurrentMessageAsync();
@@ -1158,6 +1174,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 StopInlineTypingAnimation();
                 _streamingTypingDots.RemoveFromHierarchy();
                 _streamingTypingDots = null;
+                _isStreamingResponse = true;
+                RefreshAvatarMotionState();
             }
             if (_streamingLabel != null)
                 _streamingLabel.text += token;
@@ -1206,6 +1224,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void SetSending(bool isSending)
         {
             _isSending = isSending;
+            if (!isSending)
+                _isStreamingResponse = false;
             if (_sendButton != null)
                 _sendButton.SetEnabled(!isSending);
 
@@ -2484,6 +2504,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (draft == null)
                 {
                     SetTestRow(false, LocalizationExtensions.Get("providers.test.build_failed", "Не удалось собрать настройки провайдера."));
+                    TriggerAvatarConfused();
                     return;
                 }
 
@@ -2496,6 +2517,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             catch (Exception ex)
             {
                 SetTestRow(false, LocalizationExtensions.Get("providers.test.failed", "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа."));
+                TriggerAvatarConfused();
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -2794,6 +2816,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (_modelPickerStatus != null)
                         _modelPickerStatus.text = failure;
                     AddSystemMessage(failure);
+                    TriggerAvatarConfused();
                     return;
                 }
 
@@ -2808,6 +2831,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_modelPickerStatus != null)
                     _modelPickerStatus.text = ex.Message;
                 AddSystemMessage(ex.Message);
+                TriggerAvatarConfused();
                 NeonLogger.LogError(ex.ToString());
             }
             finally
@@ -4369,7 +4393,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_isSending)
             {
-                SetAvatarMotionState(AvatarMotionState.Thinking);
+                SetAvatarMotionState(_isStreamingResponse ? AvatarMotionState.Talking : AvatarMotionState.Thinking);
                 return;
             }
 

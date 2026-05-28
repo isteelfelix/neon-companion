@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- A-10: Avatar animation — all 6 clips now trigger correctly. Talking plays during AI streaming, listening on composer input, confused on provider/model errors
+
 ## [0.2.0] - 2026-05-27
 
 ### Added
