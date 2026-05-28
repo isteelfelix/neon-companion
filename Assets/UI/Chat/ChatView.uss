@@ -358,8 +358,7 @@
     font-size: 14px;
     padding: 4px 4px;
     white-space: normal;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 .composer__hint {
