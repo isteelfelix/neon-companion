@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Text;
+using NeonCompanion.Runtime.Avatar;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -66,8 +67,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             ("OK", "Neural core engine initialized",           true),
             ("OK", "Voice synthesis modules loaded",           true),
             ("OK", "AI provider API · connection established", true),
-            ("OK", "Avatar profile library synced",            true),
-            ("..", "Calibrating response pipeline",             false),
             ("..", "Starting companion runtime...",             false),
         };
 
@@ -166,25 +165,73 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             yield return new WaitForSeconds(0.5f);
 
-            int   total            = LogEntries.Length;
-            float progressPerEntry = 85f / total;
-            float progress         = 0f;
+            // Phase 1: Static log entries
+            int staticCount = 3;
+            float progressPerStatic = 40f / staticCount;
+            float progress = 0f;
 
-            for (int i = 0; i < total; i++)
+            for (int i = 0; i < staticCount; i++)
             {
                 var (status, text, ok) = LogEntries[i];
                 AddLogRow(status, text, ok);
 
-                progress += progressPerEntry;
+                progress += progressPerStatic;
                 SetProgress(progress);
 
                 float delay = ok
                     ? UnityEngine.Random.Range(0.16f, 0.32f)
                     : UnityEngine.Random.Range(0.38f, 0.65f);
-
                 yield return new WaitForSeconds(delay);
             }
 
+            // Phase 2: Preload avatar sprite sheets — real work, visual feedback
+            string manifestPath = System.IO.Path.Combine(
+                Application.streamingAssetsPath, "Avatars", "neon", "motion_pack.json");
+
+            AddLogRow("..", "Preloading avatar animations...", false);
+            SetProgress(progress);
+            yield return null;
+
+            int loadedCount = 0;
+            yield return SpriteSheetAnimationLoader.PreloadManifestCoroutine(
+                manifestPath,
+                (clipName, current, total) =>
+                {
+                    loadedCount = current;
+                    // Update the last log row text with progress
+                    if (_logList != null && _logList.childCount > 0)
+                    {
+                        var lastRow = _logList[_logList.childCount - 1];
+                        var textLabel = lastRow.Q<Label>(className: "splash__log-text");
+                        if (textLabel != null)
+                            textLabel.text = "Loaded " + clipName + " sprites (" + current + "/" + total + ")";
+                    }
+                    float clipProgress = 40f + (45f * current / total);
+                    SetProgress(clipProgress);
+                });
+
+            // Mark preload row as complete
+            if (_logList != null && _logList.childCount > 0)
+            {
+                var lastRow = _logList[_logList.childCount - 1];
+                var statusLabel = lastRow.Q<Label>(className: "splash__log-status--pending");
+                if (statusLabel != null)
+                {
+                    statusLabel.text = "OK";
+                    statusLabel.RemoveFromClassList("splash__log-status--pending");
+                    statusLabel.AddToClassList("splash__log-status--ok");
+                }
+                var textLabel = lastRow.Q<Label>(className: "splash__log-text");
+                if (textLabel != null)
+                    textLabel.text = "Avatar animations ready (" + loadedCount + " clips)";
+            }
+            progress = 85f;
+            SetProgress(progress);
+
+            // Phase 3: Final entry
+            var (finalStatus, finalText, finalOk) = LogEntries[staticCount];
+            AddLogRow(finalStatus, finalText, finalOk);
+            SetProgress(92f);
             yield return new WaitForSeconds(0.3f);
 
             SetProgress(100f);

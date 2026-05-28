@@ -128,6 +128,67 @@ namespace NeonCompanion.Runtime.Avatar
             return result;
         }
 
+        /// <summary>
+        /// Coroutine-friendly preloader. Yields after each clip so the caller
+        /// can interleave boot-log UI updates. Populates TextureCache and SpriteCache.
+        /// </summary>
+        public static System.Collections.IEnumerator PreloadManifestCoroutine(
+            string manifestPath,
+            System.Action<string, int, int> onClipLoaded = null)
+        {
+            if (string.IsNullOrWhiteSpace(manifestPath))
+                yield break;
+
+            string resolvedPath = ResolvePath(manifestPath);
+            if (string.IsNullOrWhiteSpace(resolvedPath) || !System.IO.File.Exists(resolvedPath))
+                yield break;
+
+            AvatarMotionPackManifest manifest;
+            try
+            {
+                string json = System.IO.File.ReadAllText(resolvedPath);
+                manifest = JsonUtility.FromJson<AvatarMotionPackManifest>(json);
+            }
+            catch
+            {
+                yield break;
+            }
+
+            if (manifest == null || manifest.clips == null || manifest.clips.Count == 0)
+                yield break;
+
+            string baseDir = System.IO.Path.GetDirectoryName(resolvedPath) ?? string.Empty;
+            int total = manifest.clips.Count;
+
+            for (int i = 0; i < total; i++)
+            {
+                var clip = manifest.clips[i];
+                if (clip == null || string.IsNullOrWhiteSpace(clip.spriteSheetPath))
+                    continue;
+
+                string spritePath = clip.spriteSheetPath;
+                if (!System.IO.Path.IsPathRooted(spritePath) && !string.IsNullOrEmpty(baseDir))
+                    spritePath = System.IO.Path.Combine(baseDir, spritePath);
+
+                LoadFrames(spritePath, clip.columns, clip.rows);
+
+                if (onClipLoaded != null)
+                    onClipLoaded(clip.action, i + 1, total);
+
+                yield return null;
+            }
+
+            // Preload lipsync clip if present
+            if (manifest.lipsyncClip != null && !string.IsNullOrWhiteSpace(manifest.lipsyncClip.spriteSheetPath))
+            {
+                string lipsyncPath = manifest.lipsyncClip.spriteSheetPath;
+                if (!System.IO.Path.IsPathRooted(lipsyncPath) && !string.IsNullOrEmpty(baseDir))
+                    lipsyncPath = System.IO.Path.Combine(baseDir, lipsyncPath);
+
+                LoadFrames(lipsyncPath, manifest.lipsyncClip.columns, manifest.lipsyncClip.rows);
+            }
+        }
+
         internal static string ResolvePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
