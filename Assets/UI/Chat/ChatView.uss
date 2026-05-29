@@ -964,3 +964,105 @@
     background-color: rgba(0, 123, 255, 0.8);
     color: white;
 }
+
+/* ---- Message context menu (U-29/U-30) ---- */
+
+.message-context-menu {
+    flex-direction: column;
+    background-color: rgba(30, 35, 50, 0.98);
+    border-width: 1px;
+    border-color: rgba(100, 120, 200, 0.3);
+    border-radius: 8px;
+    padding: 4px;
+    position: absolute;
+    z-index: 100;
+    min-width: 150px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.message-context-menu__item {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 12px;
+    padding-right: 16px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-radius: 4px;
+}
+
+.message-context-menu__item:hover,
+.message-context-menu__item--hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.message-context-menu__icon {
+    margin-right: 8px;
+    font-size: 14px;
+    width: 18px;
+}
+
+.message-context-menu__label {
+    font-size: 13px;
+    color: #e0e0e0;
+}
+
+/* ---- Inline message edit (U-29) ---- */
+
+.message-edit-container {
+    flex-direction: column;
+    margin-top: 4px;
+    margin-bottom: 2px;
+}
+
+.message-edit-field {
+    background-color: rgba(18, 20, 28, 0.95);
+    color: #e8e8e8;
+    border-width: 1px;
+    border-color: rgba(100, 120, 200, 0.35);
+    border-radius: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 13px;
+    min-height: 60px;
+}
+
+.message-edit-field > .unity-text-field__input,
+.message-edit-field > .unity-base-text-field__input {
+    background-color: transparent;
+    color: #e8e8e8;
+    padding: 0;
+}
+
+.message-edit-buttons {
+    flex-direction: row;
+    margin-top: 6px;
+    align-items: center;
+}
+
+.message-edit-btn {
+    margin-right: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-radius: 4px;
+    font-size: 11px;
+    background-color: rgba(55, 60, 80, 0.9);
+    color: #e0e0e0;
+    border-width: 0;
+    min-width: 60px;
+}
+
+.message-edit-btn--save {
+    background-color: rgba(70, 110, 70, 0.85);
+}
+
+.message-edit-btn--regen {
+    background-color: rgba(70, 95, 130, 0.85);
+}
+
+.message-edit-btn--cancel {
+    background-color: rgba(70, 70, 80, 0.85);
+}

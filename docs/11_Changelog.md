@@ -5,6 +5,7 @@
 ### Added
 - U-16: API key show/hide toggle button in provider editor (next to password field)
 - U-37: Export current chat as Markdown file (topbar "Export" button wires to ChatController.ExportChatAsync; writes .md to Application.persistentDataPath following SettingsController.ExportChatsAsync pattern; localized messages)
+- U-29 + U-30: Right-click (desktop) and long-press (mobile) context menu on message bubbles with Edit (user messages only), Delete, Copy. Inline editing with Save/Cancel (+ Save & Regenerate if assistant follows). Delete and edit persist via SaveCurrentSessionAsync + re-render. All strings localized.
 - Agent approval system Part B: streaming integration (alwaysApprovedTools in AppSettings, RequestToolApproval + Handle in ChatController wired to OnToolProgress "requesting" status, minimal tool call detection in OpenAiCompatibleClient for hermes.tool.request and OpenAI tool_calls chunks; auto/manual modes + Always persist; prompt added/removed from transcript; reject stops generation)
 
 ### Fixed

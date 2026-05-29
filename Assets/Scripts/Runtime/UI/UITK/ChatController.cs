@@ -88,6 +88,24 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextElement _composerTextElement;
         private float _composerInputHeight = -1f;
 
+        // Message context menu (U-29/U-30)
+        private MessageContextMenu _contextMenu;
+
+        // Long-press state for mobile context menu
+        private VisualElement _longPressTarget;
+        private int _longPressIndex;
+        private bool _longPressIsUser;
+        private Vector2 _longPressPos;
+        private IVisualElementScheduledItem _longPressSchedule;
+
+        // Inline edit state
+        private int? _editingMessageIndex;
+        private VisualElement _editingBubble;
+        private VisualElement _editingContainer;
+        private TextField _editingTextField;
+        private Button _editingSaveBtn;
+        private Button _editingCancelBtn;
+
         private const float ComposerInputMinHeight = 36f;
         private const float ComposerInputMaxHeight = 140f;
         private const float ComposerInputVerticalPadding = 12f;
@@ -99,7 +117,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         public string ChatSubtitle => _chatSubtitle;
         public string SessionSearchQuery => _sessionSearchQuery;
 
-        public void SetDeps(Deps deps) { _d = deps; }
+        public void SetDeps(Deps deps)
+        {
+            _d = deps;
+            if (_contextMenu == null)
+                _contextMenu = new MessageContextMenu();
+        }
 
         public void SetVoiceRecording(bool value) { _isVoiceRecording = value; }
         public void SetChatSubtitle(string value) { _chatSubtitle = value ?? string.Empty; }
@@ -120,6 +143,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Wire up static bubble action events
             CopyRequested += OnCopyClicked;
             RegenerateRequested += OnRegenerateClicked;
+
+            if (_contextMenu != null)
+            {
+                _contextMenu.OnEditRequested += OnEditMessageRequested;
+                _contextMenu.OnDeleteRequested += OnDeleteMessageRequested;
+                _contextMenu.OnCopyRequested += OnCopyMessageRequested;
+            }
+
+            // Context menu triggers on transcript (right-click + long-press)
+            if (_d.MessagesList != null)
+            {
+                _d.MessagesList.RegisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
+                _d.MessagesList.RegisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
+                _d.MessagesList.RegisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
+            }
 
             if (_d.MessageInput != null)
             {
@@ -146,6 +184,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             CopyRequested -= OnCopyClicked;
             RegenerateRequested -= OnRegenerateClicked;
 
+            if (_contextMenu != null)
+            {
+                _contextMenu.OnEditRequested -= OnEditMessageRequested;
+                _contextMenu.OnDeleteRequested -= OnDeleteMessageRequested;
+                _contextMenu.OnCopyRequested -= OnCopyMessageRequested;
+            }
+
+            if (_d.MessagesList != null)
+            {
+                _d.MessagesList.UnregisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
+                _d.MessagesList.UnregisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
+                _d.MessagesList.UnregisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
+            }
+
             if (_d.MessageInput != null)
             {
                 _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
@@ -165,6 +217,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _composerInputHeight = -1f;
             _toolCallUiHelper.Clear();
             DismissCurrentApprovalPrompt();
+            if (_contextMenu != null)
+                _contextMenu.Hide();
+            CancelInlineEdit();
             _streamingBubble = null;
             _streamingLabel = null;
             StopInlineTypingAnimation();
@@ -295,12 +350,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnStopClicked()
         {
             DismissCurrentApprovalPrompt();
+            if (_contextMenu != null)
+                _contextMenu.Hide();
+            CancelInlineEdit();
             _currentChatService?.CancelCurrentGeneration();
         }
 
         public async Task SendCurrentMessageAsync()
         {
             DismissCurrentApprovalPrompt();
+            if (_contextMenu != null)
+                _contextMenu.Hide();
+            CancelInlineEdit();
 
             bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
             if (_isSending || _d.MessageInput == null || (string.IsNullOrWhiteSpace(_d.MessageInput.value) && !hasPendingAttachments))
@@ -977,6 +1038,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             try
             {
+                if (_contextMenu != null)
+                    _contextMenu.Hide();
+                CancelInlineEdit();
+
                 var chat = await _d.GetChatServiceAsync();
                 if (chat == null)
                     return;
@@ -1106,6 +1171,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessagesList == null)
                 return;
 
+            CancelInlineEdit();
             _d.MessagesList.Clear();
 
             if (messages == null || messages.Count == 0)
@@ -1121,7 +1187,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (!HasRenderableMessageContent(message))
                     continue;
 
-                _d.MessagesList.Add(CreateMessageElement(message));
+                var row = CreateMessageElement(message);
+                // Tag with model index so context menu / edit can identify which message it represents
+                row.userData = i;
+                var bubbleForTag = row.Q<VisualElement>(className: "transcript__bubble");
+                if (bubbleForTag != null)
+                    bubbleForTag.userData = i;
+                _d.MessagesList.Add(row);
                 hasVisibleMessages = true;
             }
 
@@ -2007,6 +2079,379 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 chat.UseStreaming = originalStreaming;
             }
+        }
+
+        // ===== Message context menu (U-29/U-30) =====
+
+        private void OnTranscriptPointerDown(PointerDownEvent evt)
+        {
+            if (_d.MessagesList == null)
+                return;
+
+            VisualElement bubble = FindBubbleAncestor(evt.target as VisualElement);
+            if (bubble == null)
+                return;
+
+            // Skip system bubbles for context menu
+            if (bubble.ClassListContains("transcript__bubble--system"))
+                return;
+
+            int? msgIndex = GetMessageIndexFromElement(bubble);
+            if (msgIndex == null)
+                return;
+
+            bool isUser = bubble.ClassListContains("transcript__bubble--user");
+
+            Vector2 pos = evt.position;
+
+            if (evt.button == 1) // right-click (UITK: 0=left, 1=right, 2=middle)
+            {
+                evt.StopImmediatePropagation();
+                ShowMessageContextMenu(bubble, msgIndex.Value, isUser, pos);
+            }
+            else if (evt.button == 0)
+            {
+                // Start long-press timer for mobile
+                _longPressTarget = bubble;
+                _longPressIndex = msgIndex.Value;
+                _longPressIsUser = isUser;
+                _longPressPos = pos;
+
+                if (_longPressSchedule != null)
+                {
+                    _longPressSchedule.Pause();
+                    _longPressSchedule = null;
+                }
+
+                _longPressSchedule = bubble.schedule.Execute(() =>
+                {
+                    _longPressSchedule = null;
+                    if (_longPressTarget != null)
+                    {
+                        ShowMessageContextMenu(_longPressTarget, _longPressIndex, _longPressIsUser, _longPressPos);
+                    }
+                    _longPressTarget = null;
+                }).StartingIn(480);
+            }
+        }
+
+        private void OnTranscriptPointerUp(PointerUpEvent evt)
+        {
+            CancelLongPress();
+        }
+
+        private void OnTranscriptPointerCancel(PointerCancelEvent evt)
+        {
+            CancelLongPress();
+        }
+
+        private void CancelLongPress()
+        {
+            if (_longPressSchedule != null)
+            {
+                _longPressSchedule.Pause();
+                _longPressSchedule = null;
+            }
+            _longPressTarget = null;
+        }
+
+        private static VisualElement FindBubbleAncestor(VisualElement el)
+        {
+            while (el != null)
+            {
+                if (el.ClassListContains("transcript__bubble"))
+                    return el;
+                el = el.parent;
+            }
+            return null;
+        }
+
+        private static int? GetMessageIndexFromElement(VisualElement el)
+        {
+            while (el != null)
+            {
+                if (el.userData is int)
+                    return (int)el.userData;
+                el = el.parent;
+            }
+            return null;
+        }
+
+        private void ShowMessageContextMenu(VisualElement target, int messageIndex, bool isUser, Vector2 position)
+        {
+            if (_contextMenu == null)
+                _contextMenu = new MessageContextMenu();
+
+            // Hide any previous
+            _contextMenu.Hide();
+
+            // Use target for positioning (ShowAt uses worldBound); position param available for future tweak
+            _contextMenu.ShowAt(target, messageIndex, isUser);
+        }
+
+        private void OnEditMessageRequested(string messageIndexStr)
+        {
+            if (_contextMenu != null)
+                _contextMenu.Hide();
+
+            int index;
+            if (!int.TryParse(messageIndexStr, out index))
+                return;
+
+            var chat = _d.GetChatServiceAsync().Result;
+            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
+                return;
+
+            var messages = chat.CurrentChatViewModel.Messages;
+            if (index < 0 || index >= messages.Count)
+                return;
+
+            var msg = messages[index];
+            string role = NormalizeRole(msg.role);
+            if (!string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
+                return; // edit only for user
+
+            // Find matching visual element by tagged index
+            if (_d.MessagesList == null)
+                return;
+
+            VisualElement targetRow = null;
+            foreach (var child in _d.MessagesList.Children())
+            {
+                if (child.userData is int)
+                {
+                    int idx = (int)child.userData;
+                    if (idx == index)
+                    {
+                        targetRow = child;
+                        break;
+                    }
+                }
+            }
+            if (targetRow == null)
+                return;
+
+            var bubble = targetRow.Q<VisualElement>(className: "transcript__bubble");
+            if (bubble == null)
+                return;
+
+            StartInlineEdit(index, bubble, msg.content ?? string.Empty);
+        }
+
+        private void OnDeleteMessageRequested(string messageIndexStr)
+        {
+            _ = DeleteMessageAsync(messageIndexStr);
+        }
+
+        private async Task DeleteMessageAsync(string messageIndexStr)
+        {
+            if (_contextMenu != null)
+                _contextMenu.Hide();
+
+            int index;
+            if (!int.TryParse(messageIndexStr, out index))
+                return;
+
+            var chat = await _d.GetChatServiceAsync();
+            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
+                return;
+
+            var messages = chat.CurrentChatViewModel.Messages;
+            if (index >= 0 && index < messages.Count)
+            {
+                messages.RemoveAt(index);
+                _d.RenderMessages(messages);
+                await chat.SaveCurrentSessionAsync();
+                await _d.LoadSessionsAsync();
+                _d.ShowSystemMessage(LocalizationExtensions.Get("msg.deleted", "Message deleted"));
+            }
+        }
+
+        private void OnCopyMessageRequested(string messageIndexStr)
+        {
+            if (_contextMenu != null)
+                _contextMenu.Hide();
+
+            int index;
+            if (!int.TryParse(messageIndexStr, out index))
+                return;
+
+            var chat = _d.GetChatServiceAsync().Result;
+            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
+                return;
+
+            var messages = chat.CurrentChatViewModel.Messages;
+            if (index >= 0 && index < messages.Count)
+            {
+                string content = messages[index].content ?? string.Empty;
+                GUIUtility.systemCopyBuffer = content;
+                _d.ShowSystemMessage(LocalizationExtensions.Get("msg.copied", "Copied"));
+            }
+        }
+
+        private void StartInlineEdit(int index, VisualElement bubble, string currentContent)
+        {
+            if (_editingMessageIndex != null)
+                CancelInlineEdit();
+
+            _editingMessageIndex = index;
+            _editingBubble = bubble;
+
+            // Hide existing body labels (user messages use plain Labels)
+            var bodies = bubble.Query<Label>(className: "transcript__body").ToList();
+            for (int i = 0; i < bodies.Count; i++)
+            {
+                bodies[i].style.display = DisplayStyle.None;
+            }
+
+            // Build edit UI
+            var container = new VisualElement();
+            container.AddToClassList("message-edit-container");
+
+            var tf = new TextField();
+            tf.AddToClassList("message-edit-field");
+            tf.multiline = true;
+            tf.value = currentContent;
+            container.Add(tf);
+
+            var btnRow = new VisualElement();
+            btnRow.AddToClassList("message-edit-buttons");
+            btnRow.style.flexDirection = FlexDirection.Row;
+
+            string saveLabel = LocalizationExtensions.Get("msg.edit.save", "Save");
+            var saveBtn = new Button(() => CommitInlineEdit(true, false));
+            saveBtn.text = saveLabel;
+            saveBtn.AddToClassList("message-edit-btn");
+            saveBtn.AddToClassList("message-edit-btn--save");
+            btnRow.Add(saveBtn);
+
+            string cancelLabel = LocalizationExtensions.Get("msg.edit.cancel", "Cancel");
+            var cancelBtn = new Button(() => CommitInlineEdit(false, false));
+            cancelBtn.text = cancelLabel;
+            cancelBtn.AddToClassList("message-edit-btn");
+            cancelBtn.AddToClassList("message-edit-btn--cancel");
+            btnRow.Add(cancelBtn);
+
+            // Offer regenerate if this user message is followed by an assistant response
+            var chat = _d.GetChatServiceAsync().Result;
+            var msgs = (chat != null && chat.CurrentChatViewModel != null) ? chat.CurrentChatViewModel.Messages : null;
+            bool hasFollowingAssistant = msgs != null &&
+                                         index + 1 < msgs.Count &&
+                                         msgs[index + 1] != null &&
+                                         string.Equals(NormalizeRole(msgs[index + 1].role), "assistant", StringComparison.OrdinalIgnoreCase);
+            if (hasFollowingAssistant)
+            {
+                string regenLabel = LocalizationExtensions.Get("msg.edit.save_regen", "Save & Regenerate");
+                var regenBtn = new Button(() => CommitInlineEdit(true, true));
+                regenBtn.text = regenLabel;
+                regenBtn.AddToClassList("message-edit-btn");
+                regenBtn.AddToClassList("message-edit-btn--regen");
+                btnRow.Add(regenBtn);
+            }
+
+            container.Add(btnRow);
+
+            // Insert after meta if present
+            var meta = bubble.Q<VisualElement>(className: "transcript__meta");
+            if (meta != null)
+            {
+                int metaIdx = bubble.IndexOf(meta);
+                if (metaIdx >= 0)
+                    bubble.Insert(metaIdx + 1, container);
+                else
+                    bubble.Add(container);
+            }
+            else
+            {
+                bubble.Add(container);
+            }
+
+            _editingContainer = container;
+            _editingTextField = tf;
+            _editingSaveBtn = saveBtn;
+            _editingCancelBtn = cancelBtn;
+
+            // Focus for immediate typing
+            tf.Focus();
+        }
+
+        private void CommitInlineEdit(bool doSave, bool regenerateAfter)
+        {
+            if (_editingMessageIndex == null || _editingTextField == null || _editingBubble == null)
+            {
+                CancelInlineEdit();
+                return;
+            }
+
+            int index = _editingMessageIndex.Value;
+            var chat = _d.GetChatServiceAsync().Result;
+            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
+            {
+                CancelInlineEdit();
+                return;
+            }
+
+            var messages = chat.CurrentChatViewModel.Messages;
+            if (index < 0 || index >= messages.Count)
+            {
+                CancelInlineEdit();
+                return;
+            }
+
+            if (doSave)
+            {
+                string newContent = (_editingTextField.value ?? string.Empty).Trim();
+                messages[index].content = newContent;
+
+                // Clear segments for user message (they are plain text)
+                if (messages[index].segments != null)
+                    messages[index].segments.Clear();
+
+                if (regenerateAfter)
+                {
+                    // Truncate everything after the edited message
+                    while (messages.Count > index + 1)
+                        messages.RemoveAt(messages.Count - 1);
+
+                    _d.RenderMessages(messages);
+                    _ = chat.SaveCurrentSessionAsync();
+                    _ = _d.LoadSessionsAsync();
+
+                    // Reuse existing regenerate flow (it will remove any trailing assistant if present and re-send)
+                    _ = RegenerateLastAsync();
+                    CancelInlineEdit();
+                    return;
+                }
+
+                // Normal save: re-render to get clean bubble
+                _d.RenderMessages(messages);
+                _ = chat.SaveCurrentSessionAsync();
+                _ = _d.LoadSessionsAsync();
+            }
+
+            CancelInlineEdit();
+        }
+
+        private void CancelInlineEdit()
+        {
+            if (_editingContainer != null && _editingContainer.parent != null)
+                _editingContainer.RemoveFromHierarchy();
+
+            if (_editingBubble != null)
+            {
+                var bodies = _editingBubble.Query<Label>(className: "transcript__body").ToList();
+                for (int i = 0; i < bodies.Count; i++)
+                {
+                    bodies[i].style.display = DisplayStyle.Flex;
+                }
+            }
+
+            _editingMessageIndex = null;
+            _editingBubble = null;
+            _editingContainer = null;
+            _editingTextField = null;
+            _editingSaveBtn = null;
+            _editingCancelBtn = null;
         }
 
         // ===== Static events for bubble action buttons =====

@@ -302,5 +302,13 @@
   "approval.always": "Всегда",
   "approval.auto_mode": "Авто (всегда разрешать)",
   "approval.manual_mode": "Вручную (спрашивать каждый раз)",
-  "approval.permission_mode": "Разрешение инструментов"
+  "approval.permission_mode": "Разрешение инструментов",
+  "msg.context.edit": "Редактировать",
+  "msg.context.delete": "Удалить",
+  "msg.context.copy": "Копировать",
+  "msg.deleted": "Сообщение удалено",
+  "msg.copied": "Скопировано",
+  "msg.edit.save": "Сохранить",
+  "msg.edit.cancel": "Отмена",
+  "msg.edit.save_regen": "Сохранить и перегенерировать"
 }

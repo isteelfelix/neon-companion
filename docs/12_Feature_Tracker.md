@@ -77,8 +77,8 @@
 | U-26 | Toggle панелей | ⏳ | M2 | Кнопки скрытия левой/правой панели. Иконки пофикшены. Ожидает проверки |
 || U-27 | Счётчик токенов + время ответа | ✅ | M2 | Approx tokens + elapsed time в footer assistant bubble. Обновляется каждые 500ms. Локализация en/ru |
 | U-28 | Precise usage данные (stream_options) | 📋 | M3 | Точные prompt_tokens + completion_tokens через `stream_options: {include_usage: true}`. Изменения в парсере SSE |
-| U-29 | Редактирование сообщений | 📋 | M2 | Долгий тап/кнопка на сообщении → inline редактирование. Перегенерация ответа идёт от отредактированного |
-| U-30 | Удаление отдельных сообщений | 📋 | M2 | Точечное удаление любого сообщения из чата |
+| U-29 | Редактирование сообщений | ✅ | M2 | Right-click/long-press context menu → inline edit (user only) + Save/Cancel + optional "Save & Regenerate". Implemented in ChatController + MessageContextMenu. |
+| U-30 | Удаление отдельных сообщений | ✅ | M2 | Right-click/long-press → Delete from context menu. Removes from model, re-renders, persists via SaveCurrentSessionAsync. |
 | U-31 | Выделение сообщений | 📋 | M2 | Multi-select режим: long press или checkbox. Панель действий снизу |
 | U-32 | Удаление выделенных | 📋 | M2 | Удалить все выбранные сообщения |
 | U-33 | Пересылка выделенных в другой чат | 📋 | M2 | Выбрать целевой чат → скопировать выбранные сообщения туда |

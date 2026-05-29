@@ -476,6 +476,16 @@ namespace NeonCompanion.Runtime.Chat
             _sessionRepository.SaveAll(sessions);
         }
 
+        /// <summary>
+        /// Persists current session after external/manual changes to messages (edit/delete).
+        /// Called from ChatController after mutating CurrentChatViewModel.Messages directly.
+        /// </summary>
+        public async Task SaveCurrentSessionAsync()
+        {
+            SaveCurrentSession();
+            await Task.CompletedTask;
+        }
+
         private List<ChatSession> GetSortedSessions()
         {
             if (!SaveChatHistory)
