@@ -90,6 +90,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private float _composerInputHeight = -1f;
         private VisualElement _composerPreviews;
 
+        // Context window indicator (U-36)
+        private VisualElement _contextBar;
+        private VisualElement _contextBarFill;
+        private Label _contextBarLabel;
+
         // Message context menu (U-29/U-30)
         private MessageContextMenu _contextMenu;
 
@@ -191,6 +196,27 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _composerPreviews.style.display = DisplayStyle.None;
                 int composerIndex = _d.Composer.parent.IndexOf(_d.Composer);
                 _d.Composer.parent.Insert(composerIndex, _composerPreviews);
+            }
+
+            // Context window indicator
+            _contextBar = new VisualElement();
+            _contextBar.name = "context-bar";
+            _contextBar.AddToClassList("context-bar");
+            _contextBar.style.display = DisplayStyle.None;
+
+            _contextBarFill = new VisualElement();
+            _contextBarFill.name = "context-bar__fill";
+            _contextBarFill.AddToClassList("context-bar__fill");
+            _contextBar.Add(_contextBarFill);
+
+            _contextBarLabel = new Label();
+            _contextBarLabel.AddToClassList("context-bar__label");
+            _contextBar.Add(_contextBarLabel);
+
+            // Insert AFTER composer in chat-main (parent is column)
+            if (_d.Composer?.parent != null)
+            {
+                _d.Composer.parent.Add(_contextBar);
             }
         }
 
@@ -1646,6 +1672,65 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        // ===== Context Window Indicator (U-36) =====
+
+        private int EstimateSessionTokens()
+        {
+            var chat = _d.GetChatServiceAsync().Result;
+            var vm = chat?.CurrentChatViewModel;
+            if (vm == null || vm.Messages.Count == 0)
+                return 0;
+
+            int totalChars = 0;
+            for (int i = 0; i < vm.Messages.Count; i++)
+            {
+                var msg = vm.Messages[i];
+                if (msg == null) continue;
+                if (!string.IsNullOrEmpty(msg.content))
+                    totalChars += msg.content.Length;
+                // Count attachment paths as ~100 tokens each (image tokens)
+                if (msg.attachments != null)
+                    totalChars += msg.attachments.Count * 400;
+            }
+            // Rough estimate: 1 token ≈ 4 chars for English, ~2 chars for CJK
+            // Use 3 as middle ground
+            return totalChars / 3;
+        }
+
+        private void UpdateContextBar()
+        {
+            if (_contextBar == null) return;
+
+            var chat = _d.GetChatServiceAsync().Result;
+            var provider = chat?.CurrentProvider;
+            int contextWindow = provider?.contextWindow ?? 0;
+
+            if (contextWindow <= 0)
+            {
+                _contextBar.style.display = DisplayStyle.None;
+                return;
+            }
+
+            int used = EstimateSessionTokens();
+            float ratio = (float)used / contextWindow;
+            ratio = Mathf.Clamp01(ratio);
+
+            _contextBar.style.display = DisplayStyle.Flex;
+            _contextBarFill.style.width = Length.Percent(ratio * 100f);
+
+            // Color: green < 60%, yellow 60-85%, red > 85%
+            if (ratio < 0.6f)
+                _contextBarFill.style.backgroundColor = new Color(0.3f, 0.7f, 0.4f, 0.8f);
+            else if (ratio < 0.85f)
+                _contextBarFill.style.backgroundColor = new Color(0.9f, 0.7f, 0.2f, 0.8f);
+            else
+                _contextBarFill.style.backgroundColor = new Color(0.9f, 0.3f, 0.3f, 0.8f);
+
+            _contextBarLabel.text = LocalizationExtensions.Get("chat.context.usage", "~{0} / {1} tokens")
+                .Replace("{0}", used.ToString("N0"))
+                .Replace("{1}", contextWindow.ToString("N0"));
+        }
+
         // ===== Message Rendering =====
 
         public void RenderMessages(IReadOnlyList<ChatMessage> messages)
@@ -1663,6 +1748,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.NavChatCount.text = count.ToString();
 
             RenderTranscript(messages);
+            UpdateContextBar();
         }
 
         private void RenderTranscript(IReadOnlyList<ChatMessage> messages)

@@ -1167,3 +1167,31 @@
     border-width: 1px;
     border-color: var(--line-2);
 }
+
+/* Context window indicator */
+.context-bar {
+    height: 18px;
+    flex-shrink: 0;
+    margin-top: 4px;
+    overflow: hidden;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.context-bar__fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 4px;
+    transition-property: width;
+    transition-duration: 0.3s;
+}
+
+.context-bar__label {
+    position: absolute;
+    left: 8px;
+    top: 0;
+    height: 18px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    -unity-text-align: middle-left;
+}
