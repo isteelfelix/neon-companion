@@ -37,7 +37,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         public Action ResetProvidersCountUi;
         public Action<string> SetCurrentSessionId;
         public Action<string> SetCurrentSessionTitle;
-        public Action<string> SetSubtitleBody;
     }
 
     internal sealed class SettingsController
@@ -821,8 +820,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 System.IO.File.WriteAllText(path, json);
                 string fileName = System.IO.Path.GetFileName(path);
 
-                _deps.SetSubtitleBody?.Invoke(
-                    LocalizationExtensions.GetFormat("system.export.subtitle", "Экспортировано: {0}", fileName));
                 _deps.AddSystemMessage?.Invoke(
                     LocalizationExtensions.GetFormat("system.export.chats", "Чаты экспортированы в {0}.", fileName));
                 OpenPath(path);

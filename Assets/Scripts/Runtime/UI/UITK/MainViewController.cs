@@ -177,8 +177,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _topbarSubtitle;
         private Label _placeholderTitle;
         private Label _placeholderBody;
-        private Label _subtitleRole;
-        private Label _subtitleBody;
 
         private Button _sendButton;
         private Button _summarizeButton;
@@ -201,9 +199,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _historyPanelSearchClear;
         private Button _historyPanelNewSessionButton;
 
-        private Button _copyButton;
-        private Button _regenerateButton;
-        private Button _listenButton;
+        // copy-btn, refresh-btn, listen-btn removed — now in bubble hover
         private Button _micButton;
         private Button _attachButton;
         private Button _avatarUploadBtn;
@@ -410,8 +406,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _topbarSubtitle = root.Q<Label>("topbar-subtitle");
             _placeholderTitle = root.Q<Label>("placeholder-title");
             _placeholderBody = root.Q<Label>("placeholder-body");
-            _subtitleRole = root.Q<Label>("subtitle-role");
-            _subtitleBody = root.Q<Label>("subtitle-body");
 
             _messageInput = root.Q<TextField>("message-input");
             if (_messageInput != null)
@@ -443,9 +437,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _historyPanelSearchClear = root.Q<Button>("history-panel-search-clear");
             _historyPanelNewSessionButton = root.Q<Button>("history-panel-new-session-btn");
 
-            _copyButton       = root.Q<Button>("copy-btn");
-            _regenerateButton = root.Q<Button>("refresh-btn");
-            _listenButton = root.Q<Button>("listen-btn");
+            // copy-btn, refresh-btn, listen-btn removed from UXML — now in bubble hover
             _micButton = root.Q<Button>("mic-button");
             _attachButton = root.Q<Button>("attach-btn");
             _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
@@ -587,7 +579,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ResetProvidersCountUi = () => _providersController.ResetNavProvidersCount(),
                 SetCurrentSessionId   = id => _currentSessionId = id,
                 SetCurrentSessionTitle = title => _currentSessionTitle = title,
-                SetSubtitleBody = text => { if (_subtitleBody != null) _subtitleBody.text = text; }
             };
         }
 
@@ -624,8 +615,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SummarizeButton = _summarizeButton,
                 SearchButton = _searchButton,
                 AttachButton = _attachButton,
-                CopyButton = _copyButton,
-                RegenerateButton = _regenerateButton,
                 NewSessionButton = _newSessionButton,
                 MessagesList = _messagesList,
                 ScrollBottomBtn = _scrollBottomBtn,
@@ -633,8 +622,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ThinkingBubble = _thinkingBubble,
                 ThinkingText = _thinkingText,
                 TopbarSubtitle = _topbarSubtitle,
-                SubtitleBody = _subtitleBody,
-                SubtitleRole = _subtitleRole,
                 NavChatCount = _navChatCount,
                 GetAvatarAnimator = _avatarGalleryController.GetAvatarAnimatorInstance,
                 SetAvatarMotionState = _avatarGalleryController.SetAvatarMotionState,
@@ -750,7 +737,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 GetChatSubtitle = () => _chatController.ChatSubtitle,
                 SetChatSubtitle = (text) => { _chatController.SetChatSubtitle(text); },
                 SetTopbarSubtitle = (text) => { if (_topbarSubtitle != null) _topbarSubtitle.text = text; },
-                SetSubtitleRole = (text) => { if (_subtitleRole != null) _subtitleRole.text = text; },
                 AddSystemMessage = AddSystemMessage,
                 IsChatSending = () => _chatController.IsSending,
                 IsChatStreamingResponse = () => _chatController.IsStreamingResponse,
@@ -831,7 +817,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _historySearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
             if (_historyPanelSearchInput != null)
                 _historyPanelSearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
-            RegisterClick(_listenButton, OnListenClicked);
+            ChatController.ListenRequested += OnListenClicked;
 
             if (_messagesList != null)
             {
@@ -853,7 +839,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_historySearchClear, OnHistorySearchCleared);
             UnregisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
             UnregisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
-            UnregisterClick(_listenButton, OnListenClicked);
+            ChatController.ListenRequested -= OnListenClicked;
 
             _settingsController.UnregisterCallbacks();
             _voiceController.UnregisterCallbacks();
@@ -952,8 +938,17 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void AddSystemMessage(string text)
         {
-            if (_subtitleBody != null)
-                _subtitleBody.text = text ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) return;
+            // Add as a system-role message in the chat transcript
+            if (_messagesList != null)
+            {
+                var msg = new ChatMessage { role = "system", content = text };
+                _messagesList.Add(ChatController.CreateMessageElement(msg));
+                // Scroll to bottom
+                var content = _messagesList.contentContainer;
+                if (content != null && content.childCount > 0)
+                    _messagesList.ScrollTo(content[content.childCount - 1]);
+            }
         }
 
         private void SetSending(bool isSending)
@@ -1075,10 +1070,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void SetNoProviderState()
         {
-            if (_subtitleBody != null)
-                _subtitleBody.text = LocalizationExtensions.Get("provider.not_configured.hint", "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ.");
-            if (_subtitleRole != null)
-                _subtitleRole.text = LocalizationExtensions.Get("chat.role.system", "Система");
+            AddSystemMessage(LocalizationExtensions.Get("provider.not_configured.hint", "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ."));
             if (_sendButton != null)
                 _sendButton.SetEnabled(false);
         }
@@ -1391,7 +1383,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             SyncGallerySelection(avatarId);
             ApplyAvatarArt(avatarId);
             string name = AvatarDisplayName(avatarId);
-            if (_subtitleRole != null) _subtitleRole.text = name;
             string updatedSubtitle = _chatController.ChatSubtitle.Contains("·")
                 ? _chatController.ChatSubtitle.Substring(0, _chatController.ChatSubtitle.LastIndexOf('·') + 2) + name
                 : _chatController.ChatSubtitle;

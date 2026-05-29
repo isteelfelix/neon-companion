@@ -24,8 +24,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Button SummarizeButton;
             public Button SearchButton;
             public Button AttachButton;
-            public Button CopyButton;
-            public Button RegenerateButton;
             public Button NewSessionButton;
             public ScrollView MessagesList;
             public Button ScrollBottomBtn;
@@ -33,8 +31,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             public VisualElement ThinkingBubble;
             public Label ThinkingText;
             public Label TopbarSubtitle;
-            public Label SubtitleBody;
-            public Label SubtitleRole;
             public Label NavChatCount;
             // Avatar
             public Func<SpriteSheetAnimator> GetAvatarAnimator;
@@ -97,10 +93,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_d.SummarizeButton, OnSummarizeClicked);
             RegisterClick(_d.SearchButton, OnSearchClicked);
             RegisterClick(_d.AttachButton, OnAttachClicked);
-            RegisterClick(_d.CopyButton, OnCopyClicked);
-            RegisterClick(_d.RegenerateButton, OnRegenerateClicked);
             RegisterClick(_d.NewSessionButton, OnNewSessionClicked);
             RegisterClick(_d.ScrollBottomBtn, OnScrollBottomClicked);
+
+            // Wire up static bubble action events
+            CopyRequested += OnCopyClicked;
+            RegenerateRequested += OnRegenerateClicked;
 
             if (_d.MessageInput != null)
             {
@@ -117,10 +115,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_d.SummarizeButton, OnSummarizeClicked);
             UnregisterClick(_d.SearchButton, OnSearchClicked);
             UnregisterClick(_d.AttachButton, OnAttachClicked);
-            UnregisterClick(_d.CopyButton, OnCopyClicked);
-            UnregisterClick(_d.RegenerateButton, OnRegenerateClicked);
             UnregisterClick(_d.NewSessionButton, OnNewSessionClicked);
             UnregisterClick(_d.ScrollBottomBtn, OnScrollBottomClicked);
+
+            CopyRequested -= OnCopyClicked;
+            RegenerateRequested -= OnRegenerateClicked;
 
             if (_d.MessageInput != null)
             {
@@ -393,7 +392,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _isStreamingResponse = false;
             if (_d.SendButton != null)
                 _d.SendButton.SetEnabled(!isSending);
-            SetDisplay(_d.SubtitleBody, isSending ? DisplayStyle.None : DisplayStyle.Flex);
             _d.RefreshAvatarMotionState();
         }
 
@@ -650,32 +648,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.NavChatCount != null)
                 _d.NavChatCount.text = count.ToString();
 
-            if (_d.SubtitleRole != null)
-                _d.SubtitleRole.text = avatarName;
-
             RenderTranscript(messages);
-
-            if (_d.SubtitleBody == null)
-                return;
-
-            string text = LocalizationExtensions.Get("chat.subtitle.ready", "Готова помочь. С чего начнём?");
-            if (messages != null)
-            {
-                for (int i = messages.Count - 1; i >= 0; i--)
-                {
-                    var msg = messages[i];
-                    if (!HasRenderableMessageContent(msg)) continue;
-                    if (msg.role != "user")
-                    {
-                        text = !string.IsNullOrWhiteSpace(msg.content)
-                            ? msg.content
-                            : $"[image] {GetAttachmentDisplayName(msg.attachments != null && msg.attachments.Count > 0 ? msg.attachments[0] : null)}";
-                        break;
-                    }
-                }
-            }
-
-            _d.SubtitleBody.text = TrimForSubtitle(text);
         }
 
         private void RenderTranscript(IReadOnlyList<ChatMessage> messages)
@@ -800,6 +773,40 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (attachmentWrap.childCount > 0)
                     bubble.Add(attachmentWrap);
             }
+
+            // Add hover action buttons for assistant messages
+            if (role == "assistant")
+            {
+                var actions = new VisualElement();
+                actions.AddToClassList("transcript__bubble-actions");
+
+                var copyBtn = new Button();
+                copyBtn.AddToClassList("iconbtn");
+                copyBtn.AddToClassList("icon");
+                copyBtn.AddToClassList("icon--copy");
+                copyBtn.tooltip = "Копировать";
+                RegisterClickStatic(copyBtn, () => OnCopyClickedStatic());
+
+                var refreshBtn = new Button();
+                refreshBtn.AddToClassList("iconbtn");
+                refreshBtn.AddToClassList("icon");
+                refreshBtn.AddToClassList("icon--refresh");
+                refreshBtn.tooltip = "Пересоздать";
+                RegisterClickStatic(refreshBtn, () => OnRegenerateClickedStatic());
+
+                var listenBtn = new Button();
+                listenBtn.AddToClassList("iconbtn");
+                listenBtn.AddToClassList("icon");
+                listenBtn.AddToClassList("icon--headphones");
+                listenBtn.tooltip = "Озвучить";
+                RegisterClickStatic(listenBtn, () => OnListenClickedStatic());
+
+                actions.Add(copyBtn);
+                actions.Add(refreshBtn);
+                actions.Add(listenBtn);
+                bubble.Add(actions);
+            }
+
             row.Add(bubble);
 
             return row;
@@ -983,15 +990,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             return $"{count} {word}";
         }
 
-        private static string TrimForSubtitle(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return string.Empty;
-
-            string normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
-            return normalized.Length <= 320 ? normalized : normalized.Substring(0, 317) + "...";
-        }
-
         private static bool HasRenderableMessageContent(ChatMessage message)
         {
             if (message == null)
@@ -1121,6 +1119,22 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (element != null)
                 element.style.display = display;
+        }
+
+        // ===== Static events for bubble action buttons =====
+
+        internal static event Action CopyRequested;
+        internal static event Action RegenerateRequested;
+        internal static event Action ListenRequested;
+
+        private static void OnCopyClickedStatic() => CopyRequested?.Invoke();
+        private static void OnRegenerateClickedStatic() => RegenerateRequested?.Invoke();
+        private static void OnListenClickedStatic() => ListenRequested?.Invoke();
+
+        private static void RegisterClickStatic(Button button, Action handler)
+        {
+            if (button != null)
+                button.clicked += handler;
         }
     }
 }

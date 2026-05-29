@@ -30,7 +30,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<string> GetChatSubtitle;
             public Action<string> SetChatSubtitle;
             public Action<string> SetTopbarSubtitle;
-            public Action<string> SetSubtitleRole;
             public Action<string> AddSystemMessage;
             // Motion state inputs
             public Func<bool> IsChatSending;
@@ -699,7 +698,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             SyncGallerySelection(avatarId);
             ApplyAvatarArt(avatarId);
             string name = AvatarDisplayName(avatarId);
-            _d.SetSubtitleRole?.Invoke(name);
             string chatSub = _d.GetChatSubtitle != null ? _d.GetChatSubtitle() : string.Empty;
             string updatedSub = chatSub.Contains("·")
                 ? chatSub.Substring(0, chatSub.LastIndexOf('·') + 2) + name

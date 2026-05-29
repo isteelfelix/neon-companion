@@ -219,6 +219,7 @@
 .transcript__row--system    { justify-content: flex-start; }
 
 .transcript__bubble {
+    position: relative;
     max-width: 76%;
     min-width: 120px;
     padding: 10px 12px;
@@ -236,6 +237,41 @@
 .transcript__bubble--system {
     border-color: rgba(239, 171, 86, 0.30);
     background-color: rgba(239, 171, 86, 0.08);
+}
+
+/* ---- Bubble hover actions (copy/refresh/listen) ---- */
+
+.transcript__bubble-actions {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.transcript__bubble:hover > .transcript__bubble-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.transcript__bubble-actions > Button {
+    width: 28px;
+    height: 28px;
+    margin: 1px 0;
+    padding: 0;
+    font-size: 14px;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: var(--text-2);
+    justify-content: center;
+    align-items: center;
+}
+
+.transcript__bubble-actions > Button:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    color: var(--text-0);
 }
 
 .transcript__meta {
