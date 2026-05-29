@@ -787,3 +787,85 @@
 .tool-entry__status--done {
     color: var(--ok);
 }
+
+/* ---- Markdown rendering (assistant messages) ---- */
+
+.markdown-root {
+    flex-direction: column;
+}
+
+.markdown-paragraph {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.markdown-bold {
+    font-weight: bold;
+}
+
+.markdown-italic {
+    font-style: italic;
+}
+
+.markdown-code {
+    font-family: monospace;
+    font-size: 0.9em;
+    background-color: rgba(255, 255, 255, 0.08);
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+.markdown-codeblock {
+    flex-direction: column;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 8px 12px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    overflow: hidden;
+}
+
+.markdown-codeblock-text {
+    font-family: monospace;
+    font-size: 0.85em;
+    white-space: pre;
+    color: #e0e0e0;
+}
+
+.markdown-bullet {
+    flex-direction: row;
+    margin-left: 16px;
+    margin-bottom: 2px;
+}
+
+.markdown-bullet-marker {
+    margin-right: 6px;
+    color: #888;
+}
+
+.markdown-numbered {
+    flex-direction: row;
+    margin-left: 16px;
+    margin-bottom: 2px;
+}
+
+.markdown-numbered-marker {
+    margin-right: 6px;
+    color: #888;
+    min-width: 20px;
+}
+
+.markdown-link {
+    color: #6ea8fe;
+    text-decoration: underline;
+}

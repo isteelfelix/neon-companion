@@ -1036,7 +1036,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             bool hasSegmentContent = AddMessageSegments(bubble, message);
             if (!hasSegmentContent && !string.IsNullOrWhiteSpace(message.content))
             {
-                bubble.Add(CreateTranscriptBody(message.content));
+                bool isAssistant = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase);
+                bubble.Add(CreateTranscriptBody(message.content, isAssistant));
             }
 
             if (message.attachments != null && message.attachments.Count > 0)
@@ -1125,7 +1126,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(segment.text))
                 {
-                    bubble.Add(CreateTranscriptBody(segment.text));
+                    bubble.Add(CreateTranscriptBody(segment.text, true));
                     added = true;
                 }
             }
@@ -1133,8 +1134,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             return added;
         }
 
-        private static Label CreateTranscriptBody(string text)
+        private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
         {
+            if (isAssistant && !string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
+            {
+                return MarkdownRenderer.Render(text);
+            }
             var body = new Label(text);
             body.AddToClassList("transcript__body");
             return body;
