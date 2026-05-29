@@ -145,6 +145,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _selectionBar;
         private Label _selectionCountLabel;
 
+        // Forward picker (U-33)
+        private VisualElement _sessionPickerOverlay;
+        private VisualElement _sessionPickerPanel;
+        private VisualElement _pickerRoot;
+        private EventCallback<PointerDownEvent> _pickerOutsideHandler;
+
         private const float ComposerInputMinHeight = 36f;
         private const float ComposerInputMaxHeight = 140f;
         private const float ComposerInputVerticalPadding = 12f;
@@ -266,6 +272,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             deleteBtn.AddToClassList("selection-bar__btn selection-bar__btn--danger");
             _selectionBar.Add(deleteBtn);
 
+            var forwardBtn = new Button(OnForwardSelected) { text = LocalizationExtensions.Get("chat.selection.forward", "Forward") };
+            forwardBtn.AddToClassList("selection-bar__btn");
+            _selectionBar.Add(forwardBtn);
+
             var cancelBtn = new Button(ExitSelectionMode) { text = LocalizationExtensions.Get("chat.selection.cancel", "Cancel") };
             cancelBtn.AddToClassList("selection-bar__btn");
             _selectionBar.Add(cancelBtn);
@@ -337,6 +347,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _contextMenu.Hide();
             CancelInlineEdit();
             CloseSearch();
+            DismissSessionPicker();
             if (_searchBar != null)
             {
                 _searchBar.RemoveFromHierarchy();
@@ -511,6 +522,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnStopClicked()
         {
             DismissCurrentApprovalPrompt();
+            DismissSessionPicker();
             if (_contextMenu != null)
                 _contextMenu.Hide();
             CancelInlineEdit();
@@ -521,6 +533,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             HideNotificationBadge();
             DismissCurrentApprovalPrompt();
+            DismissSessionPicker();
             if (_contextMenu != null)
                 _contextMenu.Hide();
             CancelInlineEdit();
@@ -583,6 +596,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     ClearThinkingBubble();
                     _toolCallUiHelper.Clear();
                     DismissCurrentApprovalPrompt();
+                    DismissSessionPicker();
                     _streamingBubble = null;
                     _streamingLabel = null;
                     StopInlineTypingAnimation();
@@ -656,6 +670,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _streamingLabel = null;
                 _toolCallUiHelper.Clear();
                 DismissCurrentApprovalPrompt();
+                DismissSessionPicker();
                 _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
             }
             catch (Exception ex)
@@ -670,6 +685,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _streamingBubble = null;
                 _streamingLabel = null;
                 DismissCurrentApprovalPrompt();
+                DismissSessionPicker();
                 _d.MessageInput.value = composerText;
                 QueueComposerHeightUpdate();
                 RestorePendingComposerAttachments(pendingAttachments);
@@ -1919,6 +1935,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private async Task RegenerateLastAsync()
         {
             DismissCurrentApprovalPrompt();
+            DismissSessionPicker();
             try
             {
                 var chat = await _d.GetChatServiceAsync();
@@ -1947,6 +1964,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         ClearThinkingBubble();
                         _toolCallUiHelper.Clear();
                         DismissCurrentApprovalPrompt();
+                        DismissSessionPicker();
                         _streamingBubble = null;
                         _streamingLabel = null;
                         StopInlineTypingAnimation();
@@ -2013,6 +2031,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _streamingBubble = null;
                     _streamingLabel = null;
                     DismissCurrentApprovalPrompt();
+                    DismissSessionPicker();
                     _d.ShowSystemMessage(ex.Message);
                     NeonLogger.LogError(ex.ToString());
                     _d.TriggerAvatarConfused();
@@ -2882,6 +2901,25 @@ namespace NeonCompanion.Runtime.UI.UITK
             _currentApprovalPrompt = null;
         }
 
+        private void DismissSessionPicker()
+        {
+            if (_sessionPickerOverlay != null && _sessionPickerOverlay.parent != null)
+                _sessionPickerOverlay.RemoveFromHierarchy();
+
+            CleanupPickerHandlers();
+            _sessionPickerOverlay = null;
+            _sessionPickerPanel = null;
+        }
+
+        private void CleanupPickerHandlers()
+        {
+            if (_pickerRoot != null && _pickerOutsideHandler != null)
+                _pickerRoot.UnregisterCallback(_pickerOutsideHandler, TrickleDown.TrickleDown);
+
+            _pickerOutsideHandler = null;
+            _pickerRoot = null;
+        }
+
         private bool IsApprovalRequestStatus(string status)
         {
             if (string.IsNullOrWhiteSpace(status))
@@ -3527,6 +3565,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ExitSelectionMode()
         {
+            DismissSessionPicker();
             _isSelectionMode = false;
             _selectedMessages.Clear();
             RenderSelectionUI();
@@ -3582,6 +3621,201 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = chat.SaveCurrentSessionAsync();
             ExitSelectionMode();
             _d.RenderMessages(chat.CurrentChatViewModel.Messages);
+        }
+
+        private void OnForwardSelected()
+        {
+            _ = ForwardSelectedAsync();
+        }
+
+        private async Task ForwardSelectedAsync()
+        {
+            if (_selectedMessages.Count == 0) return;
+
+            var chat = await _d.GetChatServiceAsync();
+            if (chat == null || chat.CurrentChatViewModel == null) return;
+
+            var source = chat.CurrentChatViewModel.Messages;
+            var toForward = new List<ChatMessage>();
+            var indices = new List<int>(_selectedMessages);
+            indices.Sort();
+
+            for (int i = 0; i < indices.Count; i++)
+            {
+                int idx = indices[i];
+                if (idx >= 0 && idx < source.Count)
+                    toForward.Add(source[idx]);
+            }
+
+            if (toForward.Count == 0)
+            {
+                ExitSelectionMode();
+                return;
+            }
+
+            var all = await chat.GetAllSessionsAsync();
+            string currentId = chat.CurrentSessionId;
+
+            var candidates = new List<ChatSession>();
+            for (int i = 0; i < all.Count; i++)
+            {
+                var s = all[i];
+                if (s != null && s.sessionId != currentId)
+                    candidates.Add(s);
+            }
+
+            if (candidates.Count == 0)
+            {
+                ExitSelectionMode();
+                return;
+            }
+
+            var target = await ShowSessionPickerAsync(candidates);
+            if (target == null)
+            {
+                // Cancel or outside click — leave selection mode active so user can try again or cancel
+                return;
+            }
+
+            int added = await chat.AppendMessagesToSessionAsync(target.sessionId, toForward);
+            ExitSelectionMode();
+
+            if (added > 0)
+            {
+                string done = LocalizationExtensions.Get("chat.selection.forward_done", "Forwarded {0} messages")
+                    .Replace("{0}", added.ToString());
+                _d.ShowSystemMessage(done);
+            }
+        }
+
+        private async Task<ChatSession> ShowSessionPickerAsync(List<ChatSession> candidates)
+        {
+            var tcs = new TaskCompletionSource<ChatSession>();
+
+            var overlay = new VisualElement();
+            overlay.AddToClassList("session-picker-overlay");
+
+            // Find root to attach (reuse pattern from context menu)
+            VisualElement root = null;
+            if (_selectionBar != null && _selectionBar.panel != null)
+                root = GetDocumentRoot(_selectionBar);
+            if (root == null && _d.MessagesList != null && _d.MessagesList.panel != null)
+                root = GetDocumentRoot(_d.MessagesList);
+            if (root == null)
+            {
+                tcs.SetResult(null);
+                return await tcs.Task;
+            }
+
+            var picker = new VisualElement();
+            picker.AddToClassList("session-picker");
+            picker.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
+
+            var headerLabel = new Label(LocalizationExtensions.Get("chat.selection.pick_session", "Pick a chat to forward to"));
+            headerLabel.AddToClassList("session-picker__header");
+            picker.Add(headerLabel);
+
+            var listScroll = new ScrollView();
+            listScroll.AddToClassList("session-picker__list");
+            listScroll.style.flexGrow = 1f;
+            listScroll.style.minHeight = 60f;
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var s = candidates[i];
+                if (s == null) continue;
+
+                var item = new VisualElement();
+                item.AddToClassList("session-picker__item");
+
+                string titleText = string.IsNullOrWhiteSpace(s.title) ? LocalizationExtensions.Get("chat.new", "New chat") : s.title;
+                var titleLabel = new Label(titleText);
+                titleLabel.AddToClassList("session-picker__title");
+
+                var timeLabel = new Label(FormatSessionTimestamp(s.updatedAtUnix));
+                timeLabel.AddToClassList("session-picker__time");
+
+                item.Add(titleLabel);
+                item.Add(timeLabel);
+
+                WireSessionPickerItem(item, s, tcs);
+                listScroll.Add(item);
+            }
+
+            picker.Add(listScroll);
+
+            // Footer cancel
+            var footer = new VisualElement();
+            footer.AddToClassList("session-picker__footer");
+            footer.style.flexDirection = FlexDirection.Row;
+            footer.style.justifyContent = JustifyContent.FlexEnd;
+            footer.style.marginTop = 6f;
+
+            var cancelBtn = new Button(() =>
+            {
+                DismissSessionPicker();
+                tcs.TrySetResult(null);
+            })
+            { text = LocalizationExtensions.Get("chat.selection.cancel", "Cancel") };
+            cancelBtn.AddToClassList("selection-bar__btn");
+            footer.Add(cancelBtn);
+            picker.Add(footer);
+
+            overlay.Add(picker);
+            root.Add(overlay);
+
+            _sessionPickerOverlay = overlay;
+            _sessionPickerPanel = picker;
+            _pickerRoot = root;
+
+            _pickerOutsideHandler = (PointerDownEvent evt) =>
+            {
+                if (_sessionPickerPanel != null && _sessionPickerPanel.worldBound.Contains(evt.position))
+                    return;
+                DismissSessionPicker();
+                tcs.TrySetResult(null);
+            };
+            root.RegisterCallback(_pickerOutsideHandler, TrickleDown.TrickleDown);
+
+            return await tcs.Task;
+        }
+
+        private static string FormatSessionTimestamp(long unixSeconds)
+        {
+            if (unixSeconds <= 0)
+                return "";
+            try
+            {
+                var dt = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime();
+                return dt.ToString("dd.MM HH:mm");
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private VisualElement GetDocumentRoot(VisualElement start)
+        {
+            if (start == null)
+                return null;
+            var el = start;
+            var panelVisualTree = start.panel != null ? start.panel.visualTree : null;
+            while (el.parent != null && el.parent != panelVisualTree)
+                el = el.parent;
+            return el;
+        }
+
+        private void WireSessionPickerItem(VisualElement item, ChatSession session, TaskCompletionSource<ChatSession> tcs)
+        {
+            item.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                DismissSessionPicker();
+                tcs.TrySetResult(session);
+            });
+            item.RegisterCallback<PointerEnterEvent>(_ => item.AddToClassList("session-picker__item--hover"));
+            item.RegisterCallback<PointerLeaveEvent>(_ => item.RemoveFromClassList("session-picker__item--hover"));
         }
 
         private void OnSelectMessageRequested(string messageIndexStr)

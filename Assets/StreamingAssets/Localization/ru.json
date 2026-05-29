@@ -330,5 +330,8 @@
   "chat.selection.clear": "Очистить выбор",
   "chat.selection.delete": "Удалить",
   "chat.selection.cancel": "Отмена",
-  "chat.selection.count": "Выбрано: {0}"
+  "chat.selection.count": "Выбрано: {0}",
+  "chat.selection.forward": "Переслать",
+  "chat.selection.pick_session": "Выберите чат для пересылки",
+  "chat.selection.forward_done": "Переслано сообщений: {0}"
 }

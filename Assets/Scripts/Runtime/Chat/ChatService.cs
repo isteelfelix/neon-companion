@@ -9,6 +9,7 @@ using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.UI.Chat;
+using UnityEngine;
 
 namespace NeonCompanion.Runtime.Chat
 {
@@ -507,6 +508,61 @@ namespace NeonCompanion.Runtime.Chat
         {
             SaveCurrentSession();
             await Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Appends deep-copied messages to another (target) session and persists the change.
+        /// Used by forward-selected (U-33). Returns number of messages appended.
+        /// </summary>
+        public async Task<int> AppendMessagesToSessionAsync(string targetSessionId, List<ChatMessage> messages)
+        {
+            if (string.IsNullOrWhiteSpace(targetSessionId) || messages == null || messages.Count == 0)
+                return 0;
+
+            var sessions = _sessionRepository.GetAll();
+            int idx = -1;
+            for (int i = 0; i < sessions.Count; i++)
+            {
+                if (sessions[i].sessionId == targetSessionId)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0)
+                return 0;
+
+            var target = sessions[idx];
+            if (target.messages == null)
+                target.messages = new List<ChatMessage>();
+
+            int added = 0;
+            for (int m = 0; m < messages.Count; m++)
+            {
+                var original = messages[m];
+                if (original == null)
+                    continue;
+
+                // Snapshot via JsonUtility (matches storage serialization, handles segments/tool_calls/attachments)
+                string json = JsonUtility.ToJson(original);
+                var copy = JsonUtility.FromJson<ChatMessage>(json);
+                if (copy != null)
+                {
+                    target.messages.Add(copy);
+                    added++;
+                }
+            }
+
+            if (added > 0)
+            {
+                target.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                target.title = BuildSessionTitle(target);
+                sessions[idx] = target;
+                _sessionRepository.SaveAll(sessions);
+            }
+
+            await Task.CompletedTask;
+            return added;
         }
 
         private List<ChatSession> GetSortedSessions()

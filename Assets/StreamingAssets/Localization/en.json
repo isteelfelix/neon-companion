@@ -330,5 +330,8 @@
   "chat.selection.clear": "Clear selection",
   "chat.selection.delete": "Delete",
   "chat.selection.cancel": "Cancel",
-  "chat.selection.count": "Selected: {0}"
+  "chat.selection.count": "Selected: {0}",
+  "chat.selection.forward": "Forward",
+  "chat.selection.pick_session": "Pick a chat to forward to",
+  "chat.selection.forward_done": "Forwarded {0} messages"
 }
