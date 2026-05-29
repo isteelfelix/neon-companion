@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api.Models;
+using NeonCompanion.Runtime.Api.Adapters;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
@@ -14,8 +15,6 @@ namespace NeonCompanion.Runtime.Api
 {
     public sealed class OpenAiCompatibleClient : IAiClient
     {
-        private const string HermesSessionHeaderName = "X-Hermes-Session-Id";
-
         public async Task<AiChatResponse> SendMessageAsync(
             ProviderConfig provider,
             AiChatRequest request,
@@ -38,6 +37,9 @@ namespace NeonCompanion.Runtime.Api
                 });
             }
 
+            var adapter = GetAdapter(provider);
+            var capabilities = adapter.GetCapabilities();
+
             var routing = await ResolveRequestRoutingAsync(provider, request, cancellationToken);
             NeonLogger.Log($"OpenAI request send: provider={provider?.id}, requestedModel={request?.model}, routedModel={routing.Model}, providerSessionId={routing.ProviderSessionId ?? "<null>"}");
             var endpoint = BuildEndpoint(provider.baseUrl);
@@ -46,7 +48,8 @@ namespace NeonCompanion.Runtime.Api
                 request.temperature,
                 request.maxTokens,
                 messages,
-                stream: false);
+                stream: false,
+                capabilities);
 
             using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
             {
@@ -59,7 +62,7 @@ namespace NeonCompanion.Runtime.Api
                 {
                     webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
                 }
-                ApplyHermesSessionHeader(webRequest, routing.ProviderSessionId);
+                adapter.ApplyRequestHeaders(webRequest, routing.ProviderSessionId);
 
                 var operation = webRequest.SendWebRequest();
 
@@ -82,7 +85,7 @@ namespace NeonCompanion.Runtime.Api
 
                 var rawResponse = webRequest.downloadHandler.text;
                 var response = ParseResponse(rawResponse);
-                response.providerSessionId = GetHermesSessionHeader(webRequest, routing.ProviderSessionId);
+                response.providerSessionId = adapter.ExtractSessionId(webRequest, routing.ProviderSessionId);
                 if (string.IsNullOrWhiteSpace(response.model))
                     response.model = routing.Model ?? request.model ?? string.Empty;
 
@@ -130,16 +133,43 @@ namespace NeonCompanion.Runtime.Api
 
                     if (authed)
                     {
+                        var adapter = GetAdapter(provider);
+                        var capabilities = adapter.GetCapabilities();
                         var modelsPayload = webRequest.downloadHandler?.text;
-                        var inventoryPayload = await TryFetchHermesInventoryPayloadAsync(provider, cancellationToken);
-                        if (!string.IsNullOrEmpty(inventoryPayload))
-                            discoveredModels = ParseHermesInventoryModelIds(inventoryPayload);
 
-                        if (!string.IsNullOrEmpty(modelsPayload))
-                            discoveredModels ??= ParseModelIds(modelsPayload);
+                        if (capabilities != null && capabilities.SupportsInventory)
+                        {
+                            var endpoints = adapter.BuildDiscoveryEndpoints(provider.baseUrl);
+                            for (int i = 0; i < endpoints.Length; i++)
+                            {
+                                string payload = null;
+                                string ep = endpoints[i];
+                                if (!string.IsNullOrEmpty(modelsPayload) &&
+                                    ep.EndsWith("/models", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    payload = modelsPayload;
+                                }
+                                else
+                                {
+                                    payload = await FetchJsonAsync(ep, provider.apiKey, cancellationToken);
+                                }
 
-                        if ((discoveredModels == null || discoveredModels.Count == 0) && !string.IsNullOrEmpty(inventoryPayload))
-                            discoveredModels = ParseModelIds(inventoryPayload);
+                                if (!string.IsNullOrEmpty(payload))
+                                {
+                                    var parsed = adapter.ParseDiscoveryResponse(payload);
+                                    if (parsed != null && parsed.Count > 0)
+                                    {
+                                        discoveredModels = parsed;
+                                        break;
+                                    }
+                                    if (string.IsNullOrEmpty(modelsPayload) || !ep.EndsWith("/models", StringComparison.OrdinalIgnoreCase))
+                                        modelsPayload = payload;
+                                }
+                            }
+                        }
+
+                        if (discoveredModels == null && !string.IsNullOrEmpty(modelsPayload))
+                            discoveredModels = ParseModelIds(modelsPayload);
 
                         if (!string.IsNullOrWhiteSpace(provider.defaultModel) && discoveredModels != null)
                         {
@@ -159,12 +189,12 @@ namespace NeonCompanion.Runtime.Api
                             }
                         }
 
-                        if (string.IsNullOrEmpty(inventoryPayload) &&
+                        if (capabilities != null && capabilities.SupportsInventory &&
                             discoveredModels != null &&
                             discoveredModels.Count == 1 &&
                             string.Equals(discoveredModels[0], "hermes-agent", StringComparison.OrdinalIgnoreCase))
                         {
-                            modelNote = AppendStatusNote(modelNote, " · Hermes inventory недоступен, сервер экспортирует только hermes-agent");
+                            modelNote = AppendStatusNote(modelNote, " · inventory недоступен, сервер экспортирует только прокси-модель");
                         }
 
                         if (discoveredModels == null || discoveredModels.Count == 0)
@@ -183,7 +213,7 @@ namespace NeonCompanion.Runtime.Api
             }
         }
 
-        public Task<ModelSwitchResult> ApplySessionModelAsync(
+        public async Task<ModelSwitchResult> ApplySessionModelAsync(
             ProviderConfig provider,
             string targetModel,
             string providerSessionId = null,
@@ -195,11 +225,95 @@ namespace NeonCompanion.Runtime.Api
             if (string.IsNullOrWhiteSpace(requestedModel))
                 throw new ArgumentException("Target model is required.", nameof(targetModel));
 
-            return Task.FromResult(new ModelSwitchResult(
-                success: true,
-                requestedModel: requestedModel,
-                appliedModel: requestedModel,
-                providerSessionId: null));
+            var adapter = GetAdapter(provider);
+            var capabilities = adapter.GetCapabilities();
+
+            if (capabilities == null || !capabilities.SupportsModelSwitch)
+            {
+                return new ModelSwitchResult(true, requestedModel, requestedModel, null);
+            }
+
+            ModelSwitchPayload payload = adapter.BuildModelSwitchRequest(requestedModel, providerSessionId);
+            if (payload == null)
+            {
+                return new ModelSwitchResult(false, requestedModel, requestedModel, providerSessionId, "Model switch not supported.", true);
+            }
+
+            string switchEndpoint = !string.IsNullOrWhiteSpace(payload.Endpoint)
+                ? payload.Endpoint
+                : BuildEndpoint(provider.baseUrl);
+
+            using (var webRequest = new UnityWebRequest(switchEndpoint, UnityWebRequest.kHttpVerbPOST))
+            {
+                string body = payload.JsonBody ?? string.Empty;
+                var bodyRaw = Encoding.UTF8.GetBytes(body);
+                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
+                webRequest.SetRequestHeader("Content-Type", "application/json");
+
+                if (!string.IsNullOrWhiteSpace(provider.apiKey))
+                    webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
+
+                adapter.ApplyRequestHeaders(webRequest, providerSessionId);
+
+                var operation = webRequest.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    await Task.Yield();
+                }
+
+                if (webRequest.result != UnityWebRequest.Result.Success)
+                {
+                    string err = ParseErrorMessage(webRequest);
+                    return new ModelSwitchResult(false, requestedModel, requestedModel, providerSessionId, err, true);
+                }
+
+                string responseContent = webRequest.downloadHandler != null ? webRequest.downloadHandler.text : string.Empty;
+                string appliedLabel = adapter.ParseModelSwitchResponse(responseContent);
+                string newSessionId = adapter.ExtractSessionId(webRequest, providerSessionId);
+                string finalApplied = !string.IsNullOrWhiteSpace(appliedLabel) ? appliedLabel : requestedModel;
+
+                return new ModelSwitchResult(true, requestedModel, finalApplied, newSessionId, null, true);
+            }
+        }
+
+        private async Task<string> FetchJsonAsync(string url, string apiKey, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            using (var webRequest = UnityWebRequest.Get(url))
+            {
+                if (!string.IsNullOrWhiteSpace(apiKey))
+                    webRequest.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+
+                var operation = webRequest.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    await Task.Yield();
+                }
+
+                if (webRequest.result == UnityWebRequest.Result.Success &&
+                    webRequest.responseCode == 200 &&
+                    !string.IsNullOrWhiteSpace(webRequest.downloadHandler?.text))
+                {
+                    return webRequest.downloadHandler.text;
+                }
+
+                return null;
+            }
         }
 
         private static IReadOnlyList<string> ParseModelIds(string json)
@@ -229,29 +343,6 @@ namespace NeonCompanion.Runtime.Api
             return ids.Count > 0 ? ids : null;
         }
 
-        private static IReadOnlyList<string> ParseHermesInventoryModelIds(string json)
-        {
-            if (string.IsNullOrEmpty(json))
-                return null;
-
-            if (!TryExtractNamedArray(json, "providers", out string providersArray))
-                return null;
-
-            var ids = new List<string>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            int position = 0;
-            while (TryExtractNamedArray(providersArray, "models", position, out string modelsArray, out int nextPosition))
-            {
-                CollectJsonStringArrayValues(modelsArray, ids, seen);
-                CollectJsonStringPropertyValues(modelsArray, "id", ids, seen);
-                CollectJsonStringPropertyValues(modelsArray, "name", ids, seen);
-                CollectJsonStringPropertyValues(modelsArray, "model", ids, seen);
-                position = nextPosition;
-            }
-
-            return ids.Count > 0 ? ids : null;
-        }
-
         private static string BuildEndpoint(string baseUrl)
         {
             var normalized = NormalizeBaseUrl(baseUrl);
@@ -268,69 +359,6 @@ namespace NeonCompanion.Runtime.Api
                 normalized = normalized.Substring(0, normalized.Length - "/chat/completions".Length);
 
             return $"{normalized}/models";
-        }
-
-        private static string[] BuildHermesInventoryEndpoints(string baseUrl)
-        {
-            var normalized = NormalizeBaseUrl(baseUrl);
-            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
-                normalized = normalized.Substring(0, normalized.Length - "/chat/completions".Length);
-
-            string root = normalized.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
-                ? normalized.Substring(0, normalized.Length - 3)
-                : normalized;
-
-            var endpoints = new List<string>();
-            void AddEndpoint(string url)
-            {
-                if (!string.IsNullOrWhiteSpace(url) && !endpoints.Contains(url))
-                    endpoints.Add(url);
-            }
-
-            AddEndpoint($"{root}/api/model/options");
-            AddEndpoint($"{normalized}/api/model/options");
-            AddEndpoint($"{root}/model/options");
-            AddEndpoint($"{normalized}/model/options");
-            return endpoints.ToArray();
-        }
-
-        private async Task<string> TryFetchHermesInventoryPayloadAsync(
-            ProviderConfig provider,
-            CancellationToken cancellationToken)
-        {
-            if (provider == null)
-                return null;
-
-            var endpoints = BuildHermesInventoryEndpoints(provider.baseUrl);
-            for (int i = 0; i < endpoints.Length; i++)
-            {
-                using (var webRequest = UnityWebRequest.Get(endpoints[i]))
-                {
-                    if (!string.IsNullOrWhiteSpace(provider.apiKey))
-                        webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
-
-                    var operation = webRequest.SendWebRequest();
-                    while (!operation.isDone)
-                    {
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            webRequest.Abort();
-                            cancellationToken.ThrowIfCancellationRequested();
-                        }
-
-                        await Task.Yield();
-                    }
-
-                    if (webRequest.result == UnityWebRequest.Result.Success &&
-                        webRequest.responseCode == 200 &&
-                        !string.IsNullOrWhiteSpace(webRequest.downloadHandler?.text))
-                    {
-                        return webRequest.downloadHandler.text;
-                    }
-                }
-            }
-
-            return null;
         }
 
         private static string NormalizeBaseUrl(string baseUrl)
@@ -354,35 +382,6 @@ namespace NeonCompanion.Runtime.Api
             }
 
             return webRequest.error ?? "Unknown error";
-        }
-
-        private static string BuildChatCompletionPayloadJson(
-            string model,
-            float temperature,
-            int maxTokens,
-            List<AiChatMessage> messages,
-            bool stream)
-        {
-            bool omitTemperature = UsesFixedDefaultTemperature(model);
-            bool useCompletionTokens = UsesMaxCompletionTokens(model);
-
-            var sb = new StringBuilder(1024);
-            sb.Append('{');
-            AppendJsonProperty(sb, "model", model, isFirst: true);
-            sb.Append(",\"messages\":[");
-            AppendMessagesJson(sb, messages);
-            sb.Append(']');
-
-            if (stream)
-                sb.Append(",\"stream\":true");
-
-            if (!omitTemperature)
-                sb.Append(",\"temperature\":").Append(temperature.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
-
-            string tokenProperty = useCompletionTokens ? "max_completion_tokens" : "max_tokens";
-            sb.Append(",\"").Append(tokenProperty).Append("\":").Append(maxTokens);
-            sb.Append('}');
-            return sb.ToString();
         }
 
         private static void AppendMessagesJson(StringBuilder sb, List<AiChatMessage> messages)
@@ -504,47 +503,47 @@ namespace NeonCompanion.Runtime.Api
         private static string GuessImageMediaType(string path)
         {
             string extension = Path.GetExtension(path)?.ToLowerInvariant();
-            return extension switch
-            {
-                ".png" => "image/png",
-                ".jpg" => "image/jpeg",
-                ".jpeg" => "image/jpeg",
-                ".webp" => "image/webp",
-                ".gif" => "image/gif",
-                ".bmp" => "image/bmp",
-                _ => "application/octet-stream"
-            };
+            if (extension == ".png")
+                return "image/png";
+            if (extension == ".jpg" || extension == ".jpeg")
+                return "image/jpeg";
+            if (extension == ".webp")
+                return "image/webp";
+            if (extension == ".gif")
+                return "image/gif";
+            if (extension == ".bmp")
+                return "image/bmp";
+            return "application/octet-stream";
         }
 
-        private static bool UsesMaxCompletionTokens(string model)
+        private static string BuildChatCompletionPayloadJson(
+            string model,
+            float temperature,
+            int maxTokens,
+            List<AiChatMessage> messages,
+            bool stream,
+            ProviderCapabilities capabilities)
         {
-            if (string.IsNullOrWhiteSpace(model))
-                return false;
+            bool omitTemperature = (capabilities != null) && capabilities.RequiresTemperatureOmission;
+            bool useCompletionTokens = (capabilities != null) && capabilities.UsesMaxCompletionTokens;
 
-            string normalized = model.Trim().ToLowerInvariant();
-            return normalized.StartsWith("gpt-5", StringComparison.Ordinal) ||
-                   normalized.Contains("/gpt-5") ||
-                   normalized.StartsWith("o1", StringComparison.Ordinal) ||
-                   normalized.StartsWith("o3", StringComparison.Ordinal) ||
-                   normalized.StartsWith("o4", StringComparison.Ordinal) ||
-                   normalized.Contains("/o1") ||
-                   normalized.Contains("/o3") ||
-                   normalized.Contains("/o4");
-        }
+            var sb = new StringBuilder(1024);
+            sb.Append('{');
+            AppendJsonProperty(sb, "model", model, isFirst: true);
+            sb.Append(",\"messages\":[");
+            AppendMessagesJson(sb, messages);
+            sb.Append(']');
 
-        private static bool UsesFixedDefaultTemperature(string model)
-        {
-            if (string.IsNullOrWhiteSpace(model))
-                return false;
+            if (stream)
+                sb.Append(",\"stream\":true");
 
-            string normalized = model.Trim().ToLowerInvariant();
-            return normalized.StartsWith("gpt-5", StringComparison.Ordinal) ||
-                   normalized.Contains("/gpt-5");
-        }
+            if (!omitTemperature)
+                sb.Append(",\"temperature\":").Append(temperature.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
 
-        private static bool ShouldForceNonStreaming(string model)
-        {
-            return UsesMaxCompletionTokens(model);
+            string tokenProperty = useCompletionTokens ? "max_completion_tokens" : "max_tokens";
+            sb.Append(",\"").Append(tokenProperty).Append("\":").Append(maxTokens);
+            sb.Append('}');
+            return sb.ToString();
         }
 
         private static AiChatResponse ParseResponse(string rawJson)
@@ -552,7 +551,7 @@ namespace NeonCompanion.Runtime.Api
             if (string.IsNullOrWhiteSpace(rawJson))
                 return new AiChatResponse { content = string.Empty };
 
-            // JsonUtility throws on null fields in vLLM/Hermes responses — try first, fall back to manual.
+            // JsonUtility throws on null fields in some provider responses — try first, fall back to manual.
             try
             {
                 var envelope = JsonUtility.FromJson<OpenAiResponseEnvelope>(rawJson);
@@ -587,148 +586,6 @@ namespace NeonCompanion.Runtime.Api
                 Model = request.model,
                 ProviderSessionId = request?.providerSessionId?.Trim()
             });
-        }
-
-        private async Task<string> TryGetHermesProxyModelAsync(
-            ProviderConfig provider,
-            CancellationToken cancellationToken)
-        {
-            if (provider == null)
-                return null;
-
-            var endpoint = BuildModelsEndpoint(provider.baseUrl);
-            using (var webRequest = UnityWebRequest.Get(endpoint))
-            {
-                if (!string.IsNullOrWhiteSpace(provider.apiKey))
-                    webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
-
-                var operation = webRequest.SendWebRequest();
-                while (!operation.isDone)
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        webRequest.Abort();
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-
-                    await Task.Yield();
-                }
-
-                if (webRequest.result != UnityWebRequest.Result.Success || webRequest.responseCode != 200)
-                    return null;
-
-                var discoveredModels = ParseModelIds(webRequest.downloadHandler?.text);
-                return ContainsModel(discoveredModels, "hermes-agent") ? "hermes-agent" : null;
-            }
-        }
-
-        private async Task<AiChatResponse> SendHermesModelSwitchAsync(
-            ProviderConfig provider,
-            string hermesProxyModel,
-            string targetModel,
-            string providerSessionId,
-            CancellationToken cancellationToken)
-        {
-            var endpoint = BuildEndpoint(provider.baseUrl);
-            var payloadJson = BuildChatCompletionPayloadJson(
-                hermesProxyModel,
-                0f,
-                64,
-                new List<AiChatMessage>
-                {
-                    new AiChatMessage
-                    {
-                        role = "user",
-                        content = $"/model {targetModel}"
-                    }
-                },
-                stream: false);
-
-            using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
-            {
-                var bodyRaw = Encoding.UTF8.GetBytes(payloadJson);
-                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                webRequest.downloadHandler = new DownloadHandlerBuffer();
-                webRequest.SetRequestHeader("Content-Type", "application/json");
-
-                if (!string.IsNullOrWhiteSpace(provider.apiKey))
-                    webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
-                ApplyHermesSessionHeader(webRequest, providerSessionId);
-
-                var operation = webRequest.SendWebRequest();
-                while (!operation.isDone)
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        webRequest.Abort();
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-
-                    await Task.Yield();
-                }
-
-                if (webRequest.result != UnityWebRequest.Result.Success)
-                    throw new InvalidOperationException($"Hermes model switch failed: {ParseErrorMessage(webRequest)}");
-
-                var response = ParseResponse(webRequest.downloadHandler?.text ?? string.Empty);
-                response.providerSessionId = GetHermesSessionHeader(webRequest, providerSessionId);
-                if (string.IsNullOrWhiteSpace(response.model))
-                    response.model = hermesProxyModel;
-
-                return response;
-            }
-        }
-
-        private async Task<string> QueryHermesCurrentModelAsync(
-            ProviderConfig provider,
-            string hermesProxyModel,
-            string providerSessionId,
-            CancellationToken cancellationToken)
-        {
-            var endpoint = BuildEndpoint(provider.baseUrl);
-            var payloadJson = BuildChatCompletionPayloadJson(
-                hermesProxyModel,
-                0f,
-                96,
-                new List<AiChatMessage>
-                {
-                    new AiChatMessage
-                    {
-                        role = "user",
-                        content = "/model"
-                    }
-                },
-                stream: false);
-
-            using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
-            {
-                var bodyRaw = Encoding.UTF8.GetBytes(payloadJson);
-                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                webRequest.downloadHandler = new DownloadHandlerBuffer();
-                webRequest.SetRequestHeader("Content-Type", "application/json");
-
-                if (!string.IsNullOrWhiteSpace(provider.apiKey))
-                    webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
-                ApplyHermesSessionHeader(webRequest, providerSessionId);
-
-                var operation = webRequest.SendWebRequest();
-                while (!operation.isDone)
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        webRequest.Abort();
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-
-                    await Task.Yield();
-                }
-
-                if (webRequest.result != UnityWebRequest.Result.Success)
-                    return null;
-
-                var response = ParseResponse(webRequest.downloadHandler?.text ?? string.Empty);
-                return ParseHermesCurrentModelLabel(response?.content);
-            }
         }
 
         private static string ExtractJsonStringValue(string json, string key, int startFrom)
@@ -775,7 +632,10 @@ namespace NeonCompanion.Runtime.Api
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
 
-            if (ShouldForceNonStreaming(request.model))
+            var adapter = GetAdapter(provider);
+            var capabilities = adapter.GetCapabilities();
+
+            if (capabilities != null && capabilities.ForceNonStreaming)
             {
                 var fallbackResponse = await SendMessageAsync(provider, request, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(fallbackResponse?.content))
@@ -801,7 +661,8 @@ namespace NeonCompanion.Runtime.Api
                 request.temperature,
                 request.maxTokens,
                 messages,
-                stream: true);
+                stream: true,
+                capabilities);
 
             using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
             {
@@ -812,7 +673,7 @@ namespace NeonCompanion.Runtime.Api
 
                 if (!string.IsNullOrWhiteSpace(provider.apiKey))
                     webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
-                ApplyHermesSessionHeader(webRequest, routing.ProviderSessionId);
+                adapter.ApplyRequestHeaders(webRequest, routing.ProviderSessionId);
 
                 var operation = webRequest.SendWebRequest();
                 int lastProcessed = 0;
@@ -850,7 +711,7 @@ namespace NeonCompanion.Runtime.Api
                     throw new InvalidOperationException($"Streaming request failed: {ParseErrorMessage(webRequest)}");
                 }
 
-                string responseProviderSessionId = GetHermesSessionHeader(webRequest, routing.ProviderSessionId);
+                string responseProviderSessionId = adapter.ExtractSessionId(webRequest, routing.ProviderSessionId);
 
                 // Some providers ignore `stream=true` and return a normal JSON completion.
                 if (!emittedAnyToken)
@@ -1117,73 +978,20 @@ namespace NeonCompanion.Runtime.Api
             return false;
         }
 
-        private static void ApplyHermesSessionHeader(UnityWebRequest webRequest, string providerSessionId)
+        private IProviderAdapter GetAdapter(ProviderConfig provider)
         {
-            if (webRequest == null || string.IsNullOrWhiteSpace(providerSessionId))
-                return;
-
-            webRequest.SetRequestHeader(HermesSessionHeaderName, providerSessionId.Trim());
-        }
-
-        private static string GetHermesSessionHeader(UnityWebRequest webRequest, string fallbackValue)
-        {
-            string sessionId = webRequest?.GetResponseHeader(HermesSessionHeaderName);
-            return string.IsNullOrWhiteSpace(sessionId) ? fallbackValue : sessionId.Trim();
+            return ProviderAdapterFactory.Create(provider != null ? provider.backendType : null);
         }
 
         [Serializable]
-        private class OpenAiChatCompletionRequest
+        private class ChatCompletionRequest
         {
             public string model;
-            public float temperature;
-            public int max_tokens;
             public List<AiChatMessage> messages;
-        }
-
-        [Serializable]
-        private class OpenAiChatCompletionRequestWithCompletionTokens
-        {
-            public string model;
-            public float temperature;
-            public int max_completion_tokens;
-            public List<AiChatMessage> messages;
-        }
-
-        [Serializable]
-        private class OpenAiChatCompletionRequestWithCompletionTokensNoTemperature
-        {
-            public string model;
-            public int max_completion_tokens;
-            public List<AiChatMessage> messages;
-        }
-
-        [Serializable]
-        private class OpenAiStreamingRequest
-        {
-            public string model;
-            public float temperature;
-            public int max_tokens;
-            public List<AiChatMessage> messages;
-            public bool stream = true;
-        }
-
-        [Serializable]
-        private class OpenAiStreamingRequestWithCompletionTokens
-        {
-            public string model;
-            public float temperature;
-            public int max_completion_tokens;
-            public List<AiChatMessage> messages;
-            public bool stream = true;
-        }
-
-        [Serializable]
-        private class OpenAiStreamingRequestWithCompletionTokensNoTemperature
-        {
-            public string model;
-            public int max_completion_tokens;
-            public List<AiChatMessage> messages;
-            public bool stream = true;
+            public bool stream;
+            public float? temperature;
+            public int? max_tokens;
+            public int? max_completion_tokens;
         }
 
         private sealed class RequestRoutingInfo
@@ -1243,7 +1051,7 @@ namespace NeonCompanion.Runtime.Api
                 if (string.IsNullOrWhiteSpace(payload))
                     continue;
 
-                // Handle Hermes tool progress events
+                // Handle provider tool progress events
                 if (onToolProgress != null &&
                     string.Equals(pendingEventType, "hermes.tool.progress", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1345,59 +1153,6 @@ namespace NeonCompanion.Runtime.Api
             }
 
             return false;
-        }
-
-        private static bool DoesHermesModelMatch(string requestedModel, string currentModel)
-        {
-            if (string.IsNullOrWhiteSpace(requestedModel) || string.IsNullOrWhiteSpace(currentModel))
-                return false;
-
-            string requested = requestedModel.Trim();
-            string current = currentModel.Trim();
-            if (string.Equals(requested, current, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            int slash = requested.LastIndexOf('/');
-            if (slash >= 0 && slash + 1 < requested.Length)
-            {
-                string shortRequested = requested.Substring(slash + 1);
-                if (string.Equals(shortRequested, current, StringComparison.OrdinalIgnoreCase))
-                    return true;
-                if (current.IndexOf(shortRequested, StringComparison.OrdinalIgnoreCase) >= 0)
-                    return true;
-            }
-
-            return current.IndexOf(requested, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static string ParseHermesCurrentModelLabel(string content)
-        {
-            if (string.IsNullOrWhiteSpace(content))
-                return null;
-
-            int marker = content.IndexOf("**", StringComparison.Ordinal);
-            if (marker >= 0)
-            {
-                int end = content.IndexOf("**", marker + 2, StringComparison.Ordinal);
-                if (end > marker + 2)
-                    return content.Substring(marker + 2, end - marker - 2).Trim();
-            }
-
-            const string prefix = "Текущая модель:";
-            int prefixIdx = content.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
-            if (prefixIdx >= 0)
-            {
-                string tail = content.Substring(prefixIdx + prefix.Length).Trim();
-                int lineBreak = tail.IndexOf('\n');
-                if (lineBreak >= 0)
-                    tail = tail.Substring(0, lineBreak).Trim();
-                int providerIdx = tail.IndexOf("(provider:", StringComparison.OrdinalIgnoreCase);
-                if (providerIdx > 0)
-                    tail = tail.Substring(0, providerIdx).Trim();
-                return tail.Trim('`', ' ', '*');
-            }
-
-            return null;
         }
 
         private static string AppendStatusNote(string current, string note)
