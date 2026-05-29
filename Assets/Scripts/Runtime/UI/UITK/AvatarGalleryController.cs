@@ -1458,7 +1458,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return LocalizationExtensions.Get("avatar.style.custom", "пользовательский");
         }
 
-        private string AvatarPersonaText(string avatarId)
+        public string AvatarPersonaText(string avatarId)
         {
             var stored = GetStoredProfile(avatarId);
             if (stored != null && !string.IsNullOrWhiteSpace(stored.systemPrompt))

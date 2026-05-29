@@ -92,8 +92,8 @@
                 <ui:VisualElement class="topbar__right">
                     <ui:Button name="summarize-btn" text="Резюме" class="btn btn--ghost" />
                     <ui:Button name="search-btn" class="iconbtn icon icon--search" tooltip="Поиск" />
-                    <ui:Button name="toggle-left-panel-btn" class="iconbtn icon icon--history" tooltip="Скрыть панель сессий" />
-                    <ui:Button name="toggle-right-panel-btn" class="iconbtn icon icon--settings" tooltip="Скрыть панель настроек" />
+                    <ui:Button name="toggle-left-panel-btn" class="iconbtn icon icon--panel-left" tooltip="Скрыть панель сессий" />
+                    <ui:Button name="toggle-right-panel-btn" class="iconbtn icon icon--panel-right" tooltip="Скрыть панель настроек" />
                     <ui:Button name="more-btn" class="iconbtn icon icon--dots" tooltip="Ещё" />
                 </ui:VisualElement>
             </ui:VisualElement>

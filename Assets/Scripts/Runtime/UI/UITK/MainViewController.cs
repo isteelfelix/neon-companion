@@ -560,15 +560,19 @@ namespace NeonCompanion.Runtime.UI.UITK
                 GetChatServiceSync = () => _chatService,
                 IsActiveAndEnabled = () => isActiveAndEnabled,
                 IsBound           = () => _isBound,
-                GetActiveAvatarId = () => _activeAvatarId,
-                SetActiveAvatarId = id => _activeAvatarId = id,
+                GetActiveAvatarId = () => _avatarGalleryController.ActiveAvatarId,
+                SetActiveAvatarId = id =>
+                {
+                    _avatarGalleryController.ActiveAvatarId = id;
+                    _activeAvatarId = id;
+                },
                 RefreshVoiceControls  = RefreshVoiceControls,
                 RequestRefreshLocalizedUi = RefreshLocalizedUiAsync,
-                RefreshCustomAvatarGallery   = RefreshCustomAvatarGallery,
-                RefreshBuiltInAvatarTileLabels = RefreshBuiltInAvatarTileLabels,
-                ApplyAvatarFilter    = ApplyAvatarFilter,
-                ApplyAvatarArt       = ApplyAvatarArt,
-                SyncGallerySelection = SyncGallerySelection,
+                RefreshCustomAvatarGallery   = _avatarGalleryController.RefreshCustomAvatarGallery,
+                RefreshBuiltInAvatarTileLabels = _avatarGalleryController.RefreshBuiltInAvatarTileLabels,
+                ApplyAvatarFilter    = _avatarGalleryController.ApplyAvatarFilter,
+                ApplyAvatarArt       = _avatarGalleryController.ApplyAvatarArt,
+                SyncGallerySelection = _avatarGalleryController.SyncGallerySelection,
                 ShowHistoryState     = ShowHistoryState,
                 RequestRenderMessages = () => RenderMessages(null),
                 AddSystemMessage    = AddSystemMessage,
@@ -598,9 +602,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RefreshSessionsFromCacheAsync = () => RefreshSessionsFromCacheAsync(),
                 GetChatTitle = GetChatTitle,
                 GetChatSubtitle = () => _chatController.ChatSubtitle,
-                AvatarDisplayName = AvatarDisplayName,
-                GetAvatarTotalCount = () => BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0),
-                GetActiveAvatarId = () => _activeAvatarId,
+                AvatarDisplayName = _avatarGalleryController.AvatarDisplayName,
+                GetAvatarTotalCount = _avatarGalleryController.GetAvatarTotalCount,
+                GetActiveAvatarId = () => _avatarGalleryController.ActiveAvatarId,
                 GetSessionSearchQuery = () => _chatController.SessionSearchQuery,
                 ChatPanel = _chatPanel,
                 HistoryPanel = _historyPanel,
@@ -632,11 +636,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SubtitleBody = _subtitleBody,
                 SubtitleRole = _subtitleRole,
                 NavChatCount = _navChatCount,
-                GetAvatarAnimator = () => _avatarAnimator,
-                SetAvatarMotionState = SetAvatarMotionState,
-                RefreshAvatarMotionState = RefreshAvatarMotionState,
-                TriggerAvatarSmile = TriggerAvatarSmile,
-                TriggerAvatarConfused = TriggerAvatarConfused,
+                GetAvatarAnimator = _avatarGalleryController.GetAvatarAnimatorInstance,
+                SetAvatarMotionState = _avatarGalleryController.SetAvatarMotionState,
+                RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
+                TriggerAvatarSmile = _avatarGalleryController.TriggerAvatarSmile,
+                TriggerAvatarConfused = _avatarGalleryController.TriggerAvatarConfused,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetAppAsync = GetAppAsync,
                 LoadSessionsAsync = () => LoadSessionsAsync(_chatService),
@@ -649,7 +653,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RenderMessages = RenderMessages,
                 ApplyModelSelectionAsync = (id, close) => _providersController.ApplyModelSelectionAsync(id, close),
                 OpenModelPickerAsync = () => _providersController.OpenModelPickerAsync(),
-                GetAvatarDisplayName = () => AvatarDisplayName(_activeAvatarId)
+                GetAvatarDisplayName = () => _avatarGalleryController.AvatarDisplayName(_avatarGalleryController.ActiveAvatarId)
             };
         }
 
@@ -788,7 +792,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 IsVoiceEnabledBySettings = IsVoiceEnabledBySettings,
                 SendVoiceMessageAsync = SendVoiceMessageAsync,
                 OnVoiceRecordingStarted = OnVoiceRecordingStarted,
-                RefreshAvatarMotionState = RefreshAvatarMotionState,
+                RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetChatServiceSync = () => _chatService,
                 IsBound = () => _isBound
@@ -828,10 +832,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_historyPanelSearchInput != null)
                 _historyPanelSearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
             RegisterClick(_listenButton, OnListenClicked);
-            RegisterClick(_avatarUploadBtn, OnAvatarUploadClicked);
-            RegisterClick(_avatarOpenFolderBtn, OnAvatarOpenFolderClicked);
-            if (_avatarUploadTile != null)
-                _avatarUploadTile.RegisterCallback<ClickEvent>(_ => OnAvatarUploadClicked());
 
             if (_messagesList != null)
             {
@@ -840,23 +840,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _settingsController.RegisterCallbacks();
-
-            RegisterAvatarGalleryCallbacks();
-            RegisterClick(_previewApplyBtn, OnPreviewApplyClicked);
-            RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
-            RegisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
-            RegisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
-            RegisterClick(_personaSaveBtn, OnPersonaSaveClicked);
-            RegisterClick(_personaCancelBtn, OnPersonaCancelClicked);
-            RegisterClick(_viewModeStaticBtn,   OnViewModeStaticClicked);
-            RegisterClick(_viewModeAnimatedBtn, OnViewModeAnimatedClicked);
-            RegisterClick(_viewMode3DBtn,       OnViewMode3DClicked);
-            RegisterClick(_avtileNeonAnimated,  OnNeonAnimatedTileClicked);
-            RegisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
-            RegisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
-            RegisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
-            RegisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
-            RegisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
         }
 
         private void UnregisterCallbacks()
@@ -871,19 +854,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
             UnregisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
             UnregisterClick(_listenButton, OnListenClicked);
-            UnregisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
-            UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
-            UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
-            UnregisterClick(_personaCancelBtn, OnPersonaCancelClicked);
-            UnregisterClick(_viewModeStaticBtn,   OnViewModeStaticClicked);
-            UnregisterClick(_viewModeAnimatedBtn, OnViewModeAnimatedClicked);
-            UnregisterClick(_viewMode3DBtn,       OnViewMode3DClicked);
-            UnregisterClick(_avtileNeonAnimated,  OnNeonAnimatedTileClicked);
-            UnregisterClick(_avatarFilterAllBtn, OnAvatarFilterAllClicked);
-            UnregisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
-            UnregisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
-            UnregisterClick(_avatarFilterMinimalBtn, OnAvatarFilterMinimalClicked);
-            UnregisterClick(_avatarFilterCustomBtn, OnAvatarFilterCustomClicked);
 
             _settingsController.UnregisterCallbacks();
             _voiceController.UnregisterCallbacks();
@@ -1210,12 +1180,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 _settingsController.RefreshLanguageDropdown();
 
+                string activeAvatarId = _avatarGalleryController.ActiveAvatarId;
+
                 if (_previewPersona != null)
-                    _previewPersona.text = AvatarPersonaText(_activeAvatarId);
-                UpdatePersonaStateUi(_activeAvatarId);
-                UpdateAvatarActionButtons(_activeAvatarId);
-                RefreshBuiltInAvatarTileLabels();
-                UpdateAvatarFilterCounts();
+                    _previewPersona.text = _avatarGalleryController.AvatarPersonaText(activeAvatarId);
+                _avatarGalleryController.UpdatePersonaStateUi(activeAvatarId);
+                _avatarGalleryController.UpdateAvatarActionButtons(activeAvatarId);
+                _avatarGalleryController.RefreshBuiltInAvatarTileLabels();
+                _avatarGalleryController.UpdateAvatarFilterCounts();
                 _settingsController.UpdateClearDataButtonState();
 
                 var app = await GetAppAsync();
@@ -1255,9 +1227,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_avatarsPanel != null && _avatarsPanel.style.display != DisplayStyle.None)
             {
-                int total = BuiltInAvatarIds.Length + (_cachedCustomProfiles?.Count ?? 0);
+                int total = _avatarGalleryController.GetAvatarTotalCount();
+                string activeAvatarId = _avatarGalleryController.ActiveAvatarId;
                 SetTopbar(LocalizationExtensions.Get("topbar.avatars.title", "Аватары"),
-                    LocalizationExtensions.GetFormat("topbar.avatars.subtitle", "{0} образов · {1}", total, AvatarDisplayName(_activeAvatarId)));
+                    LocalizationExtensions.GetFormat("topbar.avatars.subtitle", "{0} образов · {1}", total, _avatarGalleryController.AvatarDisplayName(activeAvatarId)));
                 return;
             }
 
