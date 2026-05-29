@@ -74,6 +74,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isSending;
         private bool _isStreamingResponse;
         private bool _isVoiceRecording;
+        private bool _isDragOver;
         private ChatService _currentChatService;
         private VisualElement _streamingBubble;
         private Label _streamingLabel;
@@ -236,6 +237,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             _queueIndicator.style.display = DisplayStyle.None;
             if (_d.Composer?.parent != null)
                 _d.Composer.parent.Add(_queueIndicator);
+
+            // Drag-and-drop file support (U-44)
+            var chatMain = _d.Composer?.parent;
+            if (chatMain != null)
+            {
+                chatMain.RegisterCallback<DragUpdatedEvent>(OnDragUpdated);
+                chatMain.RegisterCallback<DragPerformEvent>(OnDragPerform);
+                chatMain.RegisterCallback<DragLeaveEvent>(OnDragLeave);
+            }
         }
 
         public void UnregisterCallbacks()
@@ -314,6 +324,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _queueIndicator.RemoveFromHierarchy();
                 _queueIndicator = null;
+            }
+
+            // Drag-and-drop file support (U-44)
+            var chatMain = _d.Composer?.parent;
+            if (chatMain != null)
+            {
+                chatMain.UnregisterCallback<DragUpdatedEvent>(OnDragUpdated);
+                chatMain.UnregisterCallback<DragPerformEvent>(OnDragPerform);
+                chatMain.UnregisterCallback<DragLeaveEvent>(OnDragLeave);
             }
         }
 
@@ -1595,6 +1614,113 @@ namespace NeonCompanion.Runtime.UI.UITK
                 text = text.Remove(idx, end - idx + 1);
             }
             return text;
+        }
+
+        // ===== Drag and Drop (U-44) =====
+
+        private void OnDragUpdated(DragUpdatedEvent evt)
+        {
+            if (!HasValidDragFiles(evt))
+                return;
+
+            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+            if (!_isDragOver)
+            {
+                _isDragOver = true;
+                _d.Composer?.parent?.AddToClassList("chat-main--drag-over");
+            }
+            evt.StopPropagation();
+        }
+
+        private void OnDragPerform(DragPerformEvent evt)
+        {
+            _isDragOver = false;
+            _d.Composer?.parent?.RemoveFromClassList("chat-main--drag-over");
+
+            if (!HasValidDragFiles(evt))
+                return;
+
+            string[] paths = DragAndDrop.paths;
+            if (paths == null || paths.Length == 0)
+                return;
+
+            for (int i = 0; i < paths.Length; i++)
+            {
+                string path = paths[i];
+                if (string.IsNullOrEmpty(path))
+                    continue;
+
+                // Skip non-file entries (folders, etc.)
+                if (!System.IO.File.Exists(path))
+                    continue;
+
+                string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
+                if (IsSupportedFile(ext))
+                {
+                    if (IsImageFile(ext) && !IsFileSizeOk(path))
+                        continue;
+
+                    _pendingComposerAttachments.Add(new ChatAttachment
+                    {
+                        kind = IsImageFile(ext) ? "image" : "file",
+                        name = System.IO.Path.GetFileName(path),
+                        path = path,
+                        mediaType = GuessImageMediaType(path)
+                    });
+                }
+            }
+
+            RenderComposerPreviews();
+            evt.StopPropagation();
+        }
+
+        private void OnDragLeave(DragLeaveEvent evt)
+        {
+            _isDragOver = false;
+            _d.Composer?.parent?.RemoveFromClassList("chat-main--drag-over");
+            evt.StopPropagation();
+        }
+
+        private static bool HasValidDragFiles(DragUpdatedEvent evt)
+        {
+            return DragAndDrop.paths != null && DragAndDrop.paths.Length > 0;
+        }
+
+        private static bool HasValidDragFiles(DragPerformEvent evt)
+        {
+            return DragAndDrop.paths != null && DragAndDrop.paths.Length > 0;
+        }
+
+        private static bool IsSupportedFile(string ext)
+        {
+            // Images
+            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
+                return true;
+            // Documents
+            if (ext == ".pdf" || ext == ".txt" || ext == ".md" || ext == ".json" || ext == ".xml" || ext == ".csv")
+                return true;
+            // Code
+            if (ext == ".cs" || ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" || ext == ".cpp" || ext == ".h" || ext == ".csproj")
+                return true;
+            return false;
+        }
+
+        private static bool IsImageFile(string ext)
+        {
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp";
+        }
+
+        private static bool IsFileSizeOk(string path, long maxSizeBytes = 10 * 1024 * 1024)
+        {
+            try
+            {
+                var info = new System.IO.FileInfo(path);
+                return info.Length <= maxSizeBytes;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // ===== Copy =====

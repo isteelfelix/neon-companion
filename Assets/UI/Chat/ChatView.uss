@@ -158,6 +158,14 @@
     position: relative;
 }
 
+/* Drag-and-drop overlay */
+.chat-main--drag-over {
+    background-color: rgba(100, 120, 237, 0.08);
+    border-width: 2px;
+    border-color: rgba(100, 120, 237, 0.4);
+    border-radius: 12px;
+}
+
 .scroll-bottom-btn {
     position: absolute;
     bottom: 80px;
