@@ -314,6 +314,7 @@
     color: var(--text-0);
     font-size: 13px;
     white-space: normal;
+    --unity-text-selection-color: rgba(124, 122, 237, 0.35);
 }
 
 /* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */
@@ -896,6 +897,7 @@
     font-size: 0.85em;
     white-space: pre;
     color: #e0e0e0;
+    --unity-text-selection-color: rgba(124, 122, 237, 0.35);
 }
 
 .markdown-bullet {

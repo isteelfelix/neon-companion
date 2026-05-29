@@ -942,6 +942,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _streamingLabel = new Label(string.Empty);
             _streamingLabel.AddToClassList("transcript__body");
+            _streamingLabel.focusable = true;
 
             // Insert body before stats footer (if present) so stats appears after content in layout.
             // (Stats is appended at end of CreateMessageElement; dynamic adds would otherwise bury it.)
@@ -2279,6 +2280,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         var attachmentLabel = new Label($"[file] {GetAttachmentDisplayName(attachment)}");
                         attachmentLabel.AddToClassList("transcript__body");
                         attachmentLabel.style.fontSize = 11f;
+                        attachmentLabel.focusable = true;
                         attachmentWrap.Add(attachmentLabel);
                     }
                 }
@@ -2374,13 +2376,29 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
         {
+            VisualElement bodyElement;
             if (isAssistant && !string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
             {
-                return MarkdownRenderer.Render(text);
+                bodyElement = MarkdownRenderer.Render(text);
             }
-            var body = new Label(text);
-            body.AddToClassList("transcript__body");
-            return body;
+            else
+            {
+                bodyElement = new Label(text);
+                bodyElement.AddToClassList("transcript__body");
+            }
+            MakeTranscriptLabelsFocusable(bodyElement);
+            return bodyElement;
+        }
+
+        private static void MakeTranscriptLabelsFocusable(VisualElement root)
+        {
+            if (root == null)
+                return;
+            var labels = root.Query<Label>().ToList();
+            for (int i = 0; i < labels.Count; i++)
+            {
+                labels[i].focusable = true;
+            }
         }
 
         private void OnScrollBottomClicked() { ScrollTranscriptToBottom(); }
