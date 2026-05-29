@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.UIElements;
+using NeonCompanion.Runtime.Localization;
 
 namespace NeonCompanion.Runtime.UI.UITK
 {
@@ -19,8 +20,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _menuElement = new VisualElement();
             _menuElement.AddToClassList("message-context-menu");
-            _menuElement.style.position = Position.Absolute;
-            _menuElement.style.zIndex = 100;
 
             if (isUser)
             {

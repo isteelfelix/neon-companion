@@ -1292,19 +1292,19 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Attachments =====
 
-        private async Task PasteImageFromClipboardAsync()
+        private Task PasteImageFromClipboardAsync()
         {
             try
             {
                 string clipboard = GUIUtility.systemCopyBuffer;
                 if (string.IsNullOrEmpty(clipboard))
-                    return;
+                    return Task.CompletedTask;
 
                 // Check if clipboard contains a file path to an image
                 string[] imageExts = { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
                 string ext = System.IO.Path.GetExtension(clipboard)?.ToLowerInvariant();
                 if (string.IsNullOrEmpty(ext))
-                    return;
+                    return Task.CompletedTask;
 
                 bool isImage = false;
                 for (int i = 0; i < imageExts.Length; i++)
@@ -1312,11 +1312,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (ext == imageExts[i]) { isImage = true; break; }
                 }
                 if (!isImage)
-                    return;
+                    return Task.CompletedTask;
 
                 // Check file exists
                 if (!System.IO.File.Exists(clipboard))
-                    return;
+                    return Task.CompletedTask;
 
                 string fileName = System.IO.Path.GetFileName(clipboard);
                 _pendingComposerAttachments.Add(new ChatAttachment
@@ -1334,6 +1334,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 NeonLogger.LogError("Paste image failed: " + ex.ToString());
             }
+            return Task.CompletedTask;
         }
 
         private void OnAttachClicked()
@@ -1409,6 +1410,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var attachment = _pendingComposerAttachments[i];
                 if (attachment == null) continue;
 
+                int index = i; // capture for closure
                 var thumb = new VisualElement();
                 thumb.AddToClassList("composer__preview-thumb");
 
@@ -1417,7 +1419,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                     var img = new Image();
                     img.AddToClassList("composer__preview-img");
                     img.scaleMode = ScaleMode.ScaleToFit;
-                    int index = i; // capture for closure
                     img.schedule.Execute(() => LoadImageAsync(img, attachment.path));
                     thumb.Add(img);
                 }
