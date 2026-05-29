@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Text;
-using NeonCompanion.Runtime.Avatar;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -167,7 +166,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Phase 1: Static log entries
             int staticCount = 3;
-            float progressPerStatic = 40f / staticCount;
+            float progressPerStatic = 65f / staticCount;
             float progress = 0f;
 
             for (int i = 0; i < staticCount; i++)
@@ -184,58 +183,19 @@ namespace NeonCompanion.Runtime.UI.UITK
                 yield return new WaitForSeconds(delay);
             }
 
-            // Phase 2: Preload avatar sprite sheets — real work, visual feedback
-            string manifestPath = System.IO.Path.Combine(
-                Application.streamingAssetsPath, "Avatars", "neon", "motion_pack.json");
-
-            AddLogRow("..", "Preloading avatar animations...", false);
-            SetProgress(progress);
-            yield return null;
-
-            int loadedCount = 0;
-            yield return SpriteSheetAnimationLoader.PreloadManifestCoroutine(
-                manifestPath,
-                (clipName, current, total) =>
-                {
-                    loadedCount = current;
-                    // Update the last log row text with progress
-                    if (_logList != null && _logList.childCount > 0)
-                    {
-                        var lastRow = _logList[_logList.childCount - 1];
-                        var textLabel = lastRow.Q<Label>(className: "splash__log-text");
-                        if (textLabel != null)
-                            textLabel.text = "Loaded " + clipName + " sprites (" + current + "/" + total + ")";
-                    }
-                    float clipProgress = 40f + (45f * current / total);
-                    SetProgress(clipProgress);
-                });
-
-            // Mark preload row as complete
-            if (_logList != null && _logList.childCount > 0)
-            {
-                var lastRow = _logList[_logList.childCount - 1];
-                var statusLabel = lastRow.Q<Label>(className: "splash__log-status--pending");
-                if (statusLabel != null)
-                {
-                    statusLabel.text = "OK";
-                    statusLabel.RemoveFromClassList("splash__log-status--pending");
-                    statusLabel.AddToClassList("splash__log-status--ok");
-                }
-                var textLabel = lastRow.Q<Label>(className: "splash__log-text");
-                if (textLabel != null)
-                    textLabel.text = "Avatar animations ready (" + loadedCount + " clips)";
-            }
-            progress = 85f;
-            SetProgress(progress);
+            // Phase 2: quick note (eager preload removed — U-20 lazy spritesheets)
+            AddLogRow("OK", "Avatar animations: lazy-load enabled", true);
+            SetProgress(72f);
+            yield return new WaitForSeconds(0.12f);
 
             // Phase 3: Final entry
             var (finalStatus, finalText, finalOk) = LogEntries[staticCount];
             AddLogRow(finalStatus, finalText, finalOk);
-            SetProgress(92f);
-            yield return new WaitForSeconds(0.3f);
+            SetProgress(88f);
+            yield return new WaitForSeconds(0.28f);
 
             SetProgress(100f);
-            yield return new WaitForSeconds(0.6f);
+            yield return new WaitForSeconds(0.55f);
 
             IsComplete = true;
             SceneManager.LoadScene(mainSceneName, LoadSceneMode.Single);
