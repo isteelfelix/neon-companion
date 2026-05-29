@@ -342,3 +342,22 @@
     flex-grow: 1;
     margin-right: 8px;
 }
+
+/* ---- API key show/hide toggle (U-16) ---- */
+
+.input-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.input-row > .input {
+    flex-grow: 1;
+}
+
+.icon--eye {
+    background-image: url("project://database/Assets/UI/Icons/eye.svg");
+}
+
+.icon--eye-off {
+    background-image: url("project://database/Assets/UI/Icons/eye-off.svg");
+}

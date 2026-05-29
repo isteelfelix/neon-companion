@@ -622,7 +622,19 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _streamingLabel = new Label(string.Empty);
             _streamingLabel.AddToClassList("transcript__body");
-            _streamingBubble.Add(_streamingLabel);
+
+            // Insert body before stats footer (if present) so stats appears after content in layout.
+            // (Stats is appended at end of CreateMessageElement; dynamic adds would otherwise bury it.)
+            var statsFooter = _streamingBubble.Q<VisualElement>(className: "transcript__stats");
+            if (statsFooter != null && statsFooter.parent == _streamingBubble)
+            {
+                int idx = _streamingBubble.IndexOf(statsFooter);
+                _streamingBubble.Insert(idx, _streamingLabel);
+            }
+            else
+            {
+                _streamingBubble.Add(_streamingLabel);
+            }
         }
 
         private void OnStreamToken(string token)
@@ -1108,19 +1120,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                     bubble.Add(attachmentWrap);
             }
 
-            // Stats footer (token count + elapsed) for assistant bubbles.
-            // Hidden by default; only the live streaming placeholder activates it via controller refs.
-            if (role == "assistant")
-            {
-                var statsFooter = new VisualElement();
-                statsFooter.AddToClassList("transcript__stats");
-                statsFooter.style.display = DisplayStyle.None;
-                var statsLabel = new Label();
-                statsLabel.AddToClassList("transcript__stats-label");
-                statsFooter.Add(statsLabel);
-                bubble.Add(statsFooter);
-            }
-
             // Add hover action buttons for assistant messages
             if (role == "assistant")
             {
@@ -1157,6 +1156,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             // hovering the bubble itself reveals them — not the empty space in the row.
             if (actions != null)
                 bubble.Add(actions);
+
+            // Stats footer for assistant (after body/attachments in flow; actions are absolute so order ok).
+            // Hidden by default; streaming path makes visible + updates it.
+            if (role == "assistant")
+            {
+                var statsFooter = new VisualElement();
+                statsFooter.AddToClassList("transcript__stats");
+                statsFooter.style.display = DisplayStyle.None;
+                var statsLabel = new Label();
+                statsLabel.AddToClassList("transcript__stats-label");
+                statsFooter.Add(statsLabel);
+                bubble.Add(statsFooter);
+            }
+
             row.Add(bubble);
 
             return row;

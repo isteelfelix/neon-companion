@@ -698,6 +698,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 EditName             = _root.Q<TextField>("edit-name"),
                 EditBaseUrl          = _root.Q<TextField>("edit-baseurl"),
                 EditApiKey           = _root.Q<TextField>("edit-apikey"),
+                EditApiKeyToggle     = _root.Q<Button>("edit-apikey-toggle"),
                 EditModel            = _root.Q<TextField>("edit-model"),
                 EditModelPreset      = _root.Q<NeonDropdown>("edit-model-preset"),
                 EditModelCustomWrap  = _root.Q<VisualElement>("edit-model-custom-wrap"),

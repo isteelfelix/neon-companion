@@ -41,7 +41,10 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="field">
                     <ui:Label text="API-ключ" class="label" />
-                    <ui:TextField name="edit-apikey" class="input input--mono" is-password-field="true" />
+                    <ui:VisualElement class="input-row">
+                        <ui:TextField name="edit-apikey" class="input input--mono" is-password-field="true" />
+                        <ui:Button name="edit-apikey-toggle" class="iconbtn icon icon--eye" text="" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement class="field">
                     <ui:Label text="Модель по умолчанию" class="label" />

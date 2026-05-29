@@ -31,6 +31,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public TextField EditName;
             public TextField EditBaseUrl;
             public TextField EditApiKey;
+            public Button EditApiKeyToggle;
             public TextField EditModel;
             public NeonDropdown EditModelPreset;
             public VisualElement EditModelCustomWrap;
@@ -83,6 +84,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ProviderConfig _editingProviderSource;
         private bool _cancelPending;
 
+        // API key visibility toggle (U-16)
+        private bool _apiKeyVisible;
+
         // Model picker state
         private bool _isApplyingModelSwitch;
         private bool _editModelUsesCustomMode;
@@ -133,6 +137,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.EditBaseUrl.RegisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
             if (_d.EditApiKey != null)
                 _d.EditApiKey.RegisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
+            if (_d.EditApiKeyToggle != null)
+                _d.EditApiKeyToggle.RegisterCallback<ClickEvent>(OnApiKeyToggleClicked);
             if (_d.EditModel != null)
                 _d.EditModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
         }
@@ -155,6 +161,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.EditBaseUrl.UnregisterCallback<ChangeEvent<string>>(OnBaseUrlChanged);
             if (_d.EditApiKey != null)
                 _d.EditApiKey.UnregisterCallback<ChangeEvent<string>>(OnProviderEndpointChanged);
+            if (_d.EditApiKeyToggle != null)
+                _d.EditApiKeyToggle.UnregisterCallback<ClickEvent>(OnApiKeyToggleClicked);
             if (_d.EditModel != null)
                 _d.EditModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
         }
@@ -355,6 +363,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_d.ProviderEditPanel == null || _editingProvider == null)
                 return;
+
+            // Reset API key visibility to hidden when opening/switching editor (U-16)
+            _apiKeyVisible = false;
+            if (_d.EditApiKey != null)
+                _d.EditApiKey.isPasswordField = true;
+            if (_d.EditApiKeyToggle != null)
+            {
+                _d.EditApiKeyToggle.RemoveFromClassList("icon--eye-off");
+                _d.EditApiKeyToggle.AddToClassList("icon--eye");
+            }
 
             if (_d.EditorProviderShort != null)
                 _d.EditorProviderShort.text = BuildProviderShort(_editingProvider);
@@ -616,6 +634,25 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _d.TestRow.EnableInClassList("testrow--ok",    success == true);
             _d.TestRow.EnableInClassList("testrow--error", success == false);
+        }
+
+        // ============================================================
+        // API key visibility toggle (U-16)
+        // ============================================================
+
+        private void OnApiKeyToggleClicked(ClickEvent evt)
+        {
+            if (_d.EditApiKey == null)
+                return;
+
+            _apiKeyVisible = !_apiKeyVisible;
+            _d.EditApiKey.isPasswordField = !_apiKeyVisible;
+
+            if (_d.EditApiKeyToggle != null)
+            {
+                _d.EditApiKeyToggle.RemoveFromClassList("icon--eye");
+                _d.EditApiKeyToggle.AddToClassList(_apiKeyVisible ? "icon--eye-off" : "icon--eye");
+            }
         }
 
         // ============================================================

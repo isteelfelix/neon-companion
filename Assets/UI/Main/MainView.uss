@@ -60,6 +60,8 @@
 .icon--upload     { background-image: url("project://database/Assets/UI/Icons/upload.svg"); }
 .icon--user       { background-image: url("project://database/Assets/UI/Icons/user.svg"); }
 .icon--power      { background-image: url("project://database/Assets/UI/Icons/power.svg"); }
+.icon--eye        { background-image: url("project://database/Assets/UI/Icons/eye.svg"); }
+.icon--eye-off    { background-image: url("project://database/Assets/UI/Icons/eye-off.svg"); }
 
 /* ============== Rail ============== */
 
