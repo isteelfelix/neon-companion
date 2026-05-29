@@ -21,7 +21,7 @@
 | C-07 | Модель-пикер в чате | ✅ | M1 | NeonDropdown в topbar + overlay-диалог |
 | C-08 | Вложения в чате | ✅ | M1 | `ChatAttachment`, `AiChatAttachment` |
 | C-09 | Сессионная маршрутизация моделей | ✅ | M1 | `X-Hermes-Session-Id`, Hermes inventory |
-| C-10 | Provider Adapter архитектура | ⏳ | M2 | Phase 1+2+2b+UI done: адаптеры, рефактор клиента, дедуп ModelDiscoveryService, dropdown backendType. Ожидает проверки |
+| C-10 | Provider Adapter архитектура | ⏳ | M2 | Phase 1+2+2b+UI done + фикс парсера OpenAI /models + локальный model switch. Ожидает проверки |
 
 ## История и сессии
 | # | Фича | Статус | Спринт | Заметки |
