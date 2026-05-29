@@ -5,6 +5,7 @@
 ### Added
 - U-16: API key show/hide toggle button in provider editor (next to password field)
 - U-37: Export current chat as Markdown file (topbar "Export" button wires to ChatController.ExportChatAsync; writes .md to Application.persistentDataPath following SettingsController.ExportChatsAsync pattern; localized messages)
+- Agent approval system Part B: streaming integration (alwaysApprovedTools in AppSettings, RequestToolApproval + Handle in ChatController wired to OnToolProgress "requesting" status, minimal tool call detection in OpenAiCompatibleClient for hermes.tool.request and OpenAI tool_calls chunks; auto/manual modes + Always persist; prompt added/removed from transcript; reject stops generation)
 
 ### Fixed
 - A-10: Avatar animation — all 6 clips now trigger correctly. Talking plays during AI streaming, listening on composer input, confused on provider/model errors

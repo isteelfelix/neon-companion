@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace NeonCompanion.Runtime.Data.Models
 {
@@ -20,5 +21,6 @@ namespace NeonCompanion.Runtime.Data.Models
         public string language = "ru";
         public string closeHotkey = "Escape";
         public string toolPermissionMode = "manual";
+        public List<string> alwaysApprovedTools = new List<string>();
     }
 }

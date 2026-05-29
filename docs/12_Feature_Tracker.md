@@ -87,6 +87,7 @@
 | U-36 | Индикатор контекстного окна | 📋 | M2 | Полоска показывающая заполненность контекста. Важно для длинных сессий |
 | U-37 | Экспорт чата | ✅ | M2 | Сохранить разговор как markdown/JSON/text файл (Markdown в ChatController, persistentDataPath по образцу Settings) |
 | U-38 | Поиск по текущему чату | 📋 | M2 | Найти текст в текущем разговоре |
+| U-48 | Agent Approval System (Part B) | ✅ | M2 | Streaming integration in ChatController + alwaysApprovedTools + tool call detection in SSE parser (hermes.tool.request + OpenAI tool_calls); approval prompt during tool request, Always saves to settings, auto/manual modes respected |
 | U-39 | Ветвление диалога | 📋 | M3 | Ответвление от любого сообщения → новая ветка диалога |
 | U-40 | Звуки уведомлений | 📋 | M2 | Звук когда ответ готов, если окно не в фокусе |
 | U-41 | Отображение картинок в чате | 📋 | M2 | Рендер вложений-изображений инлайн в bubble вместо текста [image] |

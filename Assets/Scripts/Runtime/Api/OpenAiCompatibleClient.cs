@@ -1033,6 +1033,20 @@ namespace NeonCompanion.Runtime.Api
                     continue;
                 }
 
+                // Part B: tool call request detection for approval flow (Hermes + native OpenAI tool_calls)
+                if (onToolProgress != null)
+                {
+                    if (string.Equals(pendingEventType, "hermes.tool.request", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ParseAndEmitToolRequest(payload, onToolProgress);
+                        pendingEventType = null;
+                        continue;
+                    }
+
+                    // Minimal detection of tool_calls in SSE chunks (generic OpenAI-compatible providers)
+                    TryDetectAndEmitToolCallRequest(payload, onToolProgress);
+                }
+
                 string delta = ExtractDeltaContent(payload);
                 if (!string.IsNullOrEmpty(delta))
                     onToken?.Invoke(delta);
@@ -1052,6 +1066,51 @@ namespace NeonCompanion.Runtime.Api
             string status = ExtractJsonStringValue(json, "status", 0) ?? string.Empty;
 
             onToolProgress.Invoke(tool, label, emoji, status);
+        }
+
+        // Part B: emit tool request as progress with "requesting" status so ChatController can trigger approval UI
+        private static void ParseAndEmitToolRequest(string json, Action<string, string, string, string> onToolProgress)
+        {
+            if (string.IsNullOrWhiteSpace(json) || onToolProgress == null)
+                return;
+
+            string tool = ExtractJsonStringValue(json, "tool", 0) ?? ExtractJsonStringValue(json, "name", 0) ?? string.Empty;
+            string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? "\uD83D\uDD27"; // 🔧
+            string label = ExtractJsonStringValue(json, "label", 0) ?? ExtractJsonStringValue(json, "description", 0) ?? tool;
+
+            onToolProgress.Invoke(tool, label, emoji, "requesting");
+        }
+
+        // Minimal OpenAI tool_calls detection (no full delta accumulation; enough to surface approval prompt)
+        private static bool TryDetectAndEmitToolCallRequest(string json, Action<string, string, string, string> onToolProgress)
+        {
+            if (string.IsNullOrWhiteSpace(json) || onToolProgress == null)
+                return false;
+
+            if (json.IndexOf("\"tool_calls\"", StringComparison.Ordinal) < 0 &&
+                json.IndexOf("\"function_call\"", StringComparison.Ordinal) < 0)
+                return false;
+
+            string toolName = null;
+            int namePos = json.IndexOf("\"name\"", StringComparison.Ordinal);
+            if (namePos >= 0)
+            {
+                toolName = ExtractJsonStringValue(json, "name", namePos);
+            }
+            if (string.IsNullOrEmpty(toolName))
+            {
+                toolName = ExtractJsonStringValue(json, "tool", 0);
+            }
+
+            if (!string.IsNullOrEmpty(toolName))
+            {
+                string label = ExtractJsonStringValue(json, "label", 0) ?? toolName;
+                string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? "\uD83D\uDD27";
+                onToolProgress.Invoke(toolName, label, emoji, "requesting");
+                return true;
+            }
+
+            return false;
         }
 
         private static string ExtractContentFromStreamingPayload(string text)

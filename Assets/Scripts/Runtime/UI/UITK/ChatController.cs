@@ -78,6 +78,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _streamingStatsLabel;
         private IVisualElementScheduledItem _statsUpdateSchedule;
         private readonly ToolCallUiHelper _toolCallUiHelper = new ToolCallUiHelper();
+        private ApprovalPrompt _currentApprovalPrompt;
+        private VisualElement _currentApprovalElement;
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private bool _pendingEnterSend;
         private string _chatSubtitle = string.Empty;
@@ -159,6 +161,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _composerTextElement = null;
             _composerInputHeight = -1f;
             _toolCallUiHelper.Clear();
+            DismissCurrentApprovalPrompt();
             _streamingBubble = null;
             _streamingLabel = null;
             StopInlineTypingAnimation();
@@ -288,11 +291,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnStopClicked()
         {
+            DismissCurrentApprovalPrompt();
             _currentChatService?.CancelCurrentGeneration();
         }
 
         public async Task SendCurrentMessageAsync()
         {
+            DismissCurrentApprovalPrompt();
+
             bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
             if (_isSending || _d.MessageInput == null || (string.IsNullOrWhiteSpace(_d.MessageInput.value) && !hasPendingAttachments))
                 return;
@@ -334,6 +340,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken, OnToolProgress);
                     ClearThinkingBubble();
                     _toolCallUiHelper.Clear();
+                    DismissCurrentApprovalPrompt();
                     _streamingBubble = null;
                     _streamingLabel = null;
                     StopInlineTypingAnimation();
@@ -367,6 +374,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _streamingBubble = null;
                 _streamingLabel = null;
                 _toolCallUiHelper.Clear();
+                DismissCurrentApprovalPrompt();
                 _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
             }
             catch (Exception ex)
@@ -380,6 +388,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 _streamingBubble = null;
                 _streamingLabel = null;
+                DismissCurrentApprovalPrompt();
                 _d.MessageInput.value = composerText;
                 QueueComposerHeightUpdate();
                 RestorePendingComposerAttachments(pendingAttachments);
@@ -679,6 +688,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (insertedNewEntry)
                 _streamingLabel = null;
             ScrollTranscriptToBottom();
+
+            // Wire tool call detection to approval flow (Part B)
+            if (IsApprovalRequestStatus(status))
+            {
+                var req = new ToolCallRequest
+                {
+                    id = Guid.NewGuid().ToString("N"),
+                    toolName = tool ?? string.Empty,
+                    description = !string.IsNullOrEmpty(label) ? label : tool,
+                    parameters = new Dictionary<string, string>()
+                };
+                _ = HandleApprovalRequestAsync(req);
+            }
         }
 
         private static string GetThinkingText(string tool)
@@ -979,6 +1001,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task RegenerateLastAsync()
         {
+            DismissCurrentApprovalPrompt();
             try
             {
                 var chat = await _d.GetChatServiceAsync();
@@ -1006,6 +1029,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         await chat.RegenerateAsync(OnStreamToken, OnToolProgress);
                         ClearThinkingBubble();
                         _toolCallUiHelper.Clear();
+                        DismissCurrentApprovalPrompt();
                         _streamingBubble = null;
                         _streamingLabel = null;
                         StopInlineTypingAnimation();
@@ -1036,6 +1060,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     }
                     _streamingBubble = null;
                     _streamingLabel = null;
+                    DismissCurrentApprovalPrompt();
                     _d.ShowSystemMessage(ex.Message);
                     NeonLogger.LogError(ex.ToString());
                     _d.TriggerAvatarConfused();
@@ -1640,6 +1665,176 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (element != null)
                 element.style.display = display;
+        }
+
+        // ===== Agent Tool Approval (Part B) =====
+
+        private async Task<AppSettings> GetSettingsAsync()
+        {
+            try
+            {
+                var app = await _d.GetAppAsync();
+                if (app != null && app.Settings != null)
+                    return app.Settings.Load();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError("Failed to load settings for tool approval: " + ex);
+            }
+            return null;
+        }
+
+        private async Task SaveSettingsAsync(AppSettings settings)
+        {
+            try
+            {
+                var app = await _d.GetAppAsync();
+                if (app != null && app.Settings != null && settings != null)
+                    app.Settings.Save(settings);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError("Failed to save settings for tool approval: " + ex);
+            }
+        }
+
+        private async Task<bool> IsToolAlwaysApprovedAsync(string toolName)
+        {
+            if (string.IsNullOrWhiteSpace(toolName))
+                return false;
+            var settings = await GetSettingsAsync();
+            if (settings == null || settings.alwaysApprovedTools == null)
+                return false;
+            for (int i = 0; i < settings.alwaysApprovedTools.Count; i++)
+            {
+                if (string.Equals(settings.alwaysApprovedTools[i], toolName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        private async Task SaveAlwaysApprovedToolAsync(string toolName)
+        {
+            if (string.IsNullOrWhiteSpace(toolName))
+                return;
+            var settings = await GetSettingsAsync();
+            if (settings == null)
+                return;
+            if (settings.alwaysApprovedTools == null)
+                settings.alwaysApprovedTools = new List<string>();
+            bool exists = false;
+            for (int i = 0; i < settings.alwaysApprovedTools.Count; i++)
+            {
+                if (string.Equals(settings.alwaysApprovedTools[i], toolName, StringComparison.OrdinalIgnoreCase))
+                {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists)
+            {
+                settings.alwaysApprovedTools.Add(toolName);
+                await SaveSettingsAsync(settings);
+            }
+        }
+
+        private void DismissCurrentApprovalPrompt()
+        {
+            if (_currentApprovalElement != null)
+            {
+                if (_currentApprovalElement.parent != null)
+                    _currentApprovalElement.RemoveFromHierarchy();
+                _currentApprovalElement = null;
+            }
+            _currentApprovalPrompt = null;
+        }
+
+        private bool IsApprovalRequestStatus(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return false;
+            if (string.Equals(status, "requesting", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(status, "approval_required", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(status, "pending_approval", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (status.IndexOf("request", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            return false;
+        }
+
+        private async Task HandleApprovalRequestAsync(ToolCallRequest request)
+        {
+            if (request == null)
+                return;
+            if (_currentApprovalPrompt != null)
+                return; // one at a time
+
+            bool approved = await RequestToolApproval(request);
+            if (!approved)
+            {
+                // Reject: stop generation to pause tool execution (server-side protocol is future work)
+                try
+                {
+                    if (_isSending || _isStreamingResponse)
+                    {
+                        OnStopClicked();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    NeonLogger.LogError("Error stopping on tool reject: " + ex);
+                }
+            }
+        }
+
+        private async Task<bool> RequestToolApproval(ToolCallRequest request)
+        {
+            if (request == null)
+                return true;
+
+            var settings = await GetSettingsAsync();
+            if (settings != null && string.Equals(settings.toolPermissionMode, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (await IsToolAlwaysApprovedAsync(request.toolName))
+                return true;
+
+            var prompt = new ApprovalPrompt();
+            var approvalElement = prompt.Create(request);
+            _currentApprovalPrompt = prompt;
+            _currentApprovalElement = approvalElement;
+            _d.MessagesList.Add(approvalElement);
+            ScrollTranscriptToBottom();
+
+            bool approved = false;
+            bool always = false;
+            var completionSource = new TaskCompletionSource<bool>();
+
+            prompt.OnDecision += (a, alwaysApprove) =>
+            {
+                approved = a;
+                always = alwaysApprove;
+                completionSource.TrySetResult(true);
+            };
+
+            await completionSource.Task;
+
+            if (approvalElement != null && approvalElement.parent != null)
+                approvalElement.RemoveFromHierarchy();
+
+            _currentApprovalPrompt = null;
+            _currentApprovalElement = null;
+
+            if (always && approved)
+            {
+                await SaveAlwaysApprovedToolAsync(request.toolName);
+            }
+
+            return approved;
         }
 
         // ===== Static events for bubble action buttons =====
