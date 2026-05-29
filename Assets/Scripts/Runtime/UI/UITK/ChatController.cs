@@ -63,6 +63,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<Task> OpenModelPickerAsync;
             // Avatar name for subtitle
             public Func<string> GetAvatarDisplayName;
+            public Action ShowNotificationBadge;
+            public Action HideNotificationBadge;
         }
 
         private class QueuedMessage
@@ -76,6 +78,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isStreamingResponse;
         private bool _isVoiceRecording;
         private bool _isDragOver;
+        private bool _hasUnreadNotification;
         private ChatService _currentChatService;
         private VisualElement _streamingBubble;
         private Label _streamingLabel;
@@ -158,6 +161,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d = deps;
             if (_contextMenu == null)
                 _contextMenu = new MessageContextMenu();
+
+            _d.ShowNotificationBadge = ShowNotificationBadge;
+            _d.HideNotificationBadge = HideNotificationBadge;
         }
 
         public void SetVoiceRecording(bool value) { _isVoiceRecording = value; }
@@ -275,6 +281,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 chatMain.RegisterCallback<DragPerformEvent>(OnDragPerform);
                 chatMain.RegisterCallback<DragLeaveEvent>(OnDragLeave);
             }
+
+            Application.focusChanged += OnApplicationFocusChanged;
         }
 
         public void UnregisterCallbacks()
@@ -371,6 +379,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 chatMain.UnregisterCallback<DragPerformEvent>(OnDragPerform);
                 chatMain.UnregisterCallback<DragLeaveEvent>(OnDragLeave);
             }
+
+            Application.focusChanged -= OnApplicationFocusChanged;
         }
 
         public void InitState()
@@ -509,6 +519,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public async Task SendCurrentMessageAsync()
         {
+            HideNotificationBadge();
             DismissCurrentApprovalPrompt();
             if (_contextMenu != null)
                 _contextMenu.Hide();
@@ -671,6 +682,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _currentChatService = null;
                 SetSending(false);
+
+                // Show notification badge if window not focused
+                if (!Application.isFocused)
+                {
+                    _hasUnreadNotification = true;
+                    _d.ShowNotificationBadge?.Invoke();
+                }
 
                 // Process queued messages
                 if (_messageQueue.Count > 0)
@@ -1038,6 +1056,31 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _d.RefreshAvatarMotionState();
+        }
+
+        private void ShowNotificationBadge()
+        {
+            if (_d.NavChatCount != null)
+            {
+                _d.NavChatCount.AddToClassList("nav__count--notify");
+            }
+        }
+
+        private void HideNotificationBadge()
+        {
+            if (_d.NavChatCount != null)
+            {
+                _d.NavChatCount.RemoveFromClassList("nav__count--notify");
+            }
+        }
+
+        private void OnApplicationFocusChanged(bool hasFocus)
+        {
+            if (hasFocus && _hasUnreadNotification)
+            {
+                _hasUnreadNotification = false;
+                HideNotificationBadge();
+            }
         }
 
         // ===== Summarize =====

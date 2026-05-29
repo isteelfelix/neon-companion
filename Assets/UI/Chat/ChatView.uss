@@ -1255,3 +1255,16 @@
     margin-left: 6px;
     margin-right: 6px;
 }
+
+/* Notification badge */
+.nav__count--notify {
+    background-color: rgba(220, 50, 50, 0.9);
+    color: #fff;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    padding-left: 4px;
+    padding-right: 4px;
+}
