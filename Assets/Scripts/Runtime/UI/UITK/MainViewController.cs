@@ -700,6 +700,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 EditModelCustomWrap  = _root.Q<VisualElement>("edit-model-custom-wrap"),
                 EditMaxTokens        = _root.Q<TextField>("edit-maxtokens"),
                 EditTemperature      = _root.Q<Slider>("edit-temperature"),
+                EditBackendType      = _root.Q<NeonDropdown>("edit-backend-type"),
                 EditorProviderShort  = _root.Q<Label>("editor-provider-short"),
                 EditorProviderName   = _root.Q<Label>("editor-provider-name"),
                 EditorProviderStatus = _root.Q<Label>("editor-provider-status"),

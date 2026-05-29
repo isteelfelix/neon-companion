@@ -36,6 +36,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public VisualElement EditModelCustomWrap;
             public TextField EditMaxTokens;
             public Slider EditTemperature;
+            public NeonDropdown EditBackendType;
             // UI — editor header
             public Label EditorProviderShort;
             public Label EditorProviderName;
@@ -72,6 +73,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const string ActiveProviderClass  = "provider--active";
         private const string EditingProviderClass = "provider--editing";
         private const string CustomModelPresetValue = "Custom / manual";
+        private const string GenericBackendValue = "Generic (OpenAI-compatible)";
+        private const string HermesBackendValue = "Hermes";
 
         private Deps _d;
 
@@ -321,6 +324,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
             _editModelUsesCustomMode = false;
             _discoveredModels = null;
+
+            if (_d.EditBackendType != null)
+            {
+                _d.EditBackendType.choices = new List<string> { GenericBackendValue, HermesBackendValue };
+                _d.EditBackendType.SetValueWithoutNotify(GenericBackendValue);
+            }
+
             ShowProviderEditPanel();
         }
 
@@ -364,6 +374,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.EditTemperature.SetValueWithoutNotify(_editingProvider.temperature);
             if (_d.EditMaxTokens != null)
                 _d.EditMaxTokens.SetValueWithoutNotify(_editingProvider.maxTokens.ToString());
+
+            if (_d.EditBackendType != null)
+            {
+                var choices = new List<string> { GenericBackendValue, HermesBackendValue };
+                _d.EditBackendType.choices = choices;
+                string currentBackend = string.IsNullOrEmpty(_editingProvider.backendType)
+                    ? GenericBackendValue
+                    : HermesBackendValue;
+                _d.EditBackendType.SetValueWithoutNotify(currentBackend);
+            }
 
             SetTestRow(null, string.Empty);
             _d.ProviderEditPanel.style.display = DisplayStyle.Flex;
@@ -1213,6 +1233,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.EditTemperature != null) draft.temperature  = _d.EditTemperature.value;
             if (_d.EditMaxTokens != null && int.TryParse(_d.EditMaxTokens.value, out int tokens))
                 draft.maxTokens = tokens;
+
+            if (_d.EditBackendType != null)
+            {
+                string selected = _d.EditBackendType.value;
+                draft.backendType = string.Equals(selected, HermesBackendValue, StringComparison.Ordinal)
+                    ? "hermes"
+                    : null;
+            }
+
             return draft;
         }
 
@@ -1232,7 +1261,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 defaultModel = source.defaultModel,
                 temperature  = source.temperature,
                 maxTokens    = source.maxTokens,
-                isEnabled    = source.isEnabled
+                isEnabled    = source.isEnabled,
+                backendType  = source.backendType
             };
         }
 

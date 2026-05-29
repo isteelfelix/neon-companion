@@ -62,6 +62,11 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
+                <ui:VisualElement class="field">
+                    <ui:Label text="Тип бэкенда" class="label" />
+                    <nc:NeonDropdown name="edit-backend-type" class="input" />
+                </ui:VisualElement>
+
                 <ui:VisualElement name="test-row" class="testrow">
                     <ui:VisualElement name="test-row-icon" class="icon icon--check testrow__icon" />
                     <ui:Label name="test-row-label" class="testrow__label" />
