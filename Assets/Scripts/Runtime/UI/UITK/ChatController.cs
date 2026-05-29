@@ -177,13 +177,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_isSending || _isVoiceRecording)
                 return;
 
-            bool hasText = !string.IsNullOrWhiteSpace(evt.newValue);
-            if (hasText)
-            {
-                var animator = _d.GetAvatarAnimator?.Invoke();
-                if (animator != null && animator.HasAnyClips)
-                    _d.SetAvatarMotionState(AvatarMotionState.Listening);
-            }
+            _d.RefreshAvatarMotionState?.Invoke();
         }
 
         // ===== Send =====

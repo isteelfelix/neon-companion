@@ -106,44 +106,60 @@
 
 .settings-toggle {
     margin: 0;
+    width: 42px;
+    min-width: 42px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 11px;
+    overflow: hidden;
 }
 
-.settings-toggle > .unity-toggle__input {
-    width: 36px;
-    height: 20px;
-    border-radius: 999px;
+/* unity-base-field__input is the Unity 6 class name; unity-toggle__input kept for compatibility */
+.settings-toggle .unity-toggle__input,
+.settings-toggle .unity-base-field__input {
+    width: 42px;
+    min-width: 42px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 11px;
     background-color: var(--bg-4);
+    background-image: none;
+    -unity-background-image-tint-color: rgba(0,0,0,0);
     border-width: 1px;
     border-color: var(--line-2);
     padding: 0;
+    align-items: center;
     justify-content: flex-start;
     transition-property: background-color, border-color;
     transition-duration: 0.15s;
 }
 
-.settings-toggle > .unity-toggle__input > .unity-toggle__checkmark {
-    width: 14px;
-    height: 14px;
-    margin: 2px;
+.settings-toggle .unity-toggle__checkmark {
+    width: 16px;
+    height: 16px;
+    margin: 3px;
     border-radius: 999px;
     background-color: var(--text-2);
     background-image: none;
     border-width: 0;
+    flex-shrink: 0;
     transition-property: translate, background-color;
     transition-duration: 0.18s;
 }
 
-.settings-toggle:checked > .unity-toggle__input {
+.settings-toggle:checked .unity-toggle__input,
+.settings-toggle:checked .unity-base-field__input {
     background-color: var(--accent);
     border-color: var(--accent);
 }
 
-.settings-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
+.settings-toggle:checked .unity-toggle__checkmark {
     background-color: rgb(255, 255, 255);
-    translate: 16px 0px;
+    translate: 20px 0px;
 }
 
-.settings-toggle .unity-toggle__text {
+.settings-toggle .unity-toggle__text,
+.settings-toggle .unity-base-field__label {
     display: none;
 }
 

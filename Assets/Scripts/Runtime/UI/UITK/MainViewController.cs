@@ -2165,7 +2165,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!_avatarAnimator.HasClip(reactionClipName))
                 return;
 
-            _avatarAnimator.PlayOneShot(reactionClipName, RefreshAvatarMotionState);
+            _avatarAnimator.PlayOneShot(reactionClipName, RefreshAvatarMotionState, true);
         }
 
         private void TriggerAvatarSmile()
