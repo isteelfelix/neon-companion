@@ -480,13 +480,13 @@ namespace NeonCompanion.Runtime.Api.Adapters
             return -1;
         }
 
-        [UnityEngine.Serializable]
+        [Serializable]
         private class OpenAiModelsResponse
         {
             public OpenAiModelEntry[] data;
         }
 
-        [UnityEngine.Serializable]
+        [Serializable]
         private class OpenAiModelEntry
         {
             public string id;
