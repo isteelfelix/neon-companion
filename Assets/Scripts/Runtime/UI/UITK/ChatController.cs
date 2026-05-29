@@ -43,6 +43,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Action RefreshAvatarMotionState;
             public Action TriggerAvatarSmile;
             public Action TriggerAvatarConfused;
+            public Func<AvatarAnimationController> GetAvatarAnimationController;
             // Services
             public Func<Task<ChatService>> GetChatServiceAsync;
             public Func<Task<CompanionApp>> GetAppAsync;
@@ -571,6 +572,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.MessageInput.value = string.Empty;
             QueueComposerHeightUpdate();
             SetSending(true);
+            _d.GetAvatarAnimationController?.Invoke()?.TriggerSend();
 
             ChatService chat = null;
             try
@@ -982,6 +984,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _streamingTypingDots.RemoveFromHierarchy();
                 _streamingTypingDots = null;
                 _isStreamingResponse = true;
+                _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamStart();
                 _d.RefreshAvatarMotionState();
             }
 
@@ -1057,7 +1060,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _isSending = isSending;
             if (!isSending)
+            {
                 _isStreamingResponse = false;
+                _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamEnd();
+            }
 
             if (_d.SendButton != null)
                 _d.SendButton.SetEnabled(!isSending);

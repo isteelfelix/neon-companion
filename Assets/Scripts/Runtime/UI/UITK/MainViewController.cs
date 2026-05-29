@@ -216,6 +216,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Image _avatarArtImage;
         private Image _avatar3DImage;
         private SpriteSheetAnimator _avatarAnimator;
+        private AvatarAnimationController _avatarAnimationController;
         private Avatar3DRenderer _avatar3DRenderer;
         private IAvatar3DService _avatar3DService;
         private bool _isRefreshingLocalizedUi;
@@ -635,6 +636,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 TriggerAvatarSmile = _avatarGalleryController.TriggerAvatarSmile,
                 TriggerAvatarConfused = _avatarGalleryController.TriggerAvatarConfused,
+                GetAvatarAnimationController = () => _avatarAnimationController,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetAppAsync = GetAppAsync,
                 LoadSessionsAsync = () => LoadSessionsAsync(_chatService),
@@ -761,6 +763,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                         _avatarAnimator = gameObject.GetComponent<SpriteSheetAnimator>();
                         if (_avatarAnimator == null)
                             _avatarAnimator = gameObject.AddComponent<SpriteSheetAnimator>();
+                    }
+                    if (_avatarAnimationController == null)
+                    {
+                        _avatarAnimationController = gameObject.GetComponent<AvatarAnimationController>();
+                        if (_avatarAnimationController == null)
+                            _avatarAnimationController = gameObject.AddComponent<AvatarAnimationController>();
                     }
                     return _avatarAnimator;
                 },
@@ -1931,6 +1939,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarAnimator = gameObject.GetComponent<SpriteSheetAnimator>();
             if (_avatarAnimator == null)
                 _avatarAnimator = gameObject.AddComponent<SpriteSheetAnimator>();
+
+            _avatarAnimationController = gameObject.GetComponent<AvatarAnimationController>();
+            if (_avatarAnimationController == null)
+                _avatarAnimationController = gameObject.AddComponent<AvatarAnimationController>();
         }
 
         private void EnsureAvatar3DImage()
@@ -2006,6 +2018,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarAnimator.Configure(clips, _avatarArtImage);
             if (resolvedMotion.lipsyncClip != null)
                 _avatarAnimator.RegisterClip(resolvedMotion.lipsyncClip);
+            if (_avatarAnimationController != null)
+                _avatarAnimationController.SetAnimator(_avatarAnimator);
             NeonLogger.Log("[AvatarAnim] After Configure: HasAnyClips=" + _avatarAnimator.HasAnyClips);
             if (!_avatarAnimator.HasAnyClips)
             {
