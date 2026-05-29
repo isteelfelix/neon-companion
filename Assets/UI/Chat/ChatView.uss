@@ -886,3 +886,81 @@
     color: #6ea8fe;
     text-decoration: underline;
 }
+
+/* ---- Approval prompt (agent tool call approval) ---- */
+
+.approval-prompt {
+    flex-direction: column;
+    background-color: rgba(30, 35, 50, 0.95);
+    border-width: 1px;
+    border-color: rgba(100, 120, 200, 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.approval-prompt__header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.approval-prompt__icon {
+    font-size: 16px;
+    margin-right: 6px;
+}
+
+.approval-prompt__tool-name {
+    font-weight: bold;
+    font-size: 13px;
+    color: #e0e0e0;
+}
+
+.approval-prompt__description {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+}
+
+.approval-prompt__params {
+    font-family: monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 6px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    white-space: pre-wrap;
+}
+
+.approval-prompt__buttons {
+    flex-direction: row;
+}
+
+.approval-prompt__btn {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    margin-right: 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.approval-prompt__btn--approve {
+    background-color: rgba(40, 167, 69, 0.8);
+    color: white;
+}
+
+.approval-prompt__btn--reject {
+    background-color: rgba(220, 53, 69, 0.8);
+    color: white;
+}
+
+.approval-prompt__btn--always {
+    background-color: rgba(0, 123, 255, 0.8);
+    color: white;
+}

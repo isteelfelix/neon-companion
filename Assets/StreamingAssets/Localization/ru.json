@@ -271,5 +271,12 @@
   "tool.search": "поиск",
   "tool.read_file": "чтение файла",
   "tool.write_file": "запись файла",
-  "tool.default": "инструмент"
+  "tool.default": "инструмент",
+  "approval.title": "Запрос инструмента",
+  "approval.approve": "Разрешить",
+  "approval.reject": "Отклонить",
+  "approval.always": "Всегда",
+  "approval.auto_mode": "Авто (всегда разрешать)",
+  "approval.manual_mode": "Вручную (спрашивать каждый раз)",
+  "approval.permission_mode": "Разрешение инструментов"
 }

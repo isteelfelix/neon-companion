@@ -48,6 +48,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Settings UI =====
         private NeonDropdown _settingsLanguage;
+        private NeonDropdown _settingsToolPermission;
         private Toggle _settingsHistory;
         private Toggle _settingsStreaming;
         private Toggle _settingsEnterToSend;
@@ -132,6 +133,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Settings page controls
             _settingsLanguage     = root.Q<NeonDropdown>("settings-language");
+            _settingsToolPermission = root.Q<NeonDropdown>("settings-tool-permission");
             _settingsHistory      = root.Q<Toggle>("settings-save-history");
             _settingsStreaming     = root.Q<Toggle>("settings-streaming");
             _settingsEnterToSend  = root.Q<Toggle>("settings-enter-to-send");
@@ -213,6 +215,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsLanguage.SetValueWithoutNotify(currentLanguage == "en"
                 ? LocalizationExtensions.Get("settings.language.english", "English")
                 : LocalizationExtensions.Get("settings.language.russian", "Русский"));
+
+            // Also refresh permission mode dropdown labels/choices on language change (no MainViewController edit)
+            RefreshPermissionModeDropdown();
         }
 
         internal void RefreshPluginStatus(CompanionApp app)
@@ -320,6 +325,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_settingsLanguage != null)
                 _settingsLanguage.RegisterCallback<ChangeEvent<string>>(OnSettingsLanguageChanged);
 
+            if (_settingsToolPermission != null)
+                _settingsToolPermission.RegisterCallback<ChangeEvent<string>>(OnSettingsToolPermissionChanged);
+
             RegisterClick(_settingsOpenFolderBtn,  OnOpenFolderClicked);
             RegisterClick(_settingsExportBtn,      OnExportChatsClicked);
             RegisterClick(_settingsClearChatsBtn,  OnClearChatsClicked);
@@ -342,6 +350,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_settingsLanguage != null)
                 _settingsLanguage.UnregisterCallback<ChangeEvent<string>>(OnSettingsLanguageChanged);
+
+            if (_settingsToolPermission != null)
+                _settingsToolPermission.UnregisterCallback<ChangeEvent<string>>(OnSettingsToolPermissionChanged);
 
             UnregisterClick(_settingsOpenFolderBtn,  OnOpenFolderClicked);
             UnregisterClick(_settingsExportBtn,      OnExportChatsClicked);
@@ -412,6 +423,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             OnLanguageSettingChanged(evt?.newValue);
         }
 
+        private void OnSettingsToolPermissionChanged(ChangeEvent<string> evt)
+        {
+            SaveSettings();
+        }
+
         private void OnLanguageSettingChanged(string selectedValue)
         {
             string languageCode = ResolveLanguageCode(selectedValue);
@@ -431,6 +447,49 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_deps.RequestRefreshLocalizedUi != null)
                     await _deps.RequestRefreshLocalizedUi();
             }
+        }
+
+        // ============================================================
+        // Tool permission mode helpers (manual / auto)
+        // ============================================================
+
+        private void SetPermissionModeChoices()
+        {
+            if (_settingsToolPermission == null) return;
+            string manual = LocalizationExtensions.Get("approval.manual_mode", "Manual (ask every time)");
+            string auto = LocalizationExtensions.Get("approval.auto_mode", "Auto (always allow)");
+            _settingsToolPermission.choices = new List<string> { manual, auto };
+        }
+
+        private string GetPermissionDisplay(string mode)
+        {
+            if (string.Equals(mode, "auto", StringComparison.OrdinalIgnoreCase))
+                return LocalizationExtensions.Get("approval.auto_mode", "Auto (always allow)");
+            return LocalizationExtensions.Get("approval.manual_mode", "Manual (ask every time)");
+        }
+
+        private static string ResolvePermissionMode(string displayValue)
+        {
+            if (displayValue == null) return "manual";
+            string autoDisplay = LocalizationExtensions.Get("approval.auto_mode", "Auto (always allow)");
+            if (string.Equals(displayValue, autoDisplay, StringComparison.Ordinal))
+                return "auto";
+            return "manual";
+        }
+
+        internal void RefreshPermissionModeDropdown()
+        {
+            if (_root != null)
+            {
+                var permLabel = _root.Q<Label>("settings-permission-label");
+                if (permLabel != null)
+                    permLabel.text = LocalizationExtensions.Get("approval.permission_mode", "Tool permission");
+            }
+
+            if (_settingsToolPermission == null) return;
+            string currentMode = ResolvePermissionMode(_settingsToolPermission.value);
+            SetPermissionModeChoices();
+            _settingsToolPermission.SetValueWithoutNotify(GetPermissionDisplay(currentMode));
         }
 
         // ============================================================
@@ -469,6 +528,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                         : LocalizationExtensions.Get("settings.language.russian", "Русский"));
 
                 await ApplyLanguageRuntimeAsync(s.language == "en" ? "en" : "ru");
+
+                if (_settingsToolPermission != null)
+                {
+                    SetPermissionModeChoices();
+                    string mode = string.IsNullOrEmpty(s.toolPermissionMode) ? "manual" : s.toolPermissionMode;
+                    _settingsToolPermission.SetValueWithoutNotify(GetPermissionDisplay(mode));
+                }
+
+                var permLabel = _root != null ? _root.Q<Label>("settings-permission-label") : null;
+                if (permLabel != null)
+                    permLabel.text = LocalizationExtensions.Get("approval.permission_mode", "Tool permission");
 
                 if (_settingsStoragePath != null)
                     _settingsStoragePath.text = Application.persistentDataPath;
@@ -528,6 +598,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsShowHalo != null)      s.showHalo           = _settingsShowHalo.value;
                 if (_settingsBreathing != null)     s.breathingAnimation = _settingsBreathing.value;
                 if (_settingsLanguage != null)      s.language           = ResolveLanguageCode(_settingsLanguage.value);
+                if (_settingsToolPermission != null) s.toolPermissionMode = ResolvePermissionMode(_settingsToolPermission.value);
 
                 s.avatarShape      = _avatarShape;
                 s.activeAvatarId   = _deps.GetActiveAvatarId?.Invoke() ?? "neon";

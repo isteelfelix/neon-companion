@@ -19,5 +19,6 @@ namespace NeonCompanion.Runtime.Data.Models
         public bool breathingAnimation = true;
         public string language = "ru";
         public string closeHotkey = "Escape";
+        public string toolPermissionMode = "manual";
     }
 }

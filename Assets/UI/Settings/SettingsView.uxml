@@ -54,6 +54,13 @@
 
                 <ui:VisualElement class="settings-row">
                     <ui:VisualElement class="settings-row__copy">
+                        <ui:Label name="settings-permission-label" text="Разрешение инструментов" class="settings-row__name" />
+                    </ui:VisualElement>
+                    <nc:NeonDropdown name="settings-tool-permission" choices-csv="Вручную (спрашивать каждый раз),Авто (всегда разрешать)" class="settings-dropdown" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
                         <ui:Label text="System prompt персонажа" class="settings-row__name" />
                         <ui:Label text="Использовать персону выбранного аватара." class="settings-row__sub" />
                     </ui:VisualElement>

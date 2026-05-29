@@ -271,5 +271,12 @@
   "tool.search": "search",
   "tool.read_file": "read_file",
   "tool.write_file": "write_file",
-  "tool.default": "tool"
+  "tool.default": "tool",
+  "approval.title": "Tool Request",
+  "approval.approve": "Approve",
+  "approval.reject": "Reject",
+  "approval.always": "Always",
+  "approval.auto_mode": "Auto (always allow)",
+  "approval.manual_mode": "Manual (ask every time)",
+  "approval.permission_mode": "Tool permission"
 }
