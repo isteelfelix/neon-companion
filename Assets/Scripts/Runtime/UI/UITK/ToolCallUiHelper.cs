@@ -21,31 +21,50 @@ namespace NeonCompanion.Runtime.UI.UITK
             _entries.Clear();
         }
 
-        public void OnToolProgress(string tool, string label, string emoji, string status)
+        internal static VisualElement CreateEntryElement(string tool, string label, string emoji, string status)
         {
-            if (_bubble == null)
-                return;
-
             string truncated = label != null && label.Length > 40
                 ? label.Substring(0, 40) + "..."
                 : label ?? string.Empty;
 
-            string key = tool + "\x01" + label;
             bool isDone = string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(status, "done", StringComparison.OrdinalIgnoreCase);
+            string icon = string.IsNullOrEmpty(emoji) ? GetToolEmoji(tool) : emoji;
+            return BuildEntry(icon, tool ?? string.Empty, truncated, isDone);
+        }
+
+        public bool OnToolProgress(string tool, string label, string emoji, string status)
+        {
+            if (_bubble == null)
+                return false;
+
+            string key = tool + "\x01" + label;
 
             VisualElement existing;
             if (_entries.TryGetValue(key, out existing))
             {
-                if (isDone)
+                if (string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(status, "done", StringComparison.OrdinalIgnoreCase))
                     MarkEntryDone(existing);
-                return;
+                return false;
             }
 
-            string icon = string.IsNullOrEmpty(emoji) ? GetToolEmoji(tool) : emoji;
-            var entry = BuildEntry(icon, tool ?? string.Empty, truncated, isDone);
-            _bubble.Add(entry);
+            var entry = CreateEntryElement(tool, label, emoji, status);
+            _bubble.Insert(GetInsertIndex(), entry);
             _entries[key] = entry;
+            return true;
+        }
+
+        private int GetInsertIndex()
+        {
+            if (_bubble == null)
+                return 0;
+
+            int insertIndex = _bubble.childCount;
+            if (insertIndex > 0 && _bubble[insertIndex - 1].ClassListContains("typing--inline"))
+                insertIndex--;
+
+            return insertIndex;
         }
 
         private static VisualElement BuildEntry(string icon, string name, string labelText, bool done)

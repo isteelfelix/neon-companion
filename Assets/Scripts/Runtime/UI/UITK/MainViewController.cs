@@ -982,7 +982,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void AddSystemMessage(string text)
         {
-            _chatController.ShowSystemMessage(text);
+            if (_subtitleBody != null)
+                _subtitleBody.text = text ?? string.Empty;
         }
 
         private void SetSending(bool isSending)

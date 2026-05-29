@@ -138,15 +138,29 @@ namespace NeonCompanion.Runtime.UI.Chat
                     Messages.Add(streamMsg);
 
                     var buf = new System.Text.StringBuilder();
-                    var response = await _aiClient.SendMessageStreamAsync(_provider, request, token =>
+                    Action<string> handleToken = token =>
                     {
                         buf.Append(token);
                         streamMsg.content = buf.ToString();
+                        AppendTextSegment(streamMsg, token);
                         onStreamToken(token);
-                    }, _cts.Token, onToolProgress);
+                    };
+                    Action<string, string, string, string> handleToolProgress = (tool, label, emoji, status) =>
+                    {
+                        UpsertToolSegment(streamMsg, tool, label, emoji, status);
+                        if (onToolProgress != null)
+                            onToolProgress(tool, label, emoji, status);
+                    };
+                    var response = await _aiClient.SendMessageStreamAsync(_provider, request, token =>
+                    {
+                        handleToken(token);
+                    }, _cts.Token, handleToolProgress);
                     ProviderSessionId = response?.providerSessionId ?? ProviderSessionId;
                     if (string.IsNullOrWhiteSpace(streamMsg.content) && !string.IsNullOrWhiteSpace(response?.content))
+                    {
                         streamMsg.content = response.content;
+                        AppendTextSegment(streamMsg, response.content);
+                    }
                     streamMsg.model = response?.model ?? streamMsg.model;
                 }
                 else
@@ -165,6 +179,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                                                       string.Equals(last.role, "assistant", StringComparison.OrdinalIgnoreCase) &&
                                                       string.IsNullOrWhiteSpace(last.content) &&
                                                       string.IsNullOrWhiteSpace(last.model) &&
+                                                      (last.segments == null || last.segments.Count == 0) &&
                                                       (last.attachments == null || last.attachments.Count == 0);
                     if (isEmptyAssistantPlaceholder)
                         Messages.RemoveAt(Messages.Count - 1);
@@ -172,6 +187,76 @@ namespace NeonCompanion.Runtime.UI.Chat
 
                 throw;
             }
+        }
+
+        private static void AppendTextSegment(ChatMessage message, string text)
+        {
+            if (message == null || string.IsNullOrEmpty(text))
+                return;
+
+            if (message.segments == null)
+                message.segments = new List<ChatMessageSegment>();
+
+            ChatMessageSegment segment = null;
+            if (message.segments.Count > 0)
+            {
+                var lastSegment = message.segments[message.segments.Count - 1];
+                if (lastSegment != null && string.Equals(lastSegment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
+                    segment = lastSegment;
+            }
+
+            if (segment == null)
+            {
+                segment = new ChatMessageSegment
+                {
+                    kind = ChatMessageSegment.TextKind,
+                    text = string.Empty
+                };
+                message.segments.Add(segment);
+            }
+
+            segment.text = (segment.text ?? string.Empty) + text;
+        }
+
+        private static void UpsertToolSegment(ChatMessage message, string tool, string label, string emoji, string status)
+        {
+            if (message == null)
+                return;
+
+            if (message.segments == null)
+                message.segments = new List<ChatMessageSegment>();
+
+            string key = BuildToolSegmentKey(tool, label);
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                var segment = message.segments[i];
+                if (segment == null || !string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.Equals(segment.key, key, StringComparison.Ordinal))
+                    continue;
+
+                segment.tool = tool ?? string.Empty;
+                segment.label = label ?? string.Empty;
+                segment.emoji = emoji ?? string.Empty;
+                segment.status = status ?? string.Empty;
+                return;
+            }
+
+            message.segments.Add(new ChatMessageSegment
+            {
+                kind = ChatMessageSegment.ToolKind,
+                key = key,
+                tool = tool ?? string.Empty,
+                label = label ?? string.Empty,
+                emoji = emoji ?? string.Empty,
+                status = status ?? string.Empty
+            });
+        }
+
+        private static string BuildToolSegmentKey(string tool, string label)
+        {
+            return (tool ?? string.Empty) + "\x01" + (label ?? string.Empty);
         }
 
         private static List<ChatAttachment> CloneAttachments(IReadOnlyList<ChatAttachment> attachments)

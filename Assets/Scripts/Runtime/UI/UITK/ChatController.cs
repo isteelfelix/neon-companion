@@ -68,6 +68,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isSending;
         private bool _isStreamingResponse;
         private bool _isVoiceRecording;
+        private VisualElement _streamingBubble;
         private Label _streamingLabel;
         private VisualElement _streamingTypingDots;
         private IVisualElementScheduledItem _inlineTypingSchedule;
@@ -130,6 +131,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _isSending = false;
             _isStreamingResponse = false;
             _toolCallUiHelper.Clear();
+            _streamingBubble = null;
             _streamingLabel = null;
             StopInlineTypingAnimation();
             if (_streamingTypingDots != null)
@@ -230,6 +232,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken, OnToolProgress);
                     ClearThinkingBubble();
                     _toolCallUiHelper.Clear();
+                    _streamingBubble = null;
                     _streamingLabel = null;
                     StopInlineTypingAnimation();
                     if (_streamingTypingDots != null)
@@ -299,13 +302,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var bubble = placeholder.Q<VisualElement>(className: "transcript__bubble");
 
-            _streamingLabel = placeholder.Q<Label>(className: "transcript__body");
-            if (_streamingLabel == null && bubble != null)
-            {
-                _streamingLabel = new Label("");
-                _streamingLabel.AddToClassList("transcript__body");
-                bubble.Add(_streamingLabel);
-            }
+            _streamingBubble = bubble;
+            _streamingLabel = null;
 
             _streamingTypingDots = new VisualElement();
             _streamingTypingDots.AddToClassList("typing--inline");
@@ -325,6 +323,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             ScrollTranscriptToBottom();
         }
 
+        private void EnsureStreamingLabel()
+        {
+            if (_streamingLabel != null || _streamingBubble == null)
+                return;
+
+            _streamingLabel = new Label(string.Empty);
+            _streamingLabel.AddToClassList("transcript__body");
+            _streamingBubble.Add(_streamingLabel);
+        }
+
         private void OnStreamToken(string token)
         {
             if (_streamingTypingDots != null)
@@ -335,6 +343,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _isStreamingResponse = true;
                 _d.RefreshAvatarMotionState();
             }
+
+            EnsureStreamingLabel();
             if (_streamingLabel != null)
                 _streamingLabel.text += token;
             ScrollTranscriptToBottom();
@@ -351,7 +361,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetDisplay(_d.ThinkingBubble, DisplayStyle.Flex);
             }
 
-            _toolCallUiHelper.OnToolProgress(tool, label, emoji, status);
+            bool insertedNewEntry = _toolCallUiHelper.OnToolProgress(tool, label, emoji, status);
+            if (insertedNewEntry)
+                _streamingLabel = null;
+            ScrollTranscriptToBottom();
         }
 
         private static string GetThinkingText(string tool)
@@ -592,6 +605,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         await chat.RegenerateAsync(OnStreamToken, OnToolProgress);
                         ClearThinkingBubble();
                         _toolCallUiHelper.Clear();
+                        _streamingBubble = null;
                         _streamingLabel = null;
                         StopInlineTypingAnimation();
                         if (_streamingTypingDots != null)
@@ -764,11 +778,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             meta.Add(timeLabel);
             bubble.Add(meta);
 
-            if (!string.IsNullOrWhiteSpace(message.content))
+            bool hasSegmentContent = AddMessageSegments(bubble, message);
+            if (!hasSegmentContent && !string.IsNullOrWhiteSpace(message.content))
             {
-                var body = new Label(message.content);
-                body.AddToClassList("transcript__body");
-                bubble.Add(body);
+                bubble.Add(CreateTranscriptBody(message.content));
             }
 
             if (message.attachments != null && message.attachments.Count > 0)
@@ -798,6 +811,43 @@ namespace NeonCompanion.Runtime.UI.UITK
             return row;
         }
 
+        private static bool AddMessageSegments(VisualElement bubble, ChatMessage message)
+        {
+            if (bubble == null || message == null || message.segments == null || message.segments.Count == 0)
+                return false;
+
+            bool added = false;
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                var segment = message.segments[i];
+                if (segment == null)
+                    continue;
+
+                if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status));
+                    added = true;
+                    continue;
+                }
+
+                if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(segment.text))
+                {
+                    bubble.Add(CreateTranscriptBody(segment.text));
+                    added = true;
+                }
+            }
+
+            return added;
+        }
+
+        private static Label CreateTranscriptBody(string text)
+        {
+            var body = new Label(text);
+            body.AddToClassList("transcript__body");
+            return body;
+        }
+
         private void OnScrollBottomClicked() { ScrollTranscriptToBottom(); }
 
         public void ScrollTranscriptToBottom()
@@ -808,10 +858,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.MessagesList.schedule.Execute(() =>
             {
                 var content = _d.MessagesList?.contentContainer;
-                if (content == null || content.childCount == 0)
+                var viewport = _d.MessagesList?.contentViewport;
+                if (content == null || viewport == null || content.childCount == 0)
                     return;
 
-                _d.MessagesList.ScrollTo(content[content.childCount - 1]);
+                float viewportHeight = viewport.worldBound.height;
+                float contentHeight = content.worldBound.height;
+                if (viewportHeight <= 0f || contentHeight <= 0f)
+                    return;
+
+                float maxScroll = Mathf.Max(0f, contentHeight - viewportHeight);
+                Vector2 scrollOffset = _d.MessagesList.scrollOffset;
+                _d.MessagesList.scrollOffset = new Vector2(scrollOffset.x, maxScroll);
                 SetDisplay(_d.ScrollBottomBtn, DisplayStyle.None);
             });
         }
@@ -946,8 +1004,30 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return false;
             if (!string.IsNullOrWhiteSpace(message.content))
                 return true;
+            if (message.segments != null)
+            {
+                for (int i = 0; i < message.segments.Count; i++)
+                {
+                    if (HasRenderableSegmentContent(message.segments[i]))
+                        return true;
+                }
+            }
             if (message.attachments != null && message.attachments.Count > 0)
                 return true;
+            return false;
+        }
+
+        private static bool HasRenderableSegmentContent(ChatMessageSegment segment)
+        {
+            if (segment == null)
+                return false;
+
+            if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+                return !string.IsNullOrWhiteSpace(segment.tool) || !string.IsNullOrWhiteSpace(segment.label);
+
+            if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
+                return !string.IsNullOrWhiteSpace(segment.text);
+
             return false;
         }
 
@@ -1007,18 +1087,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             _inlineTypingSchedule?.Pause();
             _inlineTypingSchedule = _d.MessagesList?.schedule.Execute(() =>
             {
-                _inlineTypingFrame++;
                 if (_streamingTypingDots == null)
                 {
                     _inlineTypingSchedule?.Pause();
                     return;
                 }
+
                 var dots = _streamingTypingDots.Query<VisualElement>(className: "typing__dot").ToList();
                 for (int i = 0; i < dots.Count; i++)
                 {
-                    bool active = (i == _inlineTypingFrame % 3);
-                    dots[i].EnableInClassList("typing__dot--active", active);
+                    dots[i].style.opacity = i == (_inlineTypingFrame % 3) ? 1f : 0.25f;
                 }
+
+                _inlineTypingFrame++;
             }).Every(200);
         }
 
