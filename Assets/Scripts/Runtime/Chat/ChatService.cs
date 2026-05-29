@@ -223,6 +223,11 @@ namespace NeonCompanion.Runtime.Chat
             NeonLogger.Log("New chat session started.");
         }
 
+        public void CancelCurrentGeneration()
+        {
+            _currentChatViewModel?.CancelGeneration();
+        }
+
         public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
         {
             if (_currentChatViewModel == null)

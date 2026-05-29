@@ -19,6 +19,7 @@
                     <ui:Label text="↵" class="kbd" />
                 </ui:VisualElement>
                 <ui:Button name="send-button" text="Отправить" class="btn btn--primary composer__send" />
+                <ui:Button name="stop-button" text="■" class="iconbtn" tooltip="Остановить генерацию" style="display: none;" />
             </ui:VisualElement>
 
             <!-- Scroll-to-bottom: last child so it paints on top of composer -->

@@ -202,6 +202,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         // copy-btn, refresh-btn, listen-btn removed — now in bubble hover
         private Button _micButton;
         private Button _attachButton;
+        private Button _stopButton;
         private Button _avatarUploadBtn;
         private Button _avatarOpenFolderBtn;
         private VisualElement _avatarUploadTile;
@@ -440,6 +441,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // copy-btn, refresh-btn, listen-btn removed from UXML — now in bubble hover
             _micButton = root.Q<Button>("mic-button");
             _attachButton = root.Q<Button>("attach-btn");
+            _stopButton = root.Q<Button>("stop-button");
             _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
             _avatarOpenFolderBtn  = root.Q<Button>("avatar-open-folder-btn");
             _avatarUploadTile     = root.Q<VisualElement>("avtile-upload");
@@ -612,6 +614,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 MessageInput = _messageInput,
                 SendButton = _sendButton,
+                StopButton = _stopButton,
                 SummarizeButton = _summarizeButton,
                 SearchButton = _searchButton,
                 AttachButton = _attachButton,

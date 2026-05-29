@@ -13,7 +13,9 @@ namespace NeonCompanion.Runtime.UI.Chat
     {
         private readonly IAiClient _aiClient;
         private readonly ProviderConfig _provider;
-        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+        private CancellationTokenSource _cts = new CancellationTokenSource();
+
+        public CancellationToken CancellationToken => _cts.Token;
 
         public string InputMessage { get; set; }
         public string ProviderSessionId { get; set; }
@@ -94,6 +96,13 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
         }
 
+        public void CancelGeneration()
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+            _cts = new CancellationTokenSource();
+        }
+
         private async Task SendRequestAsync(Action<string> onStreamToken, Action<string, string, string, string> onToolProgress = null)
         {
             try
@@ -154,7 +163,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                     var response = await _aiClient.SendMessageStreamAsync(_provider, request, token =>
                     {
                         handleToken(token);
-                    }, _cts.Token, handleToolProgress);
+                    }, CancellationToken, handleToolProgress);
                     ProviderSessionId = response?.providerSessionId ?? ProviderSessionId;
                     if (string.IsNullOrWhiteSpace(streamMsg.content) && !string.IsNullOrWhiteSpace(response?.content))
                     {
@@ -165,7 +174,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                 }
                 else
                 {
-                    var response = await _aiClient.SendMessageAsync(_provider, request, _cts.Token);
+                    var response = await _aiClient.SendMessageAsync(_provider, request, CancellationToken);
                     ProviderSessionId = response?.providerSessionId ?? ProviderSessionId;
                     AddAssistantMessage(response);
                 }

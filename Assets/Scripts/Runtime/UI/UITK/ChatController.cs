@@ -21,6 +21,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // UI elements
             public TextField MessageInput;
             public Button SendButton;
+            public Button StopButton;
             public Button SummarizeButton;
             public Button SearchButton;
             public Button AttachButton;
@@ -64,6 +65,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isSending;
         private bool _isStreamingResponse;
         private bool _isVoiceRecording;
+        private ChatService _currentChatService;
         private VisualElement _streamingBubble;
         private Label _streamingLabel;
         private VisualElement _streamingTypingDots;
@@ -96,6 +98,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void RegisterCallbacks()
         {
             RegisterClick(_d.SendButton, OnSendClicked);
+            RegisterClick(_d.StopButton, OnStopClicked);
             RegisterClick(_d.SummarizeButton, OnSummarizeClicked);
             RegisterClick(_d.SearchButton, OnSearchClicked);
             RegisterClick(_d.AttachButton, OnAttachClicked);
@@ -120,6 +123,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void UnregisterCallbacks()
         {
             UnregisterClick(_d.SendButton, OnSendClicked);
+            UnregisterClick(_d.StopButton, OnStopClicked);
             UnregisterClick(_d.SummarizeButton, OnSummarizeClicked);
             UnregisterClick(_d.SearchButton, OnSearchClicked);
             UnregisterClick(_d.AttachButton, OnAttachClicked);
@@ -273,6 +277,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = SendCurrentMessageAsync();
         }
 
+        private void OnStopClicked()
+        {
+            _currentChatService?.CancelCurrentGeneration();
+        }
+
         public async Task SendCurrentMessageAsync()
         {
             bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
@@ -302,6 +311,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _d.ShowSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
                     return;
                 }
+
+                _currentChatService = chat;
 
                 bool streaming = _d.UseStreaming();
                 chat.UseStreaming = streaming;
@@ -333,6 +344,20 @@ namespace NeonCompanion.Runtime.UI.UITK
                 await _d.LoadSessionsAsync();
                 _d.TriggerAvatarSmile();
             }
+            catch (OperationCanceledException)
+            {
+                // User clicked stop — keep partial response (critical for local LLMs)
+                StopInlineTypingAnimation();
+                if (_streamingTypingDots != null)
+                {
+                    _streamingTypingDots.RemoveFromHierarchy();
+                    _streamingTypingDots = null;
+                }
+                _streamingBubble = null;
+                _streamingLabel = null;
+                _toolCallUiHelper.Clear();
+                _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
+            }
             catch (Exception ex)
             {
                 _d.MessageInput.value = composerText;
@@ -345,6 +370,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             finally
             {
+                _currentChatService = null;
                 SetSending(false);
             }
         }
@@ -480,8 +506,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             _isSending = isSending;
             if (!isSending)
                 _isStreamingResponse = false;
+
             if (_d.SendButton != null)
                 _d.SendButton.SetEnabled(!isSending);
+
+            // Show stop button during generation (critical for local LLMs that may loop), hide send button
+            if (_d.StopButton != null)
+            {
+                _d.StopButton.style.display = isSending ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+            if (_d.SendButton != null)
+            {
+                _d.SendButton.style.display = isSending ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
             _d.RefreshAvatarMotionState();
         }
 
