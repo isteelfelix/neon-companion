@@ -20,6 +20,7 @@
   "chat.messages.one": "сообщение",
   "chat.messages.few": "сообщения",
   "chat.messages.many": "сообщений",
+  "chat.stats.footer": "~{0} ток · {1:F1}с",
   "chat.summary.empty": "Пока нет сообщений для краткого пересказа.",
   "chat.summary.provider_not_configured": "Провайдер не настроен.",
   "chat.summary.user_prompt": "Сделай короткое резюме диалога на русском языке (2-4 предложения).",

@@ -308,6 +308,23 @@
     white-space: normal;
 }
 
+/* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */
+
+.transcript__stats {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+.transcript__stats-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    margin-right: 2px;
+}
+
 /* ---- Subtitle (last AI message) ---- */
 
 .subtitle {

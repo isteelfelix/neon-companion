@@ -20,6 +20,7 @@
   "chat.messages.one": "message",
   "chat.messages.few": "messages",
   "chat.messages.many": "messages",
+  "chat.stats.footer": "~{0} tok · {1:F1}s",
   "chat.summary.empty": "There are no messages to summarize yet.",
   "chat.summary.provider_not_configured": "Provider is not configured.",
   "chat.summary.user_prompt": "Provide a short summary of the dialog in English (2-4 sentences).",
