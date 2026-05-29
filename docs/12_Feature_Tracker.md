@@ -5,6 +5,9 @@
 - 🔧 In Progress — в разработке
 - 📋 Planned — запланировано
 - ❌ Blocked — заблокировано (зависимости)
+- 🧪 Tested — проверено билдом/рунтаймом, работает
+- 🐛 Fixed — было сломано, пофикшено Felix'ом
+- ⚠️ Needs Work — есть проблемы, требует доработки
 
 ---
 
@@ -20,7 +23,7 @@
 | C-07 | Модель-пикер в чате | ✅ | M1 | NeonDropdown в topbar + overlay-диалог, `ApplySessionModelAsync` |
 | C-08 | Вложения в чате | ✅ | M1 | `ChatAttachment`, `AiChatAttachment` |
 | C-09 | Сессионная маршрутизация моделей | ✅ | M1 | `X-Hermes-Session-Id`, `ProviderSessionId`, Hermes inventory |
-| C-10 | Provider Adapter архитектура | 📋 | M2 | `IProviderAdapter` + `HermesAdapter` + `GenericOpenAiAdapter`, `ProviderConfig.backendType`. Подробности — [14_Provider_Adapter.md](14_Provider_Adapter.md) |
+| C-10 | Provider Adapter архитектура | 🔧 | M2 | Phase 1 done: `IProviderAdapter` + `HermesAdapter` + `GenericOpenAiAdapter`, `ProviderConfig.backendType`. Подробности — [14_Provider_Adapter.md](14_Provider_Adapter.md) |
 
 ## История и сессии
 | # | Фича | Статус | Спринт | Заметки |
@@ -59,12 +62,18 @@
 | U-13 | Вкладка «Темы» — переосмысление | 📋 | M2 | Текущая реализация бесполезна, подумать над функционалом |
 | U-14 | Настройки аватара — перегруженность | 📋 | M2 | Правая пanel настроек аватара перегружена, упростить |
 | U-16 | Маска API-ключа в редакторе провайдера | 📋 | M2 | Поле API key показывать как пароль (звездочки), с кнопкой show/hide |
-| U-15 | Сцена загрузки (splash screen) | 📋 | M2 | Подумать над экраном загрузки при старте приложения |
+| U-15 | Сцена загрузки (splash screen) | ✅ | M2 | Cyberpunk splash screen + dynamic effects, preload спрайтшитов, boot log |
 | U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | Экран в приложении: список кронов, расписание, статус последнего запуска, логи/ошибки. Видимость того что делает агент в фоне |
 | U-04 | NeonDropdown (кастомный компонент) | ✅ | M1 | Замена DropdownField, `choicesCsv`, popup overlay, programmatic API |
 | U-05 | Многострочный ввод сообщений | ✅ | M1 | `multiline = true`, auto vertical scroller |
 | U-06 | Масштабируемый рельс сайдбара | ✅ | M1 | `_railResizeHandle`, 160–400px |
 | U-07 | Режимы отображения аватара | ✅ | M1 | `AvatarViewMode`: Static, Animated, Volume3D; toggle buttons |
+| U-18 | Agent Activity UI | ✅ | M2 | Thinking bubble above avatar (manga style), tool progress entries in streaming bubble |
+| U-19 | Typing indicator в bubble ответа | ✅ | M2 | 3 точки внутри response bubble (как Grok), убрана строка статуса из topbar |
+| U-20 | Ленивая загрузка спрайтшитов | 📋 | M2 | Splash screen фризит при синхронной загрузке. Нужна фоновая/постепенная загрузка без блокировки UI |
+| U-21 | Scroll-to-bottom в чате | ✅ | M2 | Кнопка прокрутки вниз внутри ChatView. Позиционирование через `.chat-main` relative |
+| U-22 | Enter-to-send | ✅ | M2 | Toggle в настройках: Enter отправляет вместо Ctrl+Enter. TrickleDown + флаг _pendingEnterSend |
+| U-23 | Clear chats only | ✅ | M2 | Очистка сообщений + сброс in-memory ChatService через StartNewSessionAsync |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
@@ -77,13 +86,15 @@
 ## Рефакторинг (M2)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| R-01 | Рефакторинг MainViewController — NavigationController | ✅ | M2 | 317 строк, deps-based. MainViewController: 5271 → 5202 (-69) |
-| R-02 | MainViewController — LayoutController | 📋 | M2 | Resize handles, panel toggles (~150 строк) |
-| R-03 | MainViewController — VoiceController | 📋 | M2 | Mic/listen, voice managers (~200 строк) |
-| R-04 | MainViewController — SessionHistoryController | 📋 | M2 | History panel, session list, search (~500 строк) |
-| R-05 | MainViewController — ChatController | 📋 | M2 | Composer, send, streaming, messages (~700 строк) |
-| R-06 | MainViewController — ProvidersController | 📋 | M2 | Provider CRUD, model picker, discovery (~800 строк) |
-| R-07 | MainViewController — AvatarGalleryController | 📋 | M2 | Avatar gallery, 2D/3D, motion state (~600 строк) |
+| R-01 | NavigationController | ✅ | M2 | 317 строк, deps-based. MainViewController: 5271 → 5202 |
+| R-02 | ChatController | ✅ | M2 | 1044 строки — чат, стриминг, ввод, сообщения |
+| R-03 | SessionHistoryController | ✅ | M2 | 366 строк — история сессий, поиск |
+| R-04 | ProvidersController | ✅ | M2 | 1381 строка — провайдеры, модели, discovery |
+| R-05 | AvatarGalleryController | ✅ | M2 | 1794 строки — галерея аватаров, 2D/3D, motion |
+| R-06 | VoiceController | ✅ | M2 | 202 строки — голосовой ввод/вывод |
+| R-07 | LayoutController | ✅ | M2 | 138 строк — панели, resize |
+| R-08 | SettingsController | ✅ | M2 | 1005 строк — настройки (извлечён до R-01) |
+| R-09 | PanelResizeHandler | ✅ | M2 | Логика resize вынесена в отдельный класс |
 
 ## VR (M3+)
 | # | Фича | Статус | Спринт | Заметки |
@@ -98,3 +109,24 @@
 | P-01 | itch.io / GitHub Releases | ✅ | M4 | Ручная публикация через GitHub Releases; VERSION файл |
 | P-02 | Документация для контрибьюторов | ✅ | M4 | docs/10_Contribution.md |
 | P-03 | Донат-система | ✅ | M4 | IDonationService, DonationService, Settings: кнопка «Поддержать» |
+## Тестирование (29.05.2026)
+
+Коммиты до рефакторинга — проверяются Felix'ом по одному. Статусы обновляются по результатам.
+
+| Коммит | Фича | Результат | Заметки |
+|--------|------|-----------|---------|
+| `662183a` | Cyberpunk splash screen | 🧪 Tested | Работает |
+| `9b05296` | Splash screen dynamic effects | 🧪 Tested | Работает |
+| `ec546ee` | Clear chats + scroll-to-bottom + enter-to-send | 🐛 Fixed | Все три были сломаны, пофикшены в `e117407` |
+| `a3d9de0` | Toggle left/right panel | 🧪 Tested | Иконки пофикшены в `56edb07`, новые SVG panel-left/right |
+| `c3f356c` | Typing indicator в bubble | 🧪 Tested | Работает |
+| `a8bc419` | Agent Activity UI | 🧪 Tested | Работает, позже модифицировать (отдельная задача) |
+| `5233ec6` | U-08: кнопка выхода | 🧪 Tested | Работает |
+| `caaa821` | A-10: анимации аватаров | ⏳ Pending | |
+| `ca58ef5` | U-11: rail overflow | ⏳ Pending | |
+| `c507474` | U-12: multiline overflow | ⏳ Pending | |
+| `ebb87e6` | A-09: preload спрайтшитов | ⏳ Pending | |
+| `7acc813` | C-10: Provider Adapter Phase 1 | ⏳ Pending | |
+| `1656310`/`8d7464b` | Model selection local-only | ⏳ Pending | |
+| `500fa90` | Auto-scroll при стриминге | 🧪 Tested | Полностью перелопачен, работает. Commit `b83c062` |
+| `2fcb2fb` | Composer input overflow | ⏳ Pending | |

@@ -10,17 +10,6 @@
         <ui:VisualElement class="chat-main">
             <ui:ScrollView name="messages-list" class="transcript" />
 
-            <ui:VisualElement name="composer-wrap" class="subtitle">
-                <ui:Label name="subtitle-role" text="Neon" class="subtitle__role" />
-                <ui:Label name="subtitle-body" text="Готова помочь. С чего сегодня начнём: настройка провайдера, аватары или продолжим прошлый разговор о шейдерах?" class="subtitle__body" />
-
-                <ui:VisualElement class="subtitle__actions">
-                    <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Копировать" />
-                    <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Пересоздать" />
-                    <ui:Button name="listen-btn" class="iconbtn icon icon--headphones" tooltip="Озвучить последний ответ" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-
             <ui:VisualElement name="composer" class="composer">
                 <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить токен вложения" />
                 <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />
