@@ -46,7 +46,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Chat controller
             public Action ClearPendingComposerAttachments;
             public Func<TextField> GetMessageInput;
-            public Action<object> SetProviderHeader;
+            public Action<object, object> SetProviderHeader;
         }
 
         private Deps _d;

@@ -383,13 +383,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navSettings = root.Q<VisualElement>("nav-settings");
             _providerTag = root.Q<VisualElement>("provider-tag");
 
-            AddNav(_navChat);
-            AddNav(_navAvatars);
-            AddNav(_navProviders);
-            AddNav(_navHistory);
-            AddNav(_navThemes);
-            AddNav(_navSettings);
-
             _navChatLabel = root.Q<Label>("nav-chat-label");
             _navAvatarsLabel = root.Q<Label>("nav-avatars-label");
             _navProvidersLabel = root.Q<Label>("nav-providers-label");
@@ -751,7 +744,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SyncActiveAvatarSystemPromptAsync = (app) => _settingsController.SyncActiveAvatarSystemPromptAsync(app),
                 ShowChat = _navigationController.ShowChat,
                 GetChatSubtitle = () => _chatController.ChatSubtitle,
-                SetChatSubtitle = (text) => { _chatController.ChatSubtitle = text; },
+                SetChatSubtitle = (text) => { _chatController.SetChatSubtitle(text); },
                 SetTopbarSubtitle = (text) => { if (_topbarSubtitle != null) _topbarSubtitle.text = text; },
                 SetSubtitleRole = (text) => { if (_subtitleRole != null) _subtitleRole.text = text; },
                 AddSystemMessage = AddSystemMessage,
@@ -1020,7 +1013,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnHistorySearchChanged(ChangeEvent<string> evt) => _sessionHistoryController.OnHistorySearchChanged(evt);
         private System.Threading.Tasks.Task RefreshSessionsFromCacheAsync() => _sessionHistoryController.RefreshSessionsFromCacheAsync();
         private System.Threading.Tasks.Task LoadSessionsAsync(ChatService chat) => _sessionHistoryController.LoadSessionsAsync(chat);
-        private void RenderSessionList(System.Collections.Generic.List<NeonCompanion.Runtime.Chat.ChatSession> allSessions, System.Collections.Generic.List<NeonCompanion.Runtime.Data.Models.ProviderConfig> providers) => _sessionHistoryController.RenderSessionList(allSessions, providers);
+        private void RenderSessionList(System.Collections.Generic.IReadOnlyList<NeonCompanion.Runtime.Data.Models.ChatSession> allSessions, System.Collections.Generic.List<NeonCompanion.Runtime.Data.Models.ProviderConfig> providers) => _sessionHistoryController.RenderSessionList(new System.Collections.Generic.List<NeonCompanion.Runtime.Data.Models.ChatSession>(allSessions), providers);
 
         private void OnToggleLeftPanel() => _layoutController.OnToggleLeftPanel();
 
@@ -1425,9 +1418,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             ApplyAvatarArt(avatarId);
             string name = AvatarDisplayName(avatarId);
             if (_subtitleRole != null) _subtitleRole.text = name;
-            _chatController.ChatSubtitle = _chatController.ChatSubtitle.Contains("·")
+            string updatedSubtitle = _chatController.ChatSubtitle.Contains("·")
                 ? _chatController.ChatSubtitle.Substring(0, _chatController.ChatSubtitle.LastIndexOf('·') + 2) + name
                 : _chatController.ChatSubtitle;
+            _chatController.SetChatSubtitle(updatedSubtitle);
             if (_topbarSubtitle != null) _topbarSubtitle.text = _chatController.ChatSubtitle;
             _settingsController.SaveSettings();
         }

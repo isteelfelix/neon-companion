@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -86,6 +87,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void SetVoiceRecording(bool value) { _isVoiceRecording = value; }
         public void SetChatSubtitle(string value) { _chatSubtitle = value ?? string.Empty; }
         public void SetSessionSearchQuery(string value) { _sessionSearchQuery = value ?? string.Empty; }
+        public void ShowSystemMessage(string text) { _d.ShowSystemMessage?.Invoke(text); }
 
         public void RegisterCallbacks()
         {
@@ -792,6 +794,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             return row;
         }
+
+        private void OnScrollBottomClicked() { ScrollTranscriptToBottom(); }
 
         public void ScrollTranscriptToBottom()
         {

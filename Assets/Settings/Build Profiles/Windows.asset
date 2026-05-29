@@ -24,6 +24,9 @@ MonoBehaviour:
     m_path: Assets/Scenes/Boot.unity
     m_guid: 8c9cfa26abfee488c85f1582747f6a02
   - m_enabled: 1
+    m_path: Assets/Scenes/Loading.unity
+    m_guid: 6454e005d1cd23342ae6d092db6689e9
+  - m_enabled: 1
     m_path: Assets/Scenes/Main.unity
     m_guid: 744871c631033844286bb848cfac88eb
   m_HasScriptingDefines: 0
