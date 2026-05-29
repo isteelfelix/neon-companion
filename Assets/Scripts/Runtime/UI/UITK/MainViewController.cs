@@ -183,6 +183,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _searchButton;
         private Button _moreButton;
         private Button _newSessionButton;
+        private Button _exportButton;
         private Button _scrollBottomBtn;
         private TextField _messageInput;
         private ScrollView _messagesList;
@@ -326,6 +327,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             Add("tooltip.listen", "Озвучить последний ответ", "Speak last response");
             Add("tooltip.attach", "Добавить токен вложения", "Insert attachment token");
             Add("tooltip.voice.input", "Голосовой ввод", "Voice input");
+            Add("chat.export", "Экспорт", "Export");
 
             Add("quit.dialog.title", "Закрыть приложение?", "Close application?");
             Add("quit.dialog.body",  "Активные соединения будут прерваны.", "Active connections will be interrupted.");
@@ -419,6 +421,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _searchButton = root.Q<Button>("search-btn");
             _moreButton = root.Q<Button>("more-btn");
             _newSessionButton = root.Q<Button>("new-session-btn");
+            _exportButton = root.Q<Button>("export-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
             _scrollBottomBtn = root.Q<Button>("scroll-bottom-btn");
             _sessionsList = root.Q<ScrollView>("sessions-list");
@@ -619,6 +622,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SearchButton = _searchButton,
                 AttachButton = _attachButton,
                 NewSessionButton = _newSessionButton,
+                ExportButton = _exportButton,
                 MessagesList = _messagesList,
                 ScrollBottomBtn = _scrollBottomBtn,
                 Composer = _composer,

@@ -26,6 +26,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Button SearchButton;
             public Button AttachButton;
             public Button NewSessionButton;
+            public Button ExportButton;
             public ScrollView MessagesList;
             public Button ScrollBottomBtn;
             public VisualElement Composer;
@@ -108,6 +109,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_d.SearchButton, OnSearchClicked);
             RegisterClick(_d.AttachButton, OnAttachClicked);
             RegisterClick(_d.NewSessionButton, OnNewSessionClicked);
+            RegisterClick(_d.ExportButton, OnExportClicked);
             RegisterClick(_d.ScrollBottomBtn, OnScrollBottomClicked);
 
             // Wire up static bubble action events
@@ -133,6 +135,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_d.SearchButton, OnSearchClicked);
             UnregisterClick(_d.AttachButton, OnAttachClicked);
             UnregisterClick(_d.NewSessionButton, OnNewSessionClicked);
+            UnregisterClick(_d.ExportButton, OnExportClicked);
             UnregisterClick(_d.ScrollBottomBtn, OnScrollBottomClicked);
 
             CopyRequested -= OnCopyClicked;
@@ -753,6 +756,72 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        // ===== Export =====
+
+        private async Task ExportChatAsync()
+        {
+            try
+            {
+                var chat = await _d.GetChatServiceAsync();
+                if (chat == null)
+                {
+                    _d.ShowSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
+                    return;
+                }
+
+                if (chat.CurrentChatViewModel?.Messages == null || chat.CurrentChatViewModel.Messages.Count == 0)
+                {
+                    _d.ShowSystemMessage(LocalizationExtensions.Get("chat.export.empty", "No messages to export."));
+                    return;
+                }
+
+                var messages = chat.CurrentChatViewModel.Messages;
+                var providerName = (chat.CurrentProvider != null && !string.IsNullOrWhiteSpace(chat.CurrentProvider.displayName))
+                    ? chat.CurrentProvider.displayName
+                    : (chat.CurrentProvider != null ? chat.CurrentProvider.id : "Unknown");
+                var modelName = !string.IsNullOrWhiteSpace(chat.CurrentSessionModel) ? chat.CurrentSessionModel : "Unknown";
+
+                var now = DateTime.Now;
+                var sb = new StringBuilder();
+                sb.AppendLine("# Chat Export");
+                sb.AppendLine();
+                sb.AppendLine("**Provider:** " + providerName);
+                sb.AppendLine("**Model:** " + modelName);
+                sb.AppendLine("**Date:** " + now.ToString("yyyy-MM-dd HH:mm:ss"));
+                sb.AppendLine();
+                sb.AppendLine("---");
+                sb.AppendLine();
+
+                for (int i = 0; i < messages.Count; i++)
+                {
+                    var msg = messages[i];
+                    if (msg == null || string.IsNullOrWhiteSpace(msg.content))
+                        continue;
+
+                    string role = string.Equals(msg.role, "assistant", StringComparison.OrdinalIgnoreCase)
+                        ? "Assistant"
+                        : (string.Equals(msg.role, "system", StringComparison.OrdinalIgnoreCase) ? "System" : "User");
+                    string model = !string.IsNullOrWhiteSpace(msg.model) ? " (" + msg.model + ")" : "";
+                    sb.AppendLine("**" + role + model + ":**");
+                    sb.AppendLine(msg.content);
+                    sb.AppendLine();
+                }
+
+                string fileName = "chat-export-" + now.ToString("yyyy-MM-dd-HHmmss") + ".md";
+                string content = sb.ToString();
+                string path = System.IO.Path.Combine(Application.persistentDataPath, fileName);
+                System.IO.File.WriteAllText(path, content);
+                string exportedFile = System.IO.Path.GetFileName(path);
+
+                _d.ShowSystemMessage(LocalizationExtensions.GetFormat("chat.export.success", "Chat exported to {0}.", exportedFile));
+            }
+            catch (Exception ex)
+            {
+                _d.ShowSystemMessage(LocalizationExtensions.GetFormat("chat.export.error", "Export error: {0}", ex.Message));
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
         // ===== Search =====
 
         private void OnSearchClicked()
@@ -867,6 +936,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnNewSessionClicked()
         {
             _ = StartNewSessionAsync();
+        }
+
+        // ===== Export =====
+
+        private void OnExportClicked()
+        {
+            _ = ExportChatAsync();
         }
 
         public async Task StartNewSessionAsync()
