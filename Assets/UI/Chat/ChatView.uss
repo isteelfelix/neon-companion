@@ -1066,3 +1066,73 @@
 .message-edit-btn--cancel {
     background-color: rgba(70, 70, 80, 0.85);
 }
+
+/* ============== Chat Search Bar (U-38) ============== */
+
+.search-bar {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--bg-1);
+    padding: 4px 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    margin-bottom: 2px;
+    flex-shrink: 0;
+}
+
+.search-bar__input {
+    flex-grow: 1;
+    margin-left: 6px;
+    margin-right: 6px;
+    min-width: 120px;
+}
+
+.search-bar__input > .unity-text-field__input,
+.search-bar__input > .unity-base-text-field__input {
+    border-width: 0;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: 12px;
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.search-bar__count {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-right: 6px;
+    min-width: 32px;
+    text-align: center;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+/* Highlighted rows during search (U-38) */
+.transcript__row--search-match {
+    background-color: rgba(255, 200, 0, 0.08);
+    border-radius: 6px;
+}
+
+.transcript__row--search-current {
+    background-color: rgba(255, 200, 0, 0.18);
+    border-radius: 6px;
+}
+
+/* ============== Inline Attachments & Images (U-41) ============== */
+
+.transcript__attachments {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.transcript__image {
+    max-width: 300px;
+    max-height: 200px;
+    border-radius: 6px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+    border-width: 1px;
+    border-color: var(--line-2);
+}

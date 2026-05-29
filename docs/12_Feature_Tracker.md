@@ -86,11 +86,11 @@
 || U-35 | Markdown разметка в сообщениях | ✅ | M2 | MarkdownRenderer: bold/italic/code/codeblocks/lists/links. USS стили. Только для assistant |
 | U-36 | Индикатор контекстного окна | 📋 | M2 | Полоска показывающая заполненность контекста. Важно для длинных сессий |
 | U-37 | Экспорт чата | ✅ | M2 | Сохранить разговор как markdown/JSON/text файл (Markdown в ChatController, persistentDataPath по образцу Settings) |
-| U-38 | Поиск по текущему чату | 📋 | M2 | Найти текст в текущем разговоре |
+| U-38 | Поиск по текущему чату | ✅ | M2 | Найти текст в текущем разговоре (search bar, highlight + nav, X/Y count). ChatController dynamic bar + USS + loc. |
 | U-48 | Agent Approval System (Part B) | ✅ | M2 | Streaming integration in ChatController + alwaysApprovedTools + tool call detection in SSE parser (hermes.tool.request + OpenAI tool_calls); approval prompt during tool request, Always saves to settings, auto/manual modes respected |
 | U-39 | Ветвление диалога | 📋 | M3 | Ответвление от любого сообщения → новая ветка диалога |
 | U-40 | Звуки уведомлений | 📋 | M2 | Звук когда ответ готов, если окно не в фокусе |
-| U-41 | Отображение картинок в чате | 📋 | M2 | Рендер вложений-изображений инлайн в bubble вместо текста [image] |
+| U-41 | Отображение картинок в чате | ✅ | M2 | Рендер вложений-изображений инлайн в bubble вместо текста [image] (Image + async UnityWebRequestTexture, IsImageFile). |
 | U-42 | Вставка изображений из буфера обмена | 📋 | M2 | Ctrl+V / Cmd+V — вставить скопированное изображение как вложение в композер |
 | U-43 | Мульти-агент чат | 📋 | M3 | Несколько агентов в одном разговоре. Каждый со своим bubble-цветом. Сабагенты (Claude Code, Codex) видны в реальном времени |
 | U-44 | Drag-and-drop файлов в чат | 📋 | M2 | Перетащить PDF/код/картинку → агент анализирует |

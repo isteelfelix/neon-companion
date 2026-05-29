@@ -11,6 +11,7 @@ using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK
@@ -105,6 +106,17 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextField _editingTextField;
         private Button _editingSaveBtn;
         private Button _editingCancelBtn;
+
+        // Chat search (U-38)
+        private string _searchQuery = string.Empty;
+        private int _currentMatchIndex = -1;
+        private List<int> _matchingMessageIndices = new List<int>();
+        private VisualElement _searchBar;
+        private TextField _searchInput;
+        private Label _searchCountLabel;
+        private Button _searchUpBtn;
+        private Button _searchDownBtn;
+        private Button _searchCloseBtn;
 
         private const float ComposerInputMinHeight = 36f;
         private const float ComposerInputMaxHeight = 140f;
@@ -220,6 +232,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_contextMenu != null)
                 _contextMenu.Hide();
             CancelInlineEdit();
+            CloseSearch();
+            if (_searchBar != null)
+            {
+                _searchBar.RemoveFromHierarchy();
+                _searchBar = null;
+                _searchInput = null;
+                _searchCountLabel = null;
+                _searchUpBtn = null;
+                _searchDownBtn = null;
+                _searchCloseBtn = null;
+            }
             _streamingBubble = null;
             _streamingLabel = null;
             StopInlineTypingAnimation();
@@ -911,34 +934,347 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        // ===== Search =====
+        // ===== Search (U-38: in-chat transcript search) =====
 
         private void OnSearchClicked()
         {
-            _ = SearchSessionsFromComposerAsync();
+            if (_searchBar != null && _searchBar.style.display != DisplayStyle.None)
+            {
+                CloseSearch();
+                return;
+            }
+            ShowSearchBar();
         }
 
-        private async Task SearchSessionsFromComposerAsync()
+        private void ShowSearchBar()
+        {
+            EnsureSearchBarCreated();
+            if (_searchBar == null)
+                return;
+
+            var list = _d.MessagesList;
+            if (list != null)
+            {
+                var parent = list.parent as VisualElement;
+                if (parent != null && _searchBar.parent != parent)
+                {
+                    parent.Insert(0, _searchBar);
+                }
+            }
+
+            _searchBar.style.display = DisplayStyle.Flex;
+
+            if (_searchInput != null)
+            {
+                _searchInput.value = _searchQuery ?? string.Empty;
+                _searchInput.Focus();
+                _searchInput.schedule.Execute(() =>
+                {
+                    if (_searchInput != null && _searchInput.panel != null)
+                        _searchInput.SelectAll();
+                }).StartingIn(60);
+            }
+
+            if (!string.IsNullOrEmpty(_searchQuery))
+            {
+                FindMatches();
+                HighlightMatches();
+                ScrollToCurrentMatch();
+            }
+            else
+            {
+                UpdateSearchCountLabel();
+            }
+        }
+
+        private void EnsureSearchBarCreated()
+        {
+            if (_searchBar != null)
+                return;
+
+            _searchBar = new VisualElement();
+            _searchBar.AddToClassList("search-bar");
+            _searchBar.style.display = DisplayStyle.None;
+
+            var icon = new VisualElement();
+            icon.AddToClassList("icon");
+            icon.AddToClassList("icon--search");
+            icon.style.width = 14;
+            icon.style.height = 14;
+            icon.style.marginLeft = 4;
+            icon.style.marginRight = 4;
+            icon.style.flexShrink = 0;
+            _searchBar.Add(icon);
+
+            _searchInput = new TextField();
+            _searchInput.AddToClassList("search-bar__input");
+            _searchInput.RegisterValueChangedCallback(evt => OnSearchQueryChanged(evt.newValue));
+            _searchInput.RegisterCallback<KeyDownEvent>(OnSearchInputKeyDown, TrickleDown.TrickleDown);
+            _searchBar.Add(_searchInput);
+
+            _searchCountLabel = new Label("0/0");
+            _searchCountLabel.AddToClassList("search-bar__count");
+            _searchBar.Add(_searchCountLabel);
+
+            _searchUpBtn = new Button(GoToPrevMatch);
+            _searchUpBtn.text = "\u2191";
+            _searchUpBtn.AddToClassList("iconbtn");
+            _searchUpBtn.style.width = 22;
+            _searchUpBtn.style.height = 22;
+            _searchUpBtn.style.fontSize = 11;
+            _searchUpBtn.tooltip = LocalizationExtensions.Get("chat.search.previous", "Previous match");
+            _searchBar.Add(_searchUpBtn);
+
+            _searchDownBtn = new Button(GoToNextMatch);
+            _searchDownBtn.text = "\u2193";
+            _searchDownBtn.AddToClassList("iconbtn");
+            _searchDownBtn.style.width = 22;
+            _searchDownBtn.style.height = 22;
+            _searchDownBtn.style.fontSize = 11;
+            _searchDownBtn.tooltip = LocalizationExtensions.Get("chat.search.next", "Next match");
+            _searchBar.Add(_searchDownBtn);
+
+            _searchCloseBtn = new Button(CloseSearch);
+            _searchCloseBtn.text = "\u2715";
+            _searchCloseBtn.AddToClassList("iconbtn");
+            _searchCloseBtn.style.width = 22;
+            _searchCloseBtn.style.height = 22;
+            _searchCloseBtn.style.fontSize = 11;
+            _searchCloseBtn.tooltip = LocalizationExtensions.Get("chat.search.close", "Close search");
+            _searchBar.Add(_searchCloseBtn);
+        }
+
+        private void OnSearchInputKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode == KeyCode.Escape)
+            {
+                CloseSearch();
+                evt.StopPropagation();
+            }
+            else if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+            {
+                GoToNextMatch();
+                evt.StopPropagation();
+            }
+        }
+
+        private bool IsSearchBarVisible()
+        {
+            return _searchBar != null && _searchBar.style.display != DisplayStyle.None;
+        }
+
+        private void CloseSearch()
+        {
+            _searchQuery = string.Empty;
+            _currentMatchIndex = -1;
+            _matchingMessageIndices.Clear();
+
+            if (_searchBar != null)
+            {
+                _searchBar.style.display = DisplayStyle.None;
+            }
+            if (_searchInput != null)
+            {
+                _searchInput.value = string.Empty;
+            }
+
+            ClearSearchHighlights();
+            UpdateSearchCountLabel();
+        }
+
+        private void ClearSearchHighlights()
+        {
+            if (_d.MessagesList == null)
+                return;
+
+            foreach (var child in _d.MessagesList.Children())
+            {
+                var ve = child as VisualElement;
+                if (ve != null)
+                {
+                    ve.RemoveFromClassList("transcript__row--search-match");
+                    ve.RemoveFromClassList("transcript__row--search-current");
+                }
+            }
+        }
+
+        private void OnSearchQueryChanged(string query)
+        {
+            _searchQuery = query ?? string.Empty;
+            FindMatches();
+            HighlightMatches();
+            ScrollToCurrentMatch();
+        }
+
+        private void FindMatches()
+        {
+            _matchingMessageIndices.Clear();
+
+            if (string.IsNullOrEmpty(_searchQuery))
+            {
+                _currentMatchIndex = -1;
+                return;
+            }
+
+            var messages = GetCurrentMessages();
+            if (messages == null)
+            {
+                _currentMatchIndex = -1;
+                return;
+            }
+
+            for (int i = 0; i < messages.Count; i++)
+            {
+                var m = messages[i];
+                if (m != null &&
+                    !string.IsNullOrEmpty(m.content) &&
+                    m.content.IndexOf(_searchQuery, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    _matchingMessageIndices.Add(i);
+                }
+            }
+
+            _currentMatchIndex = _matchingMessageIndices.Count > 0 ? 0 : -1;
+        }
+
+        private IReadOnlyList<ChatMessage> GetCurrentMessages()
         {
             try
             {
-                _sessionSearchQuery = _d.MessageInput?.value?.Trim() ?? string.Empty;
-
-                var chat = await _d.GetChatServiceAsync();
-                if (chat == null)
-                    return;
-
-                var allSessions = await chat.GetAllSessionsAsync();
-                var app = await _d.GetAppAsync();
-                var providers = app != null ? await app.ProviderManager.GetAllProvidersAsync() : new List<ProviderConfig>();
-                _d.RenderSessionList(allSessions, providers);
-
-                _d.ShowHistory();
+                var chatTask = _d.GetChatServiceAsync();
+                if (chatTask == null)
+                    return null;
+                // Safe .Result pattern used elsewhere in this controller for UI sync paths
+                var chat = chatTask.Result;
+                return chat != null ? chat.CurrentChatViewModel?.Messages : null;
             }
-            catch (Exception ex)
+            catch
             {
-                _d.ShowSystemMessage(LocalizationExtensions.Get("system.chat.search_failed", "Не удалось выполнить поиск по чатам. Попробуй ещё раз."));
-                NeonLogger.LogError(ex.ToString());
+                return null;
+            }
+        }
+
+        private void HighlightMatches()
+        {
+            if (_d.MessagesList == null)
+                return;
+
+            ClearSearchHighlights();
+
+            if (string.IsNullOrEmpty(_searchQuery) || _matchingMessageIndices.Count == 0)
+            {
+                UpdateSearchCountLabel();
+                return;
+            }
+
+            int currentMsgIdx = -1;
+            if (_currentMatchIndex >= 0 && _currentMatchIndex < _matchingMessageIndices.Count)
+            {
+                currentMsgIdx = _matchingMessageIndices[_currentMatchIndex];
+            }
+
+            foreach (var child in _d.MessagesList.Children())
+            {
+                var ve = child as VisualElement;
+                if (ve != null && ve.userData is int msgIdx)
+                {
+                    bool isMatch = false;
+                    for (int k = 0; k < _matchingMessageIndices.Count; k++)
+                    {
+                        if (_matchingMessageIndices[k] == msgIdx)
+                        {
+                            isMatch = true;
+                            break;
+                        }
+                    }
+                    if (isMatch)
+                    {
+                        ve.AddToClassList("transcript__row--search-match");
+                        if (msgIdx == currentMsgIdx)
+                        {
+                            ve.AddToClassList("transcript__row--search-current");
+                        }
+                    }
+                }
+            }
+
+            UpdateSearchCountLabel();
+        }
+
+        private void UpdateSearchCountLabel()
+        {
+            if (_searchCountLabel == null)
+                return;
+
+            int total = _matchingMessageIndices != null ? _matchingMessageIndices.Count : 0;
+            int cur = (total > 0 && _currentMatchIndex >= 0) ? (_currentMatchIndex + 1) : 0;
+            _searchCountLabel.text = total > 0 ? (cur + "/" + total) : "0/0";
+        }
+
+        private void GoToNextMatch()
+        {
+            if (_matchingMessageIndices == null || _matchingMessageIndices.Count == 0)
+                return;
+
+            int count = _matchingMessageIndices.Count;
+            if (_currentMatchIndex < 0)
+                _currentMatchIndex = 0;
+            else
+                _currentMatchIndex = (_currentMatchIndex + 1) % count;
+
+            HighlightMatches();
+            ScrollToCurrentMatch();
+        }
+
+        private void GoToPrevMatch()
+        {
+            if (_matchingMessageIndices == null || _matchingMessageIndices.Count == 0)
+                return;
+
+            int count = _matchingMessageIndices.Count;
+            if (_currentMatchIndex < 0)
+                _currentMatchIndex = count - 1;
+            else
+                _currentMatchIndex = (_currentMatchIndex - 1 + count) % count;
+
+            HighlightMatches();
+            ScrollToCurrentMatch();
+        }
+
+        private void ScrollToCurrentMatch()
+        {
+            if (_d.MessagesList == null || _currentMatchIndex < 0 || _matchingMessageIndices == null || _currentMatchIndex >= _matchingMessageIndices.Count)
+                return;
+
+            int targetMsgIdx = _matchingMessageIndices[_currentMatchIndex];
+            VisualElement targetRow = null;
+
+            foreach (var child in _d.MessagesList.Children())
+            {
+                if (child.userData is int idx && idx == targetMsgIdx)
+                {
+                    targetRow = child;
+                    break;
+                }
+            }
+
+            if (targetRow == null)
+                return;
+
+            try
+            {
+                _d.MessagesList.ScrollTo(targetRow);
+            }
+            catch
+            {
+                // Fallback for older UITK: approximate offset
+                var content = _d.MessagesList.contentContainer;
+                if (content != null)
+                {
+                    float y = targetRow.layout.y - 60f;
+                    if (y < 0f) y = 0f;
+                    _d.MessagesList.scrollOffset = new Vector2(0f, y);
+                }
             }
         }
 
@@ -1172,6 +1508,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             CancelInlineEdit();
+            if (IsSearchBarVisible())
+                CloseSearch();
             _d.MessagesList.Clear();
 
             if (messages == null || messages.Count == 0)
@@ -1279,8 +1617,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (message.attachments != null && message.attachments.Count > 0)
             {
                 var attachmentWrap = new VisualElement();
-                attachmentWrap.style.flexDirection = FlexDirection.Column;
-                attachmentWrap.style.marginTop = 6f;
+                attachmentWrap.AddToClassList("transcript__attachments");
 
                 for (int i = 0; i < message.attachments.Count; i++)
                 {
@@ -1288,11 +1625,22 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (attachment == null)
                         continue;
 
-                    var attachmentLabel = new Label($"[image] {GetAttachmentDisplayName(attachment)}");
-                    attachmentLabel.AddToClassList("transcript__body");
-                    attachmentLabel.style.fontSize = 11f;
-                    attachmentLabel.style.color = new Color(0.76f, 0.8f, 0.92f, 0.92f);
-                    attachmentWrap.Add(attachmentLabel);
+                    if (!string.IsNullOrEmpty(attachment.path) &&
+                        (attachment.kind == "image" || IsImageFile(attachment.path)))
+                    {
+                        var imageElement = new Image();
+                        imageElement.AddToClassList("transcript__image");
+                        imageElement.scaleMode = ScaleMode.ScaleToFit;
+                        LoadImageAsync(imageElement, attachment.path);
+                        attachmentWrap.Add(imageElement);
+                    }
+                    else
+                    {
+                        var attachmentLabel = new Label($"[file] {GetAttachmentDisplayName(attachment)}");
+                        attachmentLabel.AddToClassList("transcript__body");
+                        attachmentLabel.style.fontSize = 11f;
+                        attachmentWrap.Add(attachmentLabel);
+                    }
                 }
 
                 if (attachmentWrap.childCount > 0)
@@ -1605,6 +1953,50 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (attachment == null)
                 return string.Empty;
             return !string.IsNullOrWhiteSpace(attachment.name) ? attachment.name : "image";
+        }
+
+        private static async void LoadImageAsync(Image imageElement, string path)
+        {
+            if (imageElement == null || string.IsNullOrEmpty(path))
+                return;
+
+            try
+            {
+                string url = "file://" + path;
+                using (var request = UnityWebRequestTexture.GetTexture(url))
+                {
+                    var operation = request.SendWebRequest();
+                    while (!operation.isDone)
+                        await Task.Yield();
+
+                    if (request.result == UnityWebRequest.Result.Success)
+                    {
+                        var dh = request.downloadHandler as DownloadHandlerTexture;
+                        if (dh != null)
+                        {
+                            imageElement.image = dh.texture;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Silent fail — image simply won't render
+            }
+        }
+
+        private static bool IsImageFile(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return false;
+            string ext = System.IO.Path.GetExtension(path);
+            if (string.IsNullOrEmpty(ext))
+                return false;
+            return string.Equals(ext, ".png", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(ext, ".jpg", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(ext, ".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(ext, ".gif", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(ext, ".webp", StringComparison.OrdinalIgnoreCase);
         }
 
         private static List<ChatAttachment> CloneAttachments(IReadOnlyList<ChatAttachment> attachments)

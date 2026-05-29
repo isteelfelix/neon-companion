@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- U-38: Chat search with highlight and navigation (topbar search button now toggles in-chat transcript search bar; live filtering, match count X/Y, ↑↓ nav, Esc/Enter keys, yellow highlight rows; closes on session change or re-render). Implemented entirely in ChatController with dynamic UI.
+- U-41: Inline image rendering for attachments (replaces `[image] filename` text with actual <Image> elements loaded via UnityWebRequestTexture from local file:// paths; supports png/jpg/jpeg/gif/webp by kind or extension; non-images keep file label; max-size + rounded styles).
 - U-16: API key show/hide toggle button in provider editor (next to password field)
 - U-37: Export current chat as Markdown file (topbar "Export" button wires to ChatController.ExportChatAsync; writes .md to Application.persistentDataPath following SettingsController.ExportChatsAsync pattern; localized messages)
 - U-29 + U-30: Right-click (desktop) and long-press (mobile) context menu on message bubbles with Edit (user messages only), Delete, Copy. Inline editing with Save/Cancel (+ Save & Regenerate if assistant follows). Delete and edit persist via SaveCurrentSessionAsync + re-render. All strings localized.
