@@ -246,14 +246,11 @@
     bottom: 4px;
     right: 4px;
     flex-direction: column;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s ease;
+    visibility: hidden;
 }
 
 .transcript__bubble:hover > .transcript__bubble-actions {
-    opacity: 1;
-    pointer-events: auto;
+    visibility: visible;
 }
 
 .transcript__bubble-actions > Button {
