@@ -90,17 +90,9 @@
     width: 26px;
     height: 26px;
     border-radius: 8px;
-    background-color: var(--accent);
-    align-items: center;
-    justify-content: center;
+    background-image: url("project://database/Assets/UI/Avatars/brand-mark.png");
+    -unity-background-scale-mode: stretch-to-fill;
     margin-right: 10px;
-}
-
-.brand__mark-text {
-    color: white;
-    font-size: 11px;
-    -unity-font-style: bold;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
 }
 
 .brand__name {
