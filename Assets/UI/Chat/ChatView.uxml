@@ -31,6 +31,9 @@
                 </ui:VisualElement>
                 <ui:Button name="send-button" text="Отправить" class="btn btn--primary composer__send" />
             </ui:VisualElement>
+
+            <!-- Scroll-to-bottom: last child so it paints on top of composer -->
+            <ui:Button name="scroll-bottom-btn" text="↓" class="scroll-bottom-btn" />
         </ui:VisualElement>
 
         <!-- Drag-to-resize handle -->

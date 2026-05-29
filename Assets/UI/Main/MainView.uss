@@ -271,25 +271,6 @@
     margin-left: 8px;
 }
 
-.scroll-bottom-btn {
-    position: absolute;
-    bottom: 80px;
-    right: 24px;
-    width: 36px;
-    height: 36px;
-    border-radius: 18px;
-    background-color: rgba(0, 0, 0, 0.6);
-    color: white;
-    font-size: 18px;
-    display: none;
-    justify-content: center;
-    align-items: center;
-}
-
-.scroll-bottom-btn:hover {
-    background-color: rgba(0, 0, 0, 0.8);
-}
-
 .iconbtn {
     width: 30px;
     height: 30px;

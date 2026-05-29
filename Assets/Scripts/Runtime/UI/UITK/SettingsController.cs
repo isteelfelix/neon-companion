@@ -951,7 +951,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await _deps.GetApp();
                 if (app == null) return;
 
+                // Wipe the on-disk repository first
                 app.Chats.SaveAll(new List<ChatSession>());
+
+                // Reset the in-memory ChatService state so it doesn't write the
+                // old session back on the next send
+                var chat = await _deps.GetChatService();
+                if (chat != null)
+                    await chat.StartNewSessionAsync();
+
                 _deps.SetCurrentSessionId?.Invoke(string.Empty);
                 _deps.SetCurrentSessionTitle?.Invoke(string.Empty);
                 _deps.RequestRenderMessages?.Invoke();

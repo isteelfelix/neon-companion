@@ -74,6 +74,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private int _inlineTypingFrame;
         private readonly ToolCallUiHelper _toolCallUiHelper = new ToolCallUiHelper();
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
+        private bool _pendingEnterSend;
         private string _chatSubtitle = string.Empty;
         private string _sessionSearchQuery = string.Empty;
 
@@ -102,7 +103,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
-                _d.MessageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
+                _d.MessageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
                 _d.MessageInput.RegisterCallback<FocusEvent>(_ => _d.Composer?.AddToClassList("composer--focused"));
                 _d.MessageInput.RegisterCallback<BlurEvent>(_ => _d.Composer?.RemoveFromClassList("composer--focused"));
                 _d.MessageInput.RegisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
@@ -122,7 +123,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
-                _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
+                _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
                 _d.MessageInput.UnregisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
             }
 
@@ -153,22 +154,24 @@ namespace NeonCompanion.Runtime.UI.UITK
             bool enterToSend = _d.EnterToSend();
             bool hasCtrl = evt.ctrlKey || evt.commandKey;
 
-            if (enterToSend)
-            {
-                evt.StopPropagation();
-                OnSendClicked();
-                return;
-            }
-
-            if (hasCtrl)
-            {
-                evt.StopPropagation();
-                OnSendClicked();
-            }
+            // Set flag here (TrickleDown — before TextField inserts '\n').
+            // OnComposerTextChanged fires after the insertion and consumes it.
+            if ((enterToSend && !hasCtrl) || hasCtrl)
+                _pendingEnterSend = true;
         }
 
         private void OnComposerTextChanged(ChangeEvent<string> evt)
         {
+            if (_pendingEnterSend)
+            {
+                _pendingEnterSend = false;
+                string trimmed = (evt.newValue ?? string.Empty).TrimEnd('\n', '\r');
+                if (_d.MessageInput != null)
+                    _d.MessageInput.SetValueWithoutNotify(trimmed);
+                OnSendClicked();
+                return;
+            }
+
             if (_isSending || _isVoiceRecording)
                 return;
 
