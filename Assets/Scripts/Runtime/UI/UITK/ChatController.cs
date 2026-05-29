@@ -88,6 +88,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _sessionSearchQuery = string.Empty;
         private TextElement _composerTextElement;
         private float _composerInputHeight = -1f;
+        private VisualElement _composerPreviews;
 
         // Message context menu (U-29/U-30)
         private MessageContextMenu _contextMenu;
@@ -180,6 +181,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.MessageInput.RegisterCallback<GeometryChangedEvent>(OnComposerGeometryChanged);
                 QueueComposerHeightUpdate();
             }
+
+            _composerPreviews = _d.Composer?.Q<VisualElement>("composer-previews");
         }
 
         public void UnregisterCallbacks()
@@ -263,11 +266,20 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnInputKeyDown(KeyDownEvent evt)
         {
+            bool hasCtrl = evt.ctrlKey || evt.commandKey;
+
+            // Ctrl+V paste image
+            if (hasCtrl && evt.keyCode == KeyCode.V)
+            {
+                evt.StopPropagation();
+                _ = PasteImageFromClipboardAsync();
+                return;
+            }
+
             if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
                 return;
 
             bool enterToSend = _d.EnterToSend();
-            bool hasCtrl = evt.ctrlKey || evt.commandKey;
 
             // Set flag here (TrickleDown — before TextField inserts '\n').
             // OnComposerTextChanged fires after the insertion and consumes it.
@@ -1280,6 +1292,50 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Attachments =====
 
+        private async Task PasteImageFromClipboardAsync()
+        {
+            try
+            {
+                string clipboard = GUIUtility.systemCopyBuffer;
+                if (string.IsNullOrEmpty(clipboard))
+                    return;
+
+                // Check if clipboard contains a file path to an image
+                string[] imageExts = { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
+                string ext = System.IO.Path.GetExtension(clipboard)?.ToLowerInvariant();
+                if (string.IsNullOrEmpty(ext))
+                    return;
+
+                bool isImage = false;
+                for (int i = 0; i < imageExts.Length; i++)
+                {
+                    if (ext == imageExts[i]) { isImage = true; break; }
+                }
+                if (!isImage)
+                    return;
+
+                // Check file exists
+                if (!System.IO.File.Exists(clipboard))
+                    return;
+
+                string fileName = System.IO.Path.GetFileName(clipboard);
+                _pendingComposerAttachments.Add(new ChatAttachment
+                {
+                    kind = "image",
+                    name = fileName,
+                    path = clipboard,
+                    mediaType = GuessImageMediaType(clipboard)
+                });
+
+                RenderComposerPreviews();
+                _d.MessageInput?.Focus();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError("Paste image failed: " + ex.ToString());
+            }
+        }
+
         private void OnAttachClicked()
         {
             _ = AttachImageTokenAsync();
@@ -1305,6 +1361,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     mediaType = GuessImageMediaType(path)
                 });
 
+                RenderComposerPreviews();
+
                 string token = $"[attachment: {fileName}]";
                 string current = _d.MessageInput.value ?? string.Empty;
                 _d.MessageInput.value = string.IsNullOrWhiteSpace(current)
@@ -1322,6 +1380,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void ClearPendingComposerAttachments()
         {
             _pendingComposerAttachments.Clear();
+            RenderComposerPreviews();
         }
 
         private void RestorePendingComposerAttachments(IReadOnlyList<ChatAttachment> attachments)
@@ -1330,6 +1389,100 @@ namespace NeonCompanion.Runtime.UI.UITK
             var restored = CloneAttachments(attachments);
             for (int i = 0; i < restored.Count; i++)
                 _pendingComposerAttachments.Add(restored[i]);
+        }
+
+        private void RenderComposerPreviews()
+        {
+            if (_composerPreviews == null) return;
+            _composerPreviews.Clear();
+
+            if (_pendingComposerAttachments.Count == 0)
+            {
+                _composerPreviews.style.display = DisplayStyle.None;
+                return;
+            }
+
+            _composerPreviews.style.display = DisplayStyle.Flex;
+
+            for (int i = 0; i < _pendingComposerAttachments.Count; i++)
+            {
+                var attachment = _pendingComposerAttachments[i];
+                if (attachment == null) continue;
+
+                var thumb = new VisualElement();
+                thumb.AddToClassList("composer__preview-thumb");
+
+                if (!string.IsNullOrEmpty(attachment.path) && System.IO.File.Exists(attachment.path))
+                {
+                    var img = new Image();
+                    img.AddToClassList("composer__preview-img");
+                    img.scaleMode = ScaleMode.ScaleToFit;
+                    int index = i; // capture for closure
+                    img.schedule.Execute(() => LoadImageAsync(img, attachment.path));
+                    thumb.Add(img);
+                }
+
+                var removeBtn = new Button(() => RemovePendingAttachment(index));
+                removeBtn.text = "×";
+                removeBtn.AddToClassList("composer__preview-remove");
+                removeBtn.tooltip = LocalizationExtensions.Get("chat.preview.remove", "Убрать");
+                thumb.Add(removeBtn);
+
+                _composerPreviews.Add(thumb);
+            }
+        }
+
+        private void RemovePendingAttachment(int index)
+        {
+            if (index < 0 || index >= _pendingComposerAttachments.Count) return;
+            _pendingComposerAttachments.RemoveAt(index);
+
+            // Also remove the [attachment: ...] token from the text input
+            // Simple approach: rebuild tokens from remaining attachments
+            string text = _d.MessageInput?.value ?? string.Empty;
+            string rebuilt = BuildComposerTextWithAttachments(text, _pendingComposerAttachments);
+            if (_d.MessageInput != null)
+                _d.MessageInput.value = rebuilt;
+
+            RenderComposerPreviews();
+        }
+
+        private static string BuildComposerTextWithAttachments(string composerText, IReadOnlyList<ChatAttachment> attachments)
+        {
+            string text = StripAllAttachmentTokens(composerText ?? string.Empty).Trim();
+            if (attachments != null)
+            {
+                for (int i = 0; i < attachments.Count; i++)
+                {
+                    var a = attachments[i];
+                    if (a == null || string.IsNullOrWhiteSpace(a.name))
+                        continue;
+                    string token = $"[attachment: {a.name}]";
+                    if (text.IndexOf(token, StringComparison.Ordinal) < 0)
+                    {
+                        if (!string.IsNullOrEmpty(text))
+                            text += " ";
+                        text += token;
+                    }
+                }
+            }
+            return text;
+        }
+
+        private static string StripAllAttachmentTokens(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+
+            int idx;
+            while ((idx = text.IndexOf("[attachment: ", StringComparison.Ordinal)) >= 0)
+            {
+                int end = text.IndexOf(']', idx + 13);
+                if (end < 0)
+                    break;
+                text = text.Remove(idx, end - idx + 1);
+            }
+            return text;
         }
 
         // ===== Copy =====

@@ -35,6 +35,7 @@
   "chat.search.previous": "Previous match",
   "chat.search.next": "Next match",
   "chat.search.close": "Close search",
+  "chat.preview.remove": "Remove",
   "settings.title": "Settings",
   "settings.page.title": "Settings",
   "settings.page.subtitle": "General app parameters, data, and info.",

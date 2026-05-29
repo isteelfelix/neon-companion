@@ -13,6 +13,9 @@
             <ui:VisualElement name="composer" class="composer">
                 <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить токен вложения" />
                 <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />
+                <!-- Image previews for pending attachments -->
+                <ui:VisualElement name="composer-previews" class="composer__previews" style="display: none;">
+                </ui:VisualElement>
                 <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." multiline="true" />
                 <ui:VisualElement class="composer__hint">
                     <ui:Label text="⌘" class="kbd" />
