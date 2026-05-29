@@ -1,0 +1,75 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="../Theme/Tokens.uss" />
+    <ui:Style src="SplashView.uss" />
+
+    <ui:VisualElement name="splash-root" class="splash">
+
+        <!-- Animated scan line that sweeps top → bottom -->
+        <ui:VisualElement name="scan-line" class="splash__scanline" />
+
+        <!-- HUD corner brackets -->
+        <ui:VisualElement class="splash__corner splash__corner--tl" />
+        <ui:VisualElement class="splash__corner splash__corner--tr" />
+        <ui:VisualElement class="splash__corner splash__corner--bl" />
+        <ui:VisualElement class="splash__corner splash__corner--br" />
+
+        <!-- Build info — top center -->
+        <ui:Label name="splash-version" text="V0.2 · BUILD 20260528" class="splash__build-label" />
+
+        <!-- Scattered background particles -->
+        <ui:VisualElement class="splash__particle"          style="top: 14%; left: 19%;" />
+        <ui:VisualElement class="splash__particle--sm splash__particle" style="top: 22%; left: 73%;" />
+        <ui:VisualElement class="splash__particle"          style="top: 48%; left: 7%;" />
+        <ui:VisualElement class="splash__particle--purple splash__particle" style="top: 35%; left: 89%;" />
+        <ui:VisualElement class="splash__particle--sm splash__particle" style="top: 62%; left: 26%;" />
+        <ui:VisualElement class="splash__particle--purple splash__particle" style="top: 58%; left: 79%;" />
+        <ui:VisualElement class="splash__particle"          style="top: 76%; left: 15%;" />
+        <ui:VisualElement class="splash__particle--sm splash__particle" style="top: 28%; left: 57%;" />
+        <ui:VisualElement class="splash__particle--purple splash__particle" style="top: 68%; left: 65%;" />
+        <ui:VisualElement class="splash__particle--sm splash__particle" style="top: 82%; left: 82%;" />
+
+        <!-- Center column -->
+        <ui:VisualElement class="splash__center">
+
+            <!-- Logo -->
+            <ui:VisualElement class="splash__logo-area">
+                <!-- logo-bg-glow removed: vignette.png has a non-transparent
+                     grey outer ring that produced visible rectangular artefacts
+                     over the shader background. Halo now comes from the rings
+                     + shader's central tint. -->
+                <!-- Dashed slowly-spinning orbit -->
+                <ui:VisualElement name="orbit-dashed" class="splash__orbit-dashed" />
+                <!-- Halo rings: bright inner + soft glass.
+                     ring3/ring4 removed — too busy without conic-blob backdrop. -->
+                <ui:VisualElement class="splash__glow-ring splash__glow-ring--1" />
+                <ui:VisualElement class="splash__glow-ring splash__glow-ring--2" />
+                <!-- App icon -->
+                <ui:VisualElement class="splash__logo-img" />
+            </ui:VisualElement>
+
+            <!-- Title + tagline -->
+            <ui:VisualElement class="splash__title-area">
+                <ui:Label text="NEON COMPANION" class="splash__title" />
+                <ui:Label text="AI  ·  VOICE  ·  COMPANION" class="splash__tagline" />
+            </ui:VisualElement>
+
+            <!-- Boot log -->
+            <ui:VisualElement class="splash__log-section">
+                <ui:VisualElement name="log-list" class="splash__log-list" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- Bottom bar: label | progress | percentage -->
+        <ui:VisualElement class="splash__bottom-bar">
+            <ui:Label text="SYSTEM BOOT" class="splash__status-left" />
+            <ui:VisualElement class="splash__progress-track">
+                <ui:VisualElement name="progress-fill" class="splash__progress-fill">
+                    <ui:VisualElement class="splash__progress-dot" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="progress-pct" text="0%" class="splash__status-right" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

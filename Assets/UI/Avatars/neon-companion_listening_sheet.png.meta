@@ -1,0 +1,1703 @@
+fileFormatVersion: 2
+guid: 6ec35476321d4774cb018e470f3d9e4d
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -3889396954908509495
+    second: listening_sheet_0
+  - first:
+      213: 1497397991814852957
+    second: listening_sheet_1
+  - first:
+      213: -4924935133967999649
+    second: listening_sheet_2
+  - first:
+      213: -7132680488722867411
+    second: listening_sheet_3
+  - first:
+      213: 2613807560848517127
+    second: listening_sheet_4
+  - first:
+      213: -2700059277048684538
+    second: listening_sheet_5
+  - first:
+      213: -7424625290092222296
+    second: listening_sheet_6
+  - first:
+      213: -330325314981892667
+    second: listening_sheet_7
+  - first:
+      213: -627280923256356838
+    second: listening_sheet_8
+  - first:
+      213: 6302844257384859011
+    second: listening_sheet_9
+  - first:
+      213: -8821053461239376495
+    second: listening_sheet_10
+  - first:
+      213: 2872668648889632441
+    second: listening_sheet_11
+  - first:
+      213: 2166138779540826687
+    second: listening_sheet_12
+  - first:
+      213: 4699851326121696738
+    second: listening_sheet_13
+  - first:
+      213: 576591784918689006
+    second: listening_sheet_14
+  - first:
+      213: 2245395466191592060
+    second: listening_sheet_15
+  - first:
+      213: -3859609379438643256
+    second: listening_sheet_16
+  - first:
+      213: 4578563844239431790
+    second: listening_sheet_17
+  - first:
+      213: 6356600650422180842
+    second: listening_sheet_18
+  - first:
+      213: -4314968022264098877
+    second: listening_sheet_19
+  - first:
+      213: -8630411089110655277
+    second: listening_sheet_20
+  - first:
+      213: -1135522809003360988
+    second: listening_sheet_21
+  - first:
+      213: -2616237881759838438
+    second: listening_sheet_22
+  - first:
+      213: -5667554657684216689
+    second: listening_sheet_23
+  - first:
+      213: -8400592711726501873
+    second: listening_sheet_24
+  - first:
+      213: -5874896688977793403
+    second: listening_sheet_25
+  - first:
+      213: 6952371294771094777
+    second: listening_sheet_26
+  - first:
+      213: 6433511842961416482
+    second: listening_sheet_27
+  - first:
+      213: 5366293211560833131
+    second: listening_sheet_28
+  - first:
+      213: -4294642955446439011
+    second: listening_sheet_29
+  - first:
+      213: 6805835612693197773
+    second: listening_sheet_30
+  - first:
+      213: 5026175674826716107
+    second: listening_sheet_31
+  - first:
+      213: 7246858632183236678
+    second: listening_sheet_32
+  - first:
+      213: 5536608659322364402
+    second: listening_sheet_33
+  - first:
+      213: 4568332709346895357
+    second: listening_sheet_34
+  - first:
+      213: 6996150100511782122
+    second: listening_sheet_35
+  - first:
+      213: 3168804929475354867
+    second: listening_sheet_36
+  - first:
+      213: -183034740501398912
+    second: listening_sheet_37
+  - first:
+      213: 1324235286092391104
+    second: listening_sheet_38
+  - first:
+      213: -3944107914492641307
+    second: listening_sheet_39
+  - first:
+      213: -2261753443970369776
+    second: listening_sheet_40
+  - first:
+      213: -1095839068388905951
+    second: listening_sheet_41
+  - first:
+      213: 2867397722837572849
+    second: listening_sheet_42
+  - first:
+      213: 1494171793999802668
+    second: listening_sheet_43
+  - first:
+      213: 7917751711947200036
+    second: listening_sheet_44
+  - first:
+      213: -3815139171200639471
+    second: listening_sheet_45
+  - first:
+      213: -5291931150697710909
+    second: listening_sheet_46
+  - first:
+      213: 6289510237849707598
+    second: listening_sheet_47
+  - first:
+      213: -42628673564963364
+    second: listening_sheet_48
+  - first:
+      213: 1190919090865911318
+    second: listening_sheet_49
+  - first:
+      213: 8735651467914648026
+    second: listening_sheet_50
+  - first:
+      213: 8172458853639601608
+    second: listening_sheet_51
+  - first:
+      213: -4876755313686992315
+    second: listening_sheet_52
+  - first:
+      213: 1465352663546729657
+    second: listening_sheet_53
+  - first:
+      213: 4132728658015227098
+    second: listening_sheet_54
+  - first:
+      213: 1156736200498207059
+    second: listening_sheet_55
+  - first:
+      213: 146948881264063272
+    second: listening_sheet_56
+  - first:
+      213: -3088909619093109459
+    second: listening_sheet_57
+  - first:
+      213: -3631372673359781288
+    second: listening_sheet_58
+  - first:
+      213: -4128261718012907894
+    second: listening_sheet_59
+  - first:
+      213: -2822310833511712990
+    second: listening_sheet_60
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 8192
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: listening_sheet_0
+      rect:
+        serializedVersion: 2
+        x: 131
+        y: 4780
+        width: 243
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9ca31309316160ac0800000000000000
+      internalID: -3889396954908509495
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_1
+      rect:
+        serializedVersion: 2
+        x: 643
+        y: 4780
+        width: 243
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d51f18d3a83d7c410800000000000000
+      internalID: 1497397991814852957
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_2
+      rect:
+        serializedVersion: 2
+        x: 1155
+        y: 4780
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f5d1ffdc69d17abb0800000000000000
+      internalID: -4924935133967999649
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_3
+      rect:
+        serializedVersion: 2
+        x: 1667
+        y: 4780
+        width: 242
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d2b5055d2e0a30d90800000000000000
+      internalID: -7132680488722867411
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_4
+      rect:
+        serializedVersion: 2
+        x: 2180
+        y: 4780
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7082b97c02c164420800000000000000
+      internalID: 2613807560848517127
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_5
+      rect:
+        serializedVersion: 2
+        x: 2692
+        y: 4780
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 600e30f9466778ad0800000000000000
+      internalID: -2700059277048684538
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_6
+      rect:
+        serializedVersion: 2
+        x: 3203
+        y: 4780
+        width: 240
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8a8eba1d2ae66f890800000000000000
+      internalID: -7424625290092222296
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_7
+      rect:
+        serializedVersion: 2
+        x: 3715
+        y: 4780
+        width: 240
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5cd6f2c40e27a6bf0800000000000000
+      internalID: -330325314981892667
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_8
+      rect:
+        serializedVersion: 2
+        x: 130
+        y: 4097
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a100de2e2537b47f0800000000000000
+      internalID: -627280923256356838
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_9
+      rect:
+        serializedVersion: 2
+        x: 642
+        y: 4097
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 385090c4573387750800000000000000
+      internalID: 6302844257384859011
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_10
+      rect:
+        serializedVersion: 2
+        x: 1152
+        y: 4097
+        width: 245
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 195d81aec92559580800000000000000
+      internalID: -8821053461239376495
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_11
+      rect:
+        serializedVersion: 2
+        x: 1664
+        y: 4097
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9b6c7768ae4cdd720800000000000000
+      internalID: 2872668648889632441
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_12
+      rect:
+        serializedVersion: 2
+        x: 2175
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f3aaab84ebbaf0e10800000000000000
+      internalID: 2166138779540826687
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_13
+      rect:
+        serializedVersion: 2
+        x: 2687
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2edd1a651e9393140800000000000000
+      internalID: 4699851326121696738
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_14
+      rect:
+        serializedVersion: 2
+        x: 3197
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ee4ac786c27700800800000000000000
+      internalID: 576591784918689006
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_15
+      rect:
+        serializedVersion: 2
+        x: 3709
+        y: 4097
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c7a5f96a74f392f10800000000000000
+      internalID: 2245395466191592060
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_16
+      rect:
+        serializedVersion: 2
+        x: 125
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8c73bcee7b9ef6ac0800000000000000
+      internalID: -3859609379438643256
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_17
+      rect:
+        serializedVersion: 2
+        x: 637
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e68965dde835a8f30800000000000000
+      internalID: 4578563844239431790
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_18
+      rect:
+        serializedVersion: 2
+        x: 1149
+        y: 3414
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: aeb5e63ec9e273850800000000000000
+      internalID: 6356600650422180842
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_19
+      rect:
+        serializedVersion: 2
+        x: 1661
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3cf47c702772e14c0800000000000000
+      internalID: -4314968022264098877
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_20
+      rect:
+        serializedVersion: 2
+        x: 2173
+        y: 3414
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3de97ff17de9a3880800000000000000
+      internalID: -8630411089110655277
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_21
+      rect:
+        serializedVersion: 2
+        x: 2685
+        y: 3414
+        width: 246
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 42d300f7500dd30f0800000000000000
+      internalID: -1135522809003360988
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_22
+      rect:
+        serializedVersion: 2
+        x: 3199
+        y: 3414
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a1fc8c9028141bbd0800000000000000
+      internalID: -2616237881759838438
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_23
+      rect:
+        serializedVersion: 2
+        x: 3712
+        y: 3414
+        width: 246
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f842f9b111dc851b0800000000000000
+      internalID: -5667554657684216689
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_24
+      rect:
+        serializedVersion: 2
+        x: 130
+        y: 2731
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f007ecadf691b6b80800000000000000
+      internalID: -8400592711726501873
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_25
+      rect:
+        serializedVersion: 2
+        x: 645
+        y: 2731
+        width: 243
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 58e2c51869c287ea0800000000000000
+      internalID: -5874896688977793403
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_26
+      rect:
+        serializedVersion: 2
+        x: 1157
+        y: 2731
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9f4247b7bd8cb7060800000000000000
+      internalID: 6952371294771094777
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_27
+      rect:
+        serializedVersion: 2
+        x: 1671
+        y: 2731
+        width: 242
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 221ebf95fec684950800000000000000
+      internalID: 6433511842961416482
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_28
+      rect:
+        serializedVersion: 2
+        x: 2183
+        y: 2731
+        width: 242
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b607cab7e37e87a40800000000000000
+      internalID: 5366293211560833131
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_29
+      rect:
+        serializedVersion: 2
+        x: 2695
+        y: 2731
+        width: 244
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d933b7b6cfc5664c0800000000000000
+      internalID: -4294642955446439011
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_30
+      rect:
+        serializedVersion: 2
+        x: 3208
+        y: 2731
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dc3f74e4e6f237e50800000000000000
+      internalID: 6805835612693197773
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_31
+      rect:
+        serializedVersion: 2
+        x: 3720
+        y: 2731
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bc371cc752090c540800000000000000
+      internalID: 5026175674826716107
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_32
+      rect:
+        serializedVersion: 2
+        x: 136
+        y: 2048
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 64841ccc783029460800000000000000
+      internalID: 7246858632183236678
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_33
+      rect:
+        serializedVersion: 2
+        x: 648
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2f1e24fcd3cf5dc40800000000000000
+      internalID: 5536608659322364402
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_34
+      rect:
+        serializedVersion: 2
+        x: 1160
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: df56b64256af56f30800000000000000
+      internalID: 4568332709346895357
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_35
+      rect:
+        serializedVersion: 2
+        x: 1672
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ae471500371571160800000000000000
+      internalID: 6996150100511782122
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_36
+      rect:
+        serializedVersion: 2
+        x: 2184
+        y: 2048
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3f0a2e75b4bd9fb20800000000000000
+      internalID: 3168804929475354867
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_37
+      rect:
+        serializedVersion: 2
+        x: 2695
+        y: 2048
+        width: 246
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 08abbde8fdab57df0800000000000000
+      internalID: -183034740501398912
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_38
+      rect:
+        serializedVersion: 2
+        x: 3207
+        y: 2048
+        width: 246
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0c223920af0a06210800000000000000
+      internalID: 1324235286092391104
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_39
+      rect:
+        serializedVersion: 2
+        x: 3719
+        y: 2048
+        width: 246
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5effbd0afb6b349c0800000000000000
+      internalID: -3944107914492641307
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_40
+      rect:
+        serializedVersion: 2
+        x: 135
+        y: 1365
+        width: 246
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 01731aad933ac90e0800000000000000
+      internalID: -2261753443970369776
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_41
+      rect:
+        serializedVersion: 2
+        x: 647
+        y: 1365
+        width: 245
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 12c2fad5c2ccac0f0800000000000000
+      internalID: -1095839068388905951
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_42
+      rect:
+        serializedVersion: 2
+        x: 1159
+        y: 1365
+        width: 244
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1fc5f7b690b0bc720800000000000000
+      internalID: 2867397722837572849
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_43
+      rect:
+        serializedVersion: 2
+        x: 1669
+        y: 1365
+        width: 246
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c2134c6845d5cb410800000000000000
+      internalID: 1494171793999802668
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_44
+      rect:
+        serializedVersion: 2
+        x: 2181
+        y: 1365
+        width: 244
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4269a526b3181ed60800000000000000
+      internalID: 7917751711947200036
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_45
+      rect:
+        serializedVersion: 2
+        x: 2693
+        y: 1365
+        width: 243
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 11e58e32327ed0bc0800000000000000
+      internalID: -3815139171200639471
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_46
+      rect:
+        serializedVersion: 2
+        x: 3203
+        y: 1365
+        width: 245
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3cab6d208a84f86b0800000000000000
+      internalID: -5291931150697710909
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_47
+      rect:
+        serializedVersion: 2
+        x: 3715
+        y: 1365
+        width: 243
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e44e632fc34d84750800000000000000
+      internalID: 6289510237849707598
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_48
+      rect:
+        serializedVersion: 2
+        x: 130
+        y: 682
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cdd0aee727d886ff0800000000000000
+      internalID: -42628673564963364
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_49
+      rect:
+        serializedVersion: 2
+        x: 642
+        y: 682
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6163b477a9ef68010800000000000000
+      internalID: 1190919090865911318
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_50
+      rect:
+        serializedVersion: 2
+        x: 1152
+        y: 682
+        width: 245
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ad91ca20ab44b3970800000000000000
+      internalID: 8735651467914648026
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_51
+      rect:
+        serializedVersion: 2
+        x: 1664
+        y: 682
+        width: 245
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8cd3fa027086a6170800000000000000
+      internalID: 8172458853639601608
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_52
+      rect:
+        serializedVersion: 2
+        x: 2176
+        y: 682
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 54a203f51e8425cb0800000000000000
+      internalID: -4876755313686992315
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_53
+      rect:
+        serializedVersion: 2
+        x: 2688
+        y: 682
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9b41065db7af55410800000000000000
+      internalID: 1465352663546729657
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_54
+      rect:
+        serializedVersion: 2
+        x: 3200
+        y: 682
+        width: 243
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: adc031e71d66a5930800000000000000
+      internalID: 4132728658015227098
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_55
+      rect:
+        serializedVersion: 2
+        x: 3712
+        y: 682
+        width: 241
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 359d789127d8d0010800000000000000
+      internalID: 1156736200498207059
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_56
+      rect:
+        serializedVersion: 2
+        x: 128
+        y: 0
+        width: 241
+        height: 676
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 823b2eb9a311a0200800000000000000
+      internalID: 146948881264063272
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_57
+      rect:
+        serializedVersion: 2
+        x: 639
+        y: 0
+        width: 242
+        height: 676
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d250ba2311df125d0800000000000000
+      internalID: -3088909619093109459
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_58
+      rect:
+        serializedVersion: 2
+        x: 1151
+        y: 0
+        width: 242
+        height: 678
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 852645d1bc5ca9dc0800000000000000
+      internalID: -3631372673359781288
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_59
+      rect:
+        serializedVersion: 2
+        x: 1661
+        y: 0
+        width: 243
+        height: 678
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a8e2ff507d775b6c0800000000000000
+      internalID: -4128261718012907894
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: listening_sheet_60
+      rect:
+        serializedVersion: 2
+        x: 2173
+        y: 0
+        width: 243
+        height: 678
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2273cca004325d8d0800000000000000
+      internalID: -2822310833511712990
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      listening_sheet_0: -3889396954908509495
+      listening_sheet_1: 1497397991814852957
+      listening_sheet_10: -8821053461239376495
+      listening_sheet_11: 2872668648889632441
+      listening_sheet_12: 2166138779540826687
+      listening_sheet_13: 4699851326121696738
+      listening_sheet_14: 576591784918689006
+      listening_sheet_15: 2245395466191592060
+      listening_sheet_16: -3859609379438643256
+      listening_sheet_17: 4578563844239431790
+      listening_sheet_18: 6356600650422180842
+      listening_sheet_19: -4314968022264098877
+      listening_sheet_2: -4924935133967999649
+      listening_sheet_20: -8630411089110655277
+      listening_sheet_21: -1135522809003360988
+      listening_sheet_22: -2616237881759838438
+      listening_sheet_23: -5667554657684216689
+      listening_sheet_24: -8400592711726501873
+      listening_sheet_25: -5874896688977793403
+      listening_sheet_26: 6952371294771094777
+      listening_sheet_27: 6433511842961416482
+      listening_sheet_28: 5366293211560833131
+      listening_sheet_29: -4294642955446439011
+      listening_sheet_3: -7132680488722867411
+      listening_sheet_30: 6805835612693197773
+      listening_sheet_31: 5026175674826716107
+      listening_sheet_32: 7246858632183236678
+      listening_sheet_33: 5536608659322364402
+      listening_sheet_34: 4568332709346895357
+      listening_sheet_35: 6996150100511782122
+      listening_sheet_36: 3168804929475354867
+      listening_sheet_37: -183034740501398912
+      listening_sheet_38: 1324235286092391104
+      listening_sheet_39: -3944107914492641307
+      listening_sheet_4: 2613807560848517127
+      listening_sheet_40: -2261753443970369776
+      listening_sheet_41: -1095839068388905951
+      listening_sheet_42: 2867397722837572849
+      listening_sheet_43: 1494171793999802668
+      listening_sheet_44: 7917751711947200036
+      listening_sheet_45: -3815139171200639471
+      listening_sheet_46: -5291931150697710909
+      listening_sheet_47: 6289510237849707598
+      listening_sheet_48: -42628673564963364
+      listening_sheet_49: 1190919090865911318
+      listening_sheet_5: -2700059277048684538
+      listening_sheet_50: 8735651467914648026
+      listening_sheet_51: 8172458853639601608
+      listening_sheet_52: -4876755313686992315
+      listening_sheet_53: 1465352663546729657
+      listening_sheet_54: 4132728658015227098
+      listening_sheet_55: 1156736200498207059
+      listening_sheet_56: 146948881264063272
+      listening_sheet_57: -3088909619093109459
+      listening_sheet_58: -3631372673359781288
+      listening_sheet_59: -4128261718012907894
+      listening_sheet_6: -7424625290092222296
+      listening_sheet_60: -2822310833511712990
+      listening_sheet_7: -330325314981892667
+      listening_sheet_8: -627280923256356838
+      listening_sheet_9: 6302844257384859011
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

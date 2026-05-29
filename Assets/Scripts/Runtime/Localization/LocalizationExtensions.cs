@@ -33,5 +33,33 @@ namespace NeonCompanion.Runtime.Localization
 
             return element;
         }
+
+        public static string Get(string key, string fallback = null)
+        {
+            if (string.IsNullOrEmpty(key))
+                return fallback ?? string.Empty;
+
+            if (_service == null)
+                return fallback ?? key;
+
+            string value = _service.Get(key);
+            if (string.IsNullOrEmpty(value) || value == key)
+                return fallback ?? value ?? key;
+
+            return value;
+        }
+
+        public static string GetFormat(string key, string fallback, params object[] args)
+        {
+            string format = Get(key, fallback);
+            try
+            {
+                return string.Format(format, args);
+            }
+            catch
+            {
+                return format;
+            }
+        }
     }
 }

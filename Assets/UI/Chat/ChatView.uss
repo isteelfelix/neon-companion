@@ -105,6 +105,13 @@
     margin-bottom: 2px;
 }
 
+.history__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
 .history__item:hover {
     background-color: var(--bg-2);
 }
@@ -117,10 +124,21 @@
 .history__title {
     font-size: 13px;
     color: var(--text-1);
-    margin-bottom: 4px;
+    flex-grow: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.history__provider {
+    font-size: 10px;
+    color: var(--accent-2);
+    background-color: var(--accent-soft);
+    border-radius: 6px;
+    padding: 2px 8px;
+    -unity-font-style: bold;
+    flex-shrink: 0;
 }
 
 .history__meta {
@@ -137,6 +155,26 @@
     min-height: 0;
     min-width: 0;
     padding: 18px 28px 22px;
+    position: relative;
+}
+
+.scroll-bottom-btn {
+    position: absolute;
+    bottom: 80px;
+    right: 24px;
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 18px;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.scroll-bottom-btn:hover {
+    background-color: rgba(0, 0, 0, 0.8);
 }
 
 /* ---- Transcript ---- */
@@ -179,8 +217,10 @@
 .transcript__row--user      { justify-content: flex-end; }
 .transcript__row--assistant,
 .transcript__row--system    { justify-content: flex-start; }
+.transcript__row--assistant { align-items: flex-end; }
 
 .transcript__bubble {
+    position: relative;
     max-width: 76%;
     min-width: 120px;
     padding: 10px 12px;
@@ -198,6 +238,47 @@
 .transcript__bubble--system {
     border-color: rgba(239, 171, 86, 0.30);
     background-color: rgba(239, 171, 86, 0.08);
+}
+
+/* ---- Bubble hover actions (copy/refresh/listen) ---- */
+
+.transcript__bubble-actions {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    flex-direction: column;
+    padding-left: 8px;
+    flex-shrink: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+}
+
+/* Reveal only when hovering the bubble itself (or the buttons), not the empty
+   space beside the bubble. padding-left bridges the gap so moving onto the
+   buttons keeps them visible. */
+.transcript__bubble--assistant:hover > .transcript__bubble-actions,
+.transcript__bubble-actions:hover {
+    opacity: 1;
+    visibility: visible;
+}
+
+.transcript__bubble-actions > Button {
+    width: 28px;
+    height: 28px;
+    margin: 1px 0;
+    padding: 0;
+    font-size: 14px;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: var(--text-2);
+    justify-content: center;
+    align-items: center;
+}
+
+.transcript__bubble-actions > Button:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    color: var(--text-0);
 }
 
 .transcript__meta {
@@ -225,6 +306,23 @@
     color: var(--text-0);
     font-size: 13px;
     white-space: normal;
+}
+
+/* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */
+
+.transcript__stats {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+.transcript__stats-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    margin-right: 2px;
 }
 
 /* ---- Subtitle (last AI message) ---- */
@@ -299,8 +397,9 @@
 
 .composer {
     min-height: 54px;
+    flex-shrink: 0;
     flex-direction: row;
-    align-items: center;
+    align-items: flex-end;
     background-color: var(--bg-2);
     border-width: 1px;
     border-color: var(--line-2);
@@ -310,30 +409,46 @@
     transition-duration: 0.15s;
 }
 
+.mic-btn--recording {
+    color: var(--accent);
+    border-color: rgba(124, 122, 237, 0.45);
+    background-color: var(--accent-soft);
+}
+
 .composer--focused {
     border-color: var(--accent);
 }
 
 .composer__input {
     flex-grow: 1;
-    height: 36px;
+    flex-shrink: 1;
+    min-width: 0;
+    min-height: 36px;
+    max-height: 140px;
     margin-left: 8px;
     margin-right: 10px;
+    margin-bottom: 0;
+    overflow: hidden;
 }
 
 .composer__input > .unity-text-field__input,
 .composer__input > .unity-base-text-field__input {
+    min-height: 36px;
+    max-height: 140px;
     background-color: rgba(0, 0, 0, 0);
     border-width: 0;
     color: var(--text-0);
     font-size: 14px;
-    padding: 0 4px;
+    padding: 4px 4px;
+    white-space: normal;
 }
 
 .composer__hint {
     flex-direction: row;
     align-items: center;
+    flex-shrink: 0;
     margin-right: 8px;
+    margin-bottom: 7px;
 }
 
 .composer__hint > Label {
@@ -342,25 +457,10 @@
 
 .composer__send {
     height: 36px;
-}
-
-/* ---- Resize handle ---- */
-
-.resize-handle {
-    width: 5px;
     flex-shrink: 0;
-    background-color: rgba(0, 0, 0, 0);
-    transition-property: background-color;
-    transition-duration: 0.15s;
+    margin-bottom: 0;
 }
 
-.resize-handle:hover {
-    background-color: rgba(124, 122, 237, 0.22);
-}
-
-.resize-handle--active {
-    background-color: rgba(124, 122, 237, 0.40);
-}
 
 /* ============== RIGHT: Avatar panel ============== */
 
@@ -394,7 +494,7 @@
     background-color: rgba(11, 12, 16, 0.70);
     border-width: 1px;
     border-color: var(--line-2);
-    border-radius: 999px;
+    border-radius: 10px;
     padding: 5px 10px 5px 7px;
 }
 
@@ -549,4 +649,240 @@
     font-size: 56px;
     -unity-font-style: bold;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
+}
+
+.avatar-emoji-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 28px;
+    -unity-text-align: middle-center;
+}
+
+.avatar-frame--none { }
+.avatar-frame--neon { border-width: 2px; }
+.avatar-frame--gold { border-width: 3px; border-color: #f4c34f; }
+.avatar-frame--holographic { border-width: 3px; border-color: #7ce7ff; }
+
+/* Session delete button */
+.history__delete-btn {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 13px;
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.history__item:hover .history__delete-btn {
+    display: flex;
+}
+
+.history__delete-btn:hover,
+.history__delete-btn--confirm {
+    background-color: rgba(239, 100, 100, 0.15);
+    border-color: rgba(239, 100, 100, 0.30);
+    color: #ef6464;
+}
+
+/* ---- Inline typing dots (inside streaming bubble) ---- */
+
+.typing--inline {
+    flex-direction: row;
+    padding: 8px 12px;
+}
+
+.typing--inline .typing__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.4);
+    margin-right: 4px;
+    transition-property: opacity;
+    transition-duration: 0.4s;
+}
+
+.typing--inline .typing__dot--delay-1 {
+    opacity: 0.3;
+}
+
+.typing--inline .typing__dot--delay-2 {
+    opacity: 0.15;
+}
+
+/* ============== Thinking bubble (above avatar) ============== */
+
+.thinking-bubble {
+    margin: 10px 12px 0;
+    padding: 8px 12px;
+    background-color: rgba(124, 122, 237, 0.10);
+    border-width: 1px;
+    border-color: rgba(124, 122, 237, 0.35);
+    border-radius: 12px;
+    border-top-left-radius: 4px;
+    flex-direction: column;
+    align-items: flex-start;
+    transition-property: opacity;
+    transition-duration: 0.3s;
+}
+
+.thinking-bubble__text {
+    color: rgba(124, 122, 237, 0.85);
+    font-size: 11px;
+    -unity-font-style: italic;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============== Tool call entries (in transcript) ============== */
+
+.tool-entry {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    min-height: 24px;
+}
+
+.tool-entry__icon {
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-right: 6px;
+    width: 18px;
+    -unity-text-align: middle-center;
+}
+
+.tool-entry__name {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: var(--text-2);
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.tool-entry__label {
+    font-size: 11px;
+    color: var(--text-4);
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.tool-entry__status {
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-left: 6px;
+    width: 14px;
+    -unity-text-align: middle-center;
+}
+
+.tool-entry__status--running {
+    color: var(--ok);
+    transition-property: opacity;
+    transition-duration: 0.6s;
+}
+
+.tool-entry__status--done {
+    color: var(--ok);
+}
+
+/* ---- Markdown rendering (assistant messages) ---- */
+
+.markdown-root {
+    flex-direction: column;
+}
+
+.markdown-paragraph {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.markdown-bold {
+    font-weight: bold;
+}
+
+.markdown-italic {
+    font-style: italic;
+}
+
+.markdown-code {
+    font-family: monospace;
+    font-size: 0.9em;
+    background-color: rgba(255, 255, 255, 0.08);
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+.markdown-codeblock {
+    flex-direction: column;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 8px 12px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    overflow: hidden;
+}
+
+.markdown-codeblock-text {
+    font-family: monospace;
+    font-size: 0.85em;
+    white-space: pre;
+    color: #e0e0e0;
+}
+
+.markdown-bullet {
+    flex-direction: row;
+    margin-left: 16px;
+    margin-bottom: 2px;
+}
+
+.markdown-bullet-marker {
+    margin-right: 6px;
+    color: #888;
+}
+
+.markdown-numbered {
+    flex-direction: row;
+    margin-left: 16px;
+    margin-bottom: 2px;
+}
+
+.markdown-numbered-marker {
+    margin-right: 6px;
+    color: #888;
+    min-width: 20px;
+}
+
+.markdown-link {
+    color: #6ea8fe;
+    text-decoration: underline;
 }

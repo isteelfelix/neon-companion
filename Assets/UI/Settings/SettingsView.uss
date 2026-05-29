@@ -102,72 +102,64 @@
     min-width: 160px;
 }
 
-.settings-dropdown > .unity-base-popup-field__input {
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    padding: 0 12px;
-    color: var(--text-1);
-    font-size: 13px;
-    height: 32px;
-}
-
-.settings-dropdown > .unity-base-popup-field__input:hover {
-    border-color: var(--line-3);
-}
-
-.settings-dropdown .unity-base-popup-field__text {
-    color: var(--text-1);
-    font-size: 13px;
-}
-
-.settings-dropdown .unity-base-popup-field__arrow {
-    -unity-background-image-tint-color: var(--text-3);
-}
-
 /* ---- Toggle (Unity native, restyled as pill) ---- */
 
 .settings-toggle {
     margin: 0;
+    width: 42px;
+    min-width: 42px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 11px;
+    overflow: hidden;
 }
 
-.settings-toggle > .unity-toggle__input {
-    width: 36px;
-    height: 20px;
-    border-radius: 999px;
+/* unity-base-field__input is the Unity 6 class name; unity-toggle__input kept for compatibility */
+.settings-toggle .unity-toggle__input,
+.settings-toggle .unity-base-field__input {
+    width: 42px;
+    min-width: 42px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 11px;
     background-color: var(--bg-4);
+    background-image: none;
+    -unity-background-image-tint-color: rgba(0,0,0,0);
     border-width: 1px;
     border-color: var(--line-2);
     padding: 0;
+    align-items: center;
     justify-content: flex-start;
     transition-property: background-color, border-color;
     transition-duration: 0.15s;
 }
 
-.settings-toggle > .unity-toggle__input > .unity-toggle__checkmark {
-    width: 14px;
-    height: 14px;
-    margin: 2px;
+.settings-toggle .unity-toggle__checkmark {
+    width: 16px;
+    height: 16px;
+    margin: 3px;
     border-radius: 999px;
     background-color: var(--text-2);
     background-image: none;
     border-width: 0;
+    flex-shrink: 0;
     transition-property: translate, background-color;
     transition-duration: 0.18s;
 }
 
-.settings-toggle:checked > .unity-toggle__input {
+.settings-toggle:checked .unity-toggle__input,
+.settings-toggle:checked .unity-base-field__input {
     background-color: var(--accent);
     border-color: var(--accent);
 }
 
-.settings-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
+.settings-toggle:checked .unity-toggle__checkmark {
     background-color: rgb(255, 255, 255);
-    translate: 16px 0;
+    translate: 20px 0px;
 }
 
-.settings-toggle .unity-toggle__text {
+.settings-toggle .unity-toggle__text,
+.settings-toggle .unity-base-field__label {
     display: none;
 }
 
@@ -240,11 +232,44 @@
     margin-right: 8px;
 }
 
+.settings-plugins-list {
+    flex-direction: column;
+    padding: 6px 0 10px 0;
+}
+
+.settings-plugin-item {
+    font-size: 11px;
+    color: var(--text-2);
+    padding: 3px 0;
+}
+
+/* ---- Hotkey capture button ---- */
+
+.btn--hotkey-capture {
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 12px;
+    min-width: 90px;
+    justify-content: center;
+}
+
+.btn--hotkey-capture--active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background-color: var(--accent-soft);
+}
+
+/* ---- Last row in a card (no bottom border) ---- */
+
+.settings-row--last {
+    border-bottom-width: 0;
+}
+
 /* ---- Page-specific icons ---- */
 
 .icon--globe    { background-image: url("project://database/Assets/UI/Icons/globe.svg"); }
 .icon--shield   { background-image: url("project://database/Assets/UI/Icons/shield.svg"); }
 .icon--folder   { background-image: url("project://database/Assets/UI/Icons/folder.svg"); }
+.icon--bolt     { background-image: url("project://database/Assets/UI/Icons/bolt.svg"); }
 .icon--trash    { background-image: url("project://database/Assets/UI/Icons/trash.svg"); }
 .icon--info     { background-image: url("project://database/Assets/UI/Icons/info.svg"); }
 .icon--external { background-image: url("project://database/Assets/UI/Icons/external.svg"); }

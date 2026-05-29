@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:nc="NeonCompanion.Runtime.UI.UITK">
     <ui:Style src="../Theme/Tokens.uss" />
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="MainView.uss" />
@@ -18,7 +18,7 @@
                     <ui:Label text="N" class="brand__mark-text" />
                 </ui:VisualElement>
                 <ui:Label text="Neon" class="brand__name" />
-                <ui:Label name="brand-version" text="0.1.0" class="brand__tag" />
+                <ui:Label name="brand-version" text="0.2.0" class="brand__tag" />
             </ui:VisualElement>
 
             <ui:Label text="Рабочее пространство" class="nav__group" />
@@ -65,6 +65,11 @@
             </ui:VisualElement>
             <ui:ScrollView name="sessions-list" class="rail__sessions-list" />
 
+            <ui:Button name="nav-close" class="nav__item nav__item--close">
+                <ui:VisualElement class="nav__icon icon icon--power" />
+                <ui:Label name="nav-close-label" text="Закрыть" class="nav__label" />
+            </ui:Button>
+
             <ui:VisualElement class="rail__footer">
                 <ui:VisualElement class="dot--status" />
                 <ui:VisualElement class="rail__footer-text">
@@ -74,20 +79,24 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="rail-resize-handle" class="resize-handle" />
+
         <ui:VisualElement name="main" class="main">
             <ui:VisualElement class="topbar">
                 <ui:VisualElement class="topbar__left">
                     <ui:Label name="topbar-title" text="Новый чат" class="topbar__title" />
                     <ui:VisualElement name="topbar-sep" class="topbar__sep" />
                     <ui:Label name="topbar-subtitle" text="" class="topbar__subtitle" />
+                    <nc:NeonDropdown name="topbar-model-picker" class="topbar__model-picker" />
                 </ui:VisualElement>
                 <ui:VisualElement class="topbar__right">
                     <ui:Button name="summarize-btn" text="Резюме" class="btn btn--ghost" />
                     <ui:Button name="search-btn" class="iconbtn icon icon--search" tooltip="Поиск" />
+                    <ui:Button name="toggle-left-panel-btn" class="iconbtn icon icon--panel-left" tooltip="Скрыть панель сессий" />
+                    <ui:Button name="toggle-right-panel-btn" class="iconbtn icon icon--panel-right" tooltip="Скрыть панель настроек" />
                     <ui:Button name="more-btn" class="iconbtn icon icon--dots" tooltip="Ещё" />
                 </ui:VisualElement>
             </ui:VisualElement>
-
             <ui:VisualElement name="content-host" class="content-host">
                 <ui:Instance template="ChatView"      name="chat-panel"      class="panel panel--active" />
                 <ui:VisualElement name="history-panel" class="panel page">
@@ -116,6 +125,19 @@
                 <ui:VisualElement name="placeholder-area" class="panel">
                     <ui:Label name="placeholder-title" text="Раздел недоступен" class="page__title" />
                     <ui:Label name="placeholder-body" text="Содержимое для этого раздела сейчас не отображается." class="page__subtitle" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="quit-overlay" class="quit-overlay">
+            <ui:VisualElement name="quit-dialog" class="quit-dialog">
+                <ui:Label name="quit-dialog-title" text="Закрыть приложение?" class="quit-dialog__title" />
+                <ui:Label name="quit-dialog-body" text="Активные соединения будут прерваны." class="quit-dialog__body" />
+                <ui:VisualElement class="quit-dialog__actions">
+                    <ui:Button name="quit-cancel-btn" text="Отмена" class="btn btn--ghost" />
+                    <ui:Button name="quit-confirm-btn" class="btn btn--danger">
+                        <ui:VisualElement class="icon icon--power btn__icon" />
+                        <ui:Label text="Закрыть" />
+                    </ui:Button>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

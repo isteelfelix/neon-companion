@@ -25,6 +25,9 @@
 .avtile--cobalt { background-image: url("project://database/Assets/UI/Avatars/cobalt.png"); -unity-background-scale-mode: scale-and-crop; }
 .avtile--rose   { background-image: url("project://database/Assets/UI/Avatars/rose.png");   -unity-background-scale-mode: scale-and-crop; }
 
+/* ---- Animated gallery tile ---- */
+.avtile--neon-animated { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
+
 /* ---- Preview hero (Avatars page) ---- */
 .preview-hero--neon   { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
 .preview-hero--aurora { background-image: url("project://database/Assets/UI/Avatars/aurora.png"); -unity-background-scale-mode: scale-and-crop; }

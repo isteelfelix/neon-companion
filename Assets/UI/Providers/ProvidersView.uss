@@ -81,6 +81,16 @@
     background-color: rgba(124, 122, 237, 0.10);
 }
 
+.provider--editing {
+    border-color: var(--line-2);
+    background-color: rgba(124, 122, 237, 0.05);
+}
+
+.provider--active.provider--editing {
+    border-color: var(--accent);
+    background-color: rgba(124, 122, 237, 0.14);
+}
+
 /* Colored logo for the active provider */
 .provider--active .provider__logo {
     background-color: var(--accent);
@@ -89,6 +99,10 @@
 
 .provider--active .provider__logo Label {
     color: rgb(255, 255, 255);
+}
+
+.provider--editing .provider__logo {
+    border-color: var(--accent);
 }
 
 .provider__body {
@@ -120,8 +134,13 @@
 }
 
 .provider__model {
-    max-width: 245px;
-    margin-left: 12px;
+    font-size: 11px;
+    color: var(--text-3);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .provider__meta {
@@ -147,10 +166,12 @@
 .provider__actions {
     flex-direction: row;
     margin-left: 12px;
+    flex-shrink: 0;
 }
 
 .provider__actions > Button {
     margin-left: 6px;
+    padding: 0 10px;
 }
 
 /* ============== Editor (right column) ============== */
@@ -186,6 +207,24 @@
 .editor__sub {
     font-size: 12px;
     color: var(--text-3);
+}
+
+.editor__status {
+    margin-top: 4px;
+    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.editor__status--active {
+    color: var(--ok);
+}
+
+.editor__status--inactive {
+    color: var(--text-3);
+}
+
+.editor__status--draft {
+    color: var(--accent);
 }
 
 .field {
@@ -255,7 +294,7 @@
 .testrow {
     min-height: 42px;
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
     padding: 10px 12px;
     border-width: 1px;
     border-color: var(--line-2);
@@ -284,7 +323,15 @@
     width: 14px;
     height: 14px;
     margin-right: 10px;
+    margin-top: 2px;
     -unity-background-image-tint-color: var(--ok);
+}
+
+.testrow__label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    white-space: normal;
 }
 
 .provider-edit-actions {

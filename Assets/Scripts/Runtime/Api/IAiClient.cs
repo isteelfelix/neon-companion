@@ -13,14 +13,21 @@ namespace NeonCompanion.Runtime.Api
             AiChatRequest request,
             CancellationToken cancellationToken = default);
 
-        Task SendMessageStreamAsync(
+        Task<AiChatResponse> SendMessageStreamAsync(
             ProviderConfig provider,
             AiChatRequest request,
             Action<string> onToken,
-            CancellationToken cancellationToken = default);
+            CancellationToken cancellationToken = default,
+            Action<string, string, string, string> onToolProgress = null);
 
         Task<ConnectionTestResult> TestConnectionAsync(
             ProviderConfig provider,
+            CancellationToken cancellationToken = default);
+
+        Task<ModelSwitchResult> ApplySessionModelAsync(
+            ProviderConfig provider,
+            string targetModel,
+            string providerSessionId = null,
             CancellationToken cancellationToken = default);
     }
 }

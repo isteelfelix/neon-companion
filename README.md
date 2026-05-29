@@ -14,18 +14,29 @@ This project is intended as a personal companion shell for self-hosted agents, w
 
 - ✅ Text chat with custom OpenAI-compatible providers
 - ✅ Multiple providers support + switching
+- ✅ Model auto-discovery from provider endpoints
+- ✅ Model switcher in chat topbar (per-session model selection)
 - ✅ Chat sessions and history
 - ✅ Connection to self-hosted agents (tested with Hermes + Grok)
-- 🚧 2D avatar rendering and reactions (in progress)
+- ✅ 2D avatar rendering with sprite-sheet motion packs
+- ✅ Fixed MVP 2D action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
+- ✅ Custom NeonDropdown UI component
+- ✅ Chat attachments (images)
+- ✅ Hermes session routing + inventory integration
 - 🚧 Cross-platform builds (Desktop + Mobile)
+- 📋 Desktop-first 3D realtime avatar layer is planned separately
 
 ## Features (MVP)
 
 - Connect any OpenAI-compatible API (including self-hosted)
 - Switch between providers directly in the app
+- Auto-discover available models from provider endpoints
+- Per-session model switching from chat topbar
 - Persistent chat sessions
 - Modern dark UI built with Unity UI Toolkit
-- Designed with future 2D/3D avatar support in mind
+- Lightweight 2D sprite-sheet baseline with continuous states + one-shot reactions
+- Chat with image attachments
+- Resizable sidebar rail
 
 ## Getting Started
 
@@ -48,6 +59,12 @@ This project is intended as a personal companion shell for self-hosted agents, w
 
 4. Build the project for your target platform (Desktop / Android / iOS).
 
+## Versioning
+
+Project version is tracked in the root [`VERSION`](VERSION) file and follows semantic versioning (`MAJOR.MINOR.PATCH`).
+
+Current version: `0.2.0` (post-M2, pre-M4).
+
 ## Connecting Your Own Agent
 
 The app can connect to any OpenAI-compatible endpoint.
@@ -67,10 +84,14 @@ More detailed information is available in the `docs/` folder:
 - [Architecture](docs/01_Architecture.md)
 - [MVP Features](docs/02_Features_MVP.md)
 - [API Integration](docs/03_API_Integration.md)
+- [Avatar System](docs/04_Avatar_System.md)
+- [UI Flows](docs/05_UI_Flows.md)
 - [Data Models](docs/06_Data_Model.md)
 - [Cross-Platform](docs/07_CrossPlatform.md)
 - [Build & Deploy](docs/08_Build_and_Deploy.md)
 - [Roadmap](docs/09_Roadmap.md)
+- [Feature Tracker](docs/12_Feature_Tracker.md)
+- [Avatar Motion Research](docs/13_Avatar_Motion_Research.md)
 
 ## Contributing
 

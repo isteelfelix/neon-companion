@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api.Models;
+using NeonCompanion.Runtime.Api.Adapters;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
@@ -35,16 +37,19 @@ namespace NeonCompanion.Runtime.Api
                 });
             }
 
-            var requestWithSystem = new OpenAiChatCompletionRequest
-            {
-                model = request.model,
-                temperature = request.temperature,
-                max_tokens = request.maxTokens,
-                messages = messages
-            };
+            var adapter = GetAdapter(provider);
+            var capabilities = adapter.GetCapabilities();
 
+            var routing = await ResolveRequestRoutingAsync(provider, request, cancellationToken);
+            NeonLogger.Log($"OpenAI request send: provider={provider?.id}, requestedModel={request?.model}, routedModel={routing.Model}, providerSessionId={routing.ProviderSessionId ?? "<null>"}");
             var endpoint = BuildEndpoint(provider.baseUrl);
-            var payloadJson = JsonUtility.ToJson(requestWithSystem);
+            var payloadJson = BuildChatCompletionPayloadJson(
+                routing.Model,
+                request.temperature,
+                request.maxTokens,
+                messages,
+                stream: false,
+                capabilities);
 
             using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
             {
@@ -57,6 +62,7 @@ namespace NeonCompanion.Runtime.Api
                 {
                     webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
                 }
+                adapter.ApplyRequestHeaders(webRequest, routing.ProviderSessionId);
 
                 var operation = webRequest.SendWebRequest();
 
@@ -78,7 +84,12 @@ namespace NeonCompanion.Runtime.Api
                 }
 
                 var rawResponse = webRequest.downloadHandler.text;
-                return ParseResponse(rawResponse);
+                var response = ParseResponse(rawResponse);
+                response.providerSessionId = adapter.ExtractSessionId(webRequest, routing.ProviderSessionId);
+                if (string.IsNullOrWhiteSpace(response.model))
+                    response.model = routing.Model ?? request.model ?? string.Empty;
+
+                return response;
             }
         }
 
@@ -86,13 +97,9 @@ namespace NeonCompanion.Runtime.Api
             ProviderConfig provider,
             CancellationToken cancellationToken = default)
         {
-            ProviderValidator.Validate(provider);
+            ProviderValidator.ValidateForConnection(provider);
 
-            var normalized = (provider.baseUrl ?? string.Empty).Trim().TrimEnd('/');
-            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
-                normalized = normalized.Substring(0, normalized.Length - "/chat/completions".Length);
-
-            var endpoint = $"{normalized}/models";
+            var endpoint = BuildModelsEndpoint(provider.baseUrl);
             var startMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             using (var webRequest = UnityWebRequest.Get(endpoint))
@@ -121,10 +128,83 @@ namespace NeonCompanion.Runtime.Api
                 {
                     // 401 = server reachable, credentials wrong — still proves endpoint is live
                     bool authed = webRequest.responseCode != 401;
+                    IReadOnlyList<string> discoveredModels = null;
+                    string modelNote = null;
+
+                    if (authed)
+                    {
+                        var adapter = GetAdapter(provider);
+                        var capabilities = adapter.GetCapabilities();
+                        var modelsPayload = webRequest.downloadHandler?.text;
+
+                        if (capabilities != null && capabilities.SupportsInventory)
+                        {
+                            var endpoints = adapter.BuildDiscoveryEndpoints(provider.baseUrl);
+                            for (int i = 0; i < endpoints.Length; i++)
+                            {
+                                string payload = null;
+                                string ep = endpoints[i];
+                                if (!string.IsNullOrEmpty(modelsPayload) &&
+                                    ep.EndsWith("/models", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    payload = modelsPayload;
+                                }
+                                else
+                                {
+                                    payload = await FetchJsonAsync(ep, provider.apiKey, cancellationToken);
+                                }
+
+                                if (!string.IsNullOrEmpty(payload))
+                                {
+                                    var parsed = adapter.ParseDiscoveryResponse(payload);
+                                    if (parsed != null && parsed.Count > 0)
+                                    {
+                                        discoveredModels = parsed;
+                                        break;
+                                    }
+                                    if (string.IsNullOrEmpty(modelsPayload) || !ep.EndsWith("/models", StringComparison.OrdinalIgnoreCase))
+                                        modelsPayload = payload;
+                                }
+                            }
+                        }
+
+                        if (discoveredModels == null && !string.IsNullOrEmpty(modelsPayload))
+                            discoveredModels = adapter.ParseDiscoveryResponse(modelsPayload);
+
+                        if (!string.IsNullOrWhiteSpace(provider.defaultModel) && discoveredModels != null)
+                        {
+                            bool found = false;
+                            var trimmedModel = provider.defaultModel.Trim();
+                            foreach (var m in discoveredModels)
+                            {
+                                if (string.Equals(m, trimmedModel, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found)
+                            {
+                                modelNote = $" · модель «{provider.defaultModel}» не найдена — выберите из списка";
+                            }
+                        }
+
+                        if (capabilities != null && capabilities.SupportsInventory &&
+                            discoveredModels != null &&
+                            discoveredModels.Count == 1 &&
+                            string.Equals(discoveredModels[0], "hermes-agent", StringComparison.OrdinalIgnoreCase))
+                        {
+                            modelNote = AppendStatusNote(modelNote, " · inventory недоступен, сервер экспортирует только прокси-модель");
+                        }
+
+                        if (discoveredModels == null || discoveredModels.Count == 0)
+                            modelNote = AppendStatusNote(modelNote, " · список моделей не распознан");
+                    }
+
                     string msg = authed
-                        ? $"OK · {latency} ms"
+                        ? $"OK · {latency} ms{modelNote}"
                         : $"Reachable but unauthorized · {latency} ms";
-                    return new ConnectionTestResult(authed, msg, latency);
+                    return new ConnectionTestResult(authed, msg, latency, discoveredModels);
                 }
 
                 return new ConnectionTestResult(false,
@@ -133,15 +213,130 @@ namespace NeonCompanion.Runtime.Api
             }
         }
 
-        private static string BuildEndpoint(string baseUrl)
+        public async Task<ModelSwitchResult> ApplySessionModelAsync(
+            ProviderConfig provider,
+            string targetModel,
+            string providerSessionId = null,
+            CancellationToken cancellationToken = default)
         {
-            var normalized = (baseUrl ?? string.Empty).Trim().TrimEnd('/');
-            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            ProviderValidator.Validate(provider);
+
+            string requestedModel = targetModel?.Trim();
+            if (string.IsNullOrWhiteSpace(requestedModel))
+                throw new ArgumentException("Target model is required.", nameof(targetModel));
+
+            var adapter = GetAdapter(provider);
+            var capabilities = adapter.GetCapabilities();
+
+            if (capabilities == null || !capabilities.SupportsModelSwitch)
             {
-                return normalized;
+                return new ModelSwitchResult(true, requestedModel, requestedModel, null);
             }
 
+            ModelSwitchPayload payload = adapter.BuildModelSwitchRequest(requestedModel, providerSessionId);
+            if (payload == null)
+            {
+                return new ModelSwitchResult(false, requestedModel, requestedModel, providerSessionId, "Model switch not supported.", true);
+            }
+
+            string switchEndpoint = !string.IsNullOrWhiteSpace(payload.Endpoint)
+                ? payload.Endpoint
+                : BuildEndpoint(provider.baseUrl);
+
+            using (var webRequest = new UnityWebRequest(switchEndpoint, UnityWebRequest.kHttpVerbPOST))
+            {
+                string body = payload.JsonBody ?? string.Empty;
+                var bodyRaw = Encoding.UTF8.GetBytes(body);
+                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
+                webRequest.SetRequestHeader("Content-Type", "application/json");
+
+                if (!string.IsNullOrWhiteSpace(provider.apiKey))
+                    webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
+
+                adapter.ApplyRequestHeaders(webRequest, providerSessionId);
+
+                var operation = webRequest.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    await Task.Yield();
+                }
+
+                if (webRequest.result != UnityWebRequest.Result.Success)
+                {
+                    string err = ParseErrorMessage(webRequest);
+                    return new ModelSwitchResult(false, requestedModel, requestedModel, providerSessionId, err, true);
+                }
+
+                string responseContent = webRequest.downloadHandler != null ? webRequest.downloadHandler.text : string.Empty;
+                string appliedLabel = adapter.ParseModelSwitchResponse(responseContent);
+                string newSessionId = adapter.ExtractSessionId(webRequest, providerSessionId);
+                string finalApplied = !string.IsNullOrWhiteSpace(appliedLabel) ? appliedLabel : requestedModel;
+
+                return new ModelSwitchResult(true, requestedModel, finalApplied, newSessionId, null, true);
+            }
+        }
+
+        private async Task<string> FetchJsonAsync(string url, string apiKey, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            using (var webRequest = UnityWebRequest.Get(url))
+            {
+                if (!string.IsNullOrWhiteSpace(apiKey))
+                    webRequest.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+
+                var operation = webRequest.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    await Task.Yield();
+                }
+
+                if (webRequest.result == UnityWebRequest.Result.Success &&
+                    webRequest.responseCode == 200 &&
+                    !string.IsNullOrWhiteSpace(webRequest.downloadHandler?.text))
+                {
+                    return webRequest.downloadHandler.text;
+                }
+
+                return null;
+            }
+        }
+
+        private static string BuildEndpoint(string baseUrl)
+        {
+            var normalized = NormalizeBaseUrl(baseUrl);
+            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+                return normalized;
+
             return $"{normalized}/chat/completions";
+        }
+
+        private static string BuildModelsEndpoint(string baseUrl)
+        {
+            var normalized = NormalizeBaseUrl(baseUrl);
+            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+                normalized = normalized.Substring(0, normalized.Length - "/chat/completions".Length);
+
+            return $"{normalized}/models";
+        }
+
+        private static string NormalizeBaseUrl(string baseUrl)
+        {
+            return (baseUrl ?? string.Empty).Trim().TrimEnd('/');
         }
 
         private static string ParseErrorMessage(UnityWebRequest webRequest)
@@ -162,44 +357,264 @@ namespace NeonCompanion.Runtime.Api
             return webRequest.error ?? "Unknown error";
         }
 
-        private static AiChatResponse ParseResponse(string rawJson)
+        private static void AppendMessagesJson(StringBuilder sb, List<AiChatMessage> messages)
         {
-            if (string.IsNullOrWhiteSpace(rawJson))
+            if (messages == null || messages.Count == 0)
+                return;
+
+            for (int i = 0; i < messages.Count; i++)
             {
-                return new AiChatResponse { content = string.Empty };
+                if (i > 0)
+                    sb.Append(',');
+
+                AppendSingleMessageJson(sb, messages[i]);
+            }
+        }
+
+        private static void AppendSingleMessageJson(StringBuilder sb, AiChatMessage message)
+        {
+            sb.Append('{');
+            AppendJsonProperty(sb, "role", message?.role, isFirst: true);
+            sb.Append(",\"content\":");
+
+            bool hasAttachments = message?.attachments != null && message.attachments.Count > 0;
+            if (!hasAttachments)
+            {
+                AppendJsonString(sb, message?.content ?? string.Empty);
+                sb.Append('}');
+                return;
             }
 
-            var response = JsonUtility.FromJson<OpenAiResponseEnvelope>(rawJson);
-            var content = string.Empty;
-
-            if (response?.choices != null && response.choices.Length > 0)
+            sb.Append('[');
+            bool appendedPart = false;
+            if (!string.IsNullOrWhiteSpace(message.content))
             {
-                var first = response.choices[0];
-                if (first?.message != null)
+                sb.Append("{\"type\":\"text\",\"text\":");
+                AppendJsonString(sb, message.content);
+                sb.Append('}');
+                appendedPart = true;
+            }
+
+            for (int i = 0; i < message.attachments.Count; i++)
+            {
+                var attachment = message.attachments[i];
+                if (attachment == null)
+                    continue;
+
+                if (appendedPart)
+                    sb.Append(',');
+
+                string dataUrl = BuildImageDataUrl(attachment);
+                sb.Append("{\"type\":\"image_url\",\"image_url\":{\"url\":");
+                AppendJsonString(sb, dataUrl);
+                sb.Append("}}");
+                appendedPart = true;
+            }
+
+            sb.Append(']');
+            sb.Append('}');
+        }
+
+        private static string BuildImageDataUrl(AiChatAttachment attachment)
+        {
+            if (attachment == null)
+                throw new InvalidOperationException("Attachment payload is missing.");
+
+            if (string.IsNullOrWhiteSpace(attachment.path))
+                throw new InvalidOperationException($"Attachment \"{attachment.name ?? "image"}\" has no local path.");
+
+            if (!File.Exists(attachment.path))
+                throw new InvalidOperationException($"Image file not found: {attachment.path}");
+
+            string mediaType = !string.IsNullOrWhiteSpace(attachment.mediaType)
+                ? attachment.mediaType.Trim()
+                : GuessImageMediaType(attachment.path);
+            byte[] bytes = File.ReadAllBytes(attachment.path);
+            return $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
+        }
+
+        private static void AppendJsonProperty(StringBuilder sb, string propertyName, string value, bool isFirst)
+        {
+            if (!isFirst)
+                sb.Append(',');
+
+            AppendJsonString(sb, propertyName);
+            sb.Append(':');
+            AppendJsonString(sb, value ?? string.Empty);
+        }
+
+        private static void AppendJsonString(StringBuilder sb, string value)
+        {
+            sb.Append('"');
+            if (!string.IsNullOrEmpty(value))
+            {
+                for (int i = 0; i < value.Length; i++)
                 {
-                    content = first.message.content ?? string.Empty;
+                    char c = value[i];
+                    switch (c)
+                    {
+                        case '\\': sb.Append("\\\\"); break;
+                        case '"': sb.Append("\\\""); break;
+                        case '\b': sb.Append("\\b"); break;
+                        case '\f': sb.Append("\\f"); break;
+                        case '\n': sb.Append("\\n"); break;
+                        case '\r': sb.Append("\\r"); break;
+                        case '\t': sb.Append("\\t"); break;
+                        default:
+                            if (c < 32)
+                                sb.Append("\\u").Append(((int)c).ToString("x4"));
+                            else
+                                sb.Append(c);
+                            break;
+                    }
                 }
             }
 
-            return new AiChatResponse
-            {
-                id = response?.id ?? string.Empty,
-                model = response?.model ?? string.Empty,
-                content = content,
-                receivedAtUtc = DateTime.UtcNow
-            };
+            sb.Append('"');
         }
 
-        public async Task SendMessageStreamAsync(
+        private static string GuessImageMediaType(string path)
+        {
+            string extension = Path.GetExtension(path)?.ToLowerInvariant();
+            if (extension == ".png")
+                return "image/png";
+            if (extension == ".jpg" || extension == ".jpeg")
+                return "image/jpeg";
+            if (extension == ".webp")
+                return "image/webp";
+            if (extension == ".gif")
+                return "image/gif";
+            if (extension == ".bmp")
+                return "image/bmp";
+            return "application/octet-stream";
+        }
+
+        private static string BuildChatCompletionPayloadJson(
+            string model,
+            float temperature,
+            int maxTokens,
+            List<AiChatMessage> messages,
+            bool stream,
+            ProviderCapabilities capabilities)
+        {
+            bool omitTemperature = (capabilities != null) && capabilities.RequiresTemperatureOmission;
+            bool useCompletionTokens = (capabilities != null) && capabilities.UsesMaxCompletionTokens;
+
+            var sb = new StringBuilder(1024);
+            sb.Append('{');
+            AppendJsonProperty(sb, "model", model, isFirst: true);
+            sb.Append(",\"messages\":[");
+            AppendMessagesJson(sb, messages);
+            sb.Append(']');
+
+            if (stream)
+                sb.Append(",\"stream\":true");
+
+            if (!omitTemperature)
+                sb.Append(",\"temperature\":").Append(temperature.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+
+            string tokenProperty = useCompletionTokens ? "max_completion_tokens" : "max_tokens";
+            sb.Append(",\"").Append(tokenProperty).Append("\":").Append(maxTokens);
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        private static AiChatResponse ParseResponse(string rawJson)
+        {
+            if (string.IsNullOrWhiteSpace(rawJson))
+                return new AiChatResponse { content = string.Empty };
+
+            // JsonUtility throws on null fields in some provider responses — try first, fall back to manual.
+            try
+            {
+                var envelope = JsonUtility.FromJson<OpenAiResponseEnvelope>(rawJson);
+                if (envelope?.choices != null && envelope.choices.Length > 0)
+                {
+                    var msg = envelope.choices[0]?.message;
+                    if (msg != null && !string.IsNullOrEmpty(msg.content))
+                        return new AiChatResponse
+                        {
+                            id = envelope.id ?? string.Empty,
+                            model = envelope.model ?? string.Empty,
+                            content = msg.content,
+                            receivedAtUtc = DateTime.UtcNow
+                        };
+                }
+            }
+            catch { }
+
+            // Manual fallback: handles both compact ("content":"") and spaced ("content": "") JSON.
+            int choicesIdx = rawJson.IndexOf("\"choices\"", StringComparison.Ordinal);
+            string content = ExtractJsonStringValue(rawJson, "content", choicesIdx >= 0 ? choicesIdx : 0) ?? string.Empty;
+            return new AiChatResponse { content = content, receivedAtUtc = DateTime.UtcNow };
+        }
+
+        private Task<RequestRoutingInfo> ResolveRequestRoutingAsync(
+            ProviderConfig provider,
+            AiChatRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new RequestRoutingInfo
+            {
+                Model = request.model,
+                ProviderSessionId = request?.providerSessionId?.Trim()
+            });
+        }
+
+        private static string ExtractJsonStringValue(string json, string key, int startFrom)
+        {
+            string keyMarker = $"\"{key}\"";
+            int pos = startFrom;
+            while (pos < json.Length)
+            {
+                int keyIdx = json.IndexOf(keyMarker, pos, StringComparison.Ordinal);
+                if (keyIdx < 0) return null;
+
+                int p = keyIdx + keyMarker.Length;
+                while (p < json.Length && (json[p] == ' ' || json[p] == '\t')) p++;
+                if (p >= json.Length || json[p] != ':') { pos = keyIdx + keyMarker.Length; continue; }
+                p++;
+                while (p < json.Length && (json[p] == ' ' || json[p] == '\t')) p++;
+                if (p >= json.Length || json[p] != '"') { pos = keyIdx + keyMarker.Length; continue; }
+                p++;
+
+                var sb = new StringBuilder();
+                while (p < json.Length && json[p] != '"')
+                {
+                    if (json[p] == '\\' && p + 1 < json.Length)
+                    {
+                        AppendEscapedJsonCharacter(json, ref p, sb, preserveUnknownEscape: false);
+                    }
+                    else sb.Append(json[p]);
+                    p++;
+                }
+                return sb.ToString();
+            }
+            return null;
+        }
+
+        public async Task<AiChatResponse> SendMessageStreamAsync(
             ProviderConfig provider,
             AiChatRequest request,
             Action<string> onToken,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Action<string, string, string, string> onToolProgress = null)
         {
             ProviderValidator.Validate(provider);
 
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
+
+            var adapter = GetAdapter(provider);
+            var capabilities = adapter.GetCapabilities();
+
+            if (capabilities != null && capabilities.ForceNonStreaming)
+            {
+                var fallbackResponse = await SendMessageAsync(provider, request, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(fallbackResponse?.content))
+                    onToken?.Invoke(fallbackResponse.content);
+                return fallbackResponse ?? new AiChatResponse { content = string.Empty };
+            }
 
             var messages = new List<AiChatMessage>(request.messages ?? new List<AiChatMessage>());
 
@@ -212,28 +627,40 @@ namespace NeonCompanion.Runtime.Api
                 });
             }
 
-            var streamRequest = new OpenAiStreamingRequest
-            {
-                model = request.model,
-                temperature = request.temperature,
-                max_tokens = request.maxTokens,
-                messages = messages
-            };
-
+            var routing = await ResolveRequestRoutingAsync(provider, request, cancellationToken);
             var endpoint = BuildEndpoint(provider.baseUrl);
-            var payloadJson = JsonUtility.ToJson(streamRequest);
+            var payloadJson = BuildChatCompletionPayloadJson(
+                routing.Model,
+                request.temperature,
+                request.maxTokens,
+                messages,
+                stream: true,
+                capabilities);
 
             using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
             {
                 var bodyRaw = Encoding.UTF8.GetBytes(payloadJson);
                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                webRequest.downloadHandler = new SseDownloadHandler(onToken);
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
 
                 if (!string.IsNullOrWhiteSpace(provider.apiKey))
                     webRequest.SetRequestHeader("Authorization", $"Bearer {provider.apiKey}");
+                adapter.ApplyRequestHeaders(webRequest, routing.ProviderSessionId);
 
                 var operation = webRequest.SendWebRequest();
+                int lastProcessed = 0;
+                bool emittedAnyToken = false;
+                var collected = new StringBuilder();
+                Action<string> emitToken = token =>
+                {
+                    if (string.IsNullOrEmpty(token))
+                        return;
+
+                    emittedAnyToken = true;
+                    collected.Append(token);
+                    onToken?.Invoke(token);
+                };
 
                 while (!operation.isDone)
                 {
@@ -243,106 +670,546 @@ namespace NeonCompanion.Runtime.Api
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
+                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, emitToken, flushPartialLine: false, onToolProgress: onToolProgress);
+
                     await Task.Yield();
                 }
 
-                if (webRequest.result == UnityWebRequest.Result.ConnectionError ||
-                    webRequest.result == UnityWebRequest.Result.DataProcessingError)
+                // Drain any data that arrived after the last yield
+                string finalStreamingText = webRequest.downloadHandler?.text ?? string.Empty;
+                ParseSseText(finalStreamingText, lastProcessed, emitToken, flushPartialLine: true, onToolProgress: onToolProgress);
+
+                if (webRequest.result != UnityWebRequest.Result.Success)
                 {
-                    throw new InvalidOperationException($"Streaming request failed: {webRequest.error}");
+                    throw new InvalidOperationException($"Streaming request failed: {ParseErrorMessage(webRequest)}");
                 }
-            }
-        }
 
-        [Serializable]
-        private class OpenAiChatCompletionRequest
-        {
-            public string model;
-            public float temperature;
-            public int max_tokens;
-            public List<AiChatMessage> messages;
-        }
+                string responseProviderSessionId = adapter.ExtractSessionId(webRequest, routing.ProviderSessionId);
 
-        [Serializable]
-        private class OpenAiStreamingRequest
-        {
-            public string model;
-            public float temperature;
-            public int max_tokens;
-            public List<AiChatMessage> messages;
-            public bool stream = true;
-        }
-
-        private sealed class SseDownloadHandler : DownloadHandlerScript
-        {
-            private readonly Action<string> _onToken;
-            private readonly StringBuilder _buf = new StringBuilder();
-
-            public SseDownloadHandler(Action<string> onToken) : base(new byte[4096])
-            {
-                _onToken = onToken;
-            }
-
-            protected override bool ReceiveData(byte[] data, int dataLength)
-            {
-                _buf.Append(Encoding.UTF8.GetString(data, 0, dataLength));
-                Flush();
-                return true;
-            }
-
-            private void Flush()
-            {
-                string text = _buf.ToString();
-                int searchFrom = 0;
-
-                while (true)
+                // Some providers ignore `stream=true` and return a normal JSON completion.
+                if (!emittedAnyToken)
                 {
-                    int nl = text.IndexOf('\n', searchFrom);
-                    if (nl < 0) break;
-
-                    string line = text.Substring(searchFrom, nl - searchFrom).TrimEnd('\r');
-                    searchFrom = nl + 1;
-
-                    if (!line.StartsWith("data: ")) continue;
-                    string payload = line.Substring(6);
-                    if (payload == "[DONE]") break;
-                    if (string.IsNullOrWhiteSpace(payload)) continue;
-
-                    try
+                    AiChatResponse fallbackResponse = null;
+                    var fallback = ExtractContentFromStreamingPayload(finalStreamingText);
+                    if (string.IsNullOrWhiteSpace(fallback))
                     {
-                        var chunk = JsonUtility.FromJson<OpenAiStreamChunk>(payload);
-                        string delta = chunk?.choices != null && chunk.choices.Length > 0
-                            ? chunk.choices[0]?.delta?.content
-                            : null;
-                        if (!string.IsNullOrEmpty(delta))
-                            _onToken?.Invoke(delta);
+                        fallbackResponse = ParseResponse(finalStreamingText);
+                        fallback = fallbackResponse?.content;
                     }
-                    catch { /* malformed chunk, skip */ }
+                    if (string.IsNullOrWhiteSpace(fallback))
+                    {
+                        fallbackResponse = await SendMessageAsync(
+                            provider,
+                            new AiChatRequest
+                            {
+                                model = request.model,
+                                providerSessionId = responseProviderSessionId,
+                                temperature = request.temperature,
+                                maxTokens = request.maxTokens,
+                                systemPrompt = request.systemPrompt,
+                                messages = request.messages
+                            },
+                            cancellationToken);
+                        fallback = fallbackResponse?.content;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(fallback))
+                    {
+                        emittedAnyToken = true;
+                        collected.Append(fallback);
+                        onToken?.Invoke(fallback);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(fallbackResponse?.providerSessionId))
+                        responseProviderSessionId = fallbackResponse.providerSessionId;
                 }
 
-                _buf.Clear();
-                if (searchFrom < text.Length)
-                    _buf.Append(text.Substring(searchFrom));
+                if (!emittedAnyToken)
+                {
+                    throw new InvalidOperationException("Streaming response contained no tokens. Check provider endpoint, model id, and streaming compatibility.");
+                }
+
+                return new AiChatResponse
+                {
+                    model = routing.Model ?? request.model ?? string.Empty,
+                    providerSessionId = responseProviderSessionId,
+                    content = collected.ToString(),
+                    receivedAtUtc = DateTime.UtcNow
+                };
             }
         }
 
-        [Serializable]
-        private class OpenAiStreamChunk
+        private static bool TryExtractNamedArray(string json, string propertyName, out string arrayJson)
         {
-            public OpenAiStreamChoice[] choices;
+            arrayJson = null;
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(propertyName))
+                return false;
+
+            int propertyIdx = json.IndexOf($"\"{propertyName}\"", StringComparison.OrdinalIgnoreCase);
+            if (propertyIdx < 0)
+                return false;
+
+            int colonIdx = json.IndexOf(':', propertyIdx + propertyName.Length + 2);
+            if (colonIdx < 0)
+                return false;
+
+            int arrayStart = SkipWhitespace(json, colonIdx + 1);
+            if (arrayStart >= json.Length || json[arrayStart] != '[')
+                return false;
+
+            int depth = 0;
+            bool inString = false;
+            for (int i = arrayStart; i < json.Length; i++)
+            {
+                char c = json[i];
+                if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+                {
+                    inString = !inString;
+                    continue;
+                }
+
+                if (inString)
+                    continue;
+
+                if (c == '[')
+                    depth++;
+                else if (c == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        arrayJson = json.Substring(arrayStart, i - arrayStart + 1);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryExtractNamedArray(
+            string json,
+            string propertyName,
+            int searchStart,
+            out string arrayJson,
+            out int nextSearchStart)
+        {
+            arrayJson = null;
+            nextSearchStart = searchStart;
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(propertyName))
+                return false;
+
+            int propertyIdx = json.IndexOf($"\"{propertyName}\"", Math.Max(0, searchStart), StringComparison.OrdinalIgnoreCase);
+            if (propertyIdx < 0)
+                return false;
+
+            int colonIdx = json.IndexOf(':', propertyIdx + propertyName.Length + 2);
+            if (colonIdx < 0)
+                return false;
+
+            int arrayStart = SkipWhitespace(json, colonIdx + 1);
+            if (arrayStart >= json.Length || json[arrayStart] != '[')
+            {
+                nextSearchStart = colonIdx + 1;
+                return false;
+            }
+
+            int depth = 0;
+            bool inString = false;
+            for (int i = arrayStart; i < json.Length; i++)
+            {
+                char c = json[i];
+                if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+                {
+                    inString = !inString;
+                    continue;
+                }
+
+                if (inString)
+                    continue;
+
+                if (c == '[')
+                    depth++;
+                else if (c == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        arrayJson = json.Substring(arrayStart, i - arrayStart + 1);
+                        nextSearchStart = i + 1;
+                        return true;
+                    }
+                }
+            }
+
+            nextSearchStart = json.Length;
+            return false;
+        }
+
+        private static void CollectJsonStringArrayValues(
+            string jsonArray,
+            List<string> values,
+            HashSet<string> seen)
+        {
+            if (string.IsNullOrEmpty(jsonArray) || values == null || seen == null)
+                return;
+
+            int pos = 0;
+            while (pos < jsonArray.Length)
+            {
+                int quoteIdx = jsonArray.IndexOf('"', pos);
+                if (quoteIdx < 0)
+                    break;
+
+                if (TryReadJsonString(jsonArray, quoteIdx, out string value, out int nextPos) &&
+                    !string.IsNullOrWhiteSpace(value) &&
+                    seen.Add(value))
+                {
+                    values.Add(value);
+                }
+
+                pos = nextPos > quoteIdx ? nextPos : quoteIdx + 1;
+            }
+        }
+
+        private static void CollectJsonStringPropertyValues(
+            string json,
+            string propertyName,
+            List<string> values,
+            HashSet<string> seen)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(propertyName))
+                return;
+
+            int pos = 0;
+            while (pos < json.Length)
+            {
+                int keyIdx = json.IndexOf($"\"{propertyName}\"", pos, StringComparison.OrdinalIgnoreCase);
+                if (keyIdx < 0)
+                    break;
+
+                int colonIdx = json.IndexOf(':', keyIdx + propertyName.Length + 2);
+                if (colonIdx < 0)
+                    break;
+
+                int valueStart = SkipWhitespace(json, colonIdx + 1);
+                if (valueStart >= json.Length || json[valueStart] != '"')
+                {
+                    pos = colonIdx + 1;
+                    continue;
+                }
+
+                if (TryReadJsonString(json, valueStart, out string value, out int nextPos) &&
+                    !string.IsNullOrWhiteSpace(value) &&
+                    seen.Add(value))
+                {
+                    values.Add(value);
+                }
+
+                pos = nextPos > valueStart ? nextPos : valueStart + 1;
+            }
+        }
+
+        private static int SkipWhitespace(string text, int index)
+        {
+            while (index < text.Length && char.IsWhiteSpace(text[index]))
+                index++;
+
+            return index;
+        }
+
+        private static bool TryReadJsonString(string json, int quoteIndex, out string value, out int nextPos)
+        {
+            value = null;
+            nextPos = quoteIndex;
+
+            if (quoteIndex < 0 || quoteIndex >= json.Length || json[quoteIndex] != '"')
+                return false;
+
+            int start = quoteIndex + 1;
+            var sb = new StringBuilder();
+            for (int i = start; i < json.Length; i++)
+            {
+                char c = json[i];
+                if (c == '\\' && i + 1 < json.Length)
+                {
+                    AppendEscapedJsonCharacter(json, ref i, sb, preserveUnknownEscape: false);
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    value = sb.ToString();
+                    nextPos = i + 1;
+                    return true;
+                }
+
+                sb.Append(c);
+            }
+
+            nextPos = json.Length;
+            return false;
+        }
+
+        private IProviderAdapter GetAdapter(ProviderConfig provider)
+        {
+            return ProviderAdapterFactory.Create(provider != null ? provider.backendType : null);
         }
 
         [Serializable]
-        private class OpenAiStreamChoice
+        private class ChatCompletionRequest
         {
-            public OpenAiStreamDelta delta;
+            public string model;
+            public List<AiChatMessage> messages;
+            public bool stream;
+            public float? temperature;
+            public int? max_tokens;
+            public int? max_completion_tokens;
         }
 
-        [Serializable]
-        private class OpenAiStreamDelta
+        private sealed class RequestRoutingInfo
         {
-            public string role;
-            public string content;
+            public string Model;
+            public string ProviderSessionId;
+        }
+
+        private static int ParseSseText(
+            string text,
+            int offset,
+            Action<string> onToken,
+            bool flushPartialLine,
+            Action<string, string, string, string> onToolProgress = null)
+        {
+            if (string.IsNullOrEmpty(text) || offset >= text.Length)
+                return Math.Max(0, offset);
+
+            int searchFrom = offset;
+            string pendingEventType = null;
+
+            while (searchFrom < text.Length)
+            {
+                int lineEnd = FindLineEnd(text, searchFrom, out int nextLineStart);
+                if (lineEnd < 0)
+                {
+                    if (!flushPartialLine)
+                        break;
+
+                    lineEnd = text.Length;
+                    nextLineStart = text.Length;
+                }
+
+                string line = text.Substring(searchFrom, lineEnd - searchFrom).Trim();
+                searchFrom = nextLineStart;
+
+                if (string.IsNullOrEmpty(line))
+                {
+                    // SSE event boundary — reset pending event type
+                    pendingEventType = null;
+                    continue;
+                }
+
+                // Track custom SSE event types
+                if (line.StartsWith("event:", StringComparison.OrdinalIgnoreCase))
+                {
+                    pendingEventType = line.Length > 6 ? line.Substring(6).Trim() : string.Empty;
+                    continue;
+                }
+
+                if (!TryExtractSsePayload(line, out string payload))
+                    continue;
+
+                if (payload == "[DONE]")
+                    break;
+
+                if (string.IsNullOrWhiteSpace(payload))
+                    continue;
+
+                // Handle provider tool progress events
+                if (onToolProgress != null &&
+                    string.Equals(pendingEventType, "hermes.tool.progress", StringComparison.OrdinalIgnoreCase))
+                {
+                    ParseAndEmitToolProgress(payload, onToolProgress);
+                    pendingEventType = null;
+                    continue;
+                }
+
+                string delta = ExtractDeltaContent(payload);
+                if (!string.IsNullOrEmpty(delta))
+                    onToken?.Invoke(delta);
+            }
+
+            return searchFrom;
+        }
+
+        private static void ParseAndEmitToolProgress(string json, Action<string, string, string, string> onToolProgress)
+        {
+            if (string.IsNullOrWhiteSpace(json) || onToolProgress == null)
+                return;
+
+            string tool = ExtractJsonStringValue(json, "tool", 0) ?? string.Empty;
+            string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? string.Empty;
+            string label = ExtractJsonStringValue(json, "label", 0) ?? string.Empty;
+            string status = ExtractJsonStringValue(json, "status", 0) ?? string.Empty;
+
+            onToolProgress.Invoke(tool, label, emoji, status);
+        }
+
+        private static string ExtractContentFromStreamingPayload(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var sb = new StringBuilder();
+            ParseSseText(text, 0, token => sb.Append(token), flushPartialLine: true);
+            if (sb.Length > 0)
+                return sb.ToString();
+
+            return null;
+        }
+
+        private static int FindLineEnd(string text, int startIndex, out int nextLineStart)
+        {
+            for (int i = startIndex; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (c == '\r')
+                {
+                    nextLineStart = i + 1;
+                    if (nextLineStart < text.Length && text[nextLineStart] == '\n')
+                        nextLineStart++;
+
+                    return i;
+                }
+
+                if (c == '\n')
+                {
+                    nextLineStart = i + 1;
+                    return i;
+                }
+            }
+
+            nextLineStart = text.Length;
+            return -1;
+        }
+
+        private static bool TryExtractSsePayload(string line, out string payload)
+        {
+            payload = null;
+            if (string.IsNullOrWhiteSpace(line))
+                return false;
+
+            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            payload = line.Length > 5 ? line.Substring(5).TrimStart() : string.Empty;
+            return true;
+        }
+
+        private static string ExtractDeltaContent(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            int choicesIdx = json.IndexOf("\"choices\"", StringComparison.Ordinal);
+            return ExtractJsonStringValue(json, "content", choicesIdx >= 0 ? choicesIdx : 0);
+        }
+
+        private static bool ContainsModel(IReadOnlyList<string> models, string modelId)
+        {
+            if (models == null || string.IsNullOrWhiteSpace(modelId))
+                return false;
+
+            for (int i = 0; i < models.Count; i++)
+            {
+                if (string.Equals(models[i], modelId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string AppendStatusNote(string current, string note)
+        {
+            if (string.IsNullOrWhiteSpace(note))
+                return current;
+
+            return string.IsNullOrWhiteSpace(current)
+                ? note
+                : $"{current}{note}";
+        }
+
+        private static void AppendEscapedJsonCharacter(
+            string json,
+            ref int index,
+            StringBuilder sb,
+            bool preserveUnknownEscape)
+        {
+            index++;
+            if (index >= json.Length)
+                return;
+
+            switch (json[index])
+            {
+                case '"': sb.Append('"'); break;
+                case '\\': sb.Append('\\'); break;
+                case '/': sb.Append('/'); break;
+                case 'b': sb.Append('\b'); break;
+                case 'f': sb.Append('\f'); break;
+                case 'n': sb.Append('\n'); break;
+                case 'r': sb.Append('\r'); break;
+                case 't': sb.Append('\t'); break;
+                case 'u':
+                    if (TryParseUnicodeEscape(json, index + 1, out char unicodeChar))
+                    {
+                        sb.Append(unicodeChar);
+                        index += 4;
+                    }
+                    else if (preserveUnknownEscape)
+                    {
+                        sb.Append("\\u");
+                    }
+                    else
+                    {
+                        sb.Append('u');
+                    }
+                    break;
+                default:
+                    if (preserveUnknownEscape)
+                        sb.Append('\\');
+                    sb.Append(json[index]);
+                    break;
+            }
+        }
+
+        private static bool TryParseUnicodeEscape(string json, int startIndex, out char value)
+        {
+            value = '\0';
+            if (string.IsNullOrEmpty(json) || startIndex < 0 || startIndex + 3 >= json.Length)
+                return false;
+
+            int code = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                int hex = HexToInt(json[startIndex + i]);
+                if (hex < 0)
+                    return false;
+
+                code = (code << 4) | hex;
+            }
+
+            value = (char)code;
+            return true;
+        }
+
+        private static int HexToInt(char c)
+        {
+            if (c >= '0' && c <= '9')
+                return c - '0';
+            if (c >= 'a' && c <= 'f')
+                return 10 + (c - 'a');
+            if (c >= 'A' && c <= 'F')
+                return 10 + (c - 'A');
+            return -1;
         }
 
         [Serializable]

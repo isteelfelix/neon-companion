@@ -10,30 +10,20 @@
         <ui:VisualElement class="chat-main">
             <ui:ScrollView name="messages-list" class="transcript" />
 
-            <ui:VisualElement name="composer-wrap" class="subtitle">
-                <ui:Label name="subtitle-role" text="Neon" class="subtitle__role" />
-                <ui:Label name="subtitle-body" text="Готова помочь. С чего сегодня начнём: настройка провайдера, аватары или продолжим прошлый разговор о шейдерах?" class="subtitle__body" />
-                <ui:VisualElement name="typing-indicator" class="typing is-hidden">
-                    <ui:VisualElement class="typing__dot" />
-                    <ui:VisualElement class="typing__dot typing__dot--delay-1" />
-                    <ui:VisualElement class="typing__dot typing__dot--delay-2" />
-                </ui:VisualElement>
-                <ui:VisualElement class="subtitle__actions">
-                    <ui:Button name="copy-btn" class="iconbtn icon icon--copy" tooltip="Копировать" />
-                    <ui:Button name="refresh-btn" class="iconbtn icon icon--refresh" tooltip="Пересоздать" />
-                    <ui:Button name="listen-btn" class="iconbtn icon icon--copy" tooltip="Копировать последний ответ" />
-                </ui:VisualElement>
-            </ui:VisualElement>
-
             <ui:VisualElement name="composer" class="composer">
                 <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить токен вложения" />
-                <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." />
+                <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />
+                <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." multiline="true" />
                 <ui:VisualElement class="composer__hint">
                     <ui:Label text="⌘" class="kbd" />
                     <ui:Label text="↵" class="kbd" />
                 </ui:VisualElement>
                 <ui:Button name="send-button" text="Отправить" class="btn btn--primary composer__send" />
+                <ui:Button name="stop-button" text="■" class="iconbtn" tooltip="Остановить генерацию" style="display: none;" />
             </ui:VisualElement>
+
+            <!-- Scroll-to-bottom: last child so it paints on top of composer -->
+            <ui:Button name="scroll-bottom-btn" text="↓" class="scroll-bottom-btn" />
         </ui:VisualElement>
 
         <!-- Drag-to-resize handle -->
@@ -41,24 +31,12 @@
 
         <!-- RIGHT: Avatar panel -->
         <ui:VisualElement name="avatar-panel" class="avatar-panel">
-            <ui:VisualElement class="avatar-panel__head">
-                <ui:VisualElement class="statusrow">
-                    <ui:VisualElement class="statusrow__dot" />
-                    <ui:Label name="connection-status" text="статус не определён" class="statusrow__text" />
-                </ui:VisualElement>
-                <ui:Button name="provider-tag" class="providertag">
-                    <ui:VisualElement class="provider__logo provider__logo--mini">
-                        <ui:Label name="provider-short" text="—" />
-                    </ui:VisualElement>
-                    <ui:VisualElement class="providertag__body">
-                        <ui:Label name="provider-name" text="провайдер" class="providertag__name" />
-                        <ui:Label name="provider-model" text="модель" class="providertag__model" />
-                    </ui:VisualElement>
-                    <ui:VisualElement class="icon icon--arrow providertag__arrow" />
-                </ui:Button>
+
+            <ui:VisualElement name="thinking-bubble" class="thinking-bubble" style="display: none;">
+                <ui:Label name="thinking-text" class="thinking-bubble__text" />
             </ui:VisualElement>
 
-            <ui:VisualElement class="avatar-stage__hero">
+            <ui:VisualElement name="avatar-stage-hero" class="avatar-stage__hero">
                 <ui:VisualElement name="avatar-glow" class="halo" />
                 <ui:VisualElement name="avatar-circle" class="avatar">
                     <ui:VisualElement name="avatar-art" class="avatar__art avatar__art--neon" />

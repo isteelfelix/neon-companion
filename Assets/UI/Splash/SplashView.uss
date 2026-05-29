@@ -1,0 +1,414 @@
+/* ============================================================
+   SplashView — Cyberpunk / neon loading screen
+   UITK safe rules:
+   • @keyframes: opacity only
+   • translate: BOTH values must have units  (0px not 0)
+   • animation-fill-mode: forwards  (never 'both')
+   • transition-timing-function: named keywords only (no cubic-bezier)
+   • scale: requires X Y pair  (1.02 1.02, not 1.02)
+   ============================================================ */
+
+/* ── Root ───────────────────────────────────────────────────── */
+
+.splash {
+    flex-grow: 1;
+    flex-direction: column;
+    background-color: rgba(0, 0, 0, 0);   /* transparent: shader quad renders behind */
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Regular.ttf");
+}
+
+/* ── Background: rendered by SplashBackground.shader on a scene Quad ── */
+/* (CSS bg elements removed — shader handles the gradient natively)     */
+
+/* ── HUD corner brackets ────────────────────────────────────── */
+
+.splash__corner {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+}
+
+.splash__corner--tl {
+    top: 22px;
+    left: 22px;
+    border-top-width: 1px;
+    border-left-width: 1px;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    border-color: rgba(124, 122, 237, 0.55);
+}
+
+.splash__corner--tr {
+    top: 22px;
+    right: 22px;
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-left-width: 0;
+    border-bottom-width: 0;
+    border-color: rgba(124, 122, 237, 0.55);
+}
+
+.splash__corner--bl {
+    bottom: 22px;
+    left: 22px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-top-width: 0;
+    border-right-width: 0;
+    border-color: rgba(124, 122, 237, 0.55);
+}
+
+.splash__corner--br {
+    bottom: 22px;
+    right: 22px;
+    border-bottom-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 0;
+    border-left-width: 0;
+    border-color: rgba(124, 122, 237, 0.55);
+}
+
+/* ── Build label — top center ───────────────────────────────── */
+
+.splash__build-label {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    font-size: 10px;
+    color: rgba(124, 122, 237, 0.60);
+    letter-spacing: 2px;
+    /* padding-left = letter-spacing compensates the trailing intercharacter
+       gap that CSS adds after the last letter, restoring visual centring. */
+    padding-left: 2px;
+    -unity-text-align: upper-center;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+/* ── Scattered background particles ─────────────────────────── */
+
+.splash__particle {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 999px;
+    background-color: rgba(124, 122, 237, 0.55);
+}
+
+.splash__particle--sm {
+    width: 2px;
+    height: 2px;
+    background-color: rgba(124, 122, 237, 0.32);
+}
+
+.splash__particle--purple {
+    width: 2px;
+    height: 2px;
+    background-color: rgba(162, 133, 240, 0.45);
+}
+
+/* ── Center column ──────────────────────────────────────────── */
+
+.splash__center {
+    flex-direction: column;
+    align-items: center;
+    width: 460px;
+}
+
+/* ── Logo area ──────────────────────────────────────────────── */
+
+.splash__logo-area {
+    width: 280px;
+    height: 280px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: visible;   /* allow glow child to paint outside bounds */
+}
+
+/* Soft radial glow behind the icon — two offset blobs (cyan + magenta)
+   fake a conic-gradient backdrop. Parent is 280px, each blob 460px.
+   Base offset = -(460-280)/2 = -90px; ±40px left/right for the colour split. */
+.splash__logo-bg-glow {
+    position: absolute;
+    width: 460px;
+    height: 460px;
+    top: -90px;
+    background-image: url("project://database/Assets/UI/Avatars/vignette.png");
+    -unity-background-scale-mode: scale-to-fit;
+}
+.splash__logo-bg-glow--cyan {
+    left: -130px;
+    -unity-background-image-tint-color: rgba(70, 195, 230, 0.55);
+}
+.splash__logo-bg-glow--magenta {
+    left: -50px;
+    -unity-background-image-tint-color: rgba(225, 100, 200, 0.48);
+}
+
+/* ── Neon glow rings ────────────────────────────────────────────
+   Each ring is an absolute circle centred in the 280px logo-area.
+   Offset = (logo-area - ring-size) / 2
+   ─────────────────────────────────────────────────────────────── */
+
+.splash__glow-ring {
+    position: absolute;
+    border-radius: 999px;
+    border-width: 0;
+}
+
+/* ring 1 — tightest, brightest indigo border (sits just outside the icon) */
+.splash__glow-ring--1 {
+    width: 226px;
+    height: 226px;
+    left: 27px;
+    top: 27px;
+    border-width: 2px;
+    border-color: rgba(124, 122, 237, 0.90);
+}
+
+/* ring 2 — first soft halo */
+.splash__glow-ring--2 {
+    width: 250px;
+    height: 250px;
+    left: 15px;
+    top: 15px;
+    border-width: 1px;
+    border-color: rgba(124, 122, 237, 0.45);
+}
+
+/* ring 3 — violet accent ring */
+.splash__glow-ring--3 {
+    width: 270px;
+    height: 270px;
+    left: 5px;
+    top: 5px;
+    border-width: 1px;
+    border-color: rgba(162, 133, 240, 0.45);
+}
+
+/* ring 4 — outermost soft fade */
+.splash__glow-ring--4 {
+    width: 296px;
+    height: 296px;
+    left: -8px;
+    top: -8px;
+    border-width: 1px;
+    border-color: rgba(124, 122, 237, 0.15);
+}
+
+/* ── App icon ─────────────────────────────────────────────────── */
+.splash__logo-img {
+    width: 180px;
+    height: 180px;
+    border-radius: 38px;
+    background-image: url("project://database/Assets/UI/Branding/app-icon-1024.png");
+    -unity-background-scale-mode: scale-to-fit;
+    border-width: 1px;
+    border-color: rgba(124, 122, 237, 0.28);
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.8s;
+    transition-timing-function: ease-out;
+}
+
+/* ── Title + tagline ────────────────────────────────────────── */
+
+.splash__title-area {
+    align-items: center;
+    margin-bottom: 22px;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.8s;
+    transition-timing-function: ease-out;
+}
+
+.splash__title {
+    font-size: 48px;
+    color: #C7C5FF;
+    letter-spacing: 8px;
+    /* Compensate trailing letter-spacing so glyphs are visually centred. */
+    padding-left: 8px;
+    -unity-text-align: middle-center;
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    margin-bottom: 12px;
+}
+
+.splash__tagline {
+    font-size: 12px;
+    color: rgba(199, 197, 255, 0.70);
+    letter-spacing: 5px;
+    padding-left: 5px;
+    -unity-text-align: middle-center;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    transition-property: opacity;
+    transition-duration: 0.05s;
+    transition-timing-function: ease-in-out;
+}
+
+/* ── Boot log ───────────────────────────────────────────────── */
+
+.splash__log-section {
+    width: 380px;
+    align-items: center;   /* centre the log-list inside this fixed section */
+}
+
+/* Fixed width + fixed height: log-list pre-reserves space for the widest row
+   ("AI provider API · connection established" ≈ 240px) so badges don't shift
+   left as longer entries appear. log-section's align-items: center handles
+   horizontal centring of the whole block. */
+.splash__log-list {
+    flex-direction: column;
+    width: 280px;
+    height: 132px;
+}
+
+.splash__log-row {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    margin-bottom: 3px;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.35s;
+    transition-timing-function: ease-out;
+}
+
+.splash__log-status--ok {
+    font-size: 9px;
+    color: #4DCB85;
+    background-color: rgba(77, 203, 133, 0.16);
+    border-width: 1px;
+    border-color: rgba(77, 203, 133, 0.35);
+    border-radius: 3px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    -unity-text-align: middle-center;
+    width: 28px;
+    flex-shrink: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+.splash__log-status--pending {
+    font-size: 9px;
+    color: rgba(74, 81, 99, 0.8);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    -unity-text-align: middle-center;
+    width: 28px;
+    flex-shrink: 0;
+}
+
+.splash__log-text {
+    font-size: 10px;
+    color: rgba(216, 220, 230, 0.85);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    -unity-text-align: middle-left;
+    flex-grow: 1;
+    margin-left: 8px;
+}
+
+/* ── Bottom bar ─────────────────────────────────────────────── */
+
+.splash__bottom-bar {
+    position: absolute;
+    bottom: 24px;
+    left: 72px;
+    right: 72px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.splash__status-left {
+    font-size: 10px;
+    color: rgba(124, 122, 237, 0.55);
+    letter-spacing: 2px;
+    padding-left: 2px;
+    -unity-text-align: middle-left;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    width: 110px;
+    flex-shrink: 0;
+}
+
+.splash__progress-track {
+    flex-grow: 1;
+    height: 2px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+.splash__progress-fill {
+    height: 2px;
+    background-color: rgba(124, 122, 237, 0.90);
+    border-radius: 999px;
+    width: 0%;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    transition-property: width;
+    transition-duration: 0.55s;
+    transition-timing-function: ease-out;
+}
+
+.splash__progress-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background-color: rgb(255, 255, 255);
+    margin-right: -4px;
+    flex-shrink: 0;
+    border-width: 1px;
+    border-color: rgba(220, 130, 220, 0.65);
+}
+
+.splash__status-right {
+    font-size: 10px;
+    color: rgba(124, 122, 237, 0.55);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    width: 38px;
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+}
+
+/* Atmospheric side glows moved into SplashBackground.shader
+   (_TealColor cyan-left + _PurpleColor magenta-right). UITK layer
+   removed — one source of truth, cleaner GPU blend. */
+
+/* ── Horizontal scan line (animated via C#) ─────────────────── */
+
+.splash__scanline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    top: -2px;
+    background-image: url("project://database/Assets/UI/Avatars/vignette.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: rgba(150, 130, 240, 0.55);
+    opacity: 0;
+}
+
+/* ── Orbit ring (rotated via C#) ────────────────────────────
+   UITK has no border-style: dashed, so we fake "spinning dashes"
+   by giving each side a different opacity — 4 segments rotating
+   reads as a slow ticking orbit. */
+
+.splash__orbit-dashed {
+    position: absolute;
+    width: 312px;
+    height: 312px;
+    left: -16px;
+    top: -16px;
+    border-radius: 999px;
+    border-width: 1px;
+    border-top-color: rgba(124, 122, 237, 0.30);
+    border-right-color: rgba(124, 122, 237, 0.10);
+    border-bottom-color: rgba(124, 122, 237, 0.30);
+    border-left-color: rgba(124, 122, 237, 0.10);
+}

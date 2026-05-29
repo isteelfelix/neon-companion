@@ -154,37 +154,51 @@
 
 .themes-toggle {
     margin: 0;
+    width: 42px;
+    min-width: 42px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 11px;
+    overflow: hidden;
 }
 
-.themes-toggle > .unity-toggle__input {
-    width: 36px;
-    height: 20px;
-    border-radius: 999px;
+.themes-toggle .unity-toggle__input,
+.themes-toggle .unity-base-field__input {
+    width: 42px;
+    min-width: 42px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 11px;
     background-color: var(--bg-4);
+    background-image: none;
+    -unity-background-image-tint-color: rgba(0,0,0,0);
     border-width: 1px;
     border-color: var(--line-2);
     padding: 0;
+    align-items: center;
     justify-content: flex-start;
 }
 
-.themes-toggle > .unity-toggle__input > .unity-toggle__checkmark {
-    width: 14px;
-    height: 14px;
-    margin: 2px;
+.themes-toggle .unity-toggle__checkmark {
+    width: 16px;
+    height: 16px;
+    margin: 3px;
     border-radius: 999px;
     background-color: var(--text-2);
     background-image: none;
     border-width: 0;
+    flex-shrink: 0;
 }
 
-.themes-toggle:checked > .unity-toggle__input {
+.themes-toggle:checked .unity-toggle__input,
+.themes-toggle:checked .unity-base-field__input {
     background-color: var(--accent);
     border-color: var(--accent);
 }
 
-.themes-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
+.themes-toggle:checked .unity-toggle__checkmark {
     background-color: rgb(255, 255, 255);
-    translate: 16px 0;
+    translate: 20px 0px;
 }
 
 .themes-toggle .unity-toggle__text {

@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:nc="NeonCompanion.Runtime.UI.UITK">
     <ui:Style src="../Theme/Tokens.uss" />
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="SettingsView.uss" />
@@ -26,7 +26,7 @@
                         <ui:Label text="Язык" class="settings-row__name" />
                         <ui:Label text="Язык интерфейса. Применяется сразу." class="settings-row__sub" />
                     </ui:VisualElement>
-                    <ui:DropdownField name="settings-language" choices="Русский,English" index="0" class="settings-dropdown" />
+                    <nc:NeonDropdown name="settings-language" choices-csv="Русский,English" class="settings-dropdown" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="settings-row">
@@ -47,10 +47,33 @@
 
                 <ui:VisualElement class="settings-row">
                     <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Enter → отправить" class="settings-row__name" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-enter-to-send" class="settings-toggle" value="true" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
                         <ui:Label text="System prompt персонажа" class="settings-row__name" />
                         <ui:Label text="Использовать персону выбранного аватара." class="settings-row__sub" />
                     </ui:VisualElement>
                     <ui:Toggle name="settings-system-prompt" class="settings-toggle" value="true" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Voice I/O" class="settings-row__name" />
+                        <ui:Label text="Голосовой ввод и озвучивание ответов." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-voice-io" class="settings-toggle" value="true" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row settings-row--last">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Горячая клавиша закрытия" class="settings-row__name" />
+                        <ui:Label text="Нажми кнопку, затем клавишу или комбинацию." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Button name="settings-hotkey-capture" text="Escape" class="btn btn--hotkey-capture" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
@@ -104,6 +127,17 @@
                     </ui:Button>
                 </ui:VisualElement>
 
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Очистить историю чатов" class="settings-row__name" />
+                        <ui:Label text="Удалить все сессии. Провайдеры и настройки сохранятся." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Button name="settings-clear-chats-btn" class="btn btn--danger">
+                        <ui:VisualElement class="icon icon--trash btn__icon" />
+                        <ui:Label text="Очистить" />
+                    </ui:Button>
+                </ui:VisualElement>
+
                 <ui:VisualElement class="settings-row settings-row--danger">
                     <ui:VisualElement class="settings-row__copy">
                         <ui:Label text="Очистить все данные" class="settings-row__name" />
@@ -116,6 +150,24 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
+            <!-- ===== Plugins ===== -->
+            <ui:VisualElement class="settings-card">
+                <ui:VisualElement class="settings-card__head">
+                    <ui:VisualElement class="icon icon--bolt settings-card__icon" />
+                    <ui:Label text="Плагины" class="settings-card__title" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row settings-row--compact">
+                    <ui:Label text="Статус загрузки" class="settings-row__name" />
+                    <ui:Label name="settings-plugins-summary" text="—" class="settings-row__value-mono" />
+                </ui:VisualElement>
+                <ui:VisualElement class="settings-row settings-row--compact">
+                    <ui:Label text="Конфиги плагинов" class="settings-row__name" />
+                    <ui:Label name="settings-plugins-config" text="—" class="settings-row__value-mono" />
+                </ui:VisualElement>
+                <ui:VisualElement name="settings-plugins-list" class="settings-plugins-list" />
+            </ui:VisualElement>
+
             <!-- ===== About ===== -->
             <ui:VisualElement class="settings-card">
                 <ui:VisualElement class="settings-card__head">
@@ -125,7 +177,7 @@
 
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Версия" class="settings-row__name" />
-                    <ui:Label name="settings-version" text="0.1.0" class="settings-row__value-mono" />
+                    <ui:Label name="settings-version" text="0.2.0" class="settings-row__value-mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="settings-row settings-row--compact">
                     <ui:Label text="Лицензия" class="settings-row__name" />
@@ -148,6 +200,9 @@
                     <ui:Button name="settings-donate-btn" class="btn btn--muted" tooltip="Ссылка для поддержки будет добавлена позже">
                         <ui:VisualElement class="icon icon--heart btn__icon" />
                         <ui:Label text="Поддержать" />
+                    </ui:Button>
+                    <ui:Button name="settings-exit-btn" class="btn btn--danger">
+                        <ui:Label text="Выход" />
                     </ui:Button>
                 </ui:VisualElement>
             </ui:VisualElement>

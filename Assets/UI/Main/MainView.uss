@@ -48,8 +48,10 @@
 .icon--dots       { background-image: url("project://database/Assets/UI/Icons/dots.svg"); }
 .icon--headphones { background-image: url("project://database/Assets/UI/Icons/headphones.svg"); }
 .icon--history    { background-image: url("project://database/Assets/UI/Icons/history.svg"); }
-.icon--palette    { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
-.icon--plus       { background-image: url("project://database/Assets/UI/Icons/plus.svg"); }
+.icon--palette      { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
+.icon--panel-left   { background-image: url("project://database/Assets/UI/Icons/panel-left.svg"); }
+.icon--panel-right  { background-image: url("project://database/Assets/UI/Icons/panel-right.svg"); }
+.icon--plus         { background-image: url("project://database/Assets/UI/Icons/plus.svg"); }
 .icon--refresh    { background-image: url("project://database/Assets/UI/Icons/refresh.svg"); }
 .icon--search     { background-image: url("project://database/Assets/UI/Icons/search.svg"); }
 .icon--send       { background-image: url("project://database/Assets/UI/Icons/send.svg"); }
@@ -57,6 +59,7 @@
 .icon--sparkle    { background-image: url("project://database/Assets/UI/Icons/sparkle.svg"); }
 .icon--upload     { background-image: url("project://database/Assets/UI/Icons/upload.svg"); }
 .icon--user       { background-image: url("project://database/Assets/UI/Icons/user.svg"); }
+.icon--power      { background-image: url("project://database/Assets/UI/Icons/power.svg"); }
 
 /* ============== Rail ============== */
 
@@ -68,6 +71,7 @@
     border-right-color: var(--line-1);
     flex-direction: column;
     padding: 14px 12px;
+    overflow: hidden;
 }
 
 .rail__brand {
@@ -158,6 +162,7 @@
     font-size: 13px;
     color: var(--text-2);
     flex-grow: 1;
+    overflow: hidden;
 }
 
 .nav__item:hover .nav__label {
@@ -244,6 +249,11 @@
     font-size: 11px;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.topbar__model-picker {
+    margin-left: 12px;
+    max-width: 200px;
 }
 
 .topbar__sep {
@@ -407,8 +417,8 @@
     min-height: 34px;
     border-width: 1px;
     border-color: var(--line-1);
-    border-radius: var(--radius-sm);
-    background-color: color-mix(in srgb, var(--surface-1) 80%, transparent);
+    border-radius: var(--r-sm);
+    background-color: var(--bg-1);
     margin-bottom: 12px;
     padding: 0 4px;
 }
@@ -447,31 +457,147 @@
 }
 
 .history__item {
-    border-radius: var(--radius-sm);
+    border-radius: var(--r-sm);
     border-width: 1px;
     border-color: transparent;
     background-color: transparent;
     padding: 8px 10px;
     margin-bottom: 4px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.history__row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 2px;
+    min-width: 0;
 }
 
 .history__item:hover {
-    background-color: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    background-color: var(--bg-2);
 }
 
 .history__item--active {
-    border-color: color-mix(in srgb, var(--accent-0) 40%, transparent);
-    background-color: color-mix(in srgb, var(--accent-0) 12%, transparent);
+    border-color: var(--accent-glow);
+    background-color: var(--accent-soft);
 }
 
 .history__title {
     color: var(--text-0);
     font-size: 13px;
-    -unity-font-style: semi-bold;
-    margin-bottom: 2px;
+    -unity-font-style: bold;
+    flex-grow: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history__provider {
+    color: var(--accent-2);
+    background-color: var(--accent-soft);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    flex-shrink: 0;
+    max-width: 48%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .history__meta {
     color: var(--text-3);
     font-size: 12px;
+}
+
+/* Session delete button */
+.history__delete-btn {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 14px;
+    display: none;
+    flex-shrink: 0;
+    margin-left: auto;
+    align-items: center;
+    justify-content: center;
+}
+
+.history__item:hover .history__delete-btn {
+    display: flex;
+}
+
+.history__delete-btn:hover,
+.history__delete-btn--confirm {
+    background-color: rgba(239, 100, 100, 0.15);
+    border-color: rgba(239, 100, 100, 0.30);
+    color: #ef6464;
+}
+
+/* ============== Nav close button ============== */
+
+.nav__item--close {
+    margin-top: 2px;
+    opacity: 0.55;
+}
+
+.nav__item--close:hover {
+    opacity: 1.0;
+}
+
+/* ============== Quit confirmation overlay ============== */
+
+.quit-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+}
+
+.quit-dialog {
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 14px;
+    padding: 24px 28px;
+    min-width: 300px;
+    max-width: 380px;
+}
+
+.quit-dialog__title {
+    font-size: 16px;
+    color: var(--text-0);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
+    margin-bottom: 8px;
+}
+
+.quit-dialog__body {
+    font-size: 13px;
+    color: var(--text-3);
+    margin-bottom: 22px;
+    white-space: normal;
+}
+
+.quit-dialog__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.quit-dialog__actions > Button {
+    margin-left: 8px;
 }

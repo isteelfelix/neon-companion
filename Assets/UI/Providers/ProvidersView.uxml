@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:nc="NeonCompanion.Runtime.UI.UITK">
     <ui:Style src="../Theme/Tokens.uss" />
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="ProvidersView.uss" />
@@ -27,6 +27,7 @@
                     <ui:VisualElement class="editor__header-copy">
                         <ui:Label name="editor-provider-name" text="OpenAI" class="editor__title" />
                         <ui:Label text="Конфигурация подключения" class="editor__sub" />
+                        <ui:Label name="editor-provider-status" text="Новый черновик" class="editor__status editor__status--draft" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -44,6 +45,10 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="field">
                     <ui:Label text="Модель по умолчанию" class="label" />
+                    <nc:NeonDropdown name="edit-model-preset" class="input" />
+                </ui:VisualElement>
+                <ui:VisualElement name="edit-model-custom-wrap" class="field" style="display: none;">
+                    <ui:Label text="ID модели (вручную)" class="label" />
                     <ui:TextField name="edit-model" class="input input--mono" />
                 </ui:VisualElement>
                 <ui:VisualElement class="field__row">
@@ -57,9 +62,14 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
+                <ui:VisualElement class="field">
+                    <ui:Label text="Тип бэкенда" class="label" />
+                    <nc:NeonDropdown name="edit-backend-type" class="input" />
+                </ui:VisualElement>
+
                 <ui:VisualElement name="test-row" class="testrow">
                     <ui:VisualElement name="test-row-icon" class="icon icon--check testrow__icon" />
-                    <ui:Label name="test-row-label" text="Нажми Тест для проверки соединения" />
+                    <ui:Label name="test-row-label" class="testrow__label" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="provider-edit-actions">

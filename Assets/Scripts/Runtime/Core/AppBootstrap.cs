@@ -1,11 +1,14 @@
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Data.Secrets;
 using NeonCompanion.Runtime.Data.Storage;
+using NeonCompanion.Runtime.Donation;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
+using NeonCompanion.Runtime.Plugins;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Core
@@ -40,7 +43,10 @@ namespace NeonCompanion.Runtime.Core
             var settings = new AppSettingsRepository(storage);
             var aiClient = new OpenAiCompatibleClient();
             var avatarService = new AvatarService();
+            var avatar3DService = new Avatar3DService();
+            var donationService = new DonationService();
             var providerManager = new ProviderManager(providers);
+            var modelDiscoveryService = new ModelDiscoveryService(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
 
             // Apply avatar system prompt
@@ -48,7 +54,15 @@ namespace NeonCompanion.Runtime.Core
             if (settingsData != null && settingsData.useSystemPrompt)
             {
                 var avatarProfiles = avatars.GetAll();
-                var systemPrompt = avatarService.GetSystemPrompt(settingsData.activeAvatarId, avatarProfiles);
+                string activeAvatarId = settingsData.activeAvatarId;
+                bool knownAvatar = !string.IsNullOrWhiteSpace(activeAvatarId) &&
+                                   (System.Array.IndexOf(new[] { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" }, activeAvatarId) >= 0 ||
+                                    avatarProfiles.Exists(a => a != null && a.id == activeAvatarId));
+
+                if (!knownAvatar)
+                    activeAvatarId = "neon";
+
+                var systemPrompt = avatarService.GetSystemPrompt(activeAvatarId, avatarProfiles);
                 if (!string.IsNullOrEmpty(systemPrompt))
                     chatService.SystemPrompt = systemPrompt;
             }
@@ -76,9 +90,18 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IAppSettingsRepository>(settings);
             services.Register<IAiClient>(aiClient);
             services.Register<IAvatarService>(avatarService);
+            services.Register<IAvatar3DService>(avatar3DService);
+            services.Register<IDonationService>(donationService);
             services.Register<ProviderManager>(providerManager);
+            services.Register<ModelDiscoveryService>(modelDiscoveryService);
             services.Register<ChatService>(chatService);
             services.Register<ILocalizationService>(localizationService);
+
+            var pluginManager = GetComponent<PluginManager>();
+            if (pluginManager == null)
+                pluginManager = gameObject.AddComponent<PluginManager>();
+            pluginManager.Initialize(services);
+            services.Register<PluginManager>(pluginManager);
 
             NeonLogger.Log("App bootstrap completed.");
         }

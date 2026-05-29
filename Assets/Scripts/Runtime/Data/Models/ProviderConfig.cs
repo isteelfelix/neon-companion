@@ -14,6 +14,12 @@ namespace NeonCompanion.Runtime.Data.Models
         public int maxTokens = 512;
         public bool isEnabled = true;
 
+        /// <summary>
+        /// Тип бэкенда: "hermes", null (generic OpenAI-compatible).
+        /// Определяет, какой IProviderAdapter используется.
+        /// </summary>
+        public string backendType; // null = generic
+
         public static ProviderConfig CreateDefault(string name, string baseUrl)
         {
             return new ProviderConfig

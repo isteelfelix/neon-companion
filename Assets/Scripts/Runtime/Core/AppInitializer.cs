@@ -30,7 +30,8 @@ namespace NeonCompanion.Runtime.Core
 
             // Pre-initialize chat service
             var chatService = app.Services.GetRequired<ChatService>();
-            await chatService.GetOrCreateChatAsync();
+            var settings = app.Settings.Load();
+            await chatService.GetOrCreateChatAsync(settings?.activeProviderId);
 
             Debug.Log("[NeonCompanion] Application initialized successfully.");
             return app;

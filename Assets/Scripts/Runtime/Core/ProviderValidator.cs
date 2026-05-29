@@ -5,13 +5,18 @@ namespace NeonCompanion.Runtime.Core
 {
     public static class ProviderValidator
     {
-        public static void Validate(ProviderConfig provider)
+        public static void ValidateForConnection(ProviderConfig provider)
         {
             if (provider == null)
                 throw new ArgumentNullException(nameof(provider));
 
             if (string.IsNullOrWhiteSpace(provider.baseUrl))
                 throw new InvalidOperationException("Base URL is not configured.");
+        }
+
+        public static void Validate(ProviderConfig provider)
+        {
+            ValidateForConnection(provider);
 
             if (string.IsNullOrWhiteSpace(provider.defaultModel))
                 throw new InvalidOperationException("Model is not configured.");

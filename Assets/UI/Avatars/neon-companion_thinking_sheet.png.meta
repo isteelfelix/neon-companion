@@ -1,0 +1,1703 @@
+fileFormatVersion: 2
+guid: d8fe547c9e9046148903cb33f072a650
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 9050386679537602800
+    second: thinking_sheet_0
+  - first:
+      213: -6818080190387384992
+    second: thinking_sheet_1
+  - first:
+      213: 3800873524001707776
+    second: thinking_sheet_2
+  - first:
+      213: 4831713968573952393
+    second: thinking_sheet_3
+  - first:
+      213: 2007585620497251785
+    second: thinking_sheet_4
+  - first:
+      213: 8417751475803174690
+    second: thinking_sheet_5
+  - first:
+      213: -3499499090916244525
+    second: thinking_sheet_6
+  - first:
+      213: -548814253759185350
+    second: thinking_sheet_7
+  - first:
+      213: -7774863150388920327
+    second: thinking_sheet_8
+  - first:
+      213: -6688187794497538284
+    second: thinking_sheet_9
+  - first:
+      213: 1926962323431360099
+    second: thinking_sheet_10
+  - first:
+      213: 9111296067844641845
+    second: thinking_sheet_11
+  - first:
+      213: -3230543198334484949
+    second: thinking_sheet_12
+  - first:
+      213: -4330855216925685432
+    second: thinking_sheet_13
+  - first:
+      213: 1631983543328778427
+    second: thinking_sheet_14
+  - first:
+      213: -7828837714624219866
+    second: thinking_sheet_15
+  - first:
+      213: 8865795656153378547
+    second: thinking_sheet_16
+  - first:
+      213: -7746628604323172992
+    second: thinking_sheet_17
+  - first:
+      213: 7317738558351533539
+    second: thinking_sheet_18
+  - first:
+      213: -7731572489477822489
+    second: thinking_sheet_19
+  - first:
+      213: 2758084341368793795
+    second: thinking_sheet_20
+  - first:
+      213: -1504160306715039321
+    second: thinking_sheet_21
+  - first:
+      213: 8229552654018874874
+    second: thinking_sheet_22
+  - first:
+      213: 4214029277633362252
+    second: thinking_sheet_23
+  - first:
+      213: 9184434511197590711
+    second: thinking_sheet_24
+  - first:
+      213: 5626945462661378436
+    second: thinking_sheet_25
+  - first:
+      213: 3439065975901339525
+    second: thinking_sheet_26
+  - first:
+      213: -2272231574926939914
+    second: thinking_sheet_27
+  - first:
+      213: 8876239372919822088
+    second: thinking_sheet_28
+  - first:
+      213: 3939376911177299151
+    second: thinking_sheet_29
+  - first:
+      213: 7431035278351689161
+    second: thinking_sheet_30
+  - first:
+      213: -2490391269447303795
+    second: thinking_sheet_31
+  - first:
+      213: 1179361377285101185
+    second: thinking_sheet_32
+  - first:
+      213: 2225036231390162616
+    second: thinking_sheet_33
+  - first:
+      213: -2170570843738285927
+    second: thinking_sheet_34
+  - first:
+      213: -8565304798190067538
+    second: thinking_sheet_35
+  - first:
+      213: -8835342279025545571
+    second: thinking_sheet_36
+  - first:
+      213: 3555876540848535996
+    second: thinking_sheet_37
+  - first:
+      213: -153744645496756854
+    second: thinking_sheet_38
+  - first:
+      213: 4157640093210717228
+    second: thinking_sheet_39
+  - first:
+      213: 8563014949564804392
+    second: thinking_sheet_40
+  - first:
+      213: -9074132002087176653
+    second: thinking_sheet_41
+  - first:
+      213: 4204683311019607756
+    second: thinking_sheet_42
+  - first:
+      213: -7055540742891330076
+    second: thinking_sheet_43
+  - first:
+      213: 2352089888436765850
+    second: thinking_sheet_44
+  - first:
+      213: 8877645570522351369
+    second: thinking_sheet_45
+  - first:
+      213: 6892639926553055191
+    second: thinking_sheet_46
+  - first:
+      213: 6672812074694334567
+    second: thinking_sheet_47
+  - first:
+      213: -7362209224520985836
+    second: thinking_sheet_48
+  - first:
+      213: 3986600207767253845
+    second: thinking_sheet_49
+  - first:
+      213: 4692540882162096382
+    second: thinking_sheet_50
+  - first:
+      213: 2890748083457114607
+    second: thinking_sheet_51
+  - first:
+      213: 9054446089072256434
+    second: thinking_sheet_52
+  - first:
+      213: 1912749508290522427
+    second: thinking_sheet_53
+  - first:
+      213: -8322687782413180900
+    second: thinking_sheet_54
+  - first:
+      213: 2022806751177945034
+    second: thinking_sheet_55
+  - first:
+      213: 1152138170831755676
+    second: thinking_sheet_56
+  - first:
+      213: 5587828756779670025
+    second: thinking_sheet_57
+  - first:
+      213: -5317653753225915011
+    second: thinking_sheet_58
+  - first:
+      213: -203148756311386747
+    second: thinking_sheet_59
+  - first:
+      213: -6865247997361646611
+    second: thinking_sheet_60
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 8192
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: thinking_sheet_0
+      rect:
+        serializedVersion: 2
+        x: 131
+        y: 4780
+        width: 243
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0f014c9ebbe699d70800000000000000
+      internalID: 9050386679537602800
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_1
+      rect:
+        serializedVersion: 2
+        x: 642
+        y: 4780
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 06d05d9c0305161a0800000000000000
+      internalID: -6818080190387384992
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_2
+      rect:
+        serializedVersion: 2
+        x: 1154
+        y: 4780
+        width: 244
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0071f4a055a6fb430800000000000000
+      internalID: 3800873524001707776
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_3
+      rect:
+        serializedVersion: 2
+        x: 1664
+        y: 4780
+        width: 245
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 981b4214142bd0340800000000000000
+      internalID: 4831713968573952393
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_4
+      rect:
+        serializedVersion: 2
+        x: 2175
+        y: 4780
+        width: 244
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9cdbbe53c706cdb10800000000000000
+      internalID: 2007585620497251785
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_5
+      rect:
+        serializedVersion: 2
+        x: 2685
+        y: 4780
+        width: 246
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 227b4ca3e5cd1d470800000000000000
+      internalID: 8417751475803174690
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_6
+      rect:
+        serializedVersion: 2
+        x: 3194
+        y: 4780
+        width: 247
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3d382223e184f6fc0800000000000000
+      internalID: -3499499090916244525
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_7
+      rect:
+        serializedVersion: 2
+        x: 3701
+        y: 4780
+        width: 252
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a3e330d08583268f0800000000000000
+      internalID: -548814253759185350
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_8
+      rect:
+        serializedVersion: 2
+        x: 114
+        y: 4097
+        width: 255
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9ff3bcf58232a1490800000000000000
+      internalID: -7774863150388920327
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_9
+      rect:
+        serializedVersion: 2
+        x: 621
+        y: 4097
+        width: 262
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 417fedde2a8ce23a0800000000000000
+      internalID: -6688187794497538284
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_10
+      rect:
+        serializedVersion: 2
+        x: 1124
+        y: 4097
+        width: 276
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 36600bf0602fdba10800000000000000
+      internalID: 1926962323431360099
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_11
+      rect:
+        serializedVersion: 2
+        x: 1626
+        y: 4097
+        width: 291
+        height: 673
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5341b4fff73d17e70800000000000000
+      internalID: 9111296067844641845
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_12
+      rect:
+        serializedVersion: 2
+        x: 2127
+        y: 4097
+        width: 305
+        height: 673
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b2ef7b7c31eca23d0800000000000000
+      internalID: -3230543198334484949
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_13
+      rect:
+        serializedVersion: 2
+        x: 2634
+        y: 4097
+        width: 308
+        height: 673
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8494f754026b5e3c0800000000000000
+      internalID: -4330855216925685432
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_14
+      rect:
+        serializedVersion: 2
+        x: 3151
+        y: 4097
+        width: 298
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bb82563d268f5a610800000000000000
+      internalID: 1631983543328778427
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_15
+      rect:
+        serializedVersion: 2
+        x: 3683
+        y: 4097
+        width: 272
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 62574a7d3916a5390800000000000000
+      internalID: -7828837714624219866
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_16
+      rect:
+        serializedVersion: 2
+        x: 114
+        y: 3414
+        width: 257
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3fe29302d22a90b70800000000000000
+      internalID: 8865795656153378547
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_17
+      rect:
+        serializedVersion: 2
+        x: 634
+        y: 3414
+        width: 249
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 08def68e3527e7490800000000000000
+      internalID: -7746628604323172992
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_18
+      rect:
+        serializedVersion: 2
+        x: 1155
+        y: 3414
+        width: 242
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3e5e8b1a274dd8560800000000000000
+      internalID: 7317738558351533539
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_19
+      rect:
+        serializedVersion: 2
+        x: 1677
+        y: 3414
+        width: 233
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7e7ed71d8cfe3b490800000000000000
+      internalID: -7731572489477822489
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_20
+      rect:
+        serializedVersion: 2
+        x: 2197
+        y: 3414
+        width: 225
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3caaad3781fa64620800000000000000
+      internalID: 2758084341368793795
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_21
+      rect:
+        serializedVersion: 2
+        x: 2715
+        y: 3414
+        width: 219
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7a9e101ab26202be0800000000000000
+      internalID: -1504160306715039321
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_22
+      rect:
+        serializedVersion: 2
+        x: 3234
+        y: 3414
+        width: 215
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: afd0b2b698e353270800000000000000
+      internalID: 8229552654018874874
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_23
+      rect:
+        serializedVersion: 2
+        x: 3735
+        y: 3414
+        width: 228
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c49be661d4d3b7a30800000000000000
+      internalID: 4214029277633362252
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_24
+      rect:
+        serializedVersion: 2
+        x: 140
+        y: 2731
+        width: 242
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7b455c6d68aa57f70800000000000000
+      internalID: 9184434511197590711
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_25
+      rect:
+        serializedVersion: 2
+        x: 650
+        y: 2731
+        width: 244
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4817d60e51de61e40800000000000000
+      internalID: 5626945462661378436
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_26
+      rect:
+        serializedVersion: 2
+        x: 1162
+        y: 2731
+        width: 241
+        height: 681
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 58f3bbcb8440abf20800000000000000
+      internalID: 3439065975901339525
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_27
+      rect:
+        serializedVersion: 2
+        x: 1674
+        y: 2731
+        width: 238
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6f8ad01eb696770e0800000000000000
+      internalID: -2272231574926939914
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_28
+      rect:
+        serializedVersion: 2
+        x: 2186
+        y: 2731
+        width: 236
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 807d83c6eacbe2b70800000000000000
+      internalID: 8876239372919822088
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_29
+      rect:
+        serializedVersion: 2
+        x: 2698
+        y: 2731
+        width: 233
+        height: 679
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fc43913dd6a7ba630800000000000000
+      internalID: 3939376911177299151
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_30
+      rect:
+        serializedVersion: 2
+        x: 3210
+        y: 2731
+        width: 233
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9c56c8fd637502760800000000000000
+      internalID: 7431035278351689161
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_31
+      rect:
+        serializedVersion: 2
+        x: 3722
+        y: 2731
+        width: 233
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d8dfbd8c55a507dd0800000000000000
+      internalID: -2490391269447303795
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_32
+      rect:
+        serializedVersion: 2
+        x: 138
+        y: 2048
+        width: 233
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 186d4e29ceeed5010800000000000000
+      internalID: 1179361377285101185
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_33
+      rect:
+        serializedVersion: 2
+        x: 650
+        y: 2048
+        width: 233
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8be6268e9aae0ee10800000000000000
+      internalID: 2225036231390162616
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_34
+      rect:
+        serializedVersion: 2
+        x: 1162
+        y: 2048
+        width: 235
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 998d82b515590e1e0800000000000000
+      internalID: -2170570843738285927
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_35
+      rect:
+        serializedVersion: 2
+        x: 1674
+        y: 2048
+        width: 236
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ea0aeeebaace12980800000000000000
+      internalID: -8565304798190067538
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_36
+      rect:
+        serializedVersion: 2
+        x: 2184
+        y: 2048
+        width: 240
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d9e21b5420f826580800000000000000
+      internalID: -8835342279025545571
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_37
+      rect:
+        serializedVersion: 2
+        x: 2698
+        y: 2048
+        width: 239
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cb9fb62cfd2095130800000000000000
+      internalID: 3555876540848535996
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_38
+      rect:
+        serializedVersion: 2
+        x: 3208
+        y: 2048
+        width: 243
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a852c0b3f0acdddf0800000000000000
+      internalID: -153744645496756854
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_39
+      rect:
+        serializedVersion: 2
+        x: 3720
+        y: 2048
+        width: 245
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c2c2fbbf2a7e2b930800000000000000
+      internalID: 4157640093210717228
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_40
+      rect:
+        serializedVersion: 2
+        x: 136
+        y: 1365
+        width: 246
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 82d6b235ab0f5d670800000000000000
+      internalID: 8563014949564804392
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_41
+      rect:
+        serializedVersion: 2
+        x: 649
+        y: 1365
+        width: 247
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 336f69a5505321280800000000000000
+      internalID: -9074132002087176653
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_42
+      rect:
+        serializedVersion: 2
+        x: 1162
+        y: 1365
+        width: 246
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cc6465aa1390a5a30800000000000000
+      internalID: 4204683311019607756
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_43
+      rect:
+        serializedVersion: 2
+        x: 1679
+        y: 1365
+        width: 241
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4e5aaa1831fa51e90800000000000000
+      internalID: -7055540742891330076
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_44
+      rect:
+        serializedVersion: 2
+        x: 2205
+        y: 1365
+        width: 227
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a94cf08aa4d44a020800000000000000
+      internalID: 2352089888436765850
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_45
+      rect:
+        serializedVersion: 2
+        x: 2735
+        y: 1365
+        width: 207
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9070ec05c9bb33b70800000000000000
+      internalID: 8877645570522351369
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_46
+      rect:
+        serializedVersion: 2
+        x: 3245
+        y: 1365
+        width: 208
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7df8ed29e7397af50800000000000000
+      internalID: 6892639926553055191
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_47
+      rect:
+        serializedVersion: 2
+        x: 3754
+        y: 1365
+        width: 207
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 768d7155a379a9c50800000000000000
+      internalID: 6672812074694334567
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_48
+      rect:
+        serializedVersion: 2
+        x: 165
+        y: 682
+        width: 208
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 413925a87bd24d990800000000000000
+      internalID: -7362209224520985836
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_49
+      rect:
+        serializedVersion: 2
+        x: 672
+        y: 682
+        width: 208
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 553377d54cf335730800000000000000
+      internalID: 3986600207767253845
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_50
+      rect:
+        serializedVersion: 2
+        x: 1181
+        y: 682
+        width: 206
+        height: 677
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ef81547f1114f1140800000000000000
+      internalID: 4692540882162096382
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_51
+      rect:
+        serializedVersion: 2
+        x: 1690
+        y: 682
+        width: 206
+        height: 675
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fe14a99e0100e1820800000000000000
+      internalID: 2890748083457114607
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_52
+      rect:
+        serializedVersion: 2
+        x: 2200
+        y: 682
+        width: 203
+        height: 673
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2b5a319debad7ad70800000000000000
+      internalID: 9054446089072256434
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_53
+      rect:
+        serializedVersion: 2
+        x: 2711
+        y: 682
+        width: 204
+        height: 671
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b3da5f92b837b8a10800000000000000
+      internalID: 1912749508290522427
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_54
+      rect:
+        serializedVersion: 2
+        x: 3223
+        y: 682
+        width: 202
+        height: 668
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c1067c0be8fdf7c80800000000000000
+      internalID: -8322687782413180900
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_55
+      rect:
+        serializedVersion: 2
+        x: 3736
+        y: 682
+        width: 219
+        height: 668
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: acf293dd504721c10800000000000000
+      internalID: 2022806751177945034
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_56
+      rect:
+        serializedVersion: 2
+        x: 154
+        y: 0
+        width: 223
+        height: 669
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c995894ef873dff00800000000000000
+      internalID: 1152138170831755676
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_57
+      rect:
+        serializedVersion: 2
+        x: 669
+        y: 0
+        width: 219
+        height: 670
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 90a909116a4fb8d40800000000000000
+      internalID: 5587828756779670025
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_58
+      rect:
+        serializedVersion: 2
+        x: 1183
+        y: 0
+        width: 218
+        height: 671
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d755278e516e336b0800000000000000
+      internalID: -5317653753225915011
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_59
+      rect:
+        serializedVersion: 2
+        x: 1698
+        y: 0
+        width: 215
+        height: 672
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5855f7f48454e2df0800000000000000
+      internalID: -203148756311386747
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: thinking_sheet_60
+      rect:
+        serializedVersion: 2
+        x: 2213
+        y: 0
+        width: 211
+        height: 672
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: de31c4ee15db9b0a0800000000000000
+      internalID: -6865247997361646611
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      thinking_sheet_0: 9050386679537602800
+      thinking_sheet_1: -6818080190387384992
+      thinking_sheet_10: 1926962323431360099
+      thinking_sheet_11: 9111296067844641845
+      thinking_sheet_12: -3230543198334484949
+      thinking_sheet_13: -4330855216925685432
+      thinking_sheet_14: 1631983543328778427
+      thinking_sheet_15: -7828837714624219866
+      thinking_sheet_16: 8865795656153378547
+      thinking_sheet_17: -7746628604323172992
+      thinking_sheet_18: 7317738558351533539
+      thinking_sheet_19: -7731572489477822489
+      thinking_sheet_2: 3800873524001707776
+      thinking_sheet_20: 2758084341368793795
+      thinking_sheet_21: -1504160306715039321
+      thinking_sheet_22: 8229552654018874874
+      thinking_sheet_23: 4214029277633362252
+      thinking_sheet_24: 9184434511197590711
+      thinking_sheet_25: 5626945462661378436
+      thinking_sheet_26: 3439065975901339525
+      thinking_sheet_27: -2272231574926939914
+      thinking_sheet_28: 8876239372919822088
+      thinking_sheet_29: 3939376911177299151
+      thinking_sheet_3: 4831713968573952393
+      thinking_sheet_30: 7431035278351689161
+      thinking_sheet_31: -2490391269447303795
+      thinking_sheet_32: 1179361377285101185
+      thinking_sheet_33: 2225036231390162616
+      thinking_sheet_34: -2170570843738285927
+      thinking_sheet_35: -8565304798190067538
+      thinking_sheet_36: -8835342279025545571
+      thinking_sheet_37: 3555876540848535996
+      thinking_sheet_38: -153744645496756854
+      thinking_sheet_39: 4157640093210717228
+      thinking_sheet_4: 2007585620497251785
+      thinking_sheet_40: 8563014949564804392
+      thinking_sheet_41: -9074132002087176653
+      thinking_sheet_42: 4204683311019607756
+      thinking_sheet_43: -7055540742891330076
+      thinking_sheet_44: 2352089888436765850
+      thinking_sheet_45: 8877645570522351369
+      thinking_sheet_46: 6892639926553055191
+      thinking_sheet_47: 6672812074694334567
+      thinking_sheet_48: -7362209224520985836
+      thinking_sheet_49: 3986600207767253845
+      thinking_sheet_5: 8417751475803174690
+      thinking_sheet_50: 4692540882162096382
+      thinking_sheet_51: 2890748083457114607
+      thinking_sheet_52: 9054446089072256434
+      thinking_sheet_53: 1912749508290522427
+      thinking_sheet_54: -8322687782413180900
+      thinking_sheet_55: 2022806751177945034
+      thinking_sheet_56: 1152138170831755676
+      thinking_sheet_57: 5587828756779670025
+      thinking_sheet_58: -5317653753225915011
+      thinking_sheet_59: -203148756311386747
+      thinking_sheet_6: -3499499090916244525
+      thinking_sheet_60: -6865247997361646611
+      thinking_sheet_7: -548814253759185350
+      thinking_sheet_8: -7774863150388920327
+      thinking_sheet_9: -6688187794497538284
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

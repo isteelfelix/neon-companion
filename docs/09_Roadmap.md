@@ -9,14 +9,19 @@
 - Сохранение истории
 
 ### M1 — Улучшенный опыт
-- Несколько аватаров с базовой анимацией
+- Несколько аватаров с базовой sprite-sheet анимацией
+- Фиксация MVP action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
+- Разделение continuous states и one-shot reactions
+- Автоматическое определение доступных моделей через `/models` с кэшированием
+- Переключение модели из окна чата (модель-пикер в topbar)
 - Улучшенный UI
 - Поддержка нескольких провайдеров одновременно
 
 ### M2 — Голос и 3D
 - Голосовой ввод/вывод
 - Базовый lipsync
-- Переход на 3D аватары
+- Desktop-first 3D realtime аватары
+- Research asset-pipeline: генерация 2D motion clips/sprite sheets через внешние инструменты
 
 ### M3 — VR и расширения
 - Поддержка VR (Quest, PCVR)

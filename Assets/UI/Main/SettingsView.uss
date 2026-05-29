@@ -90,34 +90,20 @@
 .settings-dropdown {
     min-width: 160px;
 }
-.settings-dropdown > .unity-base-popup-field__input {
-    background-color: var(--bg-2);
-    border-width: 1px;
-    border-color: var(--line-2);
-    border-radius: 10px;
-    padding: 0 12px;
-    color: var(--text-1);
-    font-size: 13px;
-    height: 32px;
-}
-.settings-dropdown > .unity-base-popup-field__input:hover {
-    border-color: var(--line-3);
-}
-.settings-dropdown .unity-base-popup-field__text {
-    color: var(--text-1);
-    font-size: 13px;
-}
-.settings-dropdown .unity-base-popup-field__arrow {
-    -unity-background-image-tint-color: var(--text-3);
-}
 
 /* ---- toggle (Unity native, restyled as pill) ---- */
 .settings-toggle {
     margin: 0;
-}
-.settings-toggle > .unity-toggle__input {
     width: 36px;
+    min-width: 36px;
     height: 20px;
+    flex-shrink: 0;
+}
+.settings-toggle .unity-toggle__input {
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
+    flex-shrink: 0;
     border-radius: 999px;
     background-color: var(--bg-4);
     border-width: 1px;
@@ -127,7 +113,7 @@
     transition-property: background-color, border-color;
     transition-duration: 0.15s;
 }
-.settings-toggle > .unity-toggle__input > .unity-toggle__checkmark {
+.settings-toggle .unity-toggle__checkmark {
     width: 14px;
     height: 14px;
     margin: 2px;
@@ -138,13 +124,13 @@
     transition-property: translate, background-color;
     transition-duration: 0.18s;
 }
-.settings-toggle:checked > .unity-toggle__input {
+.settings-toggle:checked .unity-toggle__input {
     background-color: var(--accent);
     border-color: var(--accent);
 }
-.settings-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
+.settings-toggle:checked .unity-toggle__checkmark {
     background-color: rgb(255, 255, 255);
-    translate: 16px 0;
+    translate: 16px 0px;
 }
 .settings-toggle .unity-toggle__text {
     display: none;
