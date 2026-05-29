@@ -169,7 +169,7 @@ namespace NeonCompanion.Runtime.Api
                         }
 
                         if (discoveredModels == null && !string.IsNullOrEmpty(modelsPayload))
-                            discoveredModels = ParseModelIds(modelsPayload);
+                            discoveredModels = adapter.ParseDiscoveryResponse(modelsPayload);
 
                         if (!string.IsNullOrWhiteSpace(provider.defaultModel) && discoveredModels != null)
                         {
@@ -314,33 +314,6 @@ namespace NeonCompanion.Runtime.Api
 
                 return null;
             }
-        }
-
-        private static IReadOnlyList<string> ParseModelIds(string json)
-        {
-            if (string.IsNullOrEmpty(json))
-                return null;
-
-            var ids = new List<string>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            // Prefer known container arrays first to avoid picking unrelated top-level ids.
-            if (TryExtractNamedArray(json, "data", out string dataArray))
-                CollectJsonStringPropertyValues(dataArray, "id", ids, seen);
-
-            if (TryExtractNamedArray(json, "models", out string modelsArray))
-            {
-                CollectJsonStringPropertyValues(modelsArray, "id", ids, seen);
-                CollectJsonStringPropertyValues(modelsArray, "name", ids, seen);
-            }
-
-            if (ids.Count == 0)
-            {
-                CollectJsonStringPropertyValues(json, "id", ids, seen);
-                CollectJsonStringPropertyValues(json, "name", ids, seen);
-            }
-
-            return ids.Count > 0 ? ids : null;
         }
 
         private static string BuildEndpoint(string baseUrl)
@@ -1271,18 +1244,6 @@ namespace NeonCompanion.Runtime.Api
         {
             public string message;
             public string type;
-        }
-
-        [Serializable]
-        private class OpenAiModelsResponse
-        {
-            public OpenAiModelEntry[] data;
-        }
-
-        [Serializable]
-        private class OpenAiModelEntry
-        {
-            public string id;
         }
     }
 }

@@ -3,13 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Data.Repositories;
+using NeonCompanion.Runtime.Api.Adapters;
 
 namespace NeonCompanion.Runtime.Core
 {
     public sealed class ModelDiscoveryService
     {
         private readonly IProviderConfigRepository _repository;
-        private readonly Dictionary<string, IReadOnlyList<string>> _cache = new();
+        private readonly Dictionary<string, IReadOnlyList<string>> _cache = new Dictionary<string, IReadOnlyList<string>>();
 
         public ModelDiscoveryService(IProviderConfigRepository repository)
         {
@@ -25,20 +26,29 @@ namespace NeonCompanion.Runtime.Core
             if (_cache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
-            var result = await DiscoverModelsFromEndpointAsync(provider.baseUrl, provider.apiKey, cancellationToken);
-            if (result != null && result.Count > 0)
-                _cache[cacheKey] = result;
+            var adapter = ProviderAdapterFactory.Create(
+                provider != null ? provider.backendType : null);
+            var endpoints = adapter.BuildDiscoveryEndpoints(provider.baseUrl);
 
-            return result;
+            foreach (var endpoint in endpoints)
+            {
+                var result = await TryFetchModelsAsync(
+                    endpoint, provider.apiKey, adapter, cancellationToken);
+                if (result != null && result.Count > 0)
+                {
+                    _cache[cacheKey] = result;
+                    return result;
+                }
+            }
+
+            return null;
         }
 
-        private async Task<IReadOnlyList<string>> DiscoverModelsFromEndpointAsync(string baseUrl, string apiKey, CancellationToken cancellationToken)
+        private async Task<IReadOnlyList<string>> TryFetchModelsAsync(
+            string endpoint, string apiKey, IProviderAdapter adapter, CancellationToken cancellationToken)
         {
-            var normalized = (baseUrl ?? string.Empty).Trim().TrimEnd('/');
-            if (normalized.EndsWith("/chat/completions", System.StringComparison.OrdinalIgnoreCase))
-                normalized = normalized.Substring(0, normalized.Length - "/chat/completions".Length);
-
-            var endpoint = $"{normalized}/models";
+            if (string.IsNullOrEmpty(endpoint))
+                return null;
 
             using (var webRequest = UnityEngine.Networking.UnityWebRequest.Get(endpoint))
             {
@@ -61,47 +71,13 @@ namespace NeonCompanion.Runtime.Core
                 if (webRequest.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
                     return null;
 
-                var modelsPayload = webRequest.downloadHandler?.text;
-                if (string.IsNullOrEmpty(modelsPayload))
+                var payload = webRequest.downloadHandler?.text;
+                if (string.IsNullOrEmpty(payload))
                     return null;
 
-                return ParseModelIds(modelsPayload);
+                var parsed = adapter.ParseDiscoveryResponse(payload);
+                return parsed;
             }
-        }
-
-        private static IReadOnlyList<string> ParseModelIds(string json)
-        {
-            try
-            {
-                var response = UnityEngine.JsonUtility.FromJson<OpenAiModelsResponse>(json);
-                if (response?.data == null || response.data.Length == 0)
-                    return null;
-
-                var ids = new List<string>(response.data.Length);
-                foreach (var entry in response.data)
-                {
-                    if (!string.IsNullOrWhiteSpace(entry?.id))
-                        ids.Add(entry.id);
-                }
-
-                return ids.Count > 0 ? ids : null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        [System.Serializable]
-        private class OpenAiModelsResponse
-        {
-            public OpenAiModelEntry[] data;
-        }
-
-        [System.Serializable]
-        private class OpenAiModelEntry
-        {
-            public string id;
         }
     }
 }
