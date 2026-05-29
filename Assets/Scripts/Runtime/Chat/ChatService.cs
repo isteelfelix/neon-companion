@@ -90,6 +90,28 @@ namespace NeonCompanion.Runtime.Chat
             }
         }
 
+        public async Task SetSessionFolderAsync(string sessionId, string folder)
+        {
+            if (string.IsNullOrWhiteSpace(sessionId))
+                return;
+
+            var sessions = _sessionRepository.GetAll();
+            var index = sessions.FindIndex(s => s.sessionId == sessionId);
+            if (index < 0)
+                return;
+
+            string normalized = string.IsNullOrWhiteSpace(folder) ? string.Empty : folder.Trim();
+            sessions[index].folder = normalized;
+
+            if (_currentSession != null && _currentSession.sessionId == sessionId)
+            {
+                _currentSession.folder = normalized;
+            }
+
+            _sessionRepository.SaveAll(sessions);
+            await Task.CompletedTask;
+        }
+
         public async Task SwitchToSessionAsync(ChatSession session, string preferredProviderId = null)
         {
             if (session == null) return;
@@ -216,7 +238,8 @@ namespace NeonCompanion.Runtime.Chat
                 selectedModel = _currentProvider?.defaultModel,
                 title = "New chat",
                 updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                messages = new List<ChatMessage>()
+                messages = new List<ChatMessage>(),
+                folder = string.Empty
             };
 
             SaveCurrentSession();

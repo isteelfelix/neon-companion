@@ -51,5 +51,6 @@ namespace NeonCompanion.Runtime.Data.Models
         public string title;
         public List<ChatMessage> messages = new List<ChatMessage>();
         public long updatedAtUnix;
+        public string folder;
     }
 }

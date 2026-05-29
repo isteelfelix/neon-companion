@@ -51,6 +51,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Deps _d;
 
+        private readonly HashSet<string> _collapsedFolders = new HashSet<string>();
+        private readonly List<string> _currentAllFolders = new List<string>();
+        private VisualElement _sessionContextMenu;
+        private EventCallback<PointerDownEvent> _sessionMenuOutsideHandler;
+        private VisualElement _sessionMenuRoot;
+        private VisualElement _folderInputPopup;
+        private EventCallback<PointerDownEvent> _folderInputOutsideHandler;
+        private VisualElement _folderInputRoot;
+
         public void SetDeps(Deps deps) { _d = deps; }
 
         public async Task LoadSessionsAsync(ChatService chat)
@@ -108,6 +117,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_d.SessionsList == null && _d.HistorySessionsList == null) return;
 
+            HideSessionMenus();
+            UpdateKnownFolders(allSessions);
+
             _d.SessionsList?.Clear();
             _d.HistorySessionsList?.Clear();
             _d.SessionItems.Clear();
@@ -141,23 +153,16 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _d.ShowHistoryState(string.Empty, false);
             string currentSessionId = _d.GetCurrentSessionId();
-            for (int i = 0; i < sessions.Count; i++)
-            {
-                bool IsActiveSession(ChatSession session, int index)
-                {
-                    if (!string.IsNullOrEmpty(currentSessionId))
-                        return session.sessionId == currentSessionId;
-                    return index == 0;
-                }
 
-                bool isActive = IsActiveSession(sessions[i], i);
-                var railItem = CreateSessionItem(sessions[i], isActive, providers);
-                var historyItem = CreateSessionItem(sessions[i], isActive, providers);
-                _d.SessionsList?.Add(railItem);
-                _d.HistorySessionsList?.Add(historyItem);
-                _d.SessionItems.Add(railItem);
-                _d.SessionItems.Add(historyItem);
-            }
+            var groups = BuildFolderGroups(sessions);
+            var sortedFolders = groups.Keys
+                .Where(k => k != "")
+                .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            bool hasUncat = groups.ContainsKey("");
+
+            RenderGroupsToList(_d.SessionsList, groups, sortedFolders, hasUncat, providers, currentSessionId);
+            RenderGroupsToList(_d.HistorySessionsList, groups, sortedFolders, hasUncat, providers, currentSessionId);
         }
 
         // ---- History search ----
@@ -329,7 +334,20 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             container.Add(headerRow);
             container.Add(metaLabel);
-            container.RegisterCallback<ClickEvent>(evt => { _ = SwitchSessionAsync(session); });
+
+            container.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.button == 0)
+                    _ = SwitchSessionAsync(session);
+            });
+            container.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                if (evt.button == 1)
+                {
+                    evt.StopImmediatePropagation();
+                    ShowSessionContextMenu(container, session, evt.position);
+                }
+            });
 
             return container;
         }
@@ -361,6 +379,402 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (element != null)
                 element.style.display = display;
+        }
+
+        // ---- Folder grouping helpers ----
+
+        private void UpdateKnownFolders(List<ChatSession> allSessions)
+        {
+            _currentAllFolders.Clear();
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (allSessions != null)
+            {
+                foreach (var s in allSessions)
+                {
+                    if (!string.IsNullOrWhiteSpace(s.folder))
+                    {
+                        string f = s.folder.Trim();
+                        if (set.Add(f))
+                            _currentAllFolders.Add(f);
+                    }
+                }
+            }
+            _currentAllFolders.Sort(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private Dictionary<string, List<ChatSession>> BuildFolderGroups(List<ChatSession> sessions)
+        {
+            var groups = new Dictionary<string, List<ChatSession>>();
+            if (sessions != null)
+            {
+                foreach (var s in sessions)
+                {
+                    string key = string.IsNullOrWhiteSpace(s.folder) ? "" : s.folder.Trim();
+                    if (!groups.ContainsKey(key))
+                        groups[key] = new List<ChatSession>();
+                    groups[key].Add(s);
+                }
+            }
+            return groups;
+        }
+
+        private void RenderGroupsToList(
+            ScrollView target,
+            Dictionary<string, List<ChatSession>> groups,
+            List<string> sortedFolders,
+            bool hasUncat,
+            List<ProviderConfig> providers,
+            string currentSessionId)
+        {
+            if (target == null) return;
+
+            foreach (string f in sortedFolders)
+            {
+                var list = groups[f];
+                bool expanded = !_collapsedFolders.Contains(f);
+                var header = CreateFolderHeader(f, list.Count, expanded, f);
+                target.Add(header);
+                if (expanded)
+                {
+                    foreach (var s in list)
+                    {
+                        bool isActive = !string.IsNullOrEmpty(currentSessionId) && s.sessionId == currentSessionId;
+                        var item = CreateSessionItem(s, isActive, providers);
+                        target.Add(item);
+                        _d.SessionItems.Add(item);
+                    }
+                }
+            }
+
+            if (hasUncat)
+            {
+                var list = groups[""];
+                bool hasNamedFolders = sortedFolders.Count > 0;
+                if (hasNamedFolders)
+                {
+                    string display = LocalizationExtensions.Get("session.folder.uncategorized", "Uncategorized");
+                    bool expanded = !_collapsedFolders.Contains("");
+                    var header = CreateFolderHeader(display, list.Count, expanded, "");
+                    target.Add(header);
+                    if (expanded)
+                    {
+                        foreach (var s in list)
+                        {
+                            bool isActive = !string.IsNullOrEmpty(currentSessionId) && s.sessionId == currentSessionId;
+                            var item = CreateSessionItem(s, isActive, providers);
+                            target.Add(item);
+                            _d.SessionItems.Add(item);
+                        }
+                    }
+                }
+                else
+                {
+                    // No named folders yet: render uncategorized items flat (preserve legacy look under "Recent")
+                    foreach (var s in list)
+                    {
+                        bool isActive = !string.IsNullOrEmpty(currentSessionId) && s.sessionId == currentSessionId;
+                        var item = CreateSessionItem(s, isActive, providers);
+                        target.Add(item);
+                        _d.SessionItems.Add(item);
+                    }
+                }
+            }
+        }
+
+        private VisualElement CreateFolderHeader(string displayName, int itemCount, bool expanded, string folderKey)
+        {
+            var header = new VisualElement();
+            header.AddToClassList("session-folder-header");
+
+            string chevronChar = expanded ? "\u25bc" : "\u25b6";
+            var chevron = new Label(chevronChar);
+            chevron.AddToClassList("session-folder-chevron");
+
+            string labelText = displayName;
+            if (itemCount > 0)
+                labelText += " (" + itemCount + ")";
+            var nameLabel = new Label(labelText);
+            nameLabel.AddToClassList("session-folder-name");
+
+            header.Add(chevron);
+            header.Add(nameLabel);
+
+            string key = folderKey ?? string.Empty;
+            header.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                if (_collapsedFolders.Contains(key))
+                    _collapsedFolders.Remove(key);
+                else
+                    _collapsedFolders.Add(key);
+                _ = RefreshSessionsFromCacheAsync();
+            });
+
+            return header;
+        }
+
+        // ---- Session folder context menu ----
+
+        private void ShowSessionContextMenu(VisualElement target, ChatSession session, Vector2 position)
+        {
+            if (target == null || target.panel == null)
+                return;
+
+            HideSessionMenus();
+
+            var menu = new VisualElement();
+            menu.AddToClassList("session-context-menu");
+
+            string currentF = string.IsNullOrWhiteSpace(session.folder) ? "" : session.folder.Trim();
+
+            // Uncategorized target
+            string uncatLabel = LocalizationExtensions.Get("session.folder.uncategorized", "Uncategorized");
+            if (currentF == "") uncatLabel += " \u2713";
+            menu.Add(CreateFolderMenuItem("\uD83D\uDCC1", uncatLabel, () =>
+            {
+                HideSessionMenus();
+                if (currentF != "") _ = AssignSessionToFolderAsync(session, string.Empty);
+            }));
+
+            // Existing folders
+            foreach (var f in _currentAllFolders)
+            {
+                string label = f;
+                if (f == currentF) label += " \u2713";
+                string ff = f;
+                menu.Add(CreateFolderMenuItem("\uD83D\uDCC1", label, () =>
+                {
+                    HideSessionMenus();
+                    if (ff != currentF) _ = AssignSessionToFolderAsync(session, ff);
+                }));
+            }
+
+            // New folder
+            string newLabel = LocalizationExtensions.Get("session.folder.new", "New folder...");
+            menu.Add(CreateFolderMenuItem("\u2795", newLabel, () =>
+            {
+                HideSessionMenus();
+                ShowNewFolderNamePopup(target, session, position);
+            }));
+
+            var root = GetDocumentRoot(target);
+            if (root == null)
+                return;
+
+            _sessionContextMenu = menu;
+            _sessionMenuRoot = root;
+
+            var b = target.worldBound;
+            float left = b.xMax + 6f;
+            float top = position.y - 8f;
+            if (left < 0f) left = 0f;
+            if (top < 0f) top = 0f;
+
+            menu.style.left = left;
+            menu.style.top = top;
+            menu.style.minWidth = 160f;
+
+            root.Add(menu);
+
+            _sessionMenuOutsideHandler = OnSessionMenuOutside;
+            root.RegisterCallback(_sessionMenuOutsideHandler, TrickleDown.TrickleDown);
+        }
+
+        private VisualElement CreateFolderMenuItem(string icon, string labelText, Action onClick)
+        {
+            var item = new VisualElement();
+            item.AddToClassList("message-context-menu__item");
+
+            var iconLabel = new Label(icon);
+            iconLabel.AddToClassList("message-context-menu__icon");
+
+            var textLabel = new Label(labelText);
+            textLabel.AddToClassList("message-context-menu__label");
+
+            item.Add(iconLabel);
+            item.Add(textLabel);
+
+            item.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                if (onClick != null)
+                    onClick.Invoke();
+            });
+
+            item.RegisterCallback<PointerEnterEvent>(_ => item.AddToClassList("message-context-menu__item--hover"));
+            item.RegisterCallback<PointerLeaveEvent>(_ => item.RemoveFromClassList("message-context-menu__item--hover"));
+
+            return item;
+        }
+
+        private void OnSessionMenuOutside(PointerDownEvent evt)
+        {
+            if (_sessionContextMenu != null && _sessionContextMenu.worldBound.Contains(evt.position))
+                return;
+            HideSessionMenus();
+        }
+
+        private void HideSessionMenus()
+        {
+            if (_sessionContextMenu != null && _sessionContextMenu.parent != null)
+                _sessionContextMenu.RemoveFromHierarchy();
+
+            if (_sessionMenuRoot != null && _sessionMenuOutsideHandler != null)
+                _sessionMenuRoot.UnregisterCallback(_sessionMenuOutsideHandler, TrickleDown.TrickleDown);
+
+            _sessionContextMenu = null;
+            _sessionMenuRoot = null;
+            _sessionMenuOutsideHandler = null;
+
+            HideFolderInputPopup();
+        }
+
+        private void ShowNewFolderNamePopup(VisualElement target, ChatSession session, Vector2 position)
+        {
+            if (target == null || target.panel == null)
+                return;
+
+            HideFolderInputPopup();
+
+            var popup = new VisualElement();
+            popup.AddToClassList("folder-name-input-popup");
+
+            var titleLabel = new Label(LocalizationExtensions.Get("session.folder.input_title", "New folder name"));
+            titleLabel.AddToClassList("folder-name-input-popup__title");
+
+            var input = new TextField();
+            input.AddToClassList("folder-name-input-popup__input");
+
+            var btnRow = new VisualElement();
+            btnRow.style.flexDirection = FlexDirection.Row;
+            btnRow.style.justifyContent = JustifyContent.FlexEnd;
+
+            var cancelBtn = new Button();
+            cancelBtn.text = LocalizationExtensions.Get("session.folder.cancel", "Cancel");
+            cancelBtn.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                HideFolderInputPopup();
+            });
+
+            var capturedSession = session;
+            var createBtn = new Button();
+            createBtn.text = LocalizationExtensions.Get("session.folder.create", "Create");
+            createBtn.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                string name = (input.value ?? string.Empty).Trim();
+                if (string.IsNullOrEmpty(name))
+                    return;
+                HideFolderInputPopup();
+                _ = AssignSessionToFolderAsync(capturedSession, name);
+            });
+
+            btnRow.Add(cancelBtn);
+            btnRow.Add(createBtn);
+
+            popup.Add(titleLabel);
+            popup.Add(input);
+            popup.Add(btnRow);
+
+            var root = GetDocumentRoot(target);
+            if (root == null)
+                return;
+
+            _folderInputPopup = popup;
+            _folderInputRoot = root;
+
+            var b = target.worldBound;
+            float left = b.xMax + 6f;
+            float top = b.yMin;
+            if (left < 0f) left = 0f;
+            if (top < 0f) top = 0f;
+
+            popup.style.left = left;
+            popup.style.top = top;
+            popup.style.minWidth = 180f;
+
+            root.Add(popup);
+
+            _folderInputOutsideHandler = OnFolderInputOutside;
+            root.RegisterCallback(_folderInputOutsideHandler, TrickleDown.TrickleDown);
+
+            popup.schedule.Execute(() =>
+            {
+                if (input != null)
+                    input.Focus();
+            }).StartingIn(20);
+
+            input.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                {
+                    string name = (input.value ?? string.Empty).Trim();
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        HideFolderInputPopup();
+                        _ = AssignSessionToFolderAsync(capturedSession, name);
+                    }
+                }
+                else if (evt.keyCode == KeyCode.Escape)
+                {
+                    HideFolderInputPopup();
+                }
+            });
+        }
+
+        private void OnFolderInputOutside(PointerDownEvent evt)
+        {
+            if (_folderInputPopup != null && _folderInputPopup.worldBound.Contains(evt.position))
+                return;
+            HideFolderInputPopup();
+        }
+
+        private void HideFolderInputPopup()
+        {
+            if (_folderInputPopup != null && _folderInputPopup.parent != null)
+                _folderInputPopup.RemoveFromHierarchy();
+
+            if (_folderInputRoot != null && _folderInputOutsideHandler != null)
+                _folderInputRoot.UnregisterCallback(_folderInputOutsideHandler, TrickleDown.TrickleDown);
+
+            _folderInputPopup = null;
+            _folderInputRoot = null;
+            _folderInputOutsideHandler = null;
+        }
+
+        private VisualElement GetDocumentRoot(VisualElement start)
+        {
+            if (start == null)
+                return null;
+
+            var el = start;
+            var panelVisualTree = start.panel != null ? start.panel.visualTree : null;
+            while (el.parent != null && el.parent != panelVisualTree)
+                el = el.parent;
+            return el;
+        }
+
+        private async Task AssignSessionToFolderAsync(ChatSession session, string folderName)
+        {
+            if (session == null)
+                return;
+
+            try
+            {
+                var chat = await _d.GetChatServiceAsync();
+                if (chat == null)
+                    return;
+
+                await chat.SetSessionFolderAsync(session.sessionId, folderName);
+                await RefreshSessionsFromCacheAsync();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+                if (_d.ShowSystemMessage != null)
+                    _d.ShowSystemMessage(LocalizationExtensions.Get("session.folder.move_failed", "Failed to move session to folder."));
+            }
         }
     }
 }
