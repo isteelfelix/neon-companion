@@ -132,3 +132,4 @@ NeonCompanion.Editor.csproj.lscache
 .voice-brief.txt
 .brief-*.txt
 .claude/
+.brief-*.md
