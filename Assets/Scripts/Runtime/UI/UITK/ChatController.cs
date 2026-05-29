@@ -182,7 +182,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 QueueComposerHeightUpdate();
             }
 
-            _composerPreviews = _d.Composer?.Q<VisualElement>("composer-previews");
+            // Previews are sibling of Composer inside chat-main (column layout)
+            _composerPreviews = _d.Composer?.parent?.Q<VisualElement>("composer-previews");
         }
 
         public void UnregisterCallbacks()
