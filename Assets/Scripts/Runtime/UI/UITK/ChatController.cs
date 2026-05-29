@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Tools;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Chat;
@@ -538,6 +539,42 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _streamingBubble = null;
                     _streamingLabel = null;
                     StopInlineTypingAnimation();
+
+                    // After streaming completes, get real usage from client (adapted from suggested chat.CurrentProvider.GetClient pattern)
+                    // Use exact token count if provided via stream_options; set final stats without ~ estimate
+                    Label statsLabelForFinal = _streamingStatsLabel;
+                    if (_statsUpdateSchedule != null)
+                    {
+                        _statsUpdateSchedule.Pause();
+                        _statsUpdateSchedule = null;
+                    }
+                    try
+                    {
+                        var app = _d.GetAppAsync().Result;
+                        var client = app?.AiClient as OpenAiCompatibleClient;
+                        if (client != null)
+                        {
+                            var usage = client.LastStreamUsage;
+                            if (usage.total_tokens > 0)
+                            {
+                                _estimatedTokens = usage.total_tokens;
+                                if (statsLabelForFinal != null)
+                                {
+                                    double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
+                                    if (elapsed < 0)
+                                        elapsed = 0;
+                                    string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
+                                    string exactTemplate = template.Replace("~", string.Empty);
+                                    statsLabelForFinal.text = string.Format(exactTemplate, _estimatedTokens, elapsed);
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // keep estimate if client not available or no usage chunk
+                    }
+
                     StopStreamingStatsUpdate();
                     if (_streamingTypingDots != null)
                     {
@@ -1833,6 +1870,41 @@ namespace NeonCompanion.Runtime.UI.UITK
                         _streamingBubble = null;
                         _streamingLabel = null;
                         StopInlineTypingAnimation();
+
+                        // After streaming completes (regenerate path), get real usage from client
+                        Label statsLabelForFinal = _streamingStatsLabel;
+                        if (_statsUpdateSchedule != null)
+                        {
+                            _statsUpdateSchedule.Pause();
+                            _statsUpdateSchedule = null;
+                        }
+                        try
+                        {
+                            var app = _d.GetAppAsync().Result;
+                            var client = app?.AiClient as OpenAiCompatibleClient;
+                            if (client != null)
+                            {
+                                var usage = client.LastStreamUsage;
+                                if (usage.total_tokens > 0)
+                                {
+                                    _estimatedTokens = usage.total_tokens;
+                                    if (statsLabelForFinal != null)
+                                    {
+                                        double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
+                                        if (elapsed < 0)
+                                            elapsed = 0;
+                                        string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
+                                        string exactTemplate = template.Replace("~", string.Empty);
+                                        statsLabelForFinal.text = string.Format(exactTemplate, _estimatedTokens, elapsed);
+                                    }
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // keep estimate if no real usage
+                        }
+
                         StopStreamingStatsUpdate();
                         if (_streamingTypingDots != null)
                         {
@@ -1880,6 +1952,23 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private int EstimateSessionTokens()
         {
+            // Prefer real usage data (exact prompt_tokens from stream_options) when available
+            try
+            {
+                var app = _d.GetAppAsync().Result;
+                var client = app?.AiClient as OpenAiCompatibleClient;
+                if (client != null)
+                {
+                    var usage = client.LastStreamUsage;
+                    if (usage.prompt_tokens > 0)
+                        return usage.prompt_tokens;
+                }
+            }
+            catch
+            {
+                // fall back to character-based estimate below
+            }
+
             var chat = _d.GetChatServiceAsync().Result;
             var vm = chat?.CurrentChatViewModel;
             if (vm == null || vm.Messages.Count == 0)

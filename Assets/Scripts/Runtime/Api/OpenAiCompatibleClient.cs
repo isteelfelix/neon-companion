@@ -13,8 +13,18 @@ using UnityEngine.Networking;
 
 namespace NeonCompanion.Runtime.Api
 {
+    public struct UsageData
+    {
+        public int prompt_tokens;
+        public int completion_tokens;
+        public int total_tokens;
+    }
+
     public sealed class OpenAiCompatibleClient : IAiClient
     {
+        private static UsageData _lastStreamUsage;
+
+        public UsageData LastStreamUsage => _lastStreamUsage;
         public async Task<AiChatResponse> SendMessageAsync(
             ProviderConfig provider,
             AiChatRequest request,
@@ -592,7 +602,10 @@ namespace NeonCompanion.Runtime.Api
             sb.Append(']');
 
             if (stream)
+            {
                 sb.Append(",\"stream\":true");
+                sb.Append(",\"stream_options\":{\"include_usage\":true}");
+            }
 
             if (!omitTemperature)
                 sb.Append(",\"temperature\":").Append(temperature.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
@@ -822,6 +835,8 @@ namespace NeonCompanion.Runtime.Api
 
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
+
+            _lastStreamUsage = default;
 
             var adapter = GetAdapter(provider);
             var capabilities = adapter.GetCapabilities();
@@ -1250,6 +1265,13 @@ namespace NeonCompanion.Runtime.Api
                 if (payload == "[DONE]")
                     break;
 
+                // Extract usage data from final chunk
+                string usageChunk = ExtractUsagePayload(payload);
+                if (usageChunk != null)
+                {
+                    _lastStreamUsage = ParseUsage(usageChunk);
+                }
+
                 if (string.IsNullOrWhiteSpace(payload))
                     continue;
 
@@ -1400,6 +1422,59 @@ namespace NeonCompanion.Runtime.Api
 
             int choicesIdx = json.IndexOf("\"choices\"", StringComparison.Ordinal);
             return ExtractJsonStringValue(json, "content", choicesIdx >= 0 ? choicesIdx : 0);
+        }
+
+        private static string ExtractUsagePayload(string json)
+        {
+            // Usage is in the top-level "usage" field of the final chunk
+            int usageIdx = json.IndexOf("\"usage\"", StringComparison.Ordinal);
+            if (usageIdx < 0)
+                return null;
+            // Extract the usage object
+            int colonIdx = json.IndexOf(':', usageIdx + 7);
+            if (colonIdx < 0)
+                return null;
+            int braceStart = json.IndexOf('{', colonIdx);
+            if (braceStart < 0)
+                return null;
+            int depth = 0;
+            for (int i = braceStart; i < json.Length; i++)
+            {
+                if (json[i] == '{') depth++;
+                else if (json[i] == '}') depth--;
+                if (depth == 0)
+                    return json.Substring(braceStart, i - braceStart + 1);
+            }
+            return null;
+        }
+
+        private static UsageData ParseUsage(string json)
+        {
+            var usage = new UsageData();
+            usage.prompt_tokens = ExtractJsonIntValue(json, "prompt_tokens");
+            usage.completion_tokens = ExtractJsonIntValue(json, "completion_tokens");
+            usage.total_tokens = ExtractJsonIntValue(json, "total_tokens");
+            return usage;
+        }
+
+        private static int ExtractJsonIntValue(string json, string key)
+        {
+            string search = "\"" + key + "\"";
+            int idx = json.IndexOf(search, StringComparison.Ordinal);
+            if (idx < 0)
+                return 0;
+            int colonIdx = json.IndexOf(':', idx + search.Length);
+            if (colonIdx < 0)
+                return 0;
+            int start = colonIdx + 1;
+            while (start < json.Length && json[start] == ' ')
+                start++;
+            int end = start;
+            while (end < json.Length && (char.IsDigit(json[end]) || json[end] == '-'))
+                end++;
+            if (end > start && int.TryParse(json.Substring(start, end - start), out int val))
+                return val;
+            return 0;
         }
 
         private static bool ContainsModel(IReadOnlyList<string> models, string modelId)
