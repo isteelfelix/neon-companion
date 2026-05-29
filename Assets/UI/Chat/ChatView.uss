@@ -1213,3 +1213,45 @@
     color: rgba(255, 255, 255, 0.5);
     -unity-text-align: middle-left;
 }
+
+/* Selection mode (U-31/U-32) */
+.transcript__row--selected .transcript__bubble {
+    border-width: 2px;
+    border-color: rgba(100, 140, 255, 0.6);
+}
+
+.selection-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    flex-shrink: 0;
+    background-color: rgba(30, 35, 50, 0.95);
+    border-top-width: 1px;
+    border-top-color: rgba(100, 120, 200, 0.3);
+}
+
+.selection-bar__count {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-right: 8px;
+}
+
+.selection-bar__btn {
+    height: 32px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.selection-bar__btn--danger {
+    background-color: rgba(220, 50, 50, 0.8);
+    color: #fff;
+}
+
+/* Children spacing (gap not supported in USS; use margin) */
+.selection-bar > * {
+    margin-left: 6px;
+    margin-right: 6px;
+}

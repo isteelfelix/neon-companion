@@ -317,5 +317,11 @@
   "msg.edit.save": "Save",
   "msg.edit.cancel": "Cancel",
   "msg.edit.save_regen": "Save & Regenerate",
-  "chat.queue.pending": "Queue: {0}"
+  "chat.queue.pending": "Queue: {0}",
+  "msg.context.select": "Select",
+  "msg.context.deselect": "Deselect",
+  "chat.selection.clear": "Clear selection",
+  "chat.selection.delete": "Delete",
+  "chat.selection.cancel": "Cancel",
+  "chat.selection.count": "Selected: {0}"
 }

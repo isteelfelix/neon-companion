@@ -10,6 +10,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public event Action<string> OnEditRequested;
         public event Action<string> OnDeleteRequested;
         public event Action<string> OnCopyRequested;
+        public event Action<string> OnSelectRequested;
 
         private VisualElement _menuElement;
         private VisualElement _panelRoot;
@@ -50,6 +51,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                     OnCopyRequested.Invoke(captured);
             });
             _menuElement.Add(copyItem);
+
+            var selectItem = CreateMenuItem("\u2611\uFE0F", LocalizationExtensions.Get("msg.context.select", "Select"), () =>
+            {
+                string captured = _currentIndexStr;
+                Hide();
+                if (OnSelectRequested != null)
+                    OnSelectRequested.Invoke(captured);
+            });
+            _menuElement.Add(selectItem);
 
             return _menuElement;
         }

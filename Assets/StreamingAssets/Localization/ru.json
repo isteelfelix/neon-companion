@@ -317,5 +317,11 @@
   "msg.edit.save": "Сохранить",
   "msg.edit.cancel": "Отмена",
   "msg.edit.save_regen": "Сохранить и перегенерировать",
-  "chat.queue.pending": "Очередь: {0}"
+  "chat.queue.pending": "Очередь: {0}",
+  "msg.context.select": "Выбрать",
+  "msg.context.deselect": "Снять выбор",
+  "chat.selection.clear": "Очистить выбор",
+  "chat.selection.delete": "Удалить",
+  "chat.selection.cancel": "Отмена",
+  "chat.selection.count": "Выбрано: {0}"
 }
