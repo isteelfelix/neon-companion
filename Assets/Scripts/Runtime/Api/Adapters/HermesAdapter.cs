@@ -13,7 +13,7 @@ namespace NeonCompanion.Runtime.Api.Adapters
         {
             return new ProviderCapabilities
             {
-                SupportsModelSwitch = true,
+                SupportsModelSwitch = false, // Model switch is local — model sent in request.model field
                 SupportsInventory = true,
                 SupportsToolProgress = true,
                 UsesMaxCompletionTokens = false,
@@ -63,7 +63,13 @@ namespace NeonCompanion.Runtime.Api.Adapters
 
         public IReadOnlyList<string> ParseDiscoveryResponse(string json)
         {
-            return ParseHermesInventoryModelIds(json);
+            // Try Hermes inventory format first (providers[].models[])
+            var result = ParseHermesInventoryModelIds(json);
+            if (result != null && result.Count > 0)
+                return result;
+
+            // Fallback: standard OpenAI /models format (data[].id)
+            return ParseOpenAiModelsResponse(json);
         }
 
         public ModelSwitchPayload BuildModelSwitchRequest(string model, string providerSessionId)
@@ -128,6 +134,32 @@ namespace NeonCompanion.Runtime.Api.Adapters
             }
 
             return ids.Count > 0 ? ids : null;
+        }
+
+        private static IReadOnlyList<string> ParseOpenAiModelsResponse(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+                return null;
+
+            try
+            {
+                var response = UnityEngine.JsonUtility.FromJson<OpenAiModelsResponse>(json);
+                if (response == null || response.data == null || response.data.Length == 0)
+                    return null;
+
+                var ids = new List<string>();
+                foreach (var entry in response.data)
+                {
+                    if (entry != null && !string.IsNullOrWhiteSpace(entry.id))
+                        ids.Add(entry.id);
+                }
+
+                return ids.Count > 0 ? ids : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static string ParseHermesCurrentModelLabel(string content)
@@ -446,6 +478,18 @@ namespace NeonCompanion.Runtime.Api.Adapters
             if (c >= 'A' && c <= 'F')
                 return 10 + (c - 'A');
             return -1;
+        }
+
+        [UnityEngine.Serializable]
+        private class OpenAiModelsResponse
+        {
+            public OpenAiModelEntry[] data;
+        }
+
+        [UnityEngine.Serializable]
+        private class OpenAiModelEntry
+        {
+            public string id;
         }
     }
 }
