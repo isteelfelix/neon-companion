@@ -64,6 +64,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<string> GetAvatarDisplayName;
         }
 
+        private class QueuedMessage
+        {
+            public string Message;
+            public List<ChatAttachment> Attachments;
+        }
+
         private Deps _d;
         private bool _isSending;
         private bool _isStreamingResponse;
@@ -89,6 +95,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextElement _composerTextElement;
         private float _composerInputHeight = -1f;
         private VisualElement _composerPreviews;
+
+        // Message queue (U-45)
+        private readonly Queue<QueuedMessage> _messageQueue = new Queue<QueuedMessage>();
+        private Label _queueIndicator;
 
         // Context window indicator (U-36)
         private VisualElement _contextBar;
@@ -218,6 +228,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _d.Composer.parent.Add(_contextBar);
             }
+
+            // Message queue indicator (U-45) — created dynamically, sibling after composer
+            _queueIndicator = new Label();
+            _queueIndicator.name = "queue-indicator";
+            _queueIndicator.AddToClassList("queue-indicator");
+            _queueIndicator.style.display = DisplayStyle.None;
+            if (_d.Composer?.parent != null)
+                _d.Composer.parent.Add(_queueIndicator);
         }
 
         public void UnregisterCallbacks()
@@ -289,6 +307,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _streamingTypingDots.RemoveFromHierarchy();
                 _streamingTypingDots = null;
+            }
+
+            _messageQueue.Clear();
+            if (_queueIndicator != null)
+            {
+                _queueIndicator.RemoveFromHierarchy();
+                _queueIndicator = null;
             }
         }
 
@@ -434,14 +459,30 @@ namespace NeonCompanion.Runtime.UI.UITK
             CancelInlineEdit();
 
             bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
-            if (_isSending || _d.MessageInput == null || (string.IsNullOrWhiteSpace(_d.MessageInput.value) && !hasPendingAttachments))
+            if (_d.MessageInput == null)
                 return;
 
             string composerText = (_d.MessageInput.value ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(composerText) && !hasPendingAttachments)
+                return;
+
             if (await TryHandleCommandAsync(composerText))
             {
                 _d.MessageInput.value = string.Empty;
                 QueueComposerHeightUpdate();
+                return;
+            }
+
+            // If currently sending, queue the message instead (commands already handled above and execute immediately)
+            if (_isSending)
+            {
+                var qAttach = CloneAttachments(_pendingComposerAttachments);
+                string qMsg = StripAttachmentTokens(composerText, qAttach);
+                _messageQueue.Enqueue(new QueuedMessage { Message = qMsg, Attachments = qAttach });
+                _d.MessageInput.value = string.Empty;
+                QueueComposerHeightUpdate();
+                ClearPendingComposerAttachments();
+                RenderQueueIndicator();
                 return;
             }
 
@@ -538,6 +579,24 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _currentChatService = null;
                 SetSending(false);
+
+                // Process queued messages
+                if (_messageQueue.Count > 0)
+                {
+                    var next = _messageQueue.Dequeue();
+                    RenderQueueIndicator();
+                    // Set composer text and attachments, then send
+                    _d.MessageInput.value = next.Message;
+                    if (next.Attachments != null)
+                    {
+                        for (int i = 0; i < next.Attachments.Count; i++)
+                            _pendingComposerAttachments.Add(next.Attachments[i]);
+                    }
+                    QueueComposerHeightUpdate();
+                    // Trigger send
+                    _ = SendCurrentMessageAsync();
+                    return;
+                }
             }
         }
 
@@ -621,6 +680,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 await chat.ClearCurrentSessionAsync();
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
+                _messageQueue.Clear();
+                RenderQueueIndicator();
                 _d.ShowSystemMessage("История очищена.");
             }
             return true;
@@ -1468,6 +1529,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        private void RenderQueueIndicator()
+        {
+            if (_queueIndicator == null) return;
+            if (_messageQueue.Count > 0)
+            {
+                _queueIndicator.style.display = DisplayStyle.Flex;
+                _queueIndicator.text = LocalizationExtensions.Get("chat.queue.pending", "Очередь: {0}")
+                    .Replace("{0}", _messageQueue.Count.ToString());
+            }
+            else
+            {
+                _queueIndicator.style.display = DisplayStyle.None;
+            }
+        }
+
         private void RemovePendingAttachment(int index)
         {
             if (index < 0 || index >= _pendingComposerAttachments.Count) return;
@@ -1573,6 +1649,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 await chat.StartNewSessionAsync();
                 ClearPendingComposerAttachments();
+                _messageQueue.Clear();
+                RenderQueueIndicator();
                 if (_d.MessageInput != null)
                 {
                     _d.MessageInput.value = string.Empty;

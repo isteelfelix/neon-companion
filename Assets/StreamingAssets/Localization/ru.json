@@ -316,5 +316,6 @@
   "msg.copied": "Скопировано",
   "msg.edit.save": "Сохранить",
   "msg.edit.cancel": "Отмена",
-  "msg.edit.save_regen": "Сохранить и перегенерировать"
+  "msg.edit.save_regen": "Сохранить и перегенерировать",
+  "chat.queue.pending": "Очередь: {0}"
 }

@@ -316,5 +316,6 @@
   "msg.copied": "Copied",
   "msg.edit.save": "Save",
   "msg.edit.cancel": "Cancel",
-  "msg.edit.save_regen": "Save & Regenerate"
+  "msg.edit.save_regen": "Save & Regenerate",
+  "chat.queue.pending": "Queue: {0}"
 }

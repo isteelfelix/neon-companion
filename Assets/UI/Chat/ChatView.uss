@@ -1195,3 +1195,13 @@
     color: rgba(255, 255, 255, 0.7);
     -unity-text-align: middle-left;
 }
+
+/* Message queue indicator */
+.queue-indicator {
+    height: 20px;
+    flex-shrink: 0;
+    padding-left: 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    -unity-text-align: middle-left;
+}
