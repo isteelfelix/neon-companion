@@ -10,10 +10,6 @@
         <ui:VisualElement class="chat-main">
             <ui:ScrollView name="messages-list" class="transcript" />
 
-            <!-- Image previews for pending attachments (above composer) -->
-            <ui:VisualElement name="composer-previews" class="composer__previews" style="display: none;">
-            </ui:VisualElement>
-
             <ui:VisualElement name="composer" class="composer">
                 <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить токен вложения" />
                 <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />

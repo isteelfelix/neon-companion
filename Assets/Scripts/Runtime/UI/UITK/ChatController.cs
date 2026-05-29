@@ -182,8 +182,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                 QueueComposerHeightUpdate();
             }
 
-            // Previews are sibling of Composer inside chat-main (column layout)
-            _composerPreviews = _d.Composer?.parent?.Q<VisualElement>("composer-previews");
+            // Create preview strip dynamically — inserted BEFORE composer in parent column
+            if (_d.Composer?.parent != null)
+            {
+                _composerPreviews = new VisualElement();
+                _composerPreviews.name = "composer-previews";
+                _composerPreviews.AddToClassList("composer__previews");
+                _composerPreviews.style.display = DisplayStyle.None;
+                int composerIndex = _d.Composer.parent.IndexOf(_d.Composer);
+                _d.Composer.parent.Insert(composerIndex, _composerPreviews);
+            }
         }
 
         public void UnregisterCallbacks()
