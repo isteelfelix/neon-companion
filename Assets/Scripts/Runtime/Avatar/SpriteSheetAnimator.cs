@@ -10,6 +10,8 @@ namespace NeonCompanion.Runtime.Avatar
 {
     public sealed class SpriteSheetAnimator : MonoBehaviour
     {
+        private const float PendingTransitionSpeedMultiplier = 1.4f;
+
         private readonly Dictionary<string, ClipRuntime> _clips = new Dictionary<string, ClipRuntime>(StringComparer.OrdinalIgnoreCase);
         private Image _targetImage;
         private ClipRuntime _activeClip;
@@ -190,12 +192,18 @@ namespace NeonCompanion.Runtime.Avatar
             if (!_isPlaying || _activeClip == null || _targetImage == null)
                 return;
 
-            float fps = Mathf.Max(0.01f, _activeClip.Config.frameRate);
-            float frameDuration = 1f / fps;
             _frameTimer += Time.unscaledDeltaTime;
 
-            while (_frameTimer >= frameDuration)
+            while (true)
             {
+                float fps = Mathf.Max(0.01f, _activeClip.Config.frameRate);
+                if (HasPendingClipRequest())
+                    fps *= PendingTransitionSpeedMultiplier;
+
+                float frameDuration = 1f / fps;
+                if (_frameTimer < frameDuration)
+                    break;
+
                 _frameTimer -= frameDuration;
 
                 if (_isPlayingOneShot && _isOneShotPingPong)
@@ -392,6 +400,11 @@ namespace NeonCompanion.Runtime.Avatar
         private bool HasPendingOneShot()
         {
             return _pendingClipIsOneShot && !string.IsNullOrWhiteSpace(_pendingClipName);
+        }
+
+        private bool HasPendingClipRequest()
+        {
+            return !string.IsNullOrWhiteSpace(_pendingClipName);
         }
 
         private static bool IsSmoothAmbientClip(SpriteSheetAnimation clip)

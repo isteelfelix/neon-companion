@@ -74,6 +74,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _pendingEnterSend;
         private string _chatSubtitle = string.Empty;
         private string _sessionSearchQuery = string.Empty;
+        private TextElement _composerTextElement;
+        private float _composerInputHeight = -1f;
+
+        private const float ComposerInputMinHeight = 36f;
+        private const float ComposerInputMaxHeight = 140f;
+        private const float ComposerInputVerticalPadding = 12f;
 
         public bool IsSending => _isSending;
         public bool IsStreamingResponse => _isStreamingResponse;
@@ -106,6 +112,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.MessageInput.RegisterCallback<FocusEvent>(_ => _d.Composer?.AddToClassList("composer--focused"));
                 _d.MessageInput.RegisterCallback<BlurEvent>(_ => _d.Composer?.RemoveFromClassList("composer--focused"));
                 _d.MessageInput.RegisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
+                _d.MessageInput.RegisterCallback<GeometryChangedEvent>(OnComposerGeometryChanged);
+                QueueComposerHeightUpdate();
             }
         }
 
@@ -125,10 +133,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
                 _d.MessageInput.UnregisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
+                _d.MessageInput.UnregisterCallback<GeometryChangedEvent>(OnComposerGeometryChanged);
+            }
+
+            if (_pinBottomQueued)
+            {
+                _pinBottomQueued = false;
+                _d.MessagesList?.contentContainer?.UnregisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
             }
 
             _isSending = false;
             _isStreamingResponse = false;
+            _composerTextElement = null;
+            _composerInputHeight = -1f;
             _toolCallUiHelper.Clear();
             _streamingBubble = null;
             _streamingLabel = null;
@@ -161,14 +178,84 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _pendingEnterSend = true;
         }
 
+        private void OnComposerGeometryChanged(GeometryChangedEvent evt)
+        {
+            QueueComposerHeightUpdate();
+        }
+
+        // Auto-grow the multiline composer to fit its content, clamped to the
+        // CSS min/max-height. UITK does not auto-size a multiline TextField on its
+        // own, so we measure the text and drive the field height explicitly.
+        private void QueueComposerHeightUpdate()
+        {
+            var field = _d.MessageInput;
+            if (field == null)
+                return;
+
+            field.schedule.Execute(UpdateComposerHeight);
+        }
+
+        private void UpdateComposerHeight()
+        {
+            var field = _d.MessageInput;
+            if (field == null || field.panel == null)
+                return;
+
+            TextElement textEl = GetComposerTextElement(field);
+            if (textEl == null)
+                return;
+
+            float width = textEl.contentRect.width;
+            if (width <= 1f)
+                width = field.contentRect.width;
+            if (width <= 1f)
+                return;
+
+            string text = string.IsNullOrEmpty(field.value) ? " " : field.value;
+            if (text.EndsWith("\n", StringComparison.Ordinal) || text.EndsWith("\r", StringComparison.Ordinal))
+                text += " ";
+
+            Vector2 size = textEl.MeasureTextSize(text, width, VisualElement.MeasureMode.Exactly, 0f, VisualElement.MeasureMode.Undefined);
+            if (float.IsNaN(size.y) || size.y <= 0f)
+                size.y = textEl.resolvedStyle.fontSize * 1.35f;
+
+            float target = Mathf.Clamp(size.y + ComposerInputVerticalPadding, ComposerInputMinHeight, ComposerInputMaxHeight);
+            if (_composerInputHeight > 0f && Mathf.Abs(_composerInputHeight - target) < 0.5f)
+                return;
+
+            _composerInputHeight = target;
+            field.style.height = target;
+            textEl.style.minHeight = target;
+        }
+
+        private TextElement GetComposerTextElement(TextField field)
+        {
+            if (_composerTextElement != null && _composerTextElement.panel != null)
+                return _composerTextElement;
+
+            TextElement textEl = field.Q<TextElement>(className: "unity-text-field__input");
+            if (textEl == null)
+                textEl = field.Q<TextElement>(className: "unity-base-text-field__input");
+            if (textEl == null)
+                textEl = field.Q<TextElement>();
+
+            _composerTextElement = textEl;
+            return _composerTextElement;
+        }
+
         private void OnComposerTextChanged(ChangeEvent<string> evt)
         {
+            QueueComposerHeightUpdate();
+
             if (_pendingEnterSend)
             {
                 _pendingEnterSend = false;
                 string trimmed = (evt.newValue ?? string.Empty).TrimEnd('\n', '\r');
                 if (_d.MessageInput != null)
+                {
                     _d.MessageInput.SetValueWithoutNotify(trimmed);
+                    QueueComposerHeightUpdate();
+                }
                 OnSendClicked();
                 return;
             }
@@ -196,12 +283,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (await TryHandleModelCommandAsync(composerText))
             {
                 _d.MessageInput.value = string.Empty;
+                QueueComposerHeightUpdate();
                 return;
             }
 
             var pendingAttachments = CloneAttachments(_pendingComposerAttachments);
             string message = StripAttachmentTokens(composerText, pendingAttachments);
             _d.MessageInput.value = string.Empty;
+            QueueComposerHeightUpdate();
             SetSending(true);
 
             ChatService chat = null;
@@ -247,6 +336,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             catch (Exception ex)
             {
                 _d.MessageInput.value = composerText;
+                QueueComposerHeightUpdate();
                 RestorePendingComposerAttachments(pendingAttachments);
                 _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
                 _d.ShowSystemMessage(ex.Message);
@@ -550,7 +640,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 await chat.StartNewSessionAsync();
                 ClearPendingComposerAttachments();
                 if (_d.MessageInput != null)
+                {
                     _d.MessageInput.value = string.Empty;
+                    QueueComposerHeightUpdate();
+                }
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await _d.LoadSessionsAsync();
                 _d.ShowChat();
@@ -712,6 +805,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             bubble.AddToClassList("transcript__bubble");
             bubble.AddToClassList($"transcript__bubble--{role}");
 
+            VisualElement actions = null;
+
             var meta = new VisualElement();
             meta.AddToClassList("transcript__meta");
 
@@ -777,7 +872,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Add hover action buttons for assistant messages
             if (role == "assistant")
             {
-                var actions = new VisualElement();
+                actions = new VisualElement();
                 actions.AddToClassList("transcript__bubble-actions");
 
                 var copyBtn = new Button();
@@ -804,9 +899,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 actions.Add(copyBtn);
                 actions.Add(refreshBtn);
                 actions.Add(listenBtn);
-                bubble.Add(actions);
             }
 
+            // Actions live INSIDE the bubble (absolutely positioned) so that only
+            // hovering the bubble itself reveals them — not the empty space in the row.
+            if (actions != null)
+                bubble.Add(actions);
             row.Add(bubble);
 
             return row;
@@ -851,28 +949,54 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnScrollBottomClicked() { ScrollTranscriptToBottom(); }
 
+        private bool _pinBottomQueued;
+
         public void ScrollTranscriptToBottom()
         {
-            if (_d.MessagesList == null)
+            var list = _d.MessagesList;
+            if (list == null)
                 return;
 
-            _d.MessagesList.schedule.Execute(() =>
-            {
-                var content = _d.MessagesList?.contentContainer;
-                var viewport = _d.MessagesList?.contentViewport;
-                if (content == null || viewport == null || content.childCount == 0)
-                    return;
+            var content = list.contentContainer;
+            if (content == null)
+                return;
 
-                float viewportHeight = viewport.worldBound.height;
-                float contentHeight = content.worldBound.height;
-                if (viewportHeight <= 0f || contentHeight <= 0f)
-                    return;
+            // Try immediately (covers cases where layout is already up to date),
+            // then re-pin once the newly added/grown content has actually been
+            // laid out — otherwise we measure a stale height and stop short of
+            // the just-added message.
+            list.schedule.Execute(PinTranscriptToBottom);
 
-                float maxScroll = Mathf.Max(0f, contentHeight - viewportHeight);
-                Vector2 scrollOffset = _d.MessagesList.scrollOffset;
-                _d.MessagesList.scrollOffset = new Vector2(scrollOffset.x, maxScroll);
-                SetDisplay(_d.ScrollBottomBtn, DisplayStyle.None);
-            });
+            if (_pinBottomQueued)
+                return;
+            _pinBottomQueued = true;
+            content.RegisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
+        }
+
+        private void OnTranscriptGeometryForScroll(GeometryChangedEvent evt)
+        {
+            _pinBottomQueued = false;
+            _d.MessagesList?.contentContainer?.UnregisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
+            PinTranscriptToBottom();
+        }
+
+        private void PinTranscriptToBottom()
+        {
+            var list = _d.MessagesList;
+            var content = list?.contentContainer;
+            var viewport = list?.contentViewport;
+            if (content == null || viewport == null || content.childCount == 0)
+                return;
+
+            float viewportHeight = viewport.layout.height;
+            float contentHeight = content.layout.height;
+            if (viewportHeight <= 0f || contentHeight <= 0f)
+                return;
+
+            float maxScroll = Mathf.Max(0f, contentHeight - viewportHeight);
+            Vector2 scrollOffset = list.scrollOffset;
+            list.scrollOffset = new Vector2(scrollOffset.x, maxScroll);
+            SetDisplay(_d.ScrollBottomBtn, DisplayStyle.None);
         }
 
         // ===== Static Helpers =====
