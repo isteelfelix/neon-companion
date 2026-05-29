@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Api.Tools;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
@@ -90,6 +91,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const float ComposerInputMinHeight = 36f;
         private const float ComposerInputMaxHeight = 140f;
         private const float ComposerInputVerticalPadding = 12f;
+
+        private const int MaxToolIterations = 10;
 
         public bool IsSending => _isSending;
         public bool IsStreamingResponse => _isStreamingResponse;
@@ -360,6 +363,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await _d.LoadSessionsAsync();
                 _d.TriggerAvatarSmile();
+
+                // Agent tool execution loop: handles tool_calls returned by model, shows approvals, executes locally, continues until text response
+                await ProcessAgentToolLoopAsync(chat, streaming);
             }
             catch (OperationCanceledException)
             {
@@ -1439,6 +1445,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
                 return "system";
 
+            if (string.Equals(role, "tool", StringComparison.OrdinalIgnoreCase))
+                return "tool";
+
             return "assistant";
         }
 
@@ -1450,6 +1459,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return LocalizationExtensions.Get("chat.role.you", "Ты");
                 case "system":
                     return LocalizationExtensions.Get("chat.role.system", "Система");
+                case "tool":
+                    return LocalizationExtensions.Get("chat.role.tool", "Инструмент");
                 default:
                     return LocalizationExtensions.Get("chat.role.neon", "Neon");
             }
@@ -1764,6 +1775,63 @@ namespace NeonCompanion.Runtime.UI.UITK
             return false;
         }
 
+        private Dictionary<string, string> ParseToolArguments(string argumentsJson)
+        {
+            var result = new Dictionary<string, string>();
+            if (string.IsNullOrWhiteSpace(argumentsJson))
+                return result;
+
+            try
+            {
+                int start = argumentsJson.IndexOf('{');
+                int end = argumentsJson.LastIndexOf('}');
+                if (start < 0 || end <= start)
+                    return result;
+
+                string obj = argumentsJson.Substring(start, end - start + 1);
+                int pos = 0;
+                while (pos < obj.Length)
+                {
+                    int keyStart = obj.IndexOf('"', pos);
+                    if (keyStart < 0)
+                        break;
+                    int keyEnd = obj.IndexOf('"', keyStart + 1);
+                    if (keyEnd < 0)
+                        break;
+                    string key = obj.Substring(keyStart + 1, keyEnd - keyStart - 1);
+                    pos = keyEnd + 1;
+
+                    int colon = obj.IndexOf(':', pos);
+                    if (colon < 0)
+                        break;
+                    pos = colon + 1;
+
+                    while (pos < obj.Length && char.IsWhiteSpace(obj[pos]))
+                        pos++;
+
+                    if (pos >= obj.Length || obj[pos] != '"')
+                    {
+                        pos++;
+                        continue;
+                    }
+
+                    int valStart = pos + 1;
+                    int valEnd = obj.IndexOf('"', valStart);
+                    if (valEnd < 0)
+                        break;
+
+                    string val = obj.Substring(valStart, valEnd - valStart);
+                    // basic unescape
+                    val = val.Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\\"", "\"").Replace("\\\\", "\\");
+                    result[key] = val;
+                    pos = valEnd + 1;
+                }
+            }
+            catch { /* ignore parse errors, return what we have */ }
+
+            return result;
+        }
+
         private async Task HandleApprovalRequestAsync(ToolCallRequest request)
         {
             if (request == null)
@@ -1835,6 +1903,110 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             return approved;
+        }
+
+        private async Task ProcessAgentToolLoopAsync(ChatService chat, bool originalStreaming)
+        {
+            if (chat == null || chat.CurrentChatViewModel == null)
+                return;
+
+            int iterations = 0;
+            bool streamingMode = originalStreaming;
+
+            // Force non-streaming for tool resolution turns to keep approval UX simple and avoid nested streams
+            chat.UseStreaming = false;
+
+            try
+            {
+                while (iterations < MaxToolIterations)
+                {
+                    var vm = chat.CurrentChatViewModel;
+                    if (vm == null || vm.Messages.Count == 0)
+                        break;
+
+                    var last = vm.Messages[vm.Messages.Count - 1];
+                    if (last == null ||
+                        !string.Equals(last.role, "assistant", StringComparison.OrdinalIgnoreCase) ||
+                        last.tool_calls == null ||
+                        last.tool_calls.Count == 0)
+                    {
+                        break;
+                    }
+
+                    iterations++;
+
+                    bool executedAny = false;
+                    for (int i = 0; i < last.tool_calls.Count; i++)
+                    {
+                        var tc = last.tool_calls[i];
+                        if (tc == null || tc.function == null)
+                            continue;
+
+                        var parameters = ParseToolArguments(tc.function.arguments);
+
+                        var request = new ToolCallRequest
+                        {
+                            id = !string.IsNullOrEmpty(tc.id) ? tc.id : Guid.NewGuid().ToString("N"),
+                            toolName = tc.function.name ?? string.Empty,
+                            description = tc.function.name ?? LocalizationExtensions.Get("tool.default", "tool"),
+                            parameters = parameters
+                        };
+
+                        bool approved = await RequestToolApproval(request);
+                        if (!approved)
+                        {
+                            _d.ShowSystemMessage(LocalizationExtensions.Get("tool.approval.denied", "Tool execution denied."));
+                            return;
+                        }
+
+                        string result = ToolExecutor.Execute(tc.function.name, parameters);
+                        if (result != null && result.Length > 10000)
+                            result = result.Substring(0, 10000) + "\n... [truncated]";
+
+                        vm.Messages.Add(new ChatMessage
+                        {
+                            role = "tool",
+                            content = result ?? string.Empty,
+                            tool_call_id = tc.id ?? string.Empty,
+                            unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                        });
+
+                        executedAny = true;
+                    }
+
+                    if (!executedAny)
+                        break;
+
+                    // Continue generation with tool results in history (no new user message)
+                    try
+                    {
+                        DismissCurrentApprovalPrompt();
+                        _toolCallUiHelper.Clear();
+
+                        await chat.RegenerateAsync(null, null);
+
+                        _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _d.ShowSystemMessage(LocalizationExtensions.Get("tool.error.loop", "Tool loop error: ") + ex.Message);
+                        break;
+                    }
+                }
+
+                if (iterations >= MaxToolIterations)
+                {
+                    _d.ShowSystemMessage(LocalizationExtensions.Get("tool.loop.max", "Max tool iterations reached."));
+                }
+            }
+            finally
+            {
+                chat.UseStreaming = originalStreaming;
+            }
         }
 
         // ===== Static events for bubble action buttons =====

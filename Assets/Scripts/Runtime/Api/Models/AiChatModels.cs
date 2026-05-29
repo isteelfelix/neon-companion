@@ -54,6 +54,22 @@ namespace NeonCompanion.Runtime.Api.Models
         public int maxTokens = 512;
         public string systemPrompt;
         public List<AiChatMessage> messages = new List<AiChatMessage>();
+        public List<ToolDefinition> tools;
+    }
+
+    [Serializable]
+    public class ToolCall
+    {
+        public string id;
+        public string type = "function";
+        public ToolCallFunction function;
+    }
+
+    [Serializable]
+    public class ToolCallFunction
+    {
+        public string name;
+        public string arguments;
     }
 
     [Serializable]
@@ -71,6 +87,8 @@ namespace NeonCompanion.Runtime.Api.Models
         public string role;
         public string content;
         public List<AiChatAttachment> attachments = new List<AiChatAttachment>();
+        public string tool_call_id;
+        public List<ToolCall> tool_calls;
     }
 
     [Serializable]
@@ -81,5 +99,6 @@ namespace NeonCompanion.Runtime.Api.Models
         public string providerSessionId;
         public string content;
         public DateTime receivedAtUtc = DateTime.UtcNow;
+        public List<ToolCall> tool_calls;
     }
 }

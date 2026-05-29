@@ -48,13 +48,20 @@ namespace NeonCompanion.Runtime.UI.Chat
 
         public void AddAssistantMessage(AiChatResponse response)
         {
-            Messages.Add(new ChatMessage
+            var chatMsg = new ChatMessage
             {
                 role = "assistant",
                 content = response?.content ?? string.Empty,
                 model = response?.model ?? string.Empty,
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-            });
+            };
+
+            if (response != null && response.tool_calls != null && response.tool_calls.Count > 0)
+            {
+                chatMsg.tool_calls = CloneToolCalls(response.tool_calls);
+            }
+
+            Messages.Add(chatMsg);
         }
 
         public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
@@ -112,14 +119,18 @@ namespace NeonCompanion.Runtime.UI.Chat
                 {
                     bool hasText = !string.IsNullOrWhiteSpace(message?.content);
                     bool hasAttachments = message?.attachments != null && message.attachments.Count > 0;
-                    if (string.IsNullOrWhiteSpace(message?.role) || (!hasText && !hasAttachments))
+                    bool hasToolCalls = message != null && message.tool_calls != null && message.tool_calls.Count > 0;
+                    bool hasToolCallRef = !string.IsNullOrEmpty(message?.tool_call_id);
+                    if (string.IsNullOrWhiteSpace(message?.role) || (!hasText && !hasAttachments && !hasToolCalls && !hasToolCallRef))
                         continue;
 
                     requestMessages.Add(new AiChatMessage
                     {
                         role = message.role,
                         content = message.content,
-                        attachments = ToAiAttachments(message.attachments)
+                        attachments = ToAiAttachments(message.attachments),
+                        tool_call_id = message.tool_call_id,
+                        tool_calls = CloneToolCalls(message.tool_calls)
                     });
                 }
 
@@ -171,6 +182,10 @@ namespace NeonCompanion.Runtime.UI.Chat
                         AppendTextSegment(streamMsg, response.content);
                     }
                     streamMsg.model = response?.model ?? streamMsg.model;
+                    if (response != null && response.tool_calls != null && response.tool_calls.Count > 0)
+                    {
+                        streamMsg.tool_calls = CloneToolCalls(response.tool_calls);
+                    }
                 }
                 else
                 {
@@ -184,12 +199,14 @@ namespace NeonCompanion.Runtime.UI.Chat
                 if (Messages.Count > 0)
                 {
                     var last = Messages[Messages.Count - 1];
+                    bool hasToolCalls = last != null && last.tool_calls != null && last.tool_calls.Count > 0;
                     bool isEmptyAssistantPlaceholder = last != null &&
                                                       string.Equals(last.role, "assistant", StringComparison.OrdinalIgnoreCase) &&
                                                       string.IsNullOrWhiteSpace(last.content) &&
                                                       string.IsNullOrWhiteSpace(last.model) &&
                                                       (last.segments == null || last.segments.Count == 0) &&
-                                                      (last.attachments == null || last.attachments.Count == 0);
+                                                      (last.attachments == null || last.attachments.Count == 0) &&
+                                                      !hasToolCalls;
                     if (isEmptyAssistantPlaceholder)
                         Messages.RemoveAt(Messages.Count - 1);
                 }
@@ -314,6 +331,33 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
 
             return mapped;
+        }
+
+        private static List<ToolCall> CloneToolCalls(List<ToolCall> source)
+        {
+            var clone = new List<ToolCall>();
+            if (source == null)
+                return clone;
+
+            for (int i = 0; i < source.Count; i++)
+            {
+                var t = source[i];
+                if (t == null)
+                    continue;
+
+                var c = new ToolCall();
+                c.id = t.id ?? string.Empty;
+                c.type = string.IsNullOrEmpty(t.type) ? "function" : t.type;
+                if (t.function != null)
+                {
+                    c.function = new ToolCallFunction();
+                    c.function.name = t.function.name ?? string.Empty;
+                    c.function.arguments = t.function.arguments ?? string.Empty;
+                }
+                clone.Add(c);
+            }
+
+            return clone;
         }
     }
 }

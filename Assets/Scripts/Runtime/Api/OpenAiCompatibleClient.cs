@@ -49,7 +49,8 @@ namespace NeonCompanion.Runtime.Api
                 request.maxTokens,
                 messages,
                 stream: false,
-                capabilities);
+                capabilities,
+                request.tools);
 
             using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
             {
@@ -473,6 +474,88 @@ namespace NeonCompanion.Runtime.Api
             sb.Append('"');
         }
 
+        private static void AppendToolDefinitionJson(StringBuilder sb, ToolDefinition tool)
+        {
+            if (tool == null)
+                return;
+
+            sb.Append("{\"type\":\"function\",\"function\":{");
+            AppendJsonProperty(sb, "name", tool.name, isFirst: true);
+            sb.Append(",\"description\":");
+            AppendJsonString(sb, tool.description ?? string.Empty);
+
+            sb.Append(",\"parameters\":");
+            AppendToolParametersJson(sb, tool.parameters);
+            sb.Append("}}");
+        }
+
+        private static void AppendToolParametersJson(StringBuilder sb, ToolParameterSchema schema)
+        {
+            if (schema == null)
+            {
+                sb.Append("{\"type\":\"object\"}");
+                return;
+            }
+
+            sb.Append('{');
+            AppendJsonProperty(sb, "type", schema.type ?? "object", isFirst: true);
+
+            if (schema.properties != null && schema.properties.Count > 0)
+            {
+                sb.Append(",\"properties\":{");
+                bool firstProp = true;
+                foreach (var kv in schema.properties)
+                {
+                    if (!firstProp)
+                        sb.Append(',');
+                    firstProp = false;
+                    AppendJsonString(sb, kv.Key);
+                    sb.Append(':');
+                    AppendToolPropertyJson(sb, kv.Value);
+                }
+                sb.Append('}');
+            }
+
+            if (schema.required != null && schema.required.Count > 0)
+            {
+                sb.Append(",\"required\":[");
+                for (int i = 0; i < schema.required.Count; i++)
+                {
+                    if (i > 0)
+                        sb.Append(',');
+                    AppendJsonString(sb, schema.required[i]);
+                }
+                sb.Append(']');
+            }
+
+            sb.Append('}');
+        }
+
+        private static void AppendToolPropertyJson(StringBuilder sb, ToolParameterProperty prop)
+        {
+            if (prop == null)
+            {
+                sb.Append("{\"type\":\"string\"}");
+                return;
+            }
+
+            sb.Append('{');
+            bool first = true;
+            if (!string.IsNullOrEmpty(prop.type))
+            {
+                AppendJsonProperty(sb, "type", prop.type, isFirst: true);
+                first = false;
+            }
+            if (!string.IsNullOrEmpty(prop.description))
+            {
+                if (!first)
+                    sb.Append(',');
+                sb.Append("\"description\":");
+                AppendJsonString(sb, prop.description);
+            }
+            sb.Append('}');
+        }
+
         private static string GuessImageMediaType(string path)
         {
             string extension = Path.GetExtension(path)?.ToLowerInvariant();
@@ -495,7 +578,8 @@ namespace NeonCompanion.Runtime.Api
             int maxTokens,
             List<AiChatMessage> messages,
             bool stream,
-            ProviderCapabilities capabilities)
+            ProviderCapabilities capabilities,
+            List<ToolDefinition> tools)
         {
             bool omitTemperature = (capabilities != null) && capabilities.RequiresTemperatureOmission;
             bool useCompletionTokens = (capabilities != null) && capabilities.UsesMaxCompletionTokens;
@@ -515,6 +599,19 @@ namespace NeonCompanion.Runtime.Api
 
             string tokenProperty = useCompletionTokens ? "max_completion_tokens" : "max_tokens";
             sb.Append(",\"").Append(tokenProperty).Append("\":").Append(maxTokens);
+
+            if (tools != null && tools.Count > 0)
+            {
+                sb.Append(",\"tools\":[");
+                for (int i = 0; i < tools.Count; i++)
+                {
+                    if (i > 0)
+                        sb.Append(',');
+                    AppendToolDefinitionJson(sb, tools[i]);
+                }
+                sb.Append(']');
+            }
+
             sb.Append('}');
             return sb.ToString();
         }
@@ -531,22 +628,143 @@ namespace NeonCompanion.Runtime.Api
                 if (envelope?.choices != null && envelope.choices.Length > 0)
                 {
                     var msg = envelope.choices[0]?.message;
-                    if (msg != null && !string.IsNullOrEmpty(msg.content))
-                        return new AiChatResponse
+                    if (msg != null)
+                    {
+                        string content = msg.content ?? string.Empty;
+                        List<ToolCall> toolCalls = null;
+                        if (msg.tool_calls != null && msg.tool_calls.Length > 0)
                         {
-                            id = envelope.id ?? string.Empty,
-                            model = envelope.model ?? string.Empty,
-                            content = msg.content,
-                            receivedAtUtc = DateTime.UtcNow
-                        };
+                            toolCalls = new List<ToolCall>();
+                            for (int i = 0; i < msg.tool_calls.Length; i++)
+                            {
+                                var src = msg.tool_calls[i];
+                                if (src == null)
+                                    continue;
+
+                                var tc = new ToolCall();
+                                tc.id = src.id ?? string.Empty;
+                                tc.type = string.IsNullOrEmpty(src.type) ? "function" : src.type;
+                                if (src.function != null)
+                                {
+                                    tc.function = new ToolCallFunction();
+                                    tc.function.name = src.function.name ?? string.Empty;
+                                    tc.function.arguments = src.function.arguments ?? string.Empty;
+                                }
+                                toolCalls.Add(tc);
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(content) || (toolCalls != null && toolCalls.Count > 0))
+                        {
+                            return new AiChatResponse
+                            {
+                                id = envelope.id ?? string.Empty,
+                                model = envelope.model ?? string.Empty,
+                                content = content,
+                                tool_calls = toolCalls,
+                                receivedAtUtc = DateTime.UtcNow
+                            };
+                        }
+                    }
                 }
             }
             catch { }
 
-            // Manual fallback: handles both compact ("content":"") and spaced ("content": "") JSON.
+            // Manual fallback: handles both compact and spaced JSON. Also extracts tool_calls if present.
             int choicesIdx = rawJson.IndexOf("\"choices\"", StringComparison.Ordinal);
-            string content = ExtractJsonStringValue(rawJson, "content", choicesIdx >= 0 ? choicesIdx : 0) ?? string.Empty;
-            return new AiChatResponse { content = content, receivedAtUtc = DateTime.UtcNow };
+            string contentManual = ExtractJsonStringValue(rawJson, "content", choicesIdx >= 0 ? choicesIdx : 0) ?? string.Empty;
+            List<ToolCall> manualToolCalls = ExtractToolCalls(rawJson, choicesIdx >= 0 ? choicesIdx : 0);
+            return new AiChatResponse
+            {
+                content = contentManual,
+                tool_calls = manualToolCalls,
+                receivedAtUtc = DateTime.UtcNow
+            };
+        }
+
+        private static List<ToolCall> ExtractToolCalls(string json, int startFrom)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            int toolCallsIdx = json.IndexOf("\"tool_calls\"", startFrom, StringComparison.Ordinal);
+            if (toolCallsIdx < 0)
+                return null;
+
+            // Find the array start [
+            int arrayStart = json.IndexOf('[', toolCallsIdx);
+            if (arrayStart < 0)
+                return null;
+
+            // Find matching ]
+            int depth = 0;
+            int arrayEnd = -1;
+            bool inString = false;
+            for (int i = arrayStart; i < json.Length; i++)
+            {
+                char c = json[i];
+                if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+                {
+                    inString = !inString;
+                    continue;
+                }
+                if (inString)
+                    continue;
+
+                if (c == '[')
+                    depth++;
+                else if (c == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        arrayEnd = i;
+                        break;
+                    }
+                }
+            }
+
+            if (arrayEnd < 0)
+                return null;
+
+            string arrayJson = json.Substring(arrayStart, arrayEnd - arrayStart + 1);
+            var result = new List<ToolCall>();
+
+            // Very simple parser for array of objects: look for "id", "name", "arguments" in sequence
+            int pos = 0;
+            while (pos < arrayJson.Length)
+            {
+                string idVal = ExtractJsonStringValue(arrayJson, "id", pos);
+                if (string.IsNullOrEmpty(idVal))
+                    break;
+
+                // find name after this id
+                int nameStart = arrayJson.IndexOf("\"name\"", pos, StringComparison.Ordinal);
+                string nameVal = null;
+                if (nameStart >= 0)
+                    nameVal = ExtractJsonStringValue(arrayJson, "name", nameStart);
+
+                int argsStart = arrayJson.IndexOf("\"arguments\"", pos, StringComparison.Ordinal);
+                string argsVal = null;
+                if (argsStart >= 0)
+                    argsVal = ExtractJsonStringValue(arrayJson, "arguments", argsStart);
+
+                var tc = new ToolCall();
+                tc.id = idVal;
+                tc.type = "function";
+                tc.function = new ToolCallFunction();
+                tc.function.name = nameVal ?? string.Empty;
+                tc.function.arguments = argsVal ?? string.Empty;
+                result.Add(tc);
+
+                // advance pos past this object roughly
+                int nextObj = arrayJson.IndexOf('}', pos);
+                if (nextObj < 0)
+                    break;
+                pos = nextObj + 1;
+            }
+
+            return result.Count > 0 ? result : null;
         }
 
         private Task<RequestRoutingInfo> ResolveRequestRoutingAsync(
@@ -635,7 +853,8 @@ namespace NeonCompanion.Runtime.Api
                 request.maxTokens,
                 messages,
                 stream: true,
-                capabilities);
+                capabilities,
+                request.tools);
 
             using (var webRequest = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
             {
@@ -707,7 +926,8 @@ namespace NeonCompanion.Runtime.Api
                                 temperature = request.temperature,
                                 maxTokens = request.maxTokens,
                                 systemPrompt = request.systemPrompt,
-                                messages = request.messages
+                                messages = request.messages,
+                                tools = request.tools
                             },
                             cancellationToken);
                         fallback = fallbackResponse?.content;
@@ -729,13 +949,22 @@ namespace NeonCompanion.Runtime.Api
                     throw new InvalidOperationException("Streaming response contained no tokens. Check provider endpoint, model id, and streaming compatibility.");
                 }
 
-                return new AiChatResponse
+                var streamFinal = new AiChatResponse
                 {
                     model = routing.Model ?? request.model ?? string.Empty,
                     providerSessionId = responseProviderSessionId,
                     content = collected.ToString(),
                     receivedAtUtc = DateTime.UtcNow
                 };
+
+                if (streamFinal.tool_calls == null || streamFinal.tool_calls.Count == 0)
+                {
+                    var parsedForTools = ParseResponse(finalStreamingText);
+                    if (parsedForTools != null && parsedForTools.tool_calls != null && parsedForTools.tool_calls.Count > 0)
+                        streamFinal.tool_calls = parsedForTools.tool_calls;
+                }
+
+                return streamFinal;
             }
         }
 
@@ -1290,6 +1519,22 @@ namespace NeonCompanion.Runtime.Api
         {
             public string role;
             public string content;
+            public OpenAiToolCall[] tool_calls;
+        }
+
+        [Serializable]
+        private class OpenAiToolCall
+        {
+            public string id;
+            public string type;
+            public OpenAiToolCallFunction function;
+        }
+
+        [Serializable]
+        private class OpenAiToolCallFunction
+        {
+            public string name;
+            public string arguments;
         }
 
         [Serializable]

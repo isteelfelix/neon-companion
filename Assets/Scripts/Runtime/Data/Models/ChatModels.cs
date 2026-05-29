@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NeonCompanion.Runtime.Api.Models;
 
 namespace NeonCompanion.Runtime.Data.Models
 {
@@ -36,6 +37,8 @@ namespace NeonCompanion.Runtime.Data.Models
         public List<ChatAttachment> attachments = new List<ChatAttachment>();
         public List<ChatMessageSegment> segments = new List<ChatMessageSegment>();
         public long unixTimeSeconds;
+        public string tool_call_id;
+        public List<ToolCall> tool_calls;
     }
 
     [Serializable]
