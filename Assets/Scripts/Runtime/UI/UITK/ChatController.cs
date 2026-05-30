@@ -286,12 +286,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Drag-and-drop file support (U-44)
             var chatMain = _d.Composer?.parent;
+#if UNITY_EDITOR
             if (chatMain != null)
             {
                 chatMain.RegisterCallback<DragUpdatedEvent>(OnDragUpdated);
                 chatMain.RegisterCallback<DragPerformEvent>(OnDragPerform);
                 chatMain.RegisterCallback<DragLeaveEvent>(OnDragLeave);
             }
+#endif
 
             Application.focusChanged += OnApplicationFocusChanged;
         }
@@ -385,12 +387,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Drag-and-drop file support (U-44)
             var chatMain = _d.Composer?.parent;
+#if UNITY_EDITOR
             if (chatMain != null)
             {
                 chatMain.UnregisterCallback<DragUpdatedEvent>(OnDragUpdated);
                 chatMain.UnregisterCallback<DragPerformEvent>(OnDragPerform);
                 chatMain.UnregisterCallback<DragLeaveEvent>(OnDragLeave);
             }
+#endif
 
             Application.focusChanged -= OnApplicationFocusChanged;
         }
@@ -1758,6 +1762,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Drag and Drop (U-44) =====
 
+#if UNITY_EDITOR
         private void OnDragUpdated(DragUpdatedEvent evt)
         {
             if (!HasValidDragFiles(evt))
@@ -1832,6 +1837,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             string[] paths = GetDraggedPaths();
             return paths != null && paths.Length > 0;
         }
+#endif
 
         private static void SetDragCopyVisualMode()
         {
