@@ -100,5 +100,6 @@ namespace NeonCompanion.Runtime.Api.Models
         public string content;
         public DateTime receivedAtUtc = DateTime.UtcNow;
         public List<ToolCall> tool_calls;
+        public List<AiChatAttachment> attachments;
     }
 }

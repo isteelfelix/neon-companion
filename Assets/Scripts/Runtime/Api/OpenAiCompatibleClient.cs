@@ -667,7 +667,17 @@ namespace NeonCompanion.Runtime.Api
                             }
                         }
 
-                        if (!string.IsNullOrEmpty(content) || (toolCalls != null && toolCalls.Count > 0))
+                        List<AiChatAttachment> attachments = null;
+                        if (rawJson.IndexOf("\"content\":[", StringComparison.Ordinal) >= 0)
+                        {
+                            var arrRes = ExtractContentArray(rawJson, 0);
+                            if (!string.IsNullOrEmpty(arrRes.TextContent))
+                                content = arrRes.TextContent;
+                            if (arrRes.Attachments != null && arrRes.Attachments.Count > 0)
+                                attachments = arrRes.Attachments;
+                        }
+
+                        if (!string.IsNullOrEmpty(content) || (toolCalls != null && toolCalls.Count > 0) || (attachments != null && attachments.Count > 0))
                         {
                             return new AiChatResponse
                             {
@@ -675,6 +685,7 @@ namespace NeonCompanion.Runtime.Api
                                 model = envelope.model ?? string.Empty,
                                 content = content,
                                 tool_calls = toolCalls,
+                                attachments = attachments,
                                 receivedAtUtc = DateTime.UtcNow
                             };
                         }
@@ -686,11 +697,20 @@ namespace NeonCompanion.Runtime.Api
             // Manual fallback: handles both compact and spaced JSON. Also extracts tool_calls if present.
             int choicesIdx = rawJson.IndexOf("\"choices\"", StringComparison.Ordinal);
             string contentManual = ExtractJsonStringValue(rawJson, "content", choicesIdx >= 0 ? choicesIdx : 0) ?? string.Empty;
+            List<AiChatAttachment> attachmentsManual = null;
+            if (rawJson.IndexOf("\"content\":[", StringComparison.Ordinal) >= 0)
+            {
+                var arrRes = ExtractContentArray(rawJson, choicesIdx >= 0 ? choicesIdx : 0);
+                contentManual = arrRes.TextContent ?? string.Empty;
+                if (arrRes.Attachments != null && arrRes.Attachments.Count > 0)
+                    attachmentsManual = arrRes.Attachments;
+            }
             List<ToolCall> manualToolCalls = ExtractToolCalls(rawJson, choicesIdx >= 0 ? choicesIdx : 0);
             return new AiChatResponse
             {
                 content = contentManual,
                 tool_calls = manualToolCalls,
+                attachments = attachmentsManual,
                 receivedAtUtc = DateTime.UtcNow
             };
         }
@@ -778,6 +798,184 @@ namespace NeonCompanion.Runtime.Api
             }
 
             return result.Count > 0 ? result : null;
+        }
+
+        private static ContentArrayParseResult ExtractContentArray(string json, int startFrom)
+        {
+            var result = new ContentArrayParseResult
+            {
+                TextContent = string.Empty,
+                Attachments = new List<AiChatAttachment>()
+            };
+
+            if (string.IsNullOrWhiteSpace(json))
+                return result;
+
+            string keyMarker = "\"content\"";
+            int pos = startFrom;
+            int keyIdx = json.IndexOf(keyMarker, pos, StringComparison.Ordinal);
+            if (keyIdx < 0)
+                return result;
+
+            int p = keyIdx + keyMarker.Length;
+            while (p < json.Length && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r'))
+                p++;
+            if (p >= json.Length || json[p] != ':')
+                return result;
+            p++;
+            while (p < json.Length && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r'))
+                p++;
+            if (p >= json.Length || json[p] != '[')
+                return result;
+
+            int arrayStart = p;
+            int depth = 0;
+            bool inString = false;
+            int arrayEnd = -1;
+            for (int i = arrayStart; i < json.Length; i++)
+            {
+                char c = json[i];
+                if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+                {
+                    inString = !inString;
+                    continue;
+                }
+                if (inString)
+                    continue;
+                if (c == '[')
+                    depth++;
+                else if (c == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        arrayEnd = i;
+                        break;
+                    }
+                }
+            }
+            if (arrayEnd < 0)
+                return result;
+
+            string arrayJson = json.Substring(arrayStart, arrayEnd - arrayStart + 1);
+
+            var contentItems = new List<string>();
+            int idx = 1;
+            while (idx < arrayJson.Length - 1)
+            {
+                while (idx < arrayJson.Length && (arrayJson[idx] == ' ' || arrayJson[idx] == '\t' || arrayJson[idx] == '\n' || arrayJson[idx] == '\r' || arrayJson[idx] == ','))
+                    idx++;
+                if (idx >= arrayJson.Length || arrayJson[idx] != '{')
+                    break;
+
+                int objStart = idx;
+                int objDepth = 0;
+                inString = false;
+                int objEnd = -1;
+                for (int j = objStart; j < arrayJson.Length; j++)
+                {
+                    char c = arrayJson[j];
+                    if (c == '"' && (j == 0 || arrayJson[j - 1] != '\\'))
+                    {
+                        inString = !inString;
+                        continue;
+                    }
+                    if (inString)
+                        continue;
+                    if (c == '{')
+                        objDepth++;
+                    else if (c == '}')
+                    {
+                        objDepth--;
+                        if (objDepth == 0)
+                        {
+                            objEnd = j;
+                            break;
+                        }
+                    }
+                }
+                if (objEnd < 0)
+                    break;
+
+                string itemJson = arrayJson.Substring(objStart, objEnd - objStart + 1);
+                contentItems.Add(itemJson);
+                idx = objEnd + 1;
+            }
+
+            var textParts = new List<string>();
+            for (int i = 0; i < contentItems.Count; i++)
+            {
+                string item = contentItems[i];
+                string type = ExtractJsonStringValue(item, "type", 0);
+                if (string.Equals(type, "text", StringComparison.OrdinalIgnoreCase))
+                {
+                    string txt = ExtractJsonStringValue(item, "text", 0);
+                    if (!string.IsNullOrEmpty(txt))
+                        textParts.Add(txt);
+                }
+                else if (string.Equals(type, "image_url", StringComparison.OrdinalIgnoreCase))
+                {
+                    int imgUrlKey = item.IndexOf("\"image_url\"", StringComparison.Ordinal);
+                    if (imgUrlKey >= 0)
+                    {
+                        string url = ExtractJsonStringValue(item, "url", imgUrlKey);
+                        if (!string.IsNullOrEmpty(url))
+                        {
+                            string attName = DeriveNameFromUrl(url);
+                            string cleanForExt = CleanUrlForExtension(url);
+                            string media = GuessImageMediaType(cleanForExt);
+                            var att = new AiChatAttachment
+                            {
+                                kind = "image",
+                                name = attName,
+                                path = url,
+                                mediaType = media
+                            };
+                            result.Attachments.Add(att);
+                        }
+                    }
+                }
+            }
+
+            if (textParts.Count > 0)
+                result.TextContent = string.Join("\n\n", textParts);
+
+            return result;
+        }
+
+        private static string CleanUrlForExtension(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return string.Empty;
+            string s = url;
+            int q = s.IndexOf('?');
+            if (q >= 0)
+                s = s.Substring(0, q);
+            int h = s.IndexOf('#');
+            if (h >= 0)
+                s = s.Substring(0, h);
+            return s;
+        }
+
+        private static string DeriveNameFromUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return "image.png";
+            try
+            {
+                string clean = CleanUrlForExtension(url);
+                string fname = Path.GetFileName(clean);
+                if (!string.IsNullOrEmpty(fname) && fname.IndexOf('.') > 0)
+                    return fname;
+            }
+            catch { }
+            return "generated_image.png";
+        }
+
+        private struct ContentArrayParseResult
+        {
+            public string TextContent;
+            public List<AiChatAttachment> Attachments;
         }
 
         private Task<RequestRoutingInfo> ResolveRequestRoutingAsync(
@@ -921,9 +1119,9 @@ namespace NeonCompanion.Runtime.Api
                 string responseProviderSessionId = adapter.ExtractSessionId(webRequest, routing.ProviderSessionId);
 
                 // Some providers ignore `stream=true` and return a normal JSON completion.
+                AiChatResponse fallbackResponse = null;
                 if (!emittedAnyToken)
                 {
-                    AiChatResponse fallbackResponse = null;
                     var fallback = ExtractContentFromStreamingPayload(finalStreamingText);
                     if (string.IsNullOrWhiteSpace(fallback))
                     {
@@ -977,6 +1175,20 @@ namespace NeonCompanion.Runtime.Api
                     var parsedForTools = ParseResponse(finalStreamingText);
                     if (parsedForTools != null && parsedForTools.tool_calls != null && parsedForTools.tool_calls.Count > 0)
                         streamFinal.tool_calls = parsedForTools.tool_calls;
+                }
+
+                if (streamFinal.attachments == null || streamFinal.attachments.Count == 0)
+                {
+                    if (fallbackResponse != null && fallbackResponse.attachments != null && fallbackResponse.attachments.Count > 0)
+                    {
+                        streamFinal.attachments = fallbackResponse.attachments;
+                    }
+                    else
+                    {
+                        var parsedForAtts = ParseResponse(finalStreamingText);
+                        if (parsedForAtts != null && parsedForAtts.attachments != null && parsedForAtts.attachments.Count > 0)
+                            streamFinal.attachments = parsedForAtts.attachments;
+                    }
                 }
 
                 return streamFinal;

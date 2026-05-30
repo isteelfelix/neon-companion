@@ -1,134 +1,137 @@
-# 12_Feature_Tracker.md
-
-## Статусы
-- ✅ Done — реализовано и проверено
-- 🔧 In Progress — в разработке
-- ⏳ Pending — ожидает проверки
-- 📋 Planned — запланировано
-- ❌ Blocked — заблокировано
-
----
-
-## Чат и API
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| C-01 | Подключение OpenAI-совместимых API | ✅ | M0 | Streaming через DownloadHandlerBuffer + poll |
-| C-02 | Множество провайдеров + переключение | ✅ | M0 | |
-| C-03 | Провайдер-осознанные сессии | ✅ | M1 | |
-| C-04 | Пресеты моделей | ✅ | M1 | |
-| C-05 | Локализация UI | ✅ | M1 | |
-| C-06 | Авто-обнаружение моделей (ModelDiscoveryService) | ✅ | M1 | Кэширование по baseUrl\|apiKey, `/models` эндпоинт |
-| C-07 | Модель-пикер в чате | ✅ | M1 | NeonDropdown в topbar + overlay-диалог |
-| C-08 | Вложения в чате | ✅ | M1 | `ChatAttachment`, `AiChatAttachment` |
-| C-09 | Сессионная маршрутизация моделей | ✅ | M1 | `X-Hermes-Session-Id`, Hermes inventory |
-| C-10 | Provider Adapter архитектура | ⏳ | M2 | Phase 1+2+2b+UI done + фикс парсера OpenAI /models + локальный model switch. Ожидает проверки |
-
-## История и сессии
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| H-01 | Сохранение истории чата | ✅ | M0 | |
-| H-02 | Экран истории | ✅ | M1 | Выделенный экран |
-| H-03 | Удаление отдельных сессий | ✅ | M1 | Из sidebar |
-| H-04 | Папки для сессий (как проекты) | ✅ | M2 | Группировка сессий по папкам |
-
-## Аватары
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| A-01 | Статичные 2D аватары | ✅ | M0 | |
-| A-02 | Кастомные аватары (загрузка) | ✅ | M1 | |
-| A-03 | Persona/инструкции аватара | ✅ | M1 | Edit + reset flow |
-| A-04 | Scale-and-crop фон | ✅ | M1 | |
-| A-05 | Анимация спрайтшитами | ✅ | M1 | SpriteSheetAnimator + Loader, talking/idle clips |
-| A-06 | Базовая анимация аватаров | ✅ | M1 | Idle + talking через SpriteSheetAnimator |
-| A-07 | 2D motion-pack MVP contract | ✅ | M1 | Fixed action set, continuous + one-shot split |
-| A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | see docs/13_Avatar_Motion_Research.md |
-| A-09 | Загрузка спрайтшитов — производительность | ⏳ | M2 | Preload during splash screen. Фриз при загрузке — нужна lazy loading |
-| A-10 | Довести анимацию спрайтшитов до рабочего состояния | ⏳ | M2 | Talking/listening/confused триггеры. Ожидает проверки |
-| A-11 | Система триггерных анимаций | ✅ | M2 | Game-like state machine |
-
-## UI и UX
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| U-01 | Dark UI (UI Toolkit) | ✅ | M0 | |
-| U-02 | Темы | ✅ | M1 | Shape/halo/breathing, live preview sync |
-| U-03 | Composer overflow fix | ✅ | M1 | min-width: 0 |
-| U-04 | NeonDropdown (кастомный компонент) | ✅ | M1 | Замена DropdownField, `choicesCsv` |
-| U-05 | Многострочный ввод сообщений | ✅ | M1 | `multiline = true`, auto vertical scroller |
-| U-06 | Масштабируемый рельс сайдбара | ✅ | M1 | `_railResizeHandle`, 160–400px |
-| U-07 | Режимы отображения аватара | ✅ | M1 | `AvatarViewMode`: Static, Animated, Volume3D |
-| U-08 | Кнопка выхода в настройках | ⏳ | M2 | Кнопка «Выход» в settings. Ожидает проверки |
-| U-09 | Кнопка «Резюме» (summarize) не работает | 🔧 | M2 | Кнопка в topbar справа |
-| U-10 | Иконка приложения в интерфейсе | ✅ | M2 | Вверху слева, рядом с названием |
-| U-11 | Баг: сжатие левой панели | ⏳ | M2 | overflow: hidden на .rail. Ожидает проверки |
-| U-12 | Баг: многострочный ввод — переполнение | ⏳ | M2 | overflow: auto на inner text field. Ожидает проверки |
-| U-13 | Вкладка «Темы» — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
-| U-14 | Настройки аватара — перегруженность | 📋 | M2 | Правая panel перегружена |
-| U-15 | Сцена загрузки (splash screen) | ⏳ | M2 | Cyberpunk splash + dynamic effects. Ожидает проверки |
-|| U-16 | Маска API-ключа в редакторе провайдера | ✅ | M2 | Eye toggle button, isPasswordField flip, reset on editor open |
-| U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | Экран: кроны, расписание, статус, логи |
-| U-18 | Agent Activity UI | ⏳ | M2 | Thinking bubble + tool progress. Ожидает проверки |
-| U-19 | Typing indicator в bubble ответа | ⏳ | M2 | 3 точки внутри response bubble. Ожидает проверки |
-| U-20 | Ленивая загрузка спрайтшитов | ✅ | M2 | Splash screen фризит при синхронной загрузке |
-| U-21 | Scroll-to-bottom в чате | ⏳ | M2 | Кнопка прокрутки вниз. Ожидает проверки |
-| U-22 | Enter-to-send | ⏳ | M2 | Toggle в настройках. Ожидает проверки |
-| U-23 | Clear chats only | ⏳ | M2 | Очистка + сброс in-memory ChatService. Ожидает проверки |
-| U-24 | Action buttons в bubble | ⏳ | M2 | Copy/refresh/listen при ховере на assistant bubble. Felix фиксит позицию |
-| U-25 | Автоскролл при стриминге | ⏳ | M2 | Перелопачен, ожидает проверки |
-| U-26 | Toggle панелей | ⏳ | M2 | Кнопки скрытия левой/правой панели. Иконки пофикшены. Ожидает проверки |
-|| U-27 | Счётчик токенов + время ответа | ✅ | M2 | Approx tokens + elapsed time в footer assistant bubble. Обновляется каждые 500ms. Локализация en/ru |
-| U-28 | Precise usage данные (stream_options) | ✅ | M3 | Точные prompt_tokens + completion_tokens через `stream_options: {include_usage: true}`. Изменения в парсере SSE |
-| U-29 | Редактирование сообщений | ✅ | M2 | Right-click/long-press context menu → inline edit (user only) + Save/Cancel + optional "Save & Regenerate". Implemented in ChatController + MessageContextMenu. |
-| U-30 | Удаление отдельных сообщений | ✅ | M2 | Right-click/long-press → Delete from context menu. Removes from model, re-renders, persists via SaveCurrentSessionAsync. |
-| U-31 | Выделение сообщений | ✅ | M2 | Multi-select режим: long press или checkbox. Панель действий снизу |
-| U-32 | Удаление выделенных | ✅ | M2 | Удалить все выбранные сообщения |
-| U-33 | Пересылка выделенных в другой чат | ✅ | M2 | Forward button в selection bar; overlay picker со списком других сессий (title + timestamp); глубокое копирование сообщений через JsonUtility snapshot; AppendMessagesToSessionAsync в ChatService; локализация + USS. Реализовано в ChatController (без новых .cs) |
-| U-34 | Выделение текста в сообщениях | ✅ | M2 | Копирование текста из bubble через нативный текстовый selection |
-|| U-35 | Markdown разметка в сообщениях | ✅ | M2 | MarkdownRenderer: bold/italic/code/codeblocks/lists/links. USS стили. Только для assistant |
-| U-36 | Индикатор контекстного окна | ✅ | M2 | Полоска показывающая заполненность контекста. Важно для длинных сессий |
-| U-37 | Экспорт чата | ✅ | M2 | Сохранить разговор как markdown/JSON/text файл (Markdown в ChatController, persistentDataPath по образцу Settings) |
-| U-38 | Поиск по текущему чату | ✅ | M2 | Найти текст в текущем разговоре (search bar, highlight + nav, X/Y count). ChatController dynamic bar + USS + loc. |
-| U-48 | Agent Approval System (Part B) | ✅ | M2 | Streaming integration in ChatController + alwaysApprovedTools + tool call detection in SSE parser (hermes.tool.request + OpenAI tool_calls); approval prompt during tool request, Always saves to settings, auto/manual modes respected |
-| U-39 | Ветвление диалога | 📋 | M3 | Ответвление от любого сообщения → новая ветка диалога |
-| U-40 | Звуки уведомлений | ✅ | M2 | Звук когда ответ готов, если окно не в фокусе |
-| U-41 | Отображение картинок в чате | ✅ | M2 | Рендер вложений-изображений инлайн в bubble вместо текста [image] (Image + async UnityWebRequestTexture, IsImageFile). |
-| U-42 | Вставка изображений из буфера обмена | ✅ | M2 | Ctrl+V / Cmd+V — вставить скопированное изображение как вложение в композер |
-| U-43 | Мульти-агент чат | 📋 | M3 | Несколько агентов в одном разговоре. Каждый со своим bubble-цветом. Сабагенты (Claude Code, Codex) видны в реальном времени |
-| U-44 | Drag-and-drop файлов в чат | ✅ | M2 | Перетащить PDF/код/картинку → агент анализирует |
-| U-45 | Очередь сообщений | ✅ | M2 | Отправлять пока агент работает. Обрабатываются по порядку после завершения текущего. Как в Telegram |
-| U-46 | Кнопка стоп (отмена генерации) | ⏳ | M2 | ■ кнопка в композере, отменяет streaming. Критично для локальных LLM. Ожидает проверки |
-| U-47 | Система команд в чате | ⏳ | M2 | /help /model /system /temp /tokens /clear /new. Ожидает проверки |
-
-## Голос и 3D (M2+)
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| V-01 | Голосовой ввод/вывод | ✅ | M2 | IVoiceService, VoiceInputManager, VoiceOutputManager |
-| V-02 | Lipsync | ✅ | M2 | LipsyncController: phoneme→viseme |
-| V-03 | 3D аватары | ✅ | M2 | Avatar3DLoader (GLB/GLTF), Avatar3DRenderer |
-| V-04 | Desktop realtime avatar layer | 📋 | M2+ | 3D-first realtime path: blendshapes/visemes |
-
-## Рефакторинг (M2)
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| R-01 | NavigationController | ✅ | M2 | 317 строк, deps-based |
-| R-02 | ChatController | ✅ | M2 | 1044 строки — чат, стриминг, ввод |
-| R-03 | SessionHistoryController | ✅ | M2 | 366 строк — история сессий |
-| R-04 | ProvidersController | ✅ | M2 | 1381 строка — провайдеры, модели |
-| R-05 | AvatarGalleryController | ✅ | M2 | 1794 строки — галерея аватаров |
-| R-06 | VoiceController | ✅ | M2 | 202 строки — голос |
-| R-07 | LayoutController | ✅ | M2 | 138 строки — панели, resize |
-| R-08 | SettingsController | ✅ | M2 | 1005 строк — настройки |
-| R-09 | PanelResizeHandler | ✅ | M2 | Логика resize |
-
-## VR (M3+)
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| VR-01 | Поддержка VR (Quest, PCVR) | 📋 | M3 | |
-| VR-02 | Кастомизация аватаров | ✅ | M3 | |
-| VR-03 | Плагины и расширения | ✅ | M3 | IPlugin, PluginManager, DLL loading |
-
-## Публикация (M4)
-| # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
-| P-01 | itch.io / GitHub Releases | ✅ | M4 | Ручная публикация через GitHub Releases |
-| P-02 | Документация для контрибьюторов | ✅ | M4 | docs/10_Contribution.md |
-| P-03 | Донат-система | ✅ | M4 | IDonationService, кнопка «Поддержать» |
+     1|# 12_Feature_Tracker.md
+     2|
+     3|## Статусы
+     4|- ✅ Done — реализовано и проверено
+     5|- 🔧 In Progress — в разработке
+     6|- ⏳ Pending — ожидает проверки
+     7|- 📋 Planned — запланировано
+     8|- ❌ Blocked — заблокировано
+     9|
+    10|---
+    11|
+    12|## Чат и API
+    13|| # | Фича | Статус | Спринт | Заметки |
+    14||---|------|--------|--------|---------|
+    15|| C-01 | Подключение OpenAI-совместимых API | 🔧 | M0 | Streaming через DownloadHandlerBuffer + poll |
+    16|| C-02 | Множество провайдеров + переключение | 🔧 | M0 | |
+    17|| C-03 | Провайдер-осознанные сессии | 🔧 | M1 | |
+    18|| C-04 | Пресеты моделей | 🔧 | M1 | |
+    19|| C-05 | Локализация UI | 🔧 | M1 | |
+|  | C-06 | Авто-обнаружение моделей (ModelDiscoveryService) | 🔧 | M1 |
+    21|| C-07 | Модель-пикер в чате | 🔧 | M1 | NeonDropdown в topbar + overlay-диалог |
+    22|| C-08 | Вложения в чате | 🔧 | M1 | `ChatAttachment`, `AiChatAttachment` |
+    23|| C-09 | Сессионная маршрутизация моделей | 🔧 | M1 | `X-Hermes-Session-Id`, Hermes inventory |
+    24|| C-10 | Provider Adapter архитектура | ⏳ | M2 | Phase 1+2+2b+UI done + фикс парсера OpenAI /models + локальный model switch. Ожидает проверки |
+    25|
+    26|## История и сессии
+    27|| # | Фича | Статус | Спринт | Заметки |
+    28||---|------|--------|--------|---------|
+    29|| H-01 | Сохранение истории чата | 🔧 | M0 | |
+    30|| H-02 | Экран истории | 🔧 | M1 | Выделенный экран |
+    31|| H-03 | Удаление отдельных сессий | 🔧 | M1 | Из sidebar |
+    32|| H-04 | Папки для сессий (как проекты) | ❌ | M2 | Не работает — нет вообще |
+    33|
+    34|## Аватары
+    35|| # | Фича | Статус | Спринт | Заметки |
+    36||---|------|--------|--------|---------|
+    37|| A-01 | Статичные 2D аватары | 🔧 | M0 | |
+    38|| A-02 | Кастомные аватары (загрузка) | 🔧 | M1 | |
+    39|| A-03 | Persona/инструкции аватара | 🔧 | M1 | Edit + reset flow |
+    40|| A-04 | Scale-and-crop фон | 🔧 | M1 | |
+    41|| A-05 | Анимация спрайтшитами | 🔧 | M1 | SpriteSheetAnimator + Loader, talking/idle clips |
+    42|| A-06 | Базовая анимация аватаров | 🔧 | M1 | Idle + talking через SpriteSheetAnimator |
+    43|| A-07 | 2D motion-pack MVP contract | 🔧 | M1 | Fixed action set, continuous + one-shot split |
+    44|| A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | see docs/13_Avatar_Motion_Research.md |
+    45|| A-09 | Загрузка спрайтшитов — производительность | ❌ | M2 | Баг: не на сцене загрузки, а на аватарах |
+    46|| A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
+    47|| A-11 | Система триггерных анимаций | 🔧 | M2 | Game-like state machine |
+    48|
+    49|## UI и UX
+    50|| # | Фича | Статус | Спринт | Заметки |
+    51||---|------|--------|--------|---------|
+    52|| U-01 | Dark UI (UI Toolkit) | 🔧 | M0 | |
+    53|| U-02 | Темы | 🔧 | M1 | Shape/halo/breathing, live preview sync |
+    54|| U-03 | Composer overflow fix | 🔧 | M1 | min-width: 0 |
+    55|| U-04 | NeonDropdown (кастомный компонент) | 🔧 | M1 | Замена DropdownField, `choicesCsv` |
+    56|| U-05 | Многострочный ввод сообщений | 🔧 | M1 | `multiline = true`, auto vertical scroller |
+    57|| U-06 | Масштабируемый рельс сайдбара | 🔧 | M1 | `_railResizeHandle`, 160–400px |
+    58|| U-07 | Режимы отображения аватара | 🔧 | M1 | `AvatarViewMode`: Static, Animated, Volume3D |
+    59|| U-08 | Кнопка выхода в настройках | ✅ | M2 | Кнопка «Выход» в settings |
+    60|| U-09 | Кнопка «Резюме» (summarize) | ✅ | M2 | Кнопка в topbar справа |
+    61|| U-10 | Иконка приложения в интерфейсе | ❌ | M2 | Нет иконки |
+    62|| U-11 | Баг: сжатие левой панели | ✅ | M2 | overflow: hidden на .rail |
+    63|| U-12 | Баг: многострочный ввод — переполнение | ❌ | M2 | Shift+Enter и Ctrl+Enter не переносят строку |
+    64|| U-13 | Вкладка «Темы» — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
+    65|| U-14 | Настройки аватара — перегруженность | 📋 | M2 | Правая panel перегружена |
+    66|| U-15 | Сцена загрузки (splash screen) | ✅ | M2 | Cyberpunk splash + dynamic effects |
+|  |  | U-16 | Маска API-ключа в редакторе провайдера | 🔧 |
+    68|| U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | Экран: кроны, расписание, статус, логи |
+    69|| U-18 | Agent Activity UI | ✅ | M2 | Thinking bubble + tool progress |
+    70|| U-19 | Typing indicator в bubble ответа | ✅ | M2 | 3 точки внутри response bubble |
+    71|| U-20 | Ленивая загрузка спрайтшитов | 🔧 | M2 | Splash screen фризит при синхронной загрузке |
+    72|| U-21 | Scroll-to-bottom в чате | ✅ | M2 | Кнопка прокрутки вниз |
+    73|| U-22 | Enter-to-send | ❌ | M2 | Сломан — Shift+Enter не работает (дубль U-12) |
+    74|| U-23 | Clear chats only | ✅ | M2 | Очистка + сброс in-memory ChatService |
+    75|| U-24 | Action buttons в bubble | ✅ | M2 | Copy/refresh/listen при ховере на assistant bubble |
+    76|| U-25 | Автоскролл при стриминге | ✅ | M2 | Перелопачен |
+    77|| U-26 | Toggle панелей | ✅ | M2 | Кнопки скрытия левой/правой панели. Иконки пофикшены |
+|  |  | U-27 | Счётчик токенов + время ответа | 🔧 |
+| U-28 | Precise usage данные (stream_options) | ❌ | M3 | Токены пропадают после завершения сообщения — нужно оставлять |
+| U-29 | Редактирование сообщений | ❌ | M2 | ПКМ вызывает сломанную синюю полосу внизу экрана |
+| U-30 | Удаление отдельных сообщений | ❌ | M2 | ПКМ — та же сломанная синяя полоса |
+| U-31 | Выделение сообщений | ❌ | M2 | Long press — та же сломанная синяя полоса |
+| U-32 | Удаление выделенных | ❌ | M2 | Не работает — нет выделения (дубль U-31) |
+| U-33 | Пересылка выделенных в другой чат | ❌ | M2 | Не работает — нет выделения (дубль U-31) |
+| U-34 | Выделение текста в сообщениях | ❌ | M2 | Не работает |
+| U-35 | Markdown разметка в сообщениях | ❌ | M2 | Raw текст — MarkdownRenderer не подхватывает сообщения |
+| U-36 | Индикатор контекстного окна | ❌ | M2 | Не отображается — нет полоски |
+| U-37 | Экспорт чата | 🔧 | M2 | Работает, но: нет пути в сообщении, нет окна выбора пути сохранения |
+| U-38 | Поиск по текущему чату | ✅ | M2 | Работает |
+    90|| U-48 | Agent Approval System (Part B) | 🔧 | M2 | Streaming integration in ChatController + alwaysApprovedTools + tool call detection in SSE parser (hermes.tool.request + OpenAI tool_calls); approval prompt during tool request, Always saves to settings, auto/manual modes respected |
+    91|| U-39 | Ветвление диалога | 📋 | M3 | Ответвление от любого сообщения → новая ветка диалога |
+| U-40 | Звуки уведомлений | ❌ | M2 | Система звуков не подключена. Нужны: настройки громкости, включение/отключение |
+| U-41 | Отображение картинок в чате | ❌ | M2 | Не работает |
+| U-42 | Вставка изображений из буфера обмена | ❌ | M2 | Не работает |
+    95|| U-43 | Мульти-агент чат | 📋 | M3 | Несколько агентов в одном разговоре. Каждый со своим bubble-цветом. Сабагенты (Claude Code, Codex) видны в реальном времени |
+| U-44 | Drag-and-drop файлов в чат | ❌ | M2 | Не работает. Кнопка прикрепления (булавка) тоже сломана |
+| U-45 | Очередь сообщений | 🔧 | M2 | Работает, но не видно сообщения в очереди |
+| U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
+| U-47 | Система команд в чате | ✅ | M2 | Работает |
+| U-49 | Входящие вложения от AI | ❌ | M2 | Не работает |
+| U-50 | Баг: анимированный аватар в вкладке «Статика» | 🔧 | M2 | gallery-animated не скрывается при открытии — ApplyAvatarViewMode() не вызывается в Init()
+   101|
+   102|## Голос и 3D (M2+)
+   103|| # | Фича | Статус | Спринт | Заметки |
+   104||---|------|--------|--------|---------|
+| V-01 | Голосовой ввод/вывод | ❌ | M2 | Не работает. Нет настроек устройства ввода-вывода |
+| V-02 | Lipsync | ❌ | M2 | Не работает —voice не подключен |
+| V-03 | 3D аватары | ❌ | M2 | Не работает |
+   108|| V-04 | Desktop realtime avatar layer | 📋 | M2+ | 3D-first realtime path: blendshapes/visemes |
+   109|
+   110|## Рефакторинг (M2)
+   111|| # | Фича | Статус | Спринт | Заметки |
+   112||---|------|--------|--------|---------|
+   113|| R-01 | NavigationController | 🔧 | M2 | 317 строк, deps-based |
+   114|| R-02 | ChatController | 🔧 | M2 | 1044 строки — чат, стриминг, ввод |
+   115|| R-03 | SessionHistoryController | 🔧 | M2 | 366 строк — история сессий |
+   116|| R-04 | ProvidersController | 🔧 | M2 | 1381 строка — провайдеры, модели |
+   117|| R-05 | AvatarGalleryController | 🔧 | M2 | 1794 строки — галерея аватаров |
+   118|| R-06 | VoiceController | 🔧 | M2 | 202 строки — голос |
+   119|| R-07 | LayoutController | 🔧 | M2 | 138 строки — панели, resize |
+   120|| R-08 | SettingsController | 🔧 | M2 | 1005 строк — настройки |
+   121|| R-09 | PanelResizeHandler | 🔧 | M2 | Логика resize |
+   122|
+   123|## VR (M3+)
+   124|| # | Фича | Статус | Спринт | Заметки |
+   125||---|------|--------|--------|---------|
+   126|| VR-01 | Поддержка VR (Quest, PCVR) | 📋 | M3 | |
+   127|| VR-02 | Кастомизация аватаров | 🔧 | M3 | |
+   128|| VR-03 | Плагины и расширения | 🔧 | M3 | IPlugin, PluginManager, DLL loading |
+   129|
+   130|## Публикация (M4)
+   131|| # | Фича | Статус | Спринт | Заметки |
+   132||---|------|--------|--------|---------|
+   133|| P-01 | itch.io / GitHub Releases | 🔧 | M4 | Ручная публикация через GitHub Releases |
+   134|| P-02 | Документация для контрибьюторов | 🔧 | M4 | docs/10_Contribution.md |
+   135|| P-03 | Донат-система | 🔧 | M4 | IDonationService, кнопка «Поддержать» |
+   136|
