@@ -133,3 +133,4 @@ NeonCompanion.Editor.csproj.lscache
 .brief-*.txt
 .claude/
 .brief-*.md
+.verify/
