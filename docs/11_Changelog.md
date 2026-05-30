@@ -14,7 +14,7 @@
 ### Fixed
 - A-10: Avatar animation — all 6 clips now trigger correctly. Talking plays during AI streaming, listening on composer input, confused on provider/model errors
 - U-08: Exit button added to settings panel (triggers quit confirmation dialog)
-- Brief fix batch for today's failed tracker checks: H-04, A-09, U-10, U-12/U-22, U-28..U-36, U-40..U-44, U-49, V-01..V-03 received code changes and were moved to ⏳ pending Felix verification.
+- Brief fix batch (U-12/U-22 key handling, U-29..U-33 context menu + selection + edit/delete/forward, NEW chat switch transcript reload): direct KeyDownEvent send with Stop+PreventDefault only on intended send (Shift+Enter now inserts \n); pending flag eliminated; context menu positioned at pointer near bubble (small overlay, not bottom bar); selection bar inserted before composer (sane above-input placement); session switch now renders actual CurrentChatViewModel.Messages instead of null (non-empty sessions load transcript). All moved to ⏳ awaiting Felix verification. No UXML changes, C# 9 compliant.
 
 ## [0.2.0] - 2026-05-27
 

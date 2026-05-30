@@ -91,7 +91,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return item;
         }
 
-        public void ShowAt(VisualElement target, int messageIndex, bool isUser)
+        public void ShowAt(VisualElement target, int messageIndex, bool isUser, Vector2 clickPosition)
         {
             if (target == null || target.panel == null)
                 return;
@@ -110,11 +110,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _panelRoot = root;
 
-            var bounds = target.worldBound;
-            float left = bounds.xMax + 6f;
-            float top = bounds.yMin;
+            // Position near the actual click (pointer) position for reliable near-message overlay.
+            // Using click pos (in panel space) is more robust than bubble rect alone.
+            float left = clickPosition.x + 8f;
+            float top = clickPosition.y + 4f;
 
-            // Simple clamp to avoid extreme offscreen (no screen size query here)
+            // Simple clamp to avoid extreme offscreen
             if (left < 0f) left = 0f;
             if (top < 0f) top = 0f;
 

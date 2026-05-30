@@ -97,7 +97,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ApprovalPrompt _currentApprovalPrompt;
         private VisualElement _currentApprovalElement;
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
-        private bool _pendingEnterSend;
         private string _chatSubtitle = string.Empty;
         private string _sessionSearchQuery = string.Empty;
         private TextElement _composerTextElement;
@@ -261,7 +260,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.Composer?.parent != null)
                 _d.Composer.parent.Add(_queueIndicator);
 
-            // Selection action bar (U-31/U-32) — created dynamically, sibling after composer
+            // Selection action bar (U-31/U-32) — created dynamically, inserted before composer so it appears
+            // just above the input (not as a full-width bar at the very bottom under composer).
             _selectionBar = new VisualElement();
             _selectionBar.name = "selection-bar";
             _selectionBar.AddToClassList("selection-bar");
@@ -284,7 +284,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _selectionBar.Add(cancelBtn);
 
             if (_d.Composer?.parent != null)
-                _d.Composer.parent.Add(_selectionBar);
+            {
+                var parent = _d.Composer.parent;
+                int composerIndex = parent.IndexOf(_d.Composer);
+                parent.Insert(composerIndex, _selectionBar);
+            }
 
             // Drag-and-drop file support (U-44)
             var chatMain = _d.Composer?.parent;
@@ -426,23 +430,28 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool enterToSend = _d.EnterToSend != null && _d.EnterToSend();
 
-            // Set flag here (TrickleDown — before TextField inserts '\n').
-            // OnComposerTextChanged fires after the insertion and consumes it.
-            // Fix for U-12/U-22: Shift+Enter always produces newline (never sends).
-            // When enterToSend=true: plain Enter (or Ctrl+Enter) sends; Shift+Enter = newline.
-            // When enterToSend=false: Ctrl+Enter sends; plain Enter = newline.
+            // Direct KeyDown handling (per brief): StopPropagation + PreventDefault ONLY for send case.
+            // This ensures Shift+Enter (enterToSend=true) and plain Enter (enterToSend=false) let
+            // the multiline TextField insert the newline itself. No post-strip hack.
+            // Ctrl+Enter behavior deterministic and no lingering pending flag.
             bool shouldSend = false;
             if (enterToSend)
             {
-                shouldSend = !hasShift;
+                shouldSend = !hasShift; // plain Enter / Ctrl+Enter sends; Shift+Enter = newline
             }
             else
             {
-                shouldSend = hasCtrl;
+                shouldSend = hasCtrl; // Ctrl+Enter sends; plain/Shift Enter = newline
             }
 
             if (shouldSend)
-                _pendingEnterSend = true;
+            {
+                evt.StopPropagation();
+                evt.PreventDefault();
+                OnSendClicked();
+                return;
+            }
+            // Non-send Enter case: fall through without stopping — TextField handles \n insertion.
         }
 
         private void OnComposerGeometryChanged(GeometryChangedEvent evt)
@@ -513,19 +522,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnComposerTextChanged(ChangeEvent<string> evt)
         {
             QueueComposerHeightUpdate();
-
-            if (_pendingEnterSend)
-            {
-                _pendingEnterSend = false;
-                string trimmed = (evt.newValue ?? string.Empty).TrimEnd('\n', '\r');
-                if (_d.MessageInput != null)
-                {
-                    _d.MessageInput.SetValueWithoutNotify(trimmed);
-                    QueueComposerHeightUpdate();
-                }
-                OnSendClicked();
-                return;
-            }
 
             if (_isSending || _isVoiceRecording)
                 return;
@@ -3393,8 +3389,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Hide any previous
             _contextMenu.Hide();
 
-            // Use target for positioning (ShowAt uses worldBound); position param available for future tweak
-            _contextMenu.ShowAt(target, messageIndex, isUser);
+            // Pass click position for reliable placement near the tapped/clicked message bubble.
+            _contextMenu.ShowAt(target, messageIndex, isUser, position);
         }
 
         private void OnEditMessageRequested(string messageIndexStr)

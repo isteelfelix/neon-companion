@@ -697,7 +697,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetSessionSearchQuery = value => _chatController.SetSessionSearchQuery(value),
                 SetCurrentSession = (id, title) => { _currentSessionId = id; _currentSessionTitle = title; },
                 SetTopbar = (title, sub) => SetTopbar(title, sub),
-                RenderMessages = () => RenderMessages(null),
+                RenderMessages = () => RenderMessages(_chatService?.CurrentChatViewModel?.Messages),
                 ShowSystemMessage = AddSystemMessage,
                 ShowHistoryState = ShowHistoryState,
                 ShowChat = _navigationController.ShowChat,
