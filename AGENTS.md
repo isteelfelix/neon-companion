@@ -4,13 +4,13 @@ Instructions for AI coding agents working on neon-companion.
 
 ## What This Is
 
-Unity 2022.3+ desktop/mobile client for chatting with personal AI agents via OpenAI-compatible APIs. C# / UI Toolkit / JSON storage. Current version: see `VERSION` file.
+Unity 6 (6000.4+) desktop/mobile client for chatting with personal AI agents via OpenAI-compatible APIs. C# / UI Toolkit / JSON storage. Current version: see `VERSION` file.
 
 **You cannot build or run this project on this server.** There is no Unity installation. Felix builds and tests locally. Your job is to write correct code and push — Felix confirms it works.
 
 ## C# Compatibility (Critical)
 
-Unity 2022.3 uses C# 9. These features will **fail to compile**:
+Unity 6 still defaults to C# 9 for broad compatibility. These features will **fail to compile**:
 
 ```
 ❌ switch expressions          → use switch statement

@@ -42,7 +42,7 @@ This project is intended as a personal companion shell for self-hosted agents, w
 
 ### Requirements
 
-- Unity 2022.3 or newer
+- Unity 6 (6000.4 or newer)
 - .NET Standard 2.1 compatible environment
 
 ### Installation

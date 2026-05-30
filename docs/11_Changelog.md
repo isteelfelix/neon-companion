@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed / Improved
+- Composer input is UITK `TextField` (U-12/U-22), with stable Enter routing for both send modes (Enter/Ctrl+Enter/Shift+Enter), frame-level dedup to prevent double submit, and guarded newline insertion that avoids `TextEditingUtilities.Insert` out-of-range errors.
+- User message line breaks are preserved end-to-end: preprocessing keeps `\n`, and transcript rendering uses `white-space: pre-wrap` for user bubble text.
+
+### Changed
+- Removed temporary TMP composer experiment and kept chat input wiring UITK-only in ChatController/MainViewController.
+
 ### Added
 - U-33: Forward selected messages to another chat session (selection bar now has Forward between Delete/Cancel; opens centered overlay picker with session titles + timestamps from ChatService.GetAllSessionsAsync; messages deep-copied via JsonUtility snapshot in new AppendMessagesToSessionAsync; persists to target; shows confirmation; excludes current session; outside-click or Cancel aborts). All in ChatController + ChatView.uss + loc (no new .cs files).
 - U-38: Chat search with highlight and navigation (topbar search button now toggles in-chat transcript search bar; live filtering, match count X/Y, ↑↓ nav, Esc/Enter keys, yellow highlight rows; closes on session change or re-render). Implemented entirely in ChatController with dynamic UI.
@@ -14,6 +21,8 @@
 ### Fixed
 - A-10: Avatar animation — all 6 clips now trigger correctly. Talking plays during AI streaming, listening on composer input, confused on provider/model errors
 - U-08: Exit button added to settings panel (triggers quit confirmation dialog)
+- CS0618: removed obsolete `EventBase.PreventDefault()` in ChatController.OnInputKeyDown. Replaced with `StopPropagation()`.
+- Composer Enter/Shift+Enter handling (U-12/U-22): Rewritten following official Unity 6.4 TextField documentation and current forum consensus. KeyDownEvent (TrickleDown) + StopImmediatePropagation. When we want natural newline (Shift+Enter in "Enter sends" mode) the event is allowed to fall through so the TextField inserts it itself. Only when taking full control (send or forced newline) we consume the event + use PreventDefault (pragma) as the most reliable way on 6000.4 to prevent TextEditingUtilities interference. This matches the documented pattern for chat-style composers. (U-12/U-22)
 - Brief fix batch (U-12/U-22 key handling, U-29..U-33 context menu + selection + edit/delete/forward, NEW chat switch transcript reload): direct KeyDownEvent send with Stop+PreventDefault only on intended send (Shift+Enter now inserts \n); pending flag eliminated; context menu positioned at pointer near bubble (small overlay, not bottom bar); selection bar inserted before composer (sane above-input placement); session switch now renders actual CurrentChatViewModel.Messages instead of null (non-empty sessions load transcript). All moved to ⏳ awaiting Felix verification. No UXML changes, C# 9 compliant.
 
 ## [0.2.0] - 2026-05-27

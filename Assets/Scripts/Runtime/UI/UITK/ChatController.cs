@@ -101,6 +101,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _sessionSearchQuery = string.Empty;
         private TextElement _composerTextElement;
         private float _composerInputHeight = -1f;
+        private int _lastComposerEnterEventFrame = -1;
         private VisualElement _composerPreviews;
 
         // Message queue (U-45)
@@ -212,11 +213,13 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
-                _d.MessageInput.RegisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
-                _d.MessageInput.RegisterCallback<FocusEvent>(_ => _d.Composer?.AddToClassList("composer--focused"));
-                _d.MessageInput.RegisterCallback<BlurEvent>(_ => _d.Composer?.RemoveFromClassList("composer--focused"));
-                _d.MessageInput.RegisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
+                _d.MessageInput.multiline = true;
+                _d.MessageInput.RegisterCallback<KeyDownEvent>(OnComposerKeyDown, TrickleDown.TrickleDown);
+                _d.MessageInput.RegisterValueChangedCallback(OnComposerTextChanged);
+                _d.MessageInput.RegisterCallback<FocusInEvent>(OnComposerFocusIn);
+                _d.MessageInput.RegisterCallback<FocusOutEvent>(OnComposerFocusOut);
                 _d.MessageInput.RegisterCallback<GeometryChangedEvent>(OnComposerGeometryChanged);
+
                 QueueComposerHeightUpdate();
             }
 
@@ -335,10 +338,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
-                _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
-                _d.MessageInput.UnregisterCallback<ChangeEvent<string>>(OnComposerTextChanged);
+                _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnComposerKeyDown, TrickleDown.TrickleDown);
+                _d.MessageInput.UnregisterValueChangedCallback(OnComposerTextChanged);
+                _d.MessageInput.UnregisterCallback<FocusInEvent>(OnComposerFocusIn);
+                _d.MessageInput.UnregisterCallback<FocusOutEvent>(OnComposerFocusOut);
                 _d.MessageInput.UnregisterCallback<GeometryChangedEvent>(OnComposerGeometryChanged);
             }
+
+            _lastComposerEnterEventFrame = -1;
 
             if (_pinBottomQueued)
             {
@@ -412,10 +419,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Input =====
 
-        private void OnInputKeyDown(KeyDownEvent evt)
+        private void OnComposerKeyDown(KeyDownEvent evt)
         {
+            if (evt == null)
+                return;
+
             bool hasCtrl = evt.ctrlKey || evt.commandKey;
-            bool hasShift = evt.shiftKey;
 
             // Ctrl+V paste image
             if (hasCtrl && evt.keyCode == KeyCode.V)
@@ -425,33 +434,86 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
+            bool isEnterKey = evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
+            bool isEnterChar = evt.character == '\n' || evt.character == '\r';
+            if (!isEnterKey && !isEnterChar)
                 return;
 
+            // Always consume Enter here so UITK does not apply its own newline/selection behavior.
+            evt.StopImmediatePropagation();
+            evt.StopPropagation();
+#pragma warning disable CS0618
+            evt.PreventDefault();
+#pragma warning restore CS0618
+
+            int frame = Time.frameCount;
+            if (_lastComposerEnterEventFrame == frame)
+                return;
+            _lastComposerEnterEventFrame = frame;
+
+            bool hasShift = evt.shiftKey;
             bool enterToSend = _d.EnterToSend != null && _d.EnterToSend();
 
-            // Direct KeyDown handling (per brief): StopPropagation + PreventDefault ONLY for send case.
-            // This ensures Shift+Enter (enterToSend=true) and plain Enter (enterToSend=false) let
-            // the multiline TextField insert the newline itself. No post-strip hack.
-            // Ctrl+Enter behavior deterministic and no lingering pending flag.
-            bool shouldSend = false;
-            if (enterToSend)
-            {
-                shouldSend = !hasShift; // plain Enter / Ctrl+Enter sends; Shift+Enter = newline
-            }
-            else
-            {
-                shouldSend = hasCtrl; // Ctrl+Enter sends; plain/Shift Enter = newline
-            }
+            // EnterToSend = true  → Enter sends, Shift+Enter = newline
+            // EnterToSend = false → Ctrl+Enter sends, normal Enter = newline
+            bool shouldSend = enterToSend ? (!hasShift && !hasCtrl) : hasCtrl;
 
             if (shouldSend)
             {
-                evt.StopPropagation();
-                evt.PreventDefault();
                 OnSendClicked();
                 return;
             }
-            // Non-send Enter case: fall through without stopping — TextField handles \n insertion.
+
+            QueueComposerNewLineInsert();
+        }
+
+        private void QueueComposerNewLineInsert()
+        {
+            var field = _d.MessageInput;
+            if (field == null)
+                return;
+
+            int start = Math.Min(field.cursorIndex, field.selectIndex);
+            int end = Math.Max(field.cursorIndex, field.selectIndex);
+
+            // Apply text mutation after current input event pipeline finishes.
+            field.schedule.Execute(() => InsertComposerNewLine(field, start, end));
+        }
+
+        private void InsertComposerNewLine(TextField field, int selectionStart, int selectionEnd)
+        {
+            if (field == null || field.panel == null)
+                return;
+
+            string current = field.value ?? string.Empty;
+            int start = Mathf.Clamp(selectionStart, 0, current.Length);
+            int end = Mathf.Clamp(selectionEnd, 0, current.Length);
+            if (end < start)
+            {
+                int tmp = start;
+                start = end;
+                end = tmp;
+            }
+
+            string updated = current.Substring(0, start) + "\n" + current.Substring(end);
+            field.value = updated;
+
+            int caret = Mathf.Clamp(start + 1, 0, updated.Length);
+            field.cursorIndex = caret;
+            field.selectIndex = caret;
+            field.Focus();
+
+            QueueComposerHeightUpdate();
+        }
+
+        private void OnComposerFocusIn(FocusInEvent evt)
+        {
+            _d.Composer?.AddToClassList("composer--focused");
+        }
+
+        private void OnComposerFocusOut(FocusOutEvent evt)
+        {
+            _d.Composer?.RemoveFromClassList("composer--focused");
         }
 
         private void OnComposerGeometryChanged(GeometryChangedEvent evt)
@@ -2510,6 +2572,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 bodyElement = new Label(text);
                 bodyElement.AddToClassList("transcript__body");
+                if (!isAssistant)
+                    bodyElement.AddToClassList("transcript__body--user");
             }
             MakeTranscriptLabelsFocusable(bodyElement);
             return bodyElement;
@@ -2605,20 +2669,30 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return string.Empty;
 
             var sb = new StringBuilder(value.Length);
-            bool previousWasWhitespace = false;
+            bool previousWasInlineWhitespace = false;
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
+                if (c == '\r')
+                    continue;
+
+                if (c == '\n')
+                {
+                    sb.Append('\n');
+                    previousWasInlineWhitespace = false;
+                    continue;
+                }
+
                 if (char.IsWhiteSpace(c))
                 {
-                    if (!previousWasWhitespace)
+                    if (!previousWasInlineWhitespace)
                         sb.Append(' ');
-                    previousWasWhitespace = true;
+                    previousWasInlineWhitespace = true;
                 }
                 else
                 {
                     sb.Append(c);
-                    previousWasWhitespace = false;
+                    previousWasInlineWhitespace = false;
                 }
             }
 

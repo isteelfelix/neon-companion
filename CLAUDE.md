@@ -1,6 +1,6 @@
 # Unity UITK / USS / C# Constraints (from official Unity 6.4 docs)
 
-## C# 9 (Unity 2022.3) — NO EXCEPTIONS
+## C# 9 (Unity 6) — NO EXCEPTIONS
 
 ```
 ❌ switch expressions        → use switch statement

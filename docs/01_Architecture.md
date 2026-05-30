@@ -16,7 +16,7 @@
 - **Platform Layer** — специфичный код для Desktop / Mobile / VR
 
 ## Технологии
-- Unity 2022.3+
+- Unity 6 (6000.4+)
 - Newtonsoft.Json
 - UniTask (для асинхронности)
 - Возможно: Zenject или VContainer (DI)

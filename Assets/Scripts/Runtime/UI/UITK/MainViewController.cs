@@ -185,7 +185,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _newSessionButton;
         private Button _exportButton;
         private Button _scrollBottomBtn;
-        private TextField _messageInput;
+        private TextField _composerInput;
         private ScrollView _messagesList;
         private ScrollView _sessionsList;
         private ScrollView _historySessionsList;
@@ -413,11 +413,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _placeholderTitle = root.Q<Label>("placeholder-title");
             _placeholderBody = root.Q<Label>("placeholder-body");
 
-            _messageInput = root.Q<TextField>("message-input");
-            if (_messageInput != null)
+            _composerInput = root.Q<TextField>("message-input");
+
+            if (_composerInput != null)
             {
-                _messageInput.multiline = true;
-                _messageInput.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                _composerInput.multiline = true;
             }
             _sendButton = root.Q<Button>("send-button");
             _summarizeButton = root.Q<Button>("summarize-btn");
@@ -634,7 +634,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             return new ChatController.Deps
             {
-                MessageInput = _messageInput,
+                MessageInput = _composerInput,
                 SendButton = _sendButton,
                 StopButton = _stopButton,
                 SummarizeButton = _summarizeButton,
@@ -702,7 +702,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ShowHistoryState = ShowHistoryState,
                 ShowChat = _navigationController.ShowChat,
                 ClearPendingComposerAttachments = () => _chatController.ClearPendingComposerAttachments(),
-                GetMessageInput = () => _messageInput,
+                GetMessageInput = () => _composerInput,
                 SetProviderHeader = (provider, model) => _providersController.SetProviderHeader(provider as NeonCompanion.Runtime.Data.Models.ProviderConfig, model as string)
             };
         }
@@ -1054,8 +1054,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (string.IsNullOrWhiteSpace(text) || _chatController.IsSending)
                 return;
 
-            if (_messageInput != null)
-                _messageInput.value = text.Trim();
+            if (_composerInput != null)
+                _composerInput.value = text.Trim();
 
             await SendCurrentMessageAsync();
         }

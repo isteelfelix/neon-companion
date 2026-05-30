@@ -4,7 +4,7 @@
 Этот документ описывает базовый workflow для контрибьюторов Neon Companion.
 
 ## 1) Подготовка окружения
-- Unity: `2022.3 LTS` или новее (`ProjectSettings/ProjectVersion.txt` должен соответствовать).
+- Unity: 6 (6000.4 или новее) (`ProjectSettings/ProjectVersion.txt` должен соответствовать).
 - Scripting runtime: совместимость с `.NET Standard 2.1`.
 - IDE: Visual Studio / Rider с поддержкой Unity.
 - После клонирования открой проект через Unity Hub и дождись импорта ассетов.

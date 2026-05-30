@@ -398,6 +398,10 @@
     --unity-text-selection-color: rgba(124, 122, 237, 0.35);
 }
 
+.transcript__body--user {
+    white-space: pre-wrap;
+}
+
 /* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */
 
 .transcript__stats {
