@@ -84,8 +84,8 @@
 | U-33 | Пересылка выделенных в другой чат | ❌ | M2 | Не работает — нет выделения (дубль U-31) |
 | U-34 | Выделение текста в сообщениях | ❌ | M2 | Не работает |
 | U-35 | Markdown разметка в сообщениях | ❌ | M2 | Raw текст — MarkdownRenderer не подхватывает сообщения |
-    87|| U-36 | Индикатор контекстного окна | 🔧 | M2 | Полоска показывающая заполненность контекста. Важно для длинных сессий |
-    88|| U-37 | Экспорт чата | 🔧 | M2 | Сохранить разговор как markdown/JSON/text файл (Markdown в ChatController, persistentDataPath по образцу Settings) |
+| U-36 | Индикатор контекстного окна | ❌ | M2 | Не отображается — нет полоски |
+| U-37 | Экспорт чата | ❌ | M2 | Кнопка есть, по нажатию ничего не происходит |
     89|| U-38 | Поиск по текущему чату | 🔧 | M2 | Найти текст в текущем разговоре (search bar, highlight + nav, X/Y count). ChatController dynamic bar + USS + loc. |
     90|| U-48 | Agent Approval System (Part B) | 🔧 | M2 | Streaming integration in ChatController + alwaysApprovedTools + tool call detection in SSE parser (hermes.tool.request + OpenAI tool_calls); approval prompt during tool request, Always saves to settings, auto/manual modes respected |
     91|| U-39 | Ветвление диалога | 📋 | M3 | Ответвление от любого сообщения → новая ветка диалога |
