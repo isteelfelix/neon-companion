@@ -42,7 +42,7 @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Idle + talking через SpriteSheetAnimator |
 | A-07 | 2D motion-pack MVP contract | ✅ | M1 | Fixed action set, continuous + one-shot split |
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | see docs/13_Avatar_Motion_Research.md |
-| A-09 | Загрузка спрайтшитов — производительность | ⏳ | M2 | Preload during splash screen. Фриз при загрузке — нужна lazy loading |
+| A-09 | Загрузка спрайтшитов — производительность | 🔧 | M2 | Lazy loading сломал preload during splash — загрузка теперь в аниматоре, а не в сцене. Нужно вернуть eager preload в SplashViewController |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ⏳ | M2 | Talking/listening/confused триггеры. Ожидает проверки |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Game-like state machine |
 

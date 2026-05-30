@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Models;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
+using UnityEngine;
+using UnityEngine.Networking;
 
 namespace NeonCompanion.Runtime.UI.Chat
 {
@@ -46,7 +49,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             });
         }
 
-        public void AddAssistantMessage(AiChatResponse response)
+        public async Task AddAssistantMessage(AiChatResponse response)
         {
             var chatMsg = new ChatMessage
             {
@@ -59,6 +62,18 @@ namespace NeonCompanion.Runtime.UI.Chat
             if (response != null && response.tool_calls != null && response.tool_calls.Count > 0)
             {
                 chatMsg.tool_calls = CloneToolCalls(response.tool_calls);
+            }
+
+            if (response != null && response.attachments != null && response.attachments.Count > 0)
+            {
+                var localAtts = new List<ChatAttachment>();
+                for (int i = 0; i < response.attachments.Count; i++)
+                {
+                    var cached = await DownloadAndCacheAttachment(response.attachments[i]);
+                    if (cached != null)
+                        localAtts.Add(cached);
+                }
+                chatMsg.attachments = localAtts;
             }
 
             Messages.Add(chatMsg);
@@ -186,12 +201,23 @@ namespace NeonCompanion.Runtime.UI.Chat
                     {
                         streamMsg.tool_calls = CloneToolCalls(response.tool_calls);
                     }
+                    if (response != null && response.attachments != null && response.attachments.Count > 0)
+                    {
+                        var localAtts = new List<ChatAttachment>();
+                        for (int i = 0; i < response.attachments.Count; i++)
+                        {
+                            var cached = await DownloadAndCacheAttachment(response.attachments[i]);
+                            if (cached != null)
+                                localAtts.Add(cached);
+                        }
+                        streamMsg.attachments = localAtts;
+                    }
                 }
                 else
                 {
                     var response = await _aiClient.SendMessageAsync(_provider, request, CancellationToken);
                     ProviderSessionId = response?.providerSessionId ?? ProviderSessionId;
-                    AddAssistantMessage(response);
+                    await AddAssistantMessage(response);
                 }
             }
             catch
@@ -358,6 +384,139 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
 
             return clone;
+        }
+
+        private async Task<ChatAttachment> DownloadAndCacheAttachment(AiChatAttachment aiAtt)
+        {
+            if (aiAtt == null || string.IsNullOrWhiteSpace(aiAtt.path))
+                return null;
+
+            string url = aiAtt.path.Trim();
+
+            // If already a local path or data URL, return as-is (no download needed)
+            if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                url.StartsWith("file:", StringComparison.OrdinalIgnoreCase) ||
+                File.Exists(url))
+            {
+                return new ChatAttachment
+                {
+                    kind = string.IsNullOrWhiteSpace(aiAtt.kind) ? "image" : aiAtt.kind,
+                    name = !string.IsNullOrWhiteSpace(aiAtt.name) ? aiAtt.name : "image",
+                    path = url,
+                    mediaType = aiAtt.mediaType
+                };
+            }
+
+            try
+            {
+                string ext = GetFileExtensionFromUrl(url);
+                string fileName = Guid.NewGuid().ToString("N") + ext;
+                string dir = Path.Combine(Application.persistentDataPath, "Attachments");
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                string localPath = Path.Combine(dir, fileName);
+
+                using (var req = UnityWebRequest.Get(url))
+                {
+                    var operation = req.SendWebRequest();
+                    while (!operation.isDone)
+                        await Task.Yield();
+
+                    if (req.result != UnityWebRequest.Result.Success)
+                    {
+                        NeonLogger.LogWarning("Failed to download incoming attachment from " + url + ": " + (req.error ?? "unknown error"));
+                        return null;
+                    }
+
+                    byte[] data = req.downloadHandler != null ? req.downloadHandler.data : null;
+                    if (data == null || data.Length == 0)
+                    {
+                        NeonLogger.LogWarning("Downloaded attachment has no data from " + url);
+                        return null;
+                    }
+
+                    File.WriteAllBytes(localPath, data);
+
+                    string mediaType = !string.IsNullOrWhiteSpace(aiAtt.mediaType) ? aiAtt.mediaType : GuessMediaTypeFromExtension(ext);
+                    string ct = req.GetResponseHeader("Content-Type");
+                    if (string.IsNullOrWhiteSpace(aiAtt.mediaType) && !string.IsNullOrWhiteSpace(ct))
+                    {
+                        int semi = ct.IndexOf(';');
+                        mediaType = semi > 0 ? ct.Substring(0, semi).Trim() : ct.Trim();
+                    }
+
+                    string attName = !string.IsNullOrWhiteSpace(aiAtt.name) ? aiAtt.name : DeriveFileNameFromUrl(url, ext);
+
+                    return new ChatAttachment
+                    {
+                        kind = "image",
+                        name = attName,
+                        path = localPath,
+                        mediaType = mediaType
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("DownloadAndCacheAttachment failed for " + url + ": " + ex.Message);
+                return null;
+            }
+        }
+
+        private static string GetFileExtensionFromUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return ".png";
+            string clean = url;
+            int q = clean.IndexOf('?');
+            if (q >= 0)
+                clean = clean.Substring(0, q);
+            int h = clean.IndexOf('#');
+            if (h >= 0)
+                clean = clean.Substring(0, h);
+            string ext = Path.GetExtension(clean);
+            if (string.IsNullOrEmpty(ext) || ext.Length > 5)
+                return ".png";
+            return ext.ToLowerInvariant();
+        }
+
+        private static string GuessMediaTypeFromExtension(string ext)
+        {
+            if (string.IsNullOrEmpty(ext))
+                return "image/png";
+            string e = ext.ToLowerInvariant();
+            if (e == ".png")
+                return "image/png";
+            if (e == ".jpg" || e == ".jpeg")
+                return "image/jpeg";
+            if (e == ".webp")
+                return "image/webp";
+            if (e == ".gif")
+                return "image/gif";
+            if (e == ".bmp")
+                return "image/bmp";
+            return "application/octet-stream";
+        }
+
+        private static string DeriveFileNameFromUrl(string url, string ext)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return "image" + ext;
+            try
+            {
+                string clean = url;
+                int q = clean.IndexOf('?');
+                if (q >= 0)
+                    clean = clean.Substring(0, q);
+                int h = clean.IndexOf('#');
+                if (h >= 0)
+                    clean = clean.Substring(0, h);
+                string fname = Path.GetFileName(clean);
+                if (!string.IsNullOrEmpty(fname) && fname.IndexOf('.') > 0)
+                    return fname;
+            }
+            catch { }
+            return "image" + ext;
         }
     }
 }
