@@ -42,8 +42,8 @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Idle + talking через SpriteSheetAnimator |
 | A-07 | 2D motion-pack MVP contract | ✅ | M1 | Fixed action set, continuous + one-shot split |
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | see docs/13_Avatar_Motion_Research.md |
-| A-09 | Загрузка спрайтшитов — производительность | 🔧 | M2 | Lazy loading сломал preload during splash — загрузка теперь в аниматоре, а не в сцене. Нужно вернуть eager preload в SplashViewController |
-| A-10 | Довести анимацию спрайтшитов до рабочего состояния | ⏳ | M2 | Talking/listening/confused триггеры. Ожидает проверки |
+| A-09 | Загрузка спрайтшитов — производительность | 🔧 | M2 | Lazy loading сломал preload during splash — вернуть eager preload + плавная загрузка |
+| A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Game-like state machine |
 
 ## UI и UX
@@ -56,25 +56,25 @@
 | U-05 | Многострочный ввод сообщений | ✅ | M1 | `multiline = true`, auto vertical scroller |
 | U-06 | Масштабируемый рельс сайдбара | ✅ | M1 | `_railResizeHandle`, 160–400px |
 | U-07 | Режимы отображения аватара | ✅ | M1 | `AvatarViewMode`: Static, Animated, Volume3D |
-| U-08 | Кнопка выхода в настройках | ⏳ | M2 | Кнопка «Выход» в settings. Ожидает проверки |
-| U-09 | Кнопка «Резюме» (summarize) не работает | 🔧 | M2 | Кнопка в topbar справа |
+| U-08 | Кнопка выхода в настройках | ✅ | M2 | Кнопка «Выход» в settings |
+| U-09 | Кнопка «Резюме» (summarize) | ✅ | M2 | Кнопка в topbar справа |
 | U-10 | Иконка приложения в интерфейсе | ✅ | M2 | Вверху слева, рядом с названием |
-| U-11 | Баг: сжатие левой панели | ⏳ | M2 | overflow: hidden на .rail. Ожидает проверки |
-| U-12 | Баг: многострочный ввод — переполнение | ⏳ | M2 | overflow: auto на inner text field. Ожидает проверки |
+| U-11 | Баг: сжатие левой панели | ✅ | M2 | overflow: hidden на .rail |
+| U-12 | Баг: многострочный ввод — переполнение | 🔧 | M2 | Shift+Enter не переносит строку, Enter всегда отправляет. ChatController.cs:428 — не проверяется shiftKey |
 | U-13 | Вкладка «Темы» — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
 | U-14 | Настройки аватара — перегруженность | 📋 | M2 | Правая panel перегружена |
-| U-15 | Сцена загрузки (splash screen) | ⏳ | M2 | Cyberpunk splash + dynamic effects. Ожидает проверки |
+| U-15 | Сцена загрузки (splash screen) | ✅ | M2 | Cyberpunk splash + dynamic effects |
 || U-16 | Маска API-ключа в редакторе провайдера | ✅ | M2 | Eye toggle button, isPasswordField flip, reset on editor open |
 | U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | Экран: кроны, расписание, статус, логи |
-| U-18 | Agent Activity UI | ⏳ | M2 | Thinking bubble + tool progress. Ожидает проверки |
-| U-19 | Typing indicator в bubble ответа | ⏳ | M2 | 3 точки внутри response bubble. Ожидает проверки |
+| U-18 | Agent Activity UI | ✅ | M2 | Thinking bubble + tool progress |
+| U-19 | Typing indicator в bubble ответа | ✅ | M2 | 3 точки внутри response bubble |
 | U-20 | Ленивая загрузка спрайтшитов | ✅ | M2 | Splash screen фризит при синхронной загрузке |
-| U-21 | Scroll-to-bottom в чате | ⏳ | M2 | Кнопка прокрутки вниз. Ожидает проверки |
-| U-22 | Enter-to-send | ⏳ | M2 | Toggle в настройках. Ожидает проверки |
-| U-23 | Clear chats only | ⏳ | M2 | Очистка + сброс in-memory ChatService. Ожидает проверки |
-| U-24 | Action buttons в bubble | ⏳ | M2 | Copy/refresh/listen при ховере на assistant bubble. Felix фиксит позицию |
-| U-25 | Автоскролл при стриминге | ⏳ | M2 | Перелопачен, ожидает проверки |
-| U-26 | Toggle панелей | ⏳ | M2 | Кнопки скрытия левой/правой панели. Иконки пофикшены. Ожидает проверки |
+| U-21 | Scroll-to-bottom в чате | ✅ | M2 | Кнопка прокрутки вниз |
+| U-22 | Enter-to-send | 🔧 | M2 | Toggle в настройках. Сломан — same as U-12: Shift+Enter не работает |
+| U-23 | Clear chats only | ✅ | M2 | Очистка + сброс in-memory ChatService |
+| U-24 | Action buttons в bubble | ✅ | M2 | Copy/refresh/listen при ховере на assistant bubble |
+| U-25 | Автоскролл при стриминге | ✅ | M2 | Перелопачен |
+| U-26 | Toggle панелей | ✅ | M2 | Кнопки скрытия левой/правой панели. Иконки пофикшены |
 || U-27 | Счётчик токенов + время ответа | ✅ | M2 | Approx tokens + elapsed time в footer assistant bubble. Обновляется каждые 500ms. Локализация en/ru |
 | U-28 | Precise usage данные (stream_options) | ✅ | M3 | Точные prompt_tokens + completion_tokens через `stream_options: {include_usage: true}`. Изменения в парсере SSE |
 | U-29 | Редактирование сообщений | ✅ | M2 | Right-click/long-press context menu → inline edit (user only) + Save/Cancel + optional "Save & Regenerate". Implemented in ChatController + MessageContextMenu. |
@@ -95,8 +95,8 @@
 | U-43 | Мульти-агент чат | 📋 | M3 | Несколько агентов в одном разговоре. Каждый со своим bubble-цветом. Сабагенты (Claude Code, Codex) видны в реальном времени |
 | U-44 | Drag-and-drop файлов в чат | ✅ | M2 | Перетащить PDF/код/картинку → агент анализирует |
 | U-45 | Очередь сообщений | ✅ | M2 | Отправлять пока агент работает. Обрабатываются по порядку после завершения текущего. Как в Telegram |
-| U-46 | Кнопка стоп (отмена генерации) | ⏳ | M2 | ■ кнопка в композере, отменяет streaming. Критично для локальных LLM. Ожидает проверки |
-| U-47 | Система команд в чате | ⏳ | M2 | /help /model /system /temp /tokens /clear /new. Ожидает проверки |
+| U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | ■ кнопка в композере, отменяет streaming. Критично для локальных LLM |
+| U-47 | Система команд в чате | ✅ | M2 | /help /model /system /temp /tokens /clear /new |
 | U-49 | Входящие вложения от AI | ✅ | M2 | Парсинг мультимодальных content arrays (text + image_url), скачивание изображений в кэш, инлайн-рендер в транскрипте |
 
 ## Голос и 3D (M2+)
