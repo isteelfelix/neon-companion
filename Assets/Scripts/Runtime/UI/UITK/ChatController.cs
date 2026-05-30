@@ -122,6 +122,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _longPressIsUser;
         private Vector2 _longPressPos;
         private IVisualElementScheduledItem _longPressSchedule;
+        private VisualElement _transcriptContextRoot;
 
         // Inline edit state
         private int? _editingMessageIndex;
@@ -207,8 +208,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessagesList != null)
             {
                 _d.MessagesList.RegisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
+                _d.MessagesList.RegisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
                 _d.MessagesList.RegisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
                 _d.MessagesList.RegisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
+
+                _transcriptContextRoot = GetDocumentRoot(_d.MessagesList);
+                if (_transcriptContextRoot != null)
+                {
+                    _transcriptContextRoot.RegisterCallback<MouseDownEvent>(OnTranscriptRootMouseDown, TrickleDown.TrickleDown);
+                    if (_transcriptContextRoot != _d.MessagesList)
+                        _transcriptContextRoot.RegisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
+                }
             }
 
             if (_d.MessageInput != null)
@@ -332,8 +342,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessagesList != null)
             {
                 _d.MessagesList.UnregisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
+                _d.MessagesList.UnregisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
                 _d.MessagesList.UnregisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
                 _d.MessagesList.UnregisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
+            }
+
+            if (_transcriptContextRoot != null && _transcriptContextRoot != _d.MessagesList)
+            {
+                _transcriptContextRoot.UnregisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
+            }
+            if (_transcriptContextRoot != null)
+            {
+                _transcriptContextRoot.UnregisterCallback<MouseDownEvent>(OnTranscriptRootMouseDown, TrickleDown.TrickleDown);
+                _transcriptContextRoot = null;
             }
 
             if (_d.MessageInput != null)
@@ -3351,12 +3372,69 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Message context menu (U-29/U-30) =====
 
+        private void OnTranscriptRootMouseDown(MouseDownEvent evt)
+        {
+            if (_d.MessagesList == null || evt == null)
+                return;
+
+            bool isContextButton = evt.button != 0 || (evt.pressedButtons & 2) != 0;
+            if (!isContextButton)
+                return;
+
+            VisualElement target = evt.target as VisualElement;
+            Vector2 pos = evt.mousePosition;
+            bool insideByTarget = IsInsideMessagesList(target);
+            bool insideByPos = _d.MessagesList.worldBound.Contains(pos);
+            if (!insideByTarget && !insideByPos)
+                return;
+
+            evt.StopImmediatePropagation();
+            evt.StopPropagation();
+#pragma warning disable CS0618
+            evt.PreventDefault();
+#pragma warning restore CS0618
+
+            if (_isSelectionMode)
+                return;
+
+            VisualElement bubble = ResolveBubbleFromEvent(target, pos);
+            if (bubble == null)
+                return;
+
+            if (bubble.ClassListContains("transcript__bubble--system"))
+                return;
+
+            int? msgIndex = GetMessageIndexFromElement(bubble);
+            if (msgIndex == null)
+                return;
+
+            bool isUser = bubble.ClassListContains("transcript__bubble--user");
+            ShowMessageContextMenu(bubble, msgIndex.Value, isUser, pos);
+        }
+
         private void OnTranscriptPointerDown(PointerDownEvent evt)
         {
             if (_d.MessagesList == null)
                 return;
 
-            VisualElement bubble = FindBubbleAncestor(evt.target as VisualElement);
+            Vector2 pos = evt.position;
+            bool isContextButton = evt.button != 0 || (evt.pressedButtons & 2) != 0;
+
+            if (isContextButton)
+            {
+                // Always suppress default context behavior (blue strip / native fallback).
+                evt.StopImmediatePropagation();
+                evt.StopPropagation();
+#pragma warning disable CS0618
+                evt.PreventDefault();
+#pragma warning restore CS0618
+
+                if (_isSelectionMode)
+                    return;
+                return;
+            }
+
+            VisualElement bubble = ResolveBubbleFromEvent(evt.target as VisualElement, pos);
             if (bubble == null)
                 return;
 
@@ -3370,25 +3448,17 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool isUser = bubble.ClassListContains("transcript__bubble--user");
 
-            Vector2 pos = evt.position;
-
             if (_isSelectionMode)
             {
                 // Selection mode: per-row ClickEvent handles toggles for selectable messages.
-                // Suppress only the context menu and long-press timer (no menu in selection mode).
-                if (evt.button == 1)
-                    evt.StopImmediatePropagation();
-                // Do not start long-press schedule; do not call ShowMessageContextMenu
+                // No long-press/context menu here; selection toggles are handled by row ClickEvent.
                 return;
             }
 
-            if (evt.button == 1) // right-click (UITK: 0=left, 1=right, 2=middle)
+            if (evt.button == 0)
             {
-                evt.StopImmediatePropagation();
-                ShowMessageContextMenu(bubble, msgIndex.Value, isUser, pos);
-            }
-            else if (evt.button == 0)
-            {
+                bool longPressSelect = string.Equals(evt.pointerType, "mouse", StringComparison.OrdinalIgnoreCase);
+
                 // Start long-press timer for mobile
                 _longPressTarget = bubble;
                 _longPressIndex = msgIndex.Value;
@@ -3406,11 +3476,39 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _longPressSchedule = null;
                     if (_longPressTarget != null)
                     {
-                        ShowMessageContextMenu(_longPressTarget, _longPressIndex, _longPressIsUser, _longPressPos);
+                        if (longPressSelect)
+                        {
+                            EnterSelectionMode(_longPressIndex);
+                        }
+                        else
+                        {
+                            ShowMessageContextMenu(_longPressTarget, _longPressIndex, _longPressIsUser, _longPressPos);
+                        }
                     }
                     _longPressTarget = null;
                 }).StartingIn(480);
             }
+        }
+
+        private void OnTranscriptContextMenuPopulate(ContextualMenuPopulateEvent evt)
+        {
+            if (_d.MessagesList == null || evt == null)
+                return;
+
+            var target = evt.target as VisualElement;
+            Vector2 triggerPos;
+            bool hasTriggerPos = TryGetEventPosition(evt.triggerEvent, out triggerPos);
+            bool insideByTarget = IsInsideMessagesList(target);
+            bool insideByPos = hasTriggerPos && _d.MessagesList.worldBound.Contains(triggerPos);
+            if (!insideByTarget && !insideByPos)
+                return;
+
+            // Always suppress Unity's default context menu path in transcript.
+            evt.StopImmediatePropagation();
+            evt.StopPropagation();
+#pragma warning disable CS0618
+            evt.PreventDefault();
+#pragma warning restore CS0618
         }
 
         private void OnTranscriptPointerUp(PointerUpEvent evt)
@@ -3441,6 +3539,88 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return el;
                 el = el.parent;
             }
+            return null;
+        }
+
+        private Vector2 NormalizeToPanelPosition(Vector2 position)
+        {
+            if (_d.MessagesList == null)
+                return position;
+
+            // If already in panel space, it should lie within or near the transcript bounds.
+            if (_d.MessagesList.worldBound.Contains(position))
+                return position;
+
+            // Fallback: treat value as local-to-messages-list and convert to panel/world space.
+            return _d.MessagesList.LocalToWorld(position);
+        }
+
+        private bool TryGetEventPosition(EventBase eventBase, out Vector2 position)
+        {
+            if (eventBase is MouseDownEvent)
+            {
+                position = ((MouseDownEvent)eventBase).mousePosition;
+                return true;
+            }
+
+            if (eventBase is MouseUpEvent)
+            {
+                position = ((MouseUpEvent)eventBase).mousePosition;
+                return true;
+            }
+
+            if (eventBase is PointerDownEvent)
+            {
+                position = ((PointerDownEvent)eventBase).position;
+                return true;
+            }
+
+            if (eventBase is PointerUpEvent)
+            {
+                position = ((PointerUpEvent)eventBase).position;
+                return true;
+            }
+
+            position = Vector2.zero;
+            return false;
+        }
+
+        private bool IsInsideMessagesList(VisualElement element)
+        {
+            if (_d.MessagesList == null || element == null)
+                return false;
+
+            var current = element;
+            while (current != null)
+            {
+                if (current == _d.MessagesList)
+                    return true;
+                current = current.parent;
+            }
+
+            return false;
+        }
+
+        private VisualElement ResolveBubbleFromEvent(VisualElement target, Vector2 panelPosition)
+        {
+            var bubble = FindBubbleAncestor(target);
+            if (bubble != null)
+                return bubble;
+
+            if (_d.MessagesList == null)
+                return null;
+
+            foreach (var child in _d.MessagesList.Children())
+            {
+                var row = child as VisualElement;
+                if (row == null)
+                    continue;
+
+                var candidate = row.Q<VisualElement>(className: "transcript__bubble");
+                if (candidate != null && candidate.worldBound.Contains(panelPosition))
+                    return candidate;
+            }
+
             return null;
         }
 
@@ -3754,15 +3934,47 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ToggleSelection(int index)
         {
+            bool isSelected;
             if (_selectedMessages.Contains(index))
+            {
                 _selectedMessages.Remove(index);
+                isSelected = false;
+            }
             else
+            {
                 _selectedMessages.Add(index);
+                isSelected = true;
+            }
+
+            UpdateSelectionRowState(index, isSelected);
 
             if (_selectedMessages.Count == 0)
                 ExitSelectionMode();
             else
                 RenderSelectionUI();
+        }
+
+        private void UpdateSelectionRowState(int index, bool isSelected)
+        {
+            if (_d.MessagesList == null)
+                return;
+
+            foreach (var child in _d.MessagesList.Children())
+            {
+                var row = child as VisualElement;
+                if (row == null || !(row.userData is int))
+                    continue;
+
+                int rowIndex = (int)row.userData;
+                if (rowIndex != index)
+                    continue;
+
+                if (isSelected)
+                    row.AddToClassList("transcript__row--selected");
+                else
+                    row.RemoveFromClassList("transcript__row--selected");
+                break;
+            }
         }
 
         private void RenderSelectionUI()

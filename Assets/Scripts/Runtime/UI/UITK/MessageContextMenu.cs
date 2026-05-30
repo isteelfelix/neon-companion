@@ -15,12 +15,26 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _menuElement;
         private VisualElement _panelRoot;
         private EventCallback<PointerDownEvent> _outsideHandler;
+        private IVisualElementScheduledItem _outsideRegistrationSchedule;
+        private float _outsideIgnoreUntil;
         private string _currentIndexStr;
 
         public VisualElement Create(string messageIndex, bool isUser)
         {
             _menuElement = new VisualElement();
             _menuElement.AddToClassList("message-context-menu");
+            // Inline fallback so menu remains visible even if stylesheet scope changes.
+            _menuElement.style.position = Position.Absolute;
+            _menuElement.style.backgroundColor = new Color(0.12f, 0.14f, 0.2f, 0.98f);
+            _menuElement.style.borderTopLeftRadius = 8f;
+            _menuElement.style.borderTopRightRadius = 8f;
+            _menuElement.style.borderBottomLeftRadius = 8f;
+            _menuElement.style.borderBottomRightRadius = 8f;
+            _menuElement.style.paddingTop = 4f;
+            _menuElement.style.paddingBottom = 4f;
+            _menuElement.style.paddingLeft = 4f;
+            _menuElement.style.paddingRight = 4f;
+            _menuElement.style.minWidth = 150f;
 
             if (isUser)
             {
@@ -111,26 +125,57 @@ namespace NeonCompanion.Runtime.UI.UITK
             _panelRoot = root;
 
             // Position near the actual click (pointer) position for reliable near-message overlay.
-            // Using click pos (in panel space) is more robust than bubble rect alone.
-            float left = clickPosition.x + 8f;
-            float top = clickPosition.y + 4f;
+            // Convert world/panel coordinates to root-local coordinates before assigning style.left/top.
+            Vector2 localPos = root.WorldToLocal(clickPosition);
+            float left = localPos.x + 8f;
+            float top = localPos.y + 4f;
 
             // Simple clamp to avoid extreme offscreen
             if (left < 0f) left = 0f;
             if (top < 0f) top = 0f;
 
+            float maxLeft = root.layout.width - 180f;
+            float maxTop = root.layout.height - 160f;
+            if (maxLeft < 0f) maxLeft = 0f;
+            if (maxTop < 0f) maxTop = 0f;
+            if (left > maxLeft) left = maxLeft;
+            if (top > maxTop) top = maxTop;
+
             _menuElement.style.left = left;
             _menuElement.style.top = top;
             _menuElement.style.minWidth = 150f;
+            _menuElement.style.display = DisplayStyle.Flex;
+            _menuElement.style.visibility = Visibility.Visible;
 
             root.Add(_menuElement);
+            _menuElement.BringToFront();
+
+            // Ignore outside-pointer close right after open to avoid self-close
+            // from the same physical right-click sequence.
+            _outsideIgnoreUntil = Time.realtimeSinceStartup + 0.15f;
 
             _outsideHandler = OnOutsidePointerDown;
-            root.RegisterCallback(_outsideHandler, TrickleDown.TrickleDown);
+            if (_outsideRegistrationSchedule != null)
+            {
+                _outsideRegistrationSchedule.Pause();
+                _outsideRegistrationSchedule = null;
+            }
+
+            // Delay outside-handler binding by one UI tick so the opening click
+            // cannot be interpreted as an immediate outside click.
+            _outsideRegistrationSchedule = root.schedule.Execute(() =>
+            {
+                if (_panelRoot != null && _outsideHandler != null)
+                    _panelRoot.RegisterCallback(_outsideHandler, TrickleDown.TrickleDown);
+                _outsideRegistrationSchedule = null;
+            }).StartingIn(16);
         }
 
         private void OnOutsidePointerDown(PointerDownEvent evt)
         {
+            if (Time.realtimeSinceStartup < _outsideIgnoreUntil)
+                return;
+
             if (_menuElement != null && _menuElement.worldBound.Contains(evt.position))
                 return;
             Hide();
@@ -141,8 +186,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (start == null)
                 return null;
 
-            var el = start;
             var panelVisualTree = start.panel != null ? start.panel.visualTree : null;
+            if (panelVisualTree != null)
+                return panelVisualTree;
+
+            var el = start;
             while (el.parent != null && el.parent != panelVisualTree)
                 el = el.parent;
             return el;
@@ -160,11 +208,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void CleanupHandlers()
         {
+            if (_outsideRegistrationSchedule != null)
+            {
+                _outsideRegistrationSchedule.Pause();
+                _outsideRegistrationSchedule = null;
+            }
+
             if (_panelRoot != null && _outsideHandler != null)
                 _panelRoot.UnregisterCallback(_outsideHandler, TrickleDown.TrickleDown);
 
             _outsideHandler = null;
             _panelRoot = null;
+            _outsideIgnoreUntil = 0f;
         }
     }
 }
