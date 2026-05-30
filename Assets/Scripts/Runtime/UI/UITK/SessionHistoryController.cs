@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
@@ -647,7 +648,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var btnRow = new VisualElement();
             btnRow.style.flexDirection = FlexDirection.Row;
-            btnRow.style.justifyContent = JustifyContent.FlexEnd;
+            btnRow.style.justifyContent = Justify.FlexEnd;
 
             var cancelBtn = new Button();
             cancelBtn.text = LocalizationExtensions.Get("session.folder.cancel", "Cancel");

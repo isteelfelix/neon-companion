@@ -575,6 +575,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.GetAvatarAnimationController?.Invoke()?.TriggerSend();
 
             ChatService chat = null;
+            QueuedMessage nextQueuedMessage = null;
             try
             {
                 chat = await _d.GetChatServiceAsync();
@@ -711,21 +712,21 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // Process queued messages
                 if (_messageQueue.Count > 0)
                 {
-                    var next = _messageQueue.Dequeue();
+                    nextQueuedMessage = _messageQueue.Dequeue();
                     RenderQueueIndicator();
                     // Set composer text and attachments, then send
-                    _d.MessageInput.value = next.Message;
-                    if (next.Attachments != null)
+                    _d.MessageInput.value = nextQueuedMessage.Message;
+                    if (nextQueuedMessage.Attachments != null)
                     {
-                        for (int i = 0; i < next.Attachments.Count; i++)
-                            _pendingComposerAttachments.Add(next.Attachments[i]);
+                        for (int i = 0; i < nextQueuedMessage.Attachments.Count; i++)
+                            _pendingComposerAttachments.Add(nextQueuedMessage.Attachments[i]);
                     }
                     QueueComposerHeightUpdate();
-                    // Trigger send
-                    _ = SendCurrentMessageAsync();
-                    return;
                 }
             }
+
+            if (nextQueuedMessage != null)
+                _ = SendCurrentMessageAsync();
         }
 
         private async Task<bool> TryHandleCommandAsync(string message)
@@ -1762,7 +1763,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!HasValidDragFiles(evt))
                 return;
 
-            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+            SetDragCopyVisualMode();
             if (!_isDragOver)
             {
                 _isDragOver = true;
@@ -1779,7 +1780,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!HasValidDragFiles(evt))
                 return;
 
-            string[] paths = DragAndDrop.paths;
+            string[] paths = GetDraggedPaths();
             if (paths == null || paths.Length == 0)
                 return;
 
@@ -1796,12 +1797,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
                 if (IsSupportedFile(ext))
                 {
-                    if (IsImageFile(ext) && !IsFileSizeOk(path))
+                    if (IsImageExtension(ext) && !IsFileSizeOk(path))
                         continue;
 
                     _pendingComposerAttachments.Add(new ChatAttachment
                     {
-                        kind = IsImageFile(ext) ? "image" : "file",
+                        kind = IsImageExtension(ext) ? "image" : "file",
                         name = System.IO.Path.GetFileName(path),
                         path = path,
                         mediaType = GuessImageMediaType(path)
@@ -1822,12 +1823,30 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private static bool HasValidDragFiles(DragUpdatedEvent evt)
         {
-            return DragAndDrop.paths != null && DragAndDrop.paths.Length > 0;
+            string[] paths = GetDraggedPaths();
+            return paths != null && paths.Length > 0;
         }
 
         private static bool HasValidDragFiles(DragPerformEvent evt)
         {
-            return DragAndDrop.paths != null && DragAndDrop.paths.Length > 0;
+            string[] paths = GetDraggedPaths();
+            return paths != null && paths.Length > 0;
+        }
+
+        private static void SetDragCopyVisualMode()
+        {
+#if UNITY_EDITOR
+            UnityEditor.DragAndDrop.visualMode = UnityEditor.DragAndDropVisualMode.Copy;
+#endif
+        }
+
+        private static string[] GetDraggedPaths()
+        {
+#if UNITY_EDITOR
+            return UnityEditor.DragAndDrop.paths;
+#else
+            return null;
+#endif
         }
 
         private static bool IsSupportedFile(string ext)
@@ -1844,7 +1863,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return false;
         }
 
-        private static bool IsImageFile(string ext)
+        private static bool IsImageExtension(string ext)
         {
             return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp";
         }
@@ -3754,7 +3773,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var footer = new VisualElement();
             footer.AddToClassList("session-picker__footer");
             footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = JustifyContent.FlexEnd;
+            footer.style.justifyContent = Justify.FlexEnd;
             footer.style.marginTop = 6f;
 
             var cancelBtn = new Button(() =>

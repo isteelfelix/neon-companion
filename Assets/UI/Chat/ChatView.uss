@@ -106,7 +106,7 @@
     margin-bottom: 2px;
     background-color: var(--bg-2);
     border-radius: 6px;
-    cursor: pointer;
+    cursor: link;
 }
 
 .session-folder-header:hover {
@@ -580,7 +580,7 @@
     background-color: rgba(0,0,0,0.6);
     color: #fff;
     font-size: 12px;
-    text-align: center;
+    -unity-text-align: middle-center;
 }
 
 /* ============== RIGHT: Avatar panel ============== */
@@ -939,16 +939,16 @@
 }
 
 .markdown-bold {
-    font-weight: bold;
+    -unity-font-style: bold;
 }
 
 .markdown-italic {
-    font-style: italic;
+    -unity-font-style: italic;
 }
 
 .markdown-code {
-    font-family: monospace;
-    font-size: 0.9em;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 11px;
     background-color: rgba(255, 255, 255, 0.08);
     padding-left: 4px;
     padding-right: 4px;
@@ -974,8 +974,8 @@
 }
 
 .markdown-codeblock-text {
-    font-family: monospace;
-    font-size: 0.85em;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    font-size: 10px;
     white-space: pre;
     color: #e0e0e0;
     --unity-text-selection-color: rgba(124, 122, 237, 0.35);
@@ -1006,7 +1006,6 @@
 
 .markdown-link {
     color: #6ea8fe;
-    text-decoration: underline;
 }
 
 /* ---- Approval prompt (agent tool call approval) ---- */
@@ -1034,7 +1033,7 @@
 }
 
 .approval-prompt__tool-name {
-    font-weight: bold;
+    -unity-font-style: bold;
     font-size: 13px;
     color: #e0e0e0;
 }
@@ -1047,7 +1046,7 @@
 }
 
 .approval-prompt__params {
-    font-family: monospace;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     font-size: 11px;
     color: rgba(255, 255, 255, 0.5);
     background-color: rgba(0, 0, 0, 0.2);
@@ -1069,7 +1068,7 @@
     margin-right: 6px;
     border-radius: 4px;
     font-size: 12px;
-    font-weight: bold;
+    -unity-font-style: bold;
 }
 
 .approval-prompt__btn--approve {
@@ -1097,9 +1096,7 @@
     border-radius: 8px;
     padding: 4px;
     position: absolute;
-    z-index: 100;
     min-width: 150px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .message-context-menu__item {
@@ -1226,7 +1223,7 @@
     color: var(--text-3);
     margin-right: 6px;
     min-width: 32px;
-    text-align: center;
+    -unity-text-align: middle-center;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
