@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- U-33: Forward selected messages to another chat session (selection bar now has Forward between Delete/Cancel; opens centered overlay picker with session titles + timestamps from ChatService.GetAllSessionsAsync; messages deep-copied via JsonUtility snapshot in new AppendMessagesToSessionAsync; persists to target; shows confirmation; excludes current session; outside-click or Cancel aborts). All in ChatController + ChatView.uss + loc (no new .cs files).
 - U-38: Chat search with highlight and navigation (topbar search button now toggles in-chat transcript search bar; live filtering, match count X/Y, ↑↓ nav, Esc/Enter keys, yellow highlight rows; closes on session change or re-render). Implemented entirely in ChatController with dynamic UI.
 - U-41: Inline image rendering for attachments (replaces `[image] filename` text with actual <Image> elements loaded via UnityWebRequestTexture from local file:// paths; supports png/jpg/jpeg/gif/webp by kind or extension; non-images keep file label; max-size + rounded styles).
 - U-16: API key show/hide toggle button in provider editor (next to password field)

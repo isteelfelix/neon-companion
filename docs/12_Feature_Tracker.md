@@ -29,7 +29,7 @@
 | H-01 | Сохранение истории чата | ✅ | M0 | |
 | H-02 | Экран истории | ✅ | M1 | Выделенный экран |
 | H-03 | Удаление отдельных сессий | ✅ | M1 | Из sidebar |
-| H-04 | Папки для сессий (как проекты) | 📋 | M2 | Группировка сессий по папкам |
+| H-04 | Папки для сессий (как проекты) | ✅ | M2 | Группировка сессий по папкам |
 
 ## Аватары
 | # | Фича | Статус | Спринт | Заметки |
@@ -44,7 +44,7 @@
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | see docs/13_Avatar_Motion_Research.md |
 | A-09 | Загрузка спрайтшитов — производительность | ⏳ | M2 | Preload during splash screen. Фриз при загрузке — нужна lazy loading |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ⏳ | M2 | Talking/listening/confused триггеры. Ожидает проверки |
-| A-11 | Система триггерных анимаций | 📋 | M2 | Game-like state machine |
+| A-11 | Система триггерных анимаций | ✅ | M2 | Game-like state machine |
 
 ## UI и UX
 | # | Фича | Статус | Спринт | Заметки |
@@ -58,7 +58,7 @@
 | U-07 | Режимы отображения аватара | ✅ | M1 | `AvatarViewMode`: Static, Animated, Volume3D |
 | U-08 | Кнопка выхода в настройках | ⏳ | M2 | Кнопка «Выход» в settings. Ожидает проверки |
 | U-09 | Кнопка «Резюме» (summarize) не работает | 🔧 | M2 | Кнопка в topbar справа |
-| U-10 | Иконка приложения в интерфейсе | 📋 | M2 | Вверху слева, рядом с названием |
+| U-10 | Иконка приложения в интерфейсе | ✅ | M2 | Вверху слева, рядом с названием |
 | U-11 | Баг: сжатие левой панели | ⏳ | M2 | overflow: hidden на .rail. Ожидает проверки |
 | U-12 | Баг: многострочный ввод — переполнение | ⏳ | M2 | overflow: auto на inner text field. Ожидает проверки |
 | U-13 | Вкладка «Темы» — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
@@ -68,7 +68,7 @@
 | U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | Экран: кроны, расписание, статус, логи |
 | U-18 | Agent Activity UI | ⏳ | M2 | Thinking bubble + tool progress. Ожидает проверки |
 | U-19 | Typing indicator в bubble ответа | ⏳ | M2 | 3 точки внутри response bubble. Ожидает проверки |
-| U-20 | Ленивая загрузка спрайтшитов | 📋 | M2 | Splash screen фризит при синхронной загрузке |
+| U-20 | Ленивая загрузка спрайтшитов | ✅ | M2 | Splash screen фризит при синхронной загрузке |
 | U-21 | Scroll-to-bottom в чате | ⏳ | M2 | Кнопка прокрутки вниз. Ожидает проверки |
 | U-22 | Enter-to-send | ⏳ | M2 | Toggle в настройках. Ожидает проверки |
 | U-23 | Clear chats only | ⏳ | M2 | Очистка + сброс in-memory ChatService. Ожидает проверки |
@@ -76,25 +76,25 @@
 | U-25 | Автоскролл при стриминге | ⏳ | M2 | Перелопачен, ожидает проверки |
 | U-26 | Toggle панелей | ⏳ | M2 | Кнопки скрытия левой/правой панели. Иконки пофикшены. Ожидает проверки |
 || U-27 | Счётчик токенов + время ответа | ✅ | M2 | Approx tokens + elapsed time в footer assistant bubble. Обновляется каждые 500ms. Локализация en/ru |
-| U-28 | Precise usage данные (stream_options) | 📋 | M3 | Точные prompt_tokens + completion_tokens через `stream_options: {include_usage: true}`. Изменения в парсере SSE |
+| U-28 | Precise usage данные (stream_options) | ✅ | M3 | Точные prompt_tokens + completion_tokens через `stream_options: {include_usage: true}`. Изменения в парсере SSE |
 | U-29 | Редактирование сообщений | ✅ | M2 | Right-click/long-press context menu → inline edit (user only) + Save/Cancel + optional "Save & Regenerate". Implemented in ChatController + MessageContextMenu. |
 | U-30 | Удаление отдельных сообщений | ✅ | M2 | Right-click/long-press → Delete from context menu. Removes from model, re-renders, persists via SaveCurrentSessionAsync. |
-| U-31 | Выделение сообщений | 📋 | M2 | Multi-select режим: long press или checkbox. Панель действий снизу |
-| U-32 | Удаление выделенных | 📋 | M2 | Удалить все выбранные сообщения |
-| U-33 | Пересылка выделенных в другой чат | 📋 | M2 | Выбрать целевой чат → скопировать выбранные сообщения туда |
-| U-34 | Выделение текста в сообщениях | 📋 | M2 | Копирование текста из bubble через нативный текстовый selection |
+| U-31 | Выделение сообщений | ✅ | M2 | Multi-select режим: long press или checkbox. Панель действий снизу |
+| U-32 | Удаление выделенных | ✅ | M2 | Удалить все выбранные сообщения |
+| U-33 | Пересылка выделенных в другой чат | ✅ | M2 | Forward button в selection bar; overlay picker со списком других сессий (title + timestamp); глубокое копирование сообщений через JsonUtility snapshot; AppendMessagesToSessionAsync в ChatService; локализация + USS. Реализовано в ChatController (без новых .cs) |
+| U-34 | Выделение текста в сообщениях | ✅ | M2 | Копирование текста из bubble через нативный текстовый selection |
 || U-35 | Markdown разметка в сообщениях | ✅ | M2 | MarkdownRenderer: bold/italic/code/codeblocks/lists/links. USS стили. Только для assistant |
-| U-36 | Индикатор контекстного окна | 📋 | M2 | Полоска показывающая заполненность контекста. Важно для длинных сессий |
+| U-36 | Индикатор контекстного окна | ✅ | M2 | Полоска показывающая заполненность контекста. Важно для длинных сессий |
 | U-37 | Экспорт чата | ✅ | M2 | Сохранить разговор как markdown/JSON/text файл (Markdown в ChatController, persistentDataPath по образцу Settings) |
 | U-38 | Поиск по текущему чату | ✅ | M2 | Найти текст в текущем разговоре (search bar, highlight + nav, X/Y count). ChatController dynamic bar + USS + loc. |
 | U-48 | Agent Approval System (Part B) | ✅ | M2 | Streaming integration in ChatController + alwaysApprovedTools + tool call detection in SSE parser (hermes.tool.request + OpenAI tool_calls); approval prompt during tool request, Always saves to settings, auto/manual modes respected |
 | U-39 | Ветвление диалога | 📋 | M3 | Ответвление от любого сообщения → новая ветка диалога |
-| U-40 | Звуки уведомлений | 📋 | M2 | Звук когда ответ готов, если окно не в фокусе |
+| U-40 | Звуки уведомлений | ✅ | M2 | Звук когда ответ готов, если окно не в фокусе |
 | U-41 | Отображение картинок в чате | ✅ | M2 | Рендер вложений-изображений инлайн в bubble вместо текста [image] (Image + async UnityWebRequestTexture, IsImageFile). |
-| U-42 | Вставка изображений из буфера обмена | 📋 | M2 | Ctrl+V / Cmd+V — вставить скопированное изображение как вложение в композер |
+| U-42 | Вставка изображений из буфера обмена | ✅ | M2 | Ctrl+V / Cmd+V — вставить скопированное изображение как вложение в композер |
 | U-43 | Мульти-агент чат | 📋 | M3 | Несколько агентов в одном разговоре. Каждый со своим bubble-цветом. Сабагенты (Claude Code, Codex) видны в реальном времени |
-| U-44 | Drag-and-drop файлов в чат | 📋 | M2 | Перетащить PDF/код/картинку → агент анализирует |
-| U-45 | Очередь сообщений | 📋 | M2 | Отправлять пока агент работает. Обрабатываются по порядку после завершения текущего. Как в Telegram |
+| U-44 | Drag-and-drop файлов в чат | ✅ | M2 | Перетащить PDF/код/картинку → агент анализирует |
+| U-45 | Очередь сообщений | ✅ | M2 | Отправлять пока агент работает. Обрабатываются по порядку после завершения текущего. Как в Telegram |
 | U-46 | Кнопка стоп (отмена генерации) | ⏳ | M2 | ■ кнопка в композере, отменяет streaming. Критично для локальных LLM. Ожидает проверки |
 | U-47 | Система команд в чате | ⏳ | M2 | /help /model /system /temp /tokens /clear /new. Ожидает проверки |
 
