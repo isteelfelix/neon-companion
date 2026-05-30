@@ -104,8 +104,8 @@
    103|| # | Фича | Статус | Спринт | Заметки |
    104||---|------|--------|--------|---------|
 | V-01 | Голосовой ввод/вывод | ❌ | M2 | Не работает. Нет настроек устройства ввода-вывода |
-   106|| V-02 | Lipsync | 🔧 | M2 | LipsyncController: phoneme→viseme |
-   107|| V-03 | 3D аватары | 🔧 | M2 | Avatar3DLoader (GLB/GLTF), Avatar3DRenderer |
+| V-02 | Lipsync | ❌ | M2 | Не работает —voice не подключен |
+| V-03 | 3D аватары | ❌ | M2 | Не работает |
    108|| V-04 | Desktop realtime avatar layer | 📋 | M2+ | 3D-first realtime path: blendshapes/visemes |
    109|
    110|## Рефакторинг (M2)
