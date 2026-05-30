@@ -81,9 +81,9 @@
 | U-30 | Удаление отдельных сообщений | ❌ | M2 | ПКМ — та же сломанная синяя полоса |
 | U-31 | Выделение сообщений | ❌ | M2 | Long press — та же сломанная синяя полоса |
 | U-32 | Удаление выделенных | ❌ | M2 | Не работает — нет выделения (дубль U-31) |
-    84|| U-33 | Пересылка выделенных в другой чат | 🔧 | M2 | Forward button в selection bar; overlay picker со списком других сессий (title + timestamp); глубокое копирование сообщений через JsonUtility snapshot; AppendMessagesToSessionAsync в ChatService; локализация + USS. Реализовано в ChatController (без новых .cs) |
-    85|| U-34 | Выделение текста в сообщениях | 🔧 | M2 | Копирование текста из bubble через нативный текстовый selection |
-    86||| U-35 | Markdown разметка в сообщениях | 🔧 | M2 | MarkdownRenderer: bold/italic/code/codeblocks/lists/links. USS стили. Только для assistant |
+| U-33 | Пересылка выделенных в другой чат | ❌ | M2 | Не работает — нет выделения (дубль U-31) |
+| U-34 | Выделение текста в сообщениях | ❌ | M2 | Не работает |
+| U-35 | Markdown разметка в сообщениях | ❌ | M2 | Raw текст — MarkdownRenderer не подхватывает сообщения |
     87|| U-36 | Индикатор контекстного окна | 🔧 | M2 | Полоска показывающая заполненность контекста. Важно для длинных сессий |
     88|| U-37 | Экспорт чата | 🔧 | M2 | Сохранить разговор как markdown/JSON/text файл (Markdown в ChatController, persistentDataPath по образцу Settings) |
     89|| U-38 | Поиск по текущему чату | 🔧 | M2 | Найти текст в текущем разговоре (search bar, highlight + nav, X/Y count). ChatController dynamic bar + USS + loc. |
