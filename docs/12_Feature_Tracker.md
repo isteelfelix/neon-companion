@@ -76,11 +76,11 @@
     76|| U-25 | Автоскролл при стриминге | ✅ | M2 | Перелопачен |
     77|| U-26 | Toggle панелей | ✅ | M2 | Кнопки скрытия левой/правой панели. Иконки пофикшены |
     78||| U-27 | Счётчик токенов + время ответа | 🔧 | M2 | Approx tokens + elapsed time в footer assistant bubble. Обновляется каждые 500ms. Локализация en/ru |
-    79|| U-28 | Precise usage данные (stream_options) | 🔧 | M3 | Точные prompt_tokens + completion_tokens через `stream_options: {include_usage: true}`. Изменения в парсере SSE |
-    80|| U-29 | Редактирование сообщений | 🔧 | M2 | Right-click/long-press context menu → inline edit (user only) + Save/Cancel + optional "Save & Regenerate". Implemented in ChatController + MessageContextMenu. |
-    81|| U-30 | Удаление отдельных сообщений | 🔧 | M2 | Right-click/long-press → Delete from context menu. Removes from model, re-renders, persists via SaveCurrentSessionAsync. |
-    82|| U-31 | Выделение сообщений | 🔧 | M2 | Multi-select режим: long press или checkbox. Панель действий снизу |
-    83|| U-32 | Удаление выделенных | 🔧 | M2 | Удалить все выбранные сообщения |
+| U-28 | Precise usage данные (stream_options) | ❌ | M3 | Токены пропадают после завершения сообщения — нужно оставлять |
+| U-29 | Редактирование сообщений | ❌ | M2 | ПКМ вызывает сломанную синюю полосу внизу экрана |
+| U-30 | Удаление отдельных сообщений | ❌ | M2 | ПКМ — та же сломанная синяя полоса |
+| U-31 | Выделение сообщений | ❌ | M2 | Long press — та же сломанная синяя полоса |
+| U-32 | Удаление выделенных | ❌ | M2 | Не работает — нет выделения (дубль U-31) |
     84|| U-33 | Пересылка выделенных в другой чат | 🔧 | M2 | Forward button в selection bar; overlay picker со списком других сессий (title + timestamp); глубокое копирование сообщений через JsonUtility snapshot; AppendMessagesToSessionAsync в ChatService; локализация + USS. Реализовано в ChatController (без новых .cs) |
     85|| U-34 | Выделение текста в сообщениях | 🔧 | M2 | Копирование текста из bubble через нативный текстовый selection |
     86||| U-35 | Markdown разметка в сообщениях | 🔧 | M2 | MarkdownRenderer: bold/italic/code/codeblocks/lists/links. USS стили. Только для assistant |
