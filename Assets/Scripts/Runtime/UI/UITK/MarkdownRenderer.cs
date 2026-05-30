@@ -41,6 +41,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 return true;
             }
+            // Support common italic markers (fixes cases where AI uses * or _)
+            if (text.IndexOf("*", StringComparison.Ordinal) >= 0 || text.IndexOf("_", StringComparison.Ordinal) >= 0)
+            {
+                return true;
+            }
             if (text.IndexOf("\n- ", StringComparison.Ordinal) >= 0 || text.IndexOf("\n* ", StringComparison.Ordinal) >= 0 || text.IndexOf("\n+ ", StringComparison.Ordinal) >= 0)
             {
                 return true;
@@ -50,6 +55,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return true;
             }
             if (text.IndexOf("\n1. ", StringComparison.Ordinal) >= 0 || text.StartsWith("1. ", StringComparison.Ordinal))
+            {
+                return true;
+            }
+            // Detect ATX headers (# )
+            if (text.IndexOf("# ", StringComparison.Ordinal) >= 0 || text.StartsWith("#", StringComparison.Ordinal))
             {
                 return true;
             }

@@ -14,6 +14,7 @@
 ### Fixed
 - A-10: Avatar animation — all 6 clips now trigger correctly. Talking plays during AI streaming, listening on composer input, confused on provider/model errors
 - U-08: Exit button added to settings panel (triggers quit confirmation dialog)
+- Brief fix batch for today's failed tracker checks: H-04, A-09, U-10, U-12/U-22, U-28..U-36, U-40..U-44, U-49, V-01..V-03 received code changes and were moved to ⏳ pending Felix verification.
 
 ## [0.2.0] - 2026-05-27
 

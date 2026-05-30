@@ -66,6 +66,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<string> GetAvatarDisplayName;
             public Action ShowNotificationBadge;
             public Action HideNotificationBadge;
+            // Sounds (U-40)
+            public Action PlayNotificationSound;
         }
 
         private class QueuedMessage
@@ -409,6 +411,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnInputKeyDown(KeyDownEvent evt)
         {
             bool hasCtrl = evt.ctrlKey || evt.commandKey;
+            bool hasShift = evt.shiftKey;
 
             // Ctrl+V paste image
             if (hasCtrl && evt.keyCode == KeyCode.V)
@@ -421,11 +424,24 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
                 return;
 
-            bool enterToSend = _d.EnterToSend();
+            bool enterToSend = _d.EnterToSend != null && _d.EnterToSend();
 
             // Set flag here (TrickleDown — before TextField inserts '\n').
             // OnComposerTextChanged fires after the insertion and consumes it.
-            if ((enterToSend && !hasCtrl) || hasCtrl)
+            // Fix for U-12/U-22: Shift+Enter always produces newline (never sends).
+            // When enterToSend=true: plain Enter (or Ctrl+Enter) sends; Shift+Enter = newline.
+            // When enterToSend=false: Ctrl+Enter sends; plain Enter = newline.
+            bool shouldSend = false;
+            if (enterToSend)
+            {
+                shouldSend = !hasShift;
+            }
+            else
+            {
+                shouldSend = hasCtrl;
+            }
+
+            if (shouldSend)
                 _pendingEnterSend = true;
         }
 
@@ -626,15 +642,30 @@ namespace NeonCompanion.Runtime.UI.UITK
                             if (usage.total_tokens > 0)
                             {
                                 _estimatedTokens = usage.total_tokens;
+                                double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
+                                if (elapsed < 0)
+                                    elapsed = 0;
                                 if (statsLabelForFinal != null)
                                 {
-                                    double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
-                                    if (elapsed < 0)
-                                        elapsed = 0;
                                     string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
                                     string exactTemplate = template.Replace("~", string.Empty);
                                     statsLabelForFinal.text = string.Format(exactTemplate, _estimatedTokens, elapsed);
                                 }
+                                // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
+                                try
+                                {
+                                    var vm = chat.CurrentChatViewModel;
+                                    if (vm != null && vm.Messages != null && vm.Messages.Count > 0)
+                                    {
+                                        var last = vm.Messages[vm.Messages.Count - 1];
+                                        if (last != null && string.Equals(NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            last.tokenCount = _estimatedTokens;
+                                            last.responseTimeSeconds = (float)elapsed;
+                                        }
+                                    }
+                                }
+                                catch { }
                             }
                         }
                     }
@@ -656,6 +687,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 ClearPendingComposerAttachments();
+                _d.PlayNotificationSound?.Invoke();
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await _d.LoadSessionsAsync();
                 _d.TriggerAvatarSmile();
@@ -2017,15 +2049,30 @@ namespace NeonCompanion.Runtime.UI.UITK
                                 if (usage.total_tokens > 0)
                                 {
                                     _estimatedTokens = usage.total_tokens;
+                                    double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
+                                    if (elapsed < 0)
+                                        elapsed = 0;
                                     if (statsLabelForFinal != null)
                                     {
-                                        double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
-                                        if (elapsed < 0)
-                                            elapsed = 0;
                                         string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
                                         string exactTemplate = template.Replace("~", string.Empty);
                                         statsLabelForFinal.text = string.Format(exactTemplate, _estimatedTokens, elapsed);
                                     }
+                                    // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
+                                    try
+                                    {
+                                        var vm = chat.CurrentChatViewModel;
+                                        if (vm != null && vm.Messages != null && vm.Messages.Count > 0)
+                                        {
+                                            var last = vm.Messages[vm.Messages.Count - 1];
+                                            if (last != null && string.Equals(NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                last.tokenCount = _estimatedTokens;
+                                                last.responseTimeSeconds = (float)elapsed;
+                                            }
+                                        }
+                                    }
+                                    catch { }
                                 }
                             }
                         }
@@ -2126,7 +2173,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var chat = _d.GetChatServiceAsync().Result;
             var provider = chat?.CurrentProvider;
-            int contextWindow = provider?.contextWindow ?? 0;
+            int contextWindow = provider != null && provider.contextWindow > 0 ? provider.contextWindow : GuessContextWindow(provider);
 
             if (contextWindow <= 0)
             {
@@ -2152,6 +2199,25 @@ namespace NeonCompanion.Runtime.UI.UITK
             _contextBarLabel.text = LocalizationExtensions.Get("chat.context.usage", "~{0} / {1} tokens")
                 .Replace("{0}", used.ToString("N0"))
                 .Replace("{1}", contextWindow.ToString("N0"));
+        }
+
+        private static int GuessContextWindow(ProviderConfig provider)
+        {
+            if (provider == null || string.IsNullOrEmpty(provider.defaultModel))
+                return 8192; // safe default for unknown
+
+            string m = provider.defaultModel.ToLowerInvariant();
+            if (m.Contains("gpt-4o") || m.Contains("gpt-4-turbo") || m.Contains("claude-3") || m.Contains("gemini-1.5"))
+                return 128000;
+            if (m.Contains("gpt-4") || m.Contains("claude"))
+                return 8192;
+            if (m.Contains("gpt-3.5") || m.Contains("llama3") || m.Contains("llama-3"))
+                return 16384;
+            if (m.Contains("mistral") || m.Contains("mixtral"))
+                return 32768;
+            if (m.Contains("phi") || m.Contains("gemma"))
+                return 4096;
+            return 8192;
         }
 
         // ===== Message Rendering =====
@@ -2378,15 +2444,28 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Stats footer for assistant (after body/attachments in flow; actions are absolute so order ok).
             // Hidden by default; streaming path makes visible + updates it.
+            // For completed messages with persisted usage (U-28), show immediately.
             if (role == "assistant")
             {
                 var statsFooter = new VisualElement();
                 statsFooter.AddToClassList("transcript__stats");
-                statsFooter.style.display = DisplayStyle.None;
                 var statsLabel = new Label();
                 statsLabel.AddToClassList("transcript__stats-label");
                 statsFooter.Add(statsLabel);
                 bubble.Add(statsFooter);
+
+                if (message.tokenCount > 0)
+                {
+                    statsFooter.style.display = DisplayStyle.Flex;
+                    double t = message.responseTimeSeconds > 0 ? message.responseTimeSeconds : 0.0;
+                    string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
+                    string exact = template.Replace("~", string.Empty);
+                    statsLabel.text = string.Format(exact, message.tokenCount, t);
+                }
+                else
+                {
+                    statsFooter.style.display = DisplayStyle.None;
+                }
             }
 
             row.Add(bubble);

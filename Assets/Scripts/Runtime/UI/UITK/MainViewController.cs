@@ -217,6 +217,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Image _avatar3DImage;
         private SpriteSheetAnimator _avatarAnimator;
         private AvatarAnimationController _avatarAnimationController;
+        private AudioSource _notifySource; // U-40 notification sounds
+        private AudioClip _notifyClip;
         private Avatar3DRenderer _avatar3DRenderer;
         private IAvatar3DService _avatar3DService;
         private bool _isRefreshingLocalizedUi;
@@ -427,6 +429,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             _scrollBottomBtn = root.Q<Button>("scroll-bottom-btn");
             _sessionsList = root.Q<ScrollView>("sessions-list");
             _historySessionsList = root.Q<ScrollView>("history-panel-sessions-list");
+
+            // U-10: add visible app brand icon in sidebar header (dynamic, no UXML change)
+            var railHead = root.Q(className: "rail__sessions-head");
+            if (railHead != null)
+            {
+                var brand = new Label("N");
+                brand.AddToClassList("rail__brand-icon");
+                brand.style.fontSize = 11;
+                brand.style.unityFontStyleAndWeight = FontStyle.Bold;
+                brand.style.color = new Color(0.49f, 0.48f, 0.93f, 1f); // accent indigo
+                brand.style.marginRight = 6;
+                brand.style.marginLeft = 4;
+                brand.style.alignSelf = Align.Center;
+                // Insert as first child so it sits left of "Сессии" label
+                railHead.Insert(0, brand);
+            }
             if (_sessionsList != null)
                 _sessionsList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             if (_historySessionsList != null)
@@ -649,7 +667,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RenderMessages = RenderMessages,
                 ApplyModelSelectionAsync = (id, close) => _providersController.ApplyModelSelectionAsync(id, close),
                 OpenModelPickerAsync = () => _providersController.OpenModelPickerAsync(),
-                GetAvatarDisplayName = () => _avatarGalleryController.AvatarDisplayName(_avatarGalleryController.ActiveAvatarId)
+                GetAvatarDisplayName = () => _avatarGalleryController.AvatarDisplayName(_avatarGalleryController.ActiveAvatarId),
+                PlayNotificationSound = PlayNotificationBeep
             };
         }
 
@@ -1943,6 +1962,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarAnimationController = gameObject.GetComponent<AvatarAnimationController>();
             if (_avatarAnimationController == null)
                 _avatarAnimationController = gameObject.AddComponent<AvatarAnimationController>();
+
+            // U-40: ensure notification sound source (runtime tone, no asset required)
+            _notifySource = gameObject.GetComponent<AudioSource>();
+            if (_notifySource == null)
+                _notifySource = gameObject.AddComponent<AudioSource>();
+            _notifySource.playOnAwake = false;
+            _notifySource.volume = 0.15f;
         }
 
         private void EnsureAvatar3DImage()
@@ -2190,6 +2216,47 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void TriggerAvatarConfused()
         {
             PlayAvatarReaction("confused");
+        }
+
+        // U-40: runtime-generated notification beep (no audio assets; real tone via PCM)
+        private void PlayNotificationBeep()
+        {
+            try
+            {
+                if (_notifySource == null)
+                {
+                    _notifySource = gameObject.GetComponent<AudioSource>();
+                    if (_notifySource == null)
+                        _notifySource = gameObject.AddComponent<AudioSource>();
+                    _notifySource.playOnAwake = false;
+                    _notifySource.volume = 0.15f;
+                }
+
+                if (_notifyClip == null)
+                    _notifyClip = CreateNotificationClip();
+
+                if (_notifyClip != null)
+                    _notifySource.PlayOneShot(_notifyClip, 0.2f);
+            }
+            catch { /* silent fail on unsupported platforms */ }
+        }
+
+        private static AudioClip CreateNotificationClip()
+        {
+            int sampleRate = 44100;
+            float duration = 0.08f; // short ding
+            int samples = (int)(sampleRate * duration);
+            float[] data = new float[samples];
+            float freq = 880f; // A5
+            for (int i = 0; i < samples; i++)
+            {
+                float t = (float)i / sampleRate;
+                float env = 1f - (t / duration); // linear decay
+                data[i] = Mathf.Sin(2f * Mathf.PI * freq * t) * 0.6f * env;
+            }
+            var clip = AudioClip.Create("notif_beep", samples, 1, sampleRate, false);
+            clip.SetData(data, 0);
+            return clip;
         }
 
         private static string BuildAnimationInfoText(AvatarProfile profile)

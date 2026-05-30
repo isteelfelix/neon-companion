@@ -1097,6 +1097,7 @@
     padding: 4px;
     position: absolute;
     min-width: 150px;
+    min-height: 32px;
 }
 
 .message-context-menu__item {
@@ -1107,6 +1108,7 @@
     padding-top: 6px;
     padding-bottom: 6px;
     border-radius: 4px;
+    min-height: 28px;
 }
 
 .message-context-menu__item:hover,
@@ -1258,6 +1260,7 @@
 
 /* Context window indicator */
 .context-bar {
+    position: relative;
     height: 18px;
     flex-shrink: 0;
     margin-top: 4px;

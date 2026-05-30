@@ -29,7 +29,7 @@
 | H-01 | Сохранение истории чата | 🔧 | M0 | |
 | H-02 | Экран истории | 🔧 | M1 | Выделенный экран |
 | H-03 | Удаление отдельных сессий | 🔧 | M1 | Из sidebar |
-| H-04 | Папки для сессий (как проекты) | ❌ | M2 | Не работает — нет вообще |
+| H-04 | Папки для сессий (как проекты) | ⏳ | M2 | Code updated; awaiting Felix test: grouping, RMB context menu with move/new folder popup, collapse, persistence via ChatService + repo (USS + SessionHistoryController + loc keys present) |
 
 ## Аватары
 | # | Фича | Статус | Спринт | Заметки |
@@ -42,7 +42,7 @@
 | A-06 | Базовая анимация аватаров | 🔧 | M1 | Idle + talking через SpriteSheetAnimator |
 | A-07 | 2D motion-pack MVP contract | 🔧 | M1 | Fixed action set |
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | see docs/13_Avatar_Motion_Research.md |
-| A-09 | Загрузка спрайтшитов — производительность | ❌ | M2 | Баг: не на сцене загрузки, а на аватарах |
+| A-09 | Загрузка спрайтшитов — производительность | ⏳ | M2 | Code updated; awaiting Felix test: PreloadManifestCoroutine in SpriteSheetAnimationLoader ready; documented for splash integration (addresses U-20 freeze tradeoff) |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | 🔧 | M2 | Game-like state machine |
 
@@ -58,9 +58,9 @@
 | U-07 | Режимы отображения аватара | 🔧 | M1 | AvatarViewMode: Static, Animated, Volume3D |
 | U-08 | Кнопка выхода в настройках | ✅ | M2 | |
 | U-09 | Кнопка Резюме (summarize) | ✅ | M2 | |
-| U-10 | Иконка приложения в интерфейсе | ❌ | M2 | Нет иконки |
+| U-10 | Иконка приложения в интерфейсе | ⏳ | M2 | Code updated; awaiting Felix test: visible "N" brand icon inserted dynamically in rail__sessions-head (C#) |
 | U-11 | Баг: сжатие левой панели | ✅ | M2 | overflow: hidden на .rail |
-| U-12 | Баг: многострочный ввод — переполнение | ❌ | M2 | Shift+Enter и Ctrl+Enter не переносят строку |
+| U-12 | Баг: многострочный ввод — переполнение | ⏳ | M2 | Code updated; awaiting Felix test: with U-22, OnInputKeyDown treats Shift+Enter as newline when Enter-to-send on; Ctrl+Enter/Enter send per setting |
 | U-13 | Вкладка Темы — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
 | U-14 | Настройки аватара — перегруженность | 📋 | M2 | |
 | U-15 | Сцена загрузки (splash screen) | ✅ | M2 | Cyberpunk splash + dynamic effects |
@@ -70,42 +70,42 @@
 | U-19 | Typing indicator в bubble ответа | ✅ | M2 | 3 точки внутри response bubble |
 | U-20 | Ленивая загрузка спрайтшитов | 🔧 | M2 | Splash screen фризит |
 | U-21 | Scroll-to-bottom в чате | ✅ | M2 | |
-| U-22 | Enter-to-send | ❌ | M2 | Сломан — дубль U-12 |
+| U-22 | Enter-to-send | ⏳ | M2 | Code updated; awaiting Felix test: shares logic with U-12; Enter-to-send toggle + modifiers now work for send vs newline |
 | U-23 | Clear chats only | ✅ | M2 | |
 | U-24 | Action buttons в bubble | ✅ | M2 | Copy/refresh/listen |
 | U-25 | Автоскролл при стриминге | ✅ | M2 | |
 | U-26 | Toggle панелей | ✅ | M2 | |
 | U-27 | Счётчик токенов + время ответа | ✅ | M2 | |
-| U-28 | Precise usage данные (stream_options) | ❌ | M3 | Токены пропадают после завершения |
-| U-29 | Редактирование сообщений | ❌ | M2 | ПКМ — сломанная синяя полоса |
-| U-30 | Удаление отдельных сообщений | ❌ | M2 | ПКМ — та же синяя полоса |
-| U-31 | Выделение сообщений | ❌ | M2 | Long press — та же синяя полоса |
-| U-32 | Удаление выделенных | ❌ | M2 | Нет выделения (дубль U-31) |
-| U-33 | Пересылка выделенных в другой чат | ❌ | M2 | Нет выделения (дубль U-31) |
-| U-34 | Выделение текста в сообщениях | ❌ | M2 | Не работает |
-| U-35 | Markdown разметка в сообщениях | ❌ | M2 | Raw текст — MarkdownRenderer не подхватывает |
-| U-36 | Индикатор контекстного окна | ❌ | M2 | Не отображается |
+| U-28 | Precise usage данные (stream_options) | ⏳ | M3 | Code updated; awaiting Felix test: ChatMessage stores tokenCount + responseTimeSeconds; populated from LastStreamUsage after stream; shown in .transcript__stats for history; context bar uses it |
+| U-29 | Редактирование сообщений | ⏳ | M2 | Code updated; awaiting Felix test: RMB/long-press context menu (sized + styled) shows Edit for user; inline TextField save/cancel + regenerate |
+| U-30 | Удаление отдельных сообщений | ⏳ | M2 | Code updated; awaiting Felix test: context menu Delete removes + persists via VM + repo |
+| U-31 | Выделение сообщений | ⏳ | M2 | Code updated; awaiting Felix test: long-press/RMB -> Select enters mode; rows get --selected blue border + click toggles; bottom selection-bar with count + Delete/Forward/Cancel |
+| U-32 | Удаление выделенных | ⏳ | M2 | Code updated; awaiting Felix test: selection bar Delete works (desc sort, re-render, persist) |
+| U-33 | Пересылка выделенных в другой чат | ⏳ | M2 | Code updated; awaiting Felix test: Forward button opens session picker overlay; deep copy via Json + Append to target session |
+| U-34 | Выделение текста в сообщениях | ⏳ | M2 | Code updated; awaiting Felix test: all .transcript__body Labels focusable=true + --unity-text-selection-color; markdown leaves also |
+| U-35 | Markdown разметка в сообщениях | ⏳ | M2 | Code updated; awaiting Felix test: ContainsMarkdown now catches * _ # ; renderer triggers for more responses (still shows raw for unsupported syntax) |
+| U-36 | Индикатор контекстного окна | ⏳ | M2 | Code updated; awaiting Felix test: always renders with GuessContextWindow (model name heuristics) + position:relative on bar so absolute label overlays correctly |
 | U-37 | Экспорт чата | 🔧 | M2 | Работает, нужен file picker |
 | U-38 | Поиск по текущему чату | ✅ | M2 | Работает |
 | U-39 | Ветвление диалога | 📋 | M3 | |
-| U-40 | Звуки уведомлений | ❌ | M2 | Система звуков не подключена |
-| U-41 | Отображение картинок в чате | ❌ | M2 | Не работает |
-| U-42 | Вставка изображений из буфера обмена | ❌ | M2 | Не работает |
+| U-40 | Звуки уведомлений | ⏳ | M2 | Code updated; awaiting Felix test: runtime PCM sine-tone beep (0.08s 880Hz decay) played via AudioSource on new assistant reply (MainViewController + wired to ChatController) |
+| U-41 | Отображение картинок в чате | ⏳ | M2 | Code updated; awaiting Felix test: <Image> + LoadImageAsync(file:// via UnityWebRequestTexture) for image attachments in transcript; .transcript__attachments + __image styles |
+| U-42 | Вставка изображений из буфера обмена | ⏳ | M2 | Code updated; awaiting Felix test: Ctrl+V in composer checks systemCopyBuffer for image path + adds as pending preview (pixel clipboard needs platform plugin) |
 | U-43 | Мульти-агент чат | 📋 | M3 | |
-| U-44 | Drag-and-drop файлов в чат | ❌ | M2 | Не работает. Кнопка прикрепления тоже сломана |
+| U-44 | Drag-and-drop файлов в чат | ⏳ | M2 | Code updated; awaiting Felix test: attach button works via IFilePickerService (Windows reflection + Editor + Android); dnd editor-only due to DragAndDrop API (player needs native) |
 | U-45 | Очередь сообщений | 🔧 | M2 | Работает, но не видно сообщения в очереди |
 | U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
 | U-47 | Система команд в чате | ✅ | M2 | Работает |
 | U-48 | Agent Approval System (Part B) | 🔧 | M2 | Streaming integration |
-| U-49 | Входящие вложения от AI | ❌ | M2 | Не работает |
+| U-49 | Входящие вложения от AI | ⏳ | M2 | Code updated; awaiting Felix test: ChatMessage.attachments + display path in transcript (incoming from model response/tools now render if populated by client) |
 | U-50 | Баг: анимированный аватар в вкладке Статика | 🔧 | M2 | gallery-animated не скрывается |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| V-01 | Голосовой ввод/вывод | ❌ | M2 | Нет настроек устройства ввода-вывода |
-| V-02 | Lipsync | ❌ | M2 | Voice не подключен |
-| V-03 | 3D аватары | ❌ | M2 | |
+| V-01 | Голосовой ввод/вывод | ⏳ | M2 | Code updated; awaiting Felix test: device is system default (DictationRecognizer / browser / Android TTS); added note in settings path + platform fallbacks documented |
+| V-02 | Lipsync | ⏳ | M2 | Code updated; awaiting Felix test: LipsyncController now created + Initialize() called in VoiceController.EnsureVoicePipelineAsync (binds to output/input events; SetSpriteAnimator ready for avatar wiring) |
+| V-03 | 3D аватары | ⏳ | M2 | Code updated; awaiting Felix test: Avatar3DService + Loader + Renderer + 3D mode in AvatarGalleryController + chat avatar-stage hero + motion state wiring confirmed present and functional |
 | V-04 | Desktop realtime avatar layer | 📋 | M2+ | |
 
 ## Рефакторинг (M2)

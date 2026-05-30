@@ -39,6 +39,9 @@ namespace NeonCompanion.Runtime.Data.Models
         public long unixTimeSeconds;
         public string tool_call_id;
         public List<ToolCall> tool_calls;
+        // Precise usage for U-28 (persisted for history; 0 = unknown)
+        public int tokenCount;
+        public float responseTimeSeconds;
     }
 
     [Serializable]

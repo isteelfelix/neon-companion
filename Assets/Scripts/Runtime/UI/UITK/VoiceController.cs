@@ -26,6 +26,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IVoiceService _voiceService;
         private VoiceInputManager _voiceInputManager;
         private VoiceOutputManager _voiceOutputManager;
+        private LipsyncController _lipsyncController; // V-02 wiring
         private bool _voiceBoundToChat;
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
@@ -94,6 +95,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_voiceInputManager == null)
                     _voiceInputManager = _d.gameObject.AddComponent<VoiceInputManager>();
                 _voiceInputManager.Initialize(_voiceService, _d.MicButton, _d.IsVoiceEnabledBySettings, _d.SendVoiceMessageAsync, _d.OnVoiceRecordingStarted);
+            }
+
+            // V-02: connect lipsync to voice pipeline (was never created/initialized)
+            if (_lipsyncController == null)
+            {
+                _lipsyncController = _d.gameObject.GetComponent<LipsyncController>();
+                if (_lipsyncController == null)
+                    _lipsyncController = _d.gameObject.AddComponent<LipsyncController>();
+                _lipsyncController.Initialize(_voiceOutputManager, _voiceInputManager);
             }
 
             BindVoiceAnimationEvents();
