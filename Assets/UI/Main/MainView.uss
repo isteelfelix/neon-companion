@@ -756,3 +756,21 @@
     min-height: 48px;
     padding: 10px 12px;
 }
+
+/* ============================================================
+   iOS-specific adaptations (IOS-06)
+   Notch, home indicator, safe area tweaks beyond .platform-mobile
+   ============================================================ */
+.app.platform-ios {
+    /* iOS tends to have stronger safe area; extra breathing if needed */
+}
+
+.app.platform-ios .composer {
+    /* extra padding for home indicator / gesture bar */
+    padding-bottom: 22px;
+}
+
+.app.platform-ios .nav__item {
+    /* slightly different touch feel on iOS */
+    height: 46px;
+}

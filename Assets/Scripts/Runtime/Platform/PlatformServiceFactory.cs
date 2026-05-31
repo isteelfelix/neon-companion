@@ -10,9 +10,10 @@ namespace NeonCompanion.Runtime.Platform
     /// Центральная фабрика для создания платформенно-зависимых сервисов.
     /// Используется в AppBootstrap для регистрации в ServiceRegistry.
     /// 
-    /// Следуй правилам из docs/16_Platform_Architecture.md:
+    /// Следуй правилам из docs/16_Platform_Architecture.md и docs/17_iOS_Platform_Architecture.md:
     /// - Вся платформенная логика создания должна быть здесь.
     /// - Контроллеры не должны знать о конкретных реализациях.
+    /// - iOS и Android изолированы, общие мобильные случаи — через IsMobile.
     /// </summary>
     public static class PlatformServiceFactory
     {
@@ -20,6 +21,8 @@ namespace NeonCompanion.Runtime.Platform
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             return new DefaultFilePickerService(); // Android-логика внутри через #if
+#elif UNITY_IOS && !UNITY_EDITOR
+            return new iOS.iOSFilePickerService(); // iOS native bridge (placeholder + fallback, см. 17_iOS_Platform_Architecture.md)
 #elif UNITY_EDITOR || UNITY_STANDALONE_WIN
             return new DefaultFilePickerService();
 #else
@@ -47,6 +50,18 @@ namespace NeonCompanion.Runtime.Platform
             DontDestroyOnLoad(host);
             return bridge;
 #elif UNITY_EDITOR || UNITY_STANDALONE_WIN
+            if (host == null)
+                host = GameObject.Find("VoiceBridge") ?? new GameObject("VoiceBridge");
+
+            var bridge = host.GetComponent<WebSpeechBridge>();
+            if (bridge == null)
+                bridge = host.AddComponent<WebSpeechBridge>();
+
+            DontDestroyOnLoad(host);
+            return bridge;
+#elif UNITY_IOS && !UNITY_EDITOR
+            // iOS: for now use WebSpeechBridge (will be extended with native AVSpeech/SFSpeech in IOS-05)
+            // See 17_iOS_Platform_Architecture.md
             if (host == null)
                 host = GameObject.Find("VoiceBridge") ?? new GameObject("VoiceBridge");
 

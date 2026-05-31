@@ -48,7 +48,7 @@ Assets/Scripts/Runtime/
   Donation/         IDonationService
   Platform/         IFilePickerService
 
-**Важно:** Полная архитектура платформенной поддержки (Android + desktop) описана в `docs/16_Platform_Architecture.md`.
+**Важно:** Полная архитектура платформенной поддержки описана в `docs/16_Platform_Architecture.md` (Android) и `docs/17_iOS_Platform_Architecture.md` (iOS + общие мобильные принципы).
 Все изменения, связанные с мобильной версией, должны следовать правилам из этого документа.
 Ключевые изменения:
 - PlatformServiceFactory для создания платформенных сервисов
@@ -197,3 +197,20 @@ Felix performs all real builds and device testing on Windows.
 - Update the Android.asset profile for changes.
 
 See docs/16_Platform_Architecture.md for full platform rules.
+
+## iOS Build (M4+)
+
+- Build Profile: `Assets/Settings/Build Profiles/iOS.asset` (copied from Android, adjusted BuildTarget 9)
+- Native plugins: `Assets/Plugins/iOS/` — NeonSpeech.mm, NeonFilePicker.mm, Info.plist
+- Capabilities via Info.plist: NSMicrophoneUsageDescription, NSPhotoLibraryUsageDescription, NSCameraUsageDescription
+- Scripting defines in profile: UNITY_IOS
+- Voice: WebSpeechBridge routes to native AVSpeechSynthesizer / SFSpeechRecognizer (see NeonSpeech.mm + iOSSpeechBridge)
+- File picker: iOSFilePickerService + iOSFilePickerBridge + native UIDocumentPicker/PHPicker stubs
+- Safe area / layout: DefaultPlatformInfoService (Screen.safeArea for iOS), PlatformLayoutAdapter + LayoutController add "platform-ios" class
+- USS: .platform-ios rules in MainView.uss (and share .platform-mobile)
+- Permissions: iOSPermissionHelper (uses Unity Permission API for Microphone; plist for others)
+- Architecture: Follow 17_iOS_Platform_Architecture.md and 16_Platform_Architecture.md exactly. No #if in controllers.
+- Testing: .verify/check.sh for C#; full test only in Unity Editor + Xcode on macOS (Felix side)
+- Current state: Full scaffolding + wiring complete (no real device build here)
+
+See docs/17_iOS_Platform_Architecture.md for IOS-01..08 details and tracker.

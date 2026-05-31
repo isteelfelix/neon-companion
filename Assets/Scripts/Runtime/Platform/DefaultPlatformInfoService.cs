@@ -8,7 +8,8 @@ namespace NeonCompanion.Runtime.Platform
         {
             get
             {
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_IOS
+                // Both Android and iOS benefit from Screen.safeArea (notch, home indicator, etc.)
                 return Screen.safeArea;
 #else
                 return new Rect(0, 0, Screen.width, Screen.height);

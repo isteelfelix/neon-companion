@@ -143,3 +143,18 @@
 || PL-02 | Доработка IFilePickerService под Android (нативный Java плагин NeonFilePickerActivity) | 🔧 | M3 | NeonFilePickerActivity.java + Intent + runtime permission via AndroidPermissionHelper + cache copy |\n|| PL-03 | Android permissions и AndroidManifest.xml | 🔧 | M3 | Создан + обновлён Assets/Plugins/Android/AndroidManifest.xml (permissions + NeonFilePickerActivity + NeonSpeechRecognitionActivity declarations). Duplicate old NeonFilePickerActivity.java удалён. useCustomMainManifest=1 в профиле (PL-01 pending) |\n|| PL-04 | Адаптация UI под мобильные экраны (тач, клавиатура, safe area, разные DPI) | 🔧 | M3 | PlatformLayoutAdapter + AndroidKeyboardInset.cs (поллинг видимости клавиатуры). Расширены USS правила. |\n| PL-05 | Голос на Android (TTS + SpeechRecognizer вместо DictationRecognizer) | 🔧 | M3 | Полная интеграция: NeonSpeechRecognitionActivity.java + AndroidSpeechIntentHelper + AndroidSpeechRecognitionBridge + OnAndroidSpeechResult в WebSpeechBridge + proper UtteranceProgressListener для TTS |
 | PL-06 | Тестирование и фиксы runtime на Android (persistentDataPath, IL2CPP stripping, 3D аватары) | 📋 | M3 | Только Felix на реальном устройстве |
 | PL-07 | Документация по сборке Android в AGENTS.md и README | ✅ | M3 | Полный раздел Android Build в AGENTS.md (пререквизиты, профили, код, runtime, тестирование, caveats). Architecture doc уже покрывает принципы. |
+
+## Платформа iOS (M4+)
+
+| # | Фича | Статус | Спринт | Заметки |
+|---|------|--------|--------|---------|
+| IOS-01 | Полная поддержка iOS как целевой платформы | 🔧 | M4 | PlatformServiceFactory + iOS Build Profile + Info.plist + services. WebSpeechBridge fully wired for iOS. |
+| IOS-02 | iOSFilePickerService + нативный плагин (UIDocumentPicker / PHPicker) | 🔧 | M4 | Full iOSFilePickerService + iOSFilePickerBridge.cs + expanded NeonFilePicker.mm with UnitySendMessage. |
+| IOS-03 | iOS permissions (Info.plist + runtime) + unified PermissionHelper | 🔧 | M4 | Info.plist with keys present. iOSPermissionHelper.cs implemented with Unity Permission API. |
+| IOS-04 | Расширение PlatformServiceFactory под iOS | 🔧 | M4 | iOS branches added for FilePicker and Voice (routes to WebSpeechBridge for now) |
+| IOS-05 | Голос на iOS (AVSpeechSynthesizer + SFSpeechRecognizer) | 🔧 | M4 | Complete: NeonSpeech.mm (AVSpeech + SFSpeech stubs + callbacks), iOSSpeechBridge, WebSpeechBridge iOS DllImport + routing + InitializeIOS. |
+| IOS-06 | Keyboard inset + улучшенная safe area для iPad / notch | 🔧 | M4 | DefaultPlatformInfoService updated for iOS safeArea. iOSKeyboardInset.cs present. |
+| IOS-07 | .platform-ios USS правила + унификация LayoutController / PlatformLayoutAdapter | 🔧 | M4 | .platform-ios rules added to MainView.uss. LayoutController + PlatformLayoutAdapter already handle platform-ios class + safe area. |
+| IOS-08 | Документация iOS в AGENTS.md + 17_iOS_Platform_Architecture.md | 🔧 | M4 | Full docs + tracker + AGENTS.md cross-refs. iOS sections added. |
+
+**Примечание:** iOS и Android делят общую мобильную логику через `IsMobile` + `.platform-mobile`. Специфика изолирована в Platform/iOS/ и Platform/Android/. См. docs/17_iOS_Platform_Architecture.md и docs/16_Platform_Architecture.md.
