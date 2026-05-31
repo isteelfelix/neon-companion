@@ -175,7 +175,7 @@ Felix performs all real builds and device testing on Windows.
 ### Android code already implemented
 - Plugins/Android/AndroidManifest.xml (RECORD_AUDIO + storage permissions)
 - NeonFilePickerActivity.java and NeonSpeechRecognitionActivity.java
-- AndroidPermissionHelper, AndroidSpeechIntentHelper, AndroidSpeechRecognitionBridge
+- AndroidPermissionHelper, AndroidSpeechIntentHelper (AndroidSpeechRecognitionBridge legacy, not used; direct OnAndroidSpeechResult on WebSpeechBridge)
 - Full voice in WebSpeechBridge (TTS listeners + speech intent)
 - UI: .platform-android rules in MainView.uss + ChatView.uss + PlatformLayoutAdapter (safe area)
 

@@ -35,5 +35,9 @@
             <activity android:name="com.neoncompanion.speech.NeonSpeechRecognitionActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:exported="false" />
+
+            <activity android:name="com.neoncompanion.filepicker.NeonFilePickerActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
     </application>
 </manifest>

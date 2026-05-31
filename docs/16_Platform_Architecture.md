@@ -1,9 +1,9 @@
 # 16_Platform_Architecture.md
 
-**Версия:** 1.0  
+**Версия:** 1.1  
 **Дата:** 2026-05-31  
-**Статус:** Предложено для реализации  
-**Связанные задачи трекера:** PL-01 — PL-07
+**Статус:** Частично реализовано (core platform layer + filepicker + voice + permissions + safe area + UI adaptation; Build Profiles pending)  
+**Связанные задачи трекера:** PL-01 — PL-07 (см. актуальный статус в 12_Feature_Tracker.md)
 
 ## 1. Цели и ограничения
 

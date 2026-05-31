@@ -9,6 +9,7 @@ using NeonCompanion.Runtime.Donation;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.Plugins;
+using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Core
