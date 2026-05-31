@@ -2,7 +2,7 @@
 
 **Версия:** 1.1  
 **Дата:** 2026-05-31  
-**Статус:** Частично реализовано (core platform layer + filepicker + voice + permissions + safe area + UI adaptation; Build Profiles pending)  
+**Статус:** Частично реализовано (core platform layer + filepicker + voice + permissions + safe area + UI adaptation; Build Profile present (base for iOS) + device testing pending)  
 **Связанные задачи трекера:** PL-01 — PL-07 (см. актуальный статус в 12_Feature_Tracker.md)
 
 ## 1. Цели и ограничения
