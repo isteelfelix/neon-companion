@@ -135,3 +135,11 @@
 | P-01 | itch.io / GitHub Releases | 🔧 | M4 | Ручная публикация |
 | P-02 | Документация для контрибьюторов | 🔧 | M4 | |
 | P-03 | Донат-система | 🔧 | M4 | IDonationService |
+
+## Платформа и Android (M3+)
+| # | Фича | Статус | Спринт | Заметки |
+|---|------|--------|--------|---------|
+| PL-01 | Полная поддержка Android как целевой платформы | 🔧 | M3 | IL2CPP + Build Profiles, .aab для релиза |
+|| PL-02 | Доработка IFilePickerService под Android (нативный Java плагин NeonFilePickerActivity) | 🔧 | M3 | NeonFilePickerActivity.java + Intent + runtime permission via AndroidPermissionHelper + cache copy |\n|| PL-03 | Android permissions и AndroidManifest.xml | 🔧 | M3 | Создан Assets/Plugins/Android/AndroidManifest.xml (INTERNET, RECORD_AUDIO, storage). useCustomMainManifest=1 в профиле |\n|| PL-04 | Адаптация UI под мобильные экраны (тач, клавиатура, safe area, разные DPI) | 🔧 | M3 | PlatformLayoutAdapter + AndroidKeyboardInset.cs (поллинг видимости клавиатуры). Расширены USS правила. |\n| PL-05 | Голос на Android (TTS + SpeechRecognizer вместо DictationRecognizer) | 🔧 | M3 | Полная интеграция: NeonSpeechRecognitionActivity.java + AndroidSpeechIntentHelper + AndroidSpeechRecognitionBridge + OnAndroidSpeechResult в WebSpeechBridge + proper UtteranceProgressListener для TTS |
+| PL-06 | Тестирование и фиксы runtime на Android (persistentDataPath, IL2CPP stripping, 3D аватары) | 📋 | M3 | Только Felix на реальном устройстве |
+| PL-07 | Документация по сборке Android в AGENTS.md и README | ✅ | M3 | Полный раздел Android Build в AGENTS.md (пререквизиты, профили, код, runtime, тестирование, caveats). Architecture doc уже покрывает принципы. |

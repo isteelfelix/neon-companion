@@ -1430,3 +1430,72 @@
     padding-right: 10px;
     padding-top: 4px;
 }
+
+
+/* Platform mobile overrides for composer (Android support) */
+.app.platform-mobile .composer {
+    padding: 8px 10px;
+}
+
+.app.platform-mobile .composer__input {
+    font-size: 15px;
+    min-height: 44px;
+}
+
+.app.platform-android .composer {
+    padding-bottom: 16px; /* account for gesture nav */
+}
+
+
+/* Extended Android/mobile chat adaptations */
+.app.platform-mobile .message {
+    max-width: 85%;
+    font-size: 14px;
+    padding: 8px 12px;
+}
+
+.app.platform-mobile .message.user {
+    margin-left: 12%;
+}
+
+.app.platform-android .chat-scroll {
+    /* account for composer + nav */
+    padding-bottom: 60px;
+}
+
+.app.platform-mobile .composer__input {
+    font-size: 15px;
+    min-height: 44px;
+    padding: 8px 12px;
+}
+
+
+
+/* ============================================================
+   Android-specific chat enhancements (PL-04)
+   ============================================================ */
+
+.app.platform-android .composer {
+    padding-bottom: 28px;
+}
+
+.app.platform-android .message {
+    max-width: 85
+/* ============================================================
+   Android-specific chat enhancements (PL-04)
+   ============================================================ */
+
+.app.platform-android .composer {
+    padding-bottom: 28px;
+}
+
+.app.platform-android .message {
+    max-width: 85%;
+    font-size: 15px;
+    padding: 10px 14px;
+}
+
+.app.platform-mobile .composer__input {
+    font-size: 15px;
+    min-height: 40px;
+}

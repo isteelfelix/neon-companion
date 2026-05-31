@@ -1,5 +1,7 @@
 using System;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Platform;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK
@@ -21,6 +23,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             public VisualElement PlaceholderArea;
             public VisualElement SettingsPanel;
             public PanelResizeHandler PanelResizeHandler;
+
+            /// <summary>
+            /// Опционально. Если передан — будет применён Safe Area и платформенные классы.
+            /// </summary>
+            public IPlatformInfoService PlatformInfo;
         }
 
         private Deps _d;
@@ -49,6 +56,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.PanelResizeHandler.Init(_d.ResizeHandle, _d.AvatarPanel, _d.RailResizeHandle, _d.RailElement);
 
             UpdatePanelToggleTooltips();
+
+            ApplyPlatformLayout();
         }
 
         public void RegisterCallbacks()
@@ -94,15 +103,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_toggleLeftPanelBtn != null)
             {
                 _toggleLeftPanelBtn.tooltip = _leftPanelVisible
-                    ? LocalizationExtensions.Get("tooltip.panel.left.hide", "\u0421\u043a\u0440\u044b\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c \u0441\u0435\u0441\u0441\u0438\u0439")
-                    : LocalizationExtensions.Get("tooltip.panel.left.show", "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c \u0441\u0435\u0441\u0441\u0438\u0439");
+                    ? LocalizationExtensions.Get("tooltip.panel.left.hide", "Скрыть панель сессий")
+                    : LocalizationExtensions.Get("tooltip.panel.left.show", "Показать панель сессий");
             }
 
             if (_toggleRightPanelBtn != null)
             {
                 _toggleRightPanelBtn.tooltip = _rightPanelVisible
-                    ? LocalizationExtensions.Get("tooltip.panel.right.hide", "\u0421\u043a\u0440\u044b\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043a")
-                    : LocalizationExtensions.Get("tooltip.panel.right.show", "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043a");
+                    ? LocalizationExtensions.Get("tooltip.panel.right.hide", "Скрыть панель настроек")
+                    : LocalizationExtensions.Get("tooltip.panel.right.show", "Показать панель настроек");
             }
         }
 
@@ -115,6 +124,54 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_d.ThemesPanel, visible == _d.ThemesPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_d.PlaceholderArea, visible == _d.PlaceholderArea ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_d.SettingsPanel, visible == _d.SettingsPanel ? DisplayStyle.Flex : DisplayStyle.None);
+        }
+
+        /// <summary>
+        /// Применяет Safe Area и платформенные классы к root.
+        /// Вызывается автоматически в Init(), если PlatformInfo передан в Deps.
+        /// </summary>
+        public void ApplyPlatformLayout()
+        {
+            if (_d.Root == null || _d.PlatformInfo == null)
+                return;
+
+            var info = _d.PlatformInfo;
+            var safeArea = info.SafeArea;
+
+            // Применяем Safe Area как padding к корневому элементу
+            // На десктопе SafeArea = полный экран, padding будет 0
+            _d.Root.style.paddingLeft = safeArea.x;
+            _d.Root.style.paddingRight = Screen.width - safeArea.xMax;
+            _d.Root.style.paddingTop = Screen.height - safeArea.yMax;
+            _d.Root.style.paddingBottom = safeArea.y;
+
+            // Добавляем полезные классы для USS-адаптации
+            if (info.IsMobile)
+            {
+                _d.Root.AddToClassList("platform-mobile");
+            }
+
+            if (Application.platform == RuntimePlatform.Android)
+            {
+                _d.Root.AddToClassList("platform-android");
+            }
+            else if (Application.platform == RuntimePlatform.IPhonePlayer)
+            {
+                _d.Root.AddToClassList("platform-ios");
+            }
+        }
+
+        /// <summary>
+        /// Применяет Safe Area и платформенные классы.
+        /// Можно вызывать повторно, если сервис стал доступен позже (после инициализации).
+        /// </summary>
+        public void ApplyPlatformLayout(IPlatformInfoService info)
+        {
+            if (_d.Root == null || info == null)
+                return;
+
+            _d.PlatformInfo = info;
+            ApplyPlatformLayout();
         }
 
         private static void SetDisplay(VisualElement element, DisplayStyle display)

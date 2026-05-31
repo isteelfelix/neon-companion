@@ -12,6 +12,7 @@ using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Donation;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
+using NeonCompanion.Runtime.UI.Platform;
 using NeonCompanion.Runtime.UI.Avatars;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
@@ -1077,6 +1078,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 var app = await GetAppAsync();
                 if (!_isBound || app == null) return;
+                // Применяем Safe Area и платформенные классы (PL-04)
+                new PlatformLayoutAdapter().Apply(_root, app.Services.GetRequired<IPlatformInfoService>());
                 await _settingsController.BindLocalizationEventsAsync();
                 IDonationService donationService = null;
                 app.Services.TryGet(out donationService);

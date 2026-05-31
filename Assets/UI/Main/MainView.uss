@@ -595,3 +595,164 @@
 .quit-dialog__actions > Button {
     margin-left: 8px;
 }
+
+
+/* ============================================================
+   Platform & Mobile adaptations (Android support - PL-04)
+   .app gets .platform-mobile / .platform-android from PlatformLayoutAdapter
+   Safe Area padding is set in C# on the root
+   ============================================================ */
+
+.app.platform-mobile {
+    /* Base mobile adjustments */
+}
+
+.app.platform-mobile .rail {
+    width: 180px; /* more compact sidebar */
+    padding: 10px 8px;
+}
+
+.app.platform-mobile .nav__item {
+    height: 44px; /* improved touch targets */
+    padding: 6px 8px;
+}
+
+.app.platform-mobile .brand__name {
+    font-size: 13px;
+}
+
+.app.platform-android .composer {
+    /* extra breathing room for system navigation */
+    padding-bottom: 12px;
+}
+
+.app.platform-mobile .composer__send,
+.app.platform-mobile .iconbtn {
+    min-width: 44px;
+    min-height: 44px; /* larger tap areas */
+}
+
+
+/* ============================================================
+   Extended mobile / Android adaptations (full readiness)
+   Touch targets, panels, fonts, composer, history for small screens
+*/
+.app.platform-mobile {
+    /* General touch-friendly */
+    --touch-target: 44px;
+}
+
+.app.platform-mobile .nav__item,
+.app.platform-mobile .iconbtn,
+.app.platform-mobile .composer__send {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.app.platform-mobile .rail {
+    width: 160px;
+    padding: 8px 6px;
+}
+
+.app.platform-mobile .brand__name {
+    font-size: 12px;
+}
+
+.app.platform-mobile .history__item {
+    min-height: 42px;
+    font-size: 13px;
+}
+
+.app.platform-android .app__content,
+.app.platform-android .main-content {
+    /* extra bottom space if needed */
+    padding-bottom: 8px;
+}
+
+.app.platform-mobile .settings-panel,
+.app.platform-mobile .avatar-panel {
+    /* make side panels behave better on portrait */
+    max-width: 85vw;
+}
+
+
+/* Additional mobile/Android polish for full readiness */
+.app.platform-mobile .settings-panel {
+    font-size: 14px;
+}
+
+.app.platform-mobile .history-list {
+    font-size: 13px;
+}
+
+.app.platform-android .topbar {
+    padding-top: 8px;
+}
+
+/* Full mobile readiness - additional panels and components */
+.app.platform-mobile .avatar-panel {
+    max-height: 45vh;
+}
+
+.app.platform-mobile .settings-content {
+    padding: 8px;
+    font-size: 13px;
+}
+
+.app.platform-android .main-content {
+    padding-bottom: 24px; /* extra for gesture navigation */
+}
+
+.app.platform-mobile .panel-header {
+    min-height: 44px;
+}
+
+
+/* ============================================================
+   Android / Mobile enhancements (PL-04 continued)
+   - Better touch targets
+   - Composer & keyboard handling prep
+   - Gesture nav / notch compensation
+   ============================================================ */
+
+.app.platform-mobile .iconbtn,
+.app.platform-mobile .composer__send,
+.app.platform-mobile .nav__item {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+.app.platform-android .composer {
+    padding-bottom: calc(var(--safe-area-bottom, 0px) + 12px);
+    padding-top: 8px;
+}
+
+.app.platform-android .composer__input {
+    min-height: 42px;
+    font-size: 15px;
+}
+
+/* Voice / mic button should be very tappable on Android */
+.app.platform-android .iconbtn--mic,
+.app.platform-android .icon--headphones {
+    min-width: 48px;
+    min-height: 48px;
+    background-size: 24px 24px;
+}
+
+/* Extra bottom space for Android navigation bar / gesture area */
+.app.platform-android .app__content {
+    padding-bottom: 32px;
+}
+
+/* Smaller rail on very small Android screens (when rail is shown) */
+.app.platform-android .rail {
+    width: 200px;
+}
+
+/* History and settings list items - better tap area */
+.app.platform-mobile .history__item,
+.app.platform-mobile .settings-item {
+    min-height: 48px;
+    padding: 10px 12px;
+}

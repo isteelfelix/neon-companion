@@ -35,7 +35,16 @@ namespace NeonCompanion.Runtime.Core
             var services = new ServiceRegistry();
             var storage = new JsonFileStorage();
             var secrets = new DeviceSecretStore(storage);
-            var filePicker = new DefaultFilePickerService();
+
+            // Платформенные сервисы создаются централизованно через фабрику
+            // (см. docs/16_Platform_Architecture.md)
+            var filePicker = PlatformServiceFactory.CreateFilePickerService();
+            var platformInfo = PlatformServiceFactory.CreatePlatformInfoService();
+            var voiceService = PlatformServiceFactory.CreateVoiceService(gameObject);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            AndroidPermissionHelper.RequestPermission(AndroidPermissionHelper.RECORD_AUDIO);
+            AndroidPermissionHelper.RequestPermission(AndroidPermissionHelper.READ_EXTERNAL_STORAGE);
+#endif
 
             var providers = new ProviderConfigRepository(storage, secrets);
             var sessions = new ChatSessionRepository(storage);
@@ -84,6 +93,8 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IJsonStorage>(storage);
             services.Register<ISecretStore>(secrets);
             services.Register<IFilePickerService>(filePicker);
+            services.Register<IPlatformInfoService>(platformInfo);
+            services.Register<IVoiceService>(voiceService);
             services.Register<IProviderConfigRepository>(providers);
             services.Register<IChatSessionRepository>(sessions);
             services.Register<IAvatarRepository>(avatars);

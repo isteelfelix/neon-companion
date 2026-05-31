@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using NeonCompanion.Runtime.Core;
 using UnityEngine;
+
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 using UnityEngine.Windows.Speech;
 #endif
@@ -71,7 +72,11 @@ namespace NeonCompanion.Runtime.Voice
             if (!_isAvailable || _isRecording)
                 return;
 
-#if UNITY_WEBGL && !UNITY_EDITOR
+#if UNITY_ANDROID && !UNITY_EDITOR
+            _isRecording = true;
+            AndroidSpeechIntentHelper.StartSpeechRecognition(gameObject.name);
+            return;
+#elif UNITY_WEBGL && !UNITY_EDITOR
             NeonWebSpeech_StartRecognition(gameObject.name);
             _isRecording = true;
 #elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
@@ -121,8 +126,6 @@ namespace NeonCompanion.Runtime.Voice
             }
             string utteranceId = Guid.NewGuid().ToString("N");
             _androidTts.Call<int>("speak", text, 0, null, utteranceId);
-            float duration = Mathf.Clamp(0.45f + (text.Length * 0.055f), 0.5f, 12f);
-            StartCoroutine(FinishSpeakAfter(duration));
 #else
             NeonLogger.Log("TTS is not supported on this platform backend.");
             _isSpeaking = false;
@@ -143,15 +146,6 @@ namespace NeonCompanion.Runtime.Voice
             _isSpeaking = false;
             OnPlaybackComplete?.Invoke();
         }
-
-#if UNITY_ANDROID && !UNITY_EDITOR
-        private System.Collections.IEnumerator FinishSpeakAfter(float seconds)
-        {
-            yield return new WaitForSecondsRealtime(seconds);
-            _isSpeaking = false;
-            OnPlaybackComplete?.Invoke();
-        }
-#endif
 
         private bool InitializePlatform()
         {
@@ -215,7 +209,34 @@ namespace NeonCompanion.Runtime.Voice
             {
                 using var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
                 using var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                _androidTts = new AndroidJavaObject("android.speech.tts.TextToSpeech", activity, null);
+
+                _androidTts = new AndroidJavaObject("android.speech.tts.TextToSpeech", activity, new AndroidJavaProxy("android.speech.tts.TextToSpeech$OnInitListener")
+                {
+                    public void onInit(int status)
+                    {
+                        if (status == 0) // TextToSpeech.SUCCESS
+                        {
+                            _androidTts.Call<int>("setLanguage", new AndroidJavaObject("java.util.Locale", "en", "US"));
+                        }
+                    }
+                });
+
+                // Proper completion listener instead of time estimate
+                _androidTts.Call("setOnUtteranceProgressListener", new AndroidJavaProxy("android.speech.tts.UtteranceProgressListener")
+                {
+                    public void onStart(string utteranceId) { }
+                    public void onDone(string utteranceId)
+                    {
+                        _isSpeaking = false;
+                        OnPlaybackComplete?.Invoke();
+                    }
+                    public void onError(string utteranceId)
+                    {
+                        _isSpeaking = false;
+                        OnPlaybackComplete?.Invoke();
+                    }
+                });
+
                 return _androidTts != null;
             }
             catch (Exception ex)
@@ -245,5 +266,16 @@ namespace NeonCompanion.Runtime.Voice
             _isSpeaking = false;
             OnPlaybackComplete?.Invoke();
         }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        public void OnAndroidSpeechResult(string text)
+        {
+            _isRecording = false;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                OnSpeechRecognized?.Invoke(text.Trim());
+            }
+        }
+#endif
     }
 }

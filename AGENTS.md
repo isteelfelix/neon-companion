@@ -48,6 +48,13 @@ Assets/Scripts/Runtime/
   Donation/         IDonationService
   Platform/         IFilePickerService
 
+**Важно:** Полная архитектура платформенной поддержки (Android + desktop) описана в `docs/16_Platform_Architecture.md`.
+Все изменения, связанные с мобильной версией, должны следовать правилам из этого документа.
+Ключевые изменения:
+- PlatformServiceFactory для создания платформенных сервисов
+- AppBootstrap использует фабрику вместо прямого new
+- IPlatformInfoService для safe area и информации об устройстве
+
 Assets/UI/          UXML templates + USS styles per screen
   Chat/             ChatView.uxml, ChatView.uss
   Providers/        ProvidersView.uxml, ProvidersView.uss
@@ -151,3 +158,42 @@ No CI/CD. Felix builds locally via Unity Editor (`File → Build Settings`). Ver
 ## When In doubt
 
 Read the code. The source of truth is `Assets/Scripts/Runtime/`, not the docs. If docs and code disagree, code wins — then fix the docs.
+
+## Android Build (PL-01 / PL-07)
+
+Felix performs all real builds and device testing on Windows.
+
+### Prerequisites (Unity Hub)
+- Unity 6.2+ with modules: Android Build Support, OpenJDK, Android SDK & NDK Tools, Android SDK Platform (API 34+).
+
+### Build Profile
+- Use `Android` Build Profile (Assets/Settings/Build Profiles/Android.asset).
+- Package name: com.isteelfelix.neoncompanion
+- IL2CPP, ARM64 primary, min API 26.
+- Build .aab (Play) or .apk (sideload).
+
+### Android code already implemented
+- Plugins/Android/AndroidManifest.xml (RECORD_AUDIO + storage permissions)
+- NeonFilePickerActivity.java and NeonSpeechRecognitionActivity.java
+- AndroidPermissionHelper, AndroidSpeechIntentHelper, AndroidSpeechRecognitionBridge
+- Full voice in WebSpeechBridge (TTS listeners + speech intent)
+- UI: .platform-android rules in MainView.uss + ChatView.uss + PlatformLayoutAdapter (safe area)
+
+### Runtime on Android
+- persistentDataPath for storage
+- Early permissions in AppBootstrap
+- Custom Activities + SendMessage bridges for picker/speech
+- Keyboard/safe area via IPlatformInfoService + USS
+
+### Device testing
+1. Build from Android profile.
+2. adb install the apk.
+3. Test mic/TTS, file picker, layout on real device.
+4. Use adb logcat for debugging.
+
+### Caveats
+- No server builds.
+- Watch IL2CPP stripping.
+- Update the Android.asset profile for changes.
+
+See docs/16_Platform_Architecture.md for full platform rules.

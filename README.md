@@ -112,3 +112,17 @@ Maintained by iSteelFelix with contributions from the community.
 
 - **iSteelFelix** — creator, owner, product direction, engineering
 - **Neon** — AI companion, in-repo contributor, co-builder of `neon-companion`
+
+
+## Android Support
+
+Android build is in active development (M3).
+
+- Full voice support (TTS + speech recognition via system intent)
+- Native file picker
+- Runtime permissions
+- Safe area + mobile UI adaptations
+- See `AGENTS.md` → Android Build section for build instructions
+- See `docs/16_Platform_Architecture.md` for architecture
+
+Current status: Code complete. Awaiting device testing and runtime fixes.

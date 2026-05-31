@@ -126,20 +126,31 @@ namespace NeonCompanion.Runtime.Platform
                 return _androidPickCompletion.Task;
 
             _androidPickCompletion = new TaskCompletionSource<string>();
-            var bridge = AndroidFilePickerBridge.GetOrCreate(OnAndroidImagePicked);
 
-            try
-            {
-                var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                var picker = new AndroidJavaClass("com.neoncompanion.filepicker.NeonFilePickerActivity");
-                picker.CallStatic("pick", activity, bridge.gameObject.name);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[NeonCompanion] Android file picker failed: {ex.Message}");
-                _androidPickCompletion.TrySetResult(null);
-            }
+            AndroidPermissionHelper.RequestPermission(
+                AndroidPermissionHelper.READ_EXTERNAL_STORAGE,
+                onGranted: () =>
+                {
+                    var bridge = AndroidFilePickerBridge.GetOrCreate(OnAndroidImagePicked);
+
+                    try
+                    {
+                        var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                        var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+                        var picker = new AndroidJavaClass("com.neoncompanion.filepicker.NeonFilePickerActivity");
+                        picker.CallStatic("pick", activity, bridge.gameObject.name);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[NeonCompanion] Android file picker failed: {ex.Message}");
+                        _androidPickCompletion.TrySetResult(null);
+                    }
+                },
+                onDenied: () =>
+                {
+                    Debug.LogWarning("[NeonCompanion] Storage permission denied for file picker");
+                    _androidPickCompletion.TrySetResult(null);
+                });
 
             return _androidPickCompletion.Task;
         }

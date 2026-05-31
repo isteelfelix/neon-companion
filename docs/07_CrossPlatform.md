@@ -1,30 +1,14 @@
 # 07_CrossPlatform.md
 
-## Поддерживаемые платформы (MVP)
+**Устаревший документ.** Полная архитектура платформенной поддержки описана в:
 
-- Windows (x64)
-- Linux (x64)
-- Android
+→ **[16_Platform_Architecture.md](16_Platform_Architecture.md)**
 
-## Планируемые платформы
+### Краткая сводка (MVP)
 
-- iOS
-- macOS
-- WebGL (ограниченно)
+- **Поддерживаемые платформы:** Windows (x64), Android
+- **Сцены:** Общие для всех платформ (Boot → Loading → Main)
+- **Основной механизм:** Unity 6 Build Profiles + Platform Abstraction Layer через ServiceRegistry
+- **UI:** UITK + USS классы + минимальный runtime-код
 
-## Особенности сборок
-
-### Desktop
-- Полноценный файловый доступ
-- Возможность загрузки аватаров из локальных файлов
-- Desktop может получить premium/realtime слой: 3D avatar, blendshapes, visemes, live lipsync
-- Генеративные video/avatar pipelines должны быть внешним tooling/backend step, не обязательной частью клиента
-
-### Mobile (Android)
-- Ограничения на доступ к файлам
-- Использование `Application.persistentDataPath`
-- Адаптивный UI
-- Основной avatar path для mobile/weak devices — лёгкие 2D sprite-sheet clips/atlases без GPU-зависимости
-
-## Рекомендации
-Использовать Unity's Platform Defines (`#if UNITY_ANDROID`, `#if UNITY_STANDALONE`) для разделения логики.
+Подробные правила, структура папок, примеры кода и план реализации — в `16_Platform_Architecture.md`.
