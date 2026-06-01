@@ -41,8 +41,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 return true;
             }
-            // Support common italic markers (fixes cases where AI uses * or _)
-            if (text.IndexOf("*", StringComparison.Ordinal) >= 0 || text.IndexOf("_", StringComparison.Ordinal) >= 0)
+            if (text.IndexOf("~~", StringComparison.Ordinal) >= 0)
+            {
+                return true;
+            }
+            if (text.IndexOf("*", StringComparison.Ordinal) >= 0)
+            {
+                return true;
+            }
+            // Table separator row
+            if (text.IndexOf("|---|", StringComparison.Ordinal) >= 0 || text.IndexOf("|:--", StringComparison.Ordinal) >= 0)
             {
                 return true;
             }
@@ -58,8 +66,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 return true;
             }
-            // Detect ATX headers (# )
-            if (text.IndexOf("# ", StringComparison.Ordinal) >= 0 || text.StartsWith("#", StringComparison.Ordinal))
+            // ATX headers
+            if (text.IndexOf("\n#", StringComparison.Ordinal) >= 0 || text.StartsWith("#", StringComparison.Ordinal))
+            {
+                return true;
+            }
+            // Blockquotes
+            if (text.IndexOf("\n> ", StringComparison.Ordinal) >= 0 || text.StartsWith("> ", StringComparison.Ordinal))
             {
                 return true;
             }
@@ -146,6 +159,92 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
+        private static bool IsHorizontalRule(string trimmed)
+        {
+            if (trimmed.Length < 3) return false;
+            char c = trimmed[0];
+            if (c != '-' && c != '_' && c != '=' && c != '*') return false;
+            int nonSpace = 0;
+            for (int k = 0; k < trimmed.Length; k++)
+            {
+                if (trimmed[k] != c && trimmed[k] != ' ') return false;
+                if (trimmed[k] == c) nonSpace++;
+            }
+            return nonSpace >= 3;
+        }
+
+        private static bool IsTableSeparatorRow(string line)
+        {
+            string trimmed = line.Trim();
+            for (int k = 0; k < trimmed.Length; k++)
+            {
+                char c = trimmed[k];
+                if (c != '|' && c != '-' && c != ':' && c != ' ') return false;
+            }
+            return trimmed.IndexOf('-') >= 0;
+        }
+
+        private static string[] ParseTableCells(string line)
+        {
+            string trimmed = line.Trim();
+            if (trimmed.Length > 0 && trimmed[0] == '|')
+                trimmed = trimmed.Substring(1);
+            if (trimmed.Length > 0 && trimmed[trimmed.Length - 1] == '|')
+                trimmed = trimmed.Substring(0, trimmed.Length - 1);
+            string[] parts = trimmed.Split('|');
+            for (int k = 0; k < parts.Length; k++)
+                parts[k] = parts[k].Trim();
+            return parts;
+        }
+
+        private static void RenderTable(VisualElement root, List<string[]> headerRows, List<string[]> dataRows)
+        {
+            var table = new VisualElement();
+            table.AddToClassList("markdown-table");
+
+            for (int ri = 0; ri < headerRows.Count; ri++)
+            {
+                string[] row = headerRows[ri];
+                var rowEl = new VisualElement();
+                rowEl.AddToClassList("markdown-table-row");
+                rowEl.AddToClassList("markdown-table-row--header");
+                for (int ci = 0; ci < row.Length; ci++)
+                {
+                    var cellEl = new VisualElement();
+                    cellEl.AddToClassList("markdown-table-cell");
+                    cellEl.AddToClassList("markdown-table-cell--header");
+                    if (ci == row.Length - 1)
+                        cellEl.AddToClassList("markdown-table-cell--last");
+                    RenderInline(cellEl, row[ci]);
+                    rowEl.Add(cellEl);
+                }
+                table.Add(rowEl);
+            }
+
+            for (int ri = 0; ri < dataRows.Count; ri++)
+            {
+                string[] row = dataRows[ri];
+                var rowEl = new VisualElement();
+                rowEl.AddToClassList("markdown-table-row");
+                if (ri % 2 == 1)
+                    rowEl.AddToClassList("markdown-table-row--alt");
+                if (ri == dataRows.Count - 1)
+                    rowEl.AddToClassList("markdown-table-row--last");
+                for (int ci = 0; ci < row.Length; ci++)
+                {
+                    var cellEl = new VisualElement();
+                    cellEl.AddToClassList("markdown-table-cell");
+                    if (ci == row.Length - 1)
+                        cellEl.AddToClassList("markdown-table-cell--last");
+                    RenderInline(cellEl, row[ci]);
+                    rowEl.Add(cellEl);
+                }
+                table.Add(rowEl);
+            }
+
+            root.Add(table);
+        }
+
         private static void RenderNonCodeBlocks(VisualElement root, string text)
         {
             if (string.IsNullOrEmpty(text))
@@ -176,6 +275,89 @@ namespace NeonCompanion.Runtime.UI.UITK
                     flushPara();
                     continue;
                 }
+
+                // Horizontal rule: ---, ___, ===, *** (3+ same chars, spaces allowed)
+                if (IsHorizontalRule(trimmed))
+                {
+                    flushPara();
+                    var hr = new VisualElement();
+                    hr.AddToClassList("markdown-hr");
+                    root.Add(hr);
+                    continue;
+                }
+
+                // ATX headers: # H1 .. ###### H6
+                if (trimmed[0] == '#')
+                {
+                    int level = 0;
+                    while (level < trimmed.Length && trimmed[level] == '#')
+                    {
+                        level++;
+                    }
+                    if (level <= 6 && level < trimmed.Length && trimmed[level] == ' ')
+                    {
+                        flushPara();
+                        string headerText = trimmed.Substring(level + 1);
+                        var header = new Label(headerText);
+                        header.AddToClassList("markdown-h" + level.ToString());
+                        root.Add(header);
+                        continue;
+                    }
+                }
+
+                // Blockquote: > text
+                if (trimmed.StartsWith("> ") || trimmed == ">")
+                {
+                    flushPara();
+                    string quoteText = trimmed.Length > 2 ? trimmed.Substring(2) : string.Empty;
+                    var quote = new VisualElement();
+                    quote.AddToClassList("markdown-blockquote");
+                    if (!string.IsNullOrEmpty(quoteText))
+                    {
+                        RenderInline(quote, quoteText);
+                    }
+                    root.Add(quote);
+                    continue;
+                }
+
+                // Markdown table: collect consecutive | rows
+                if (trimmed[0] == '|')
+                {
+                    flushPara();
+                    List<string> tableLines = new List<string>();
+                    while (li < lines.Length)
+                    {
+                        string tl = lines[li].TrimStart(' ', '\t');
+                        if (tl.Length == 0 || tl[0] != '|') break;
+                        tableLines.Add(tl);
+                        li++;
+                    }
+                    li--;
+
+                    bool hasHeader = tableLines.Count >= 2 && IsTableSeparatorRow(tableLines[1]);
+                    List<string[]> headerRows = new List<string[]>();
+                    List<string[]> dataRows = new List<string[]>();
+
+                    for (int ti = 0; ti < tableLines.Count; ti++)
+                    {
+                        if (hasHeader && ti == 0)
+                        {
+                            headerRows.Add(ParseTableCells(tableLines[ti]));
+                        }
+                        else if (hasHeader && ti == 1)
+                        {
+                            // separator row — skip
+                        }
+                        else
+                        {
+                            dataRows.Add(ParseTableCells(tableLines[ti]));
+                        }
+                    }
+
+                    RenderTable(root, headerRows, dataRows);
+                    continue;
+                }
+
                 bool isBullet = trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || trimmed.StartsWith("+ ");
                 if (isBullet)
                 {
@@ -183,9 +365,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                     string itemText = trimmed.Substring(2);
                     var bulletRow = new VisualElement();
                     bulletRow.AddToClassList("markdown-bullet");
-                    var marker = new Label("•");
-                    marker.AddToClassList("markdown-bullet-marker");
-                    bulletRow.Add(marker);
+                    var markerLabel = new Label("•");
+                    markerLabel.AddToClassList("markdown-bullet-marker");
+                    bulletRow.Add(markerLabel);
                     var content = new VisualElement();
                     content.style.flexGrow = 1;
                     content.style.flexDirection = FlexDirection.Row;
@@ -196,8 +378,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     root.Add(bulletRow);
                     continue;
                 }
-                int markerLen = 0;
-                string numMarker = null;
+
                 if (trimmed.Length > 2 && char.IsDigit(trimmed[0]))
                 {
                     int j = 1;
@@ -208,14 +389,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (j < trimmed.Length && trimmed[j] == '.' && j + 1 < trimmed.Length && trimmed[j + 1] == ' ')
                     {
                         flushPara();
-                        markerLen = j + 2;
-                        numMarker = trimmed.Substring(0, j + 1);
-                        string itemText = trimmed.Substring(markerLen);
+                        string numMarker = trimmed.Substring(0, j + 1);
+                        string itemText = trimmed.Substring(j + 2);
                         var numRow = new VisualElement();
                         numRow.AddToClassList("markdown-numbered");
-                        var marker = new Label(numMarker + " ");
-                        marker.AddToClassList("markdown-numbered-marker");
-                        numRow.Add(marker);
+                        var numMarkerLabel = new Label(numMarker + " ");
+                        numMarkerLabel.AddToClassList("markdown-numbered-marker");
+                        numRow.Add(numMarkerLabel);
                         var content = new VisualElement();
                         content.style.flexGrow = 1;
                         content.style.flexDirection = FlexDirection.Row;
@@ -227,6 +407,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         continue;
                     }
                 }
+
                 paraBuffer.Add(trimmed);
             }
             flushPara();
@@ -241,21 +422,41 @@ namespace NeonCompanion.Runtime.UI.UITK
             int pos = 0;
             while (pos < text.Length)
             {
-                int nextBold = text.IndexOf("**", pos, StringComparison.Ordinal);
-                int nextItalic = text.IndexOf("*", pos, StringComparison.Ordinal);
-                int nextCode = text.IndexOf("`", pos, StringComparison.Ordinal);
-                int nextLink = text.IndexOf("[", pos, StringComparison.Ordinal);
+                int nextTriple = text.IndexOf("***", pos, StringComparison.Ordinal);
+                int nextBold   = text.IndexOf("**",  pos, StringComparison.Ordinal);
+                int nextStrike = text.IndexOf("~~",  pos, StringComparison.Ordinal);
+                int nextItalic = text.IndexOf("*",   pos, StringComparison.Ordinal);
+                int nextCode   = text.IndexOf("`",   pos, StringComparison.Ordinal);
+                int nextLink   = text.IndexOf("[",   pos, StringComparison.Ordinal);
+
                 int next = -1;
                 string marker = null;
+
+                // Triple *** beats ** and * at same position
+                if (nextTriple >= 0 && (next < 0 || nextTriple < next))
+                {
+                    next = nextTriple;
+                    marker = "***";
+                }
+                // ** beats * at same position
                 if (nextBold >= 0 && (next < 0 || nextBold < next))
                 {
                     next = nextBold;
                     marker = "**";
                 }
+                if (nextStrike >= 0 && (next < 0 || nextStrike < next))
+                {
+                    next = nextStrike;
+                    marker = "~~";
+                }
+                // * wins only if strictly before ** and ***
                 if (nextItalic >= 0 && (next < 0 || nextItalic < next))
                 {
-                    next = nextItalic;
-                    marker = "*";
+                    if ((nextBold < 0 || nextItalic != nextBold) && (nextTriple < 0 || nextItalic != nextTriple))
+                    {
+                        next = nextItalic;
+                        marker = "*";
+                    }
                 }
                 if (nextCode >= 0 && (next < 0 || nextCode < next))
                 {
@@ -267,6 +468,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     next = nextLink;
                     marker = "[";
                 }
+
+                // Plain text before the nearest marker
                 if (next < 0 || next > pos)
                 {
                     int end = (next >= 0 ? next : text.Length);
@@ -280,6 +483,31 @@ namespace NeonCompanion.Runtime.UI.UITK
                     pos = end;
                     continue;
                 }
+
+                if (marker == "***")
+                {
+                    int close = text.IndexOf("***", pos + 3, StringComparison.Ordinal);
+                    if (close >= 0)
+                    {
+                        string inner = text.Substring(pos + 3, close - (pos + 3));
+                        var boldItal = new Label(inner);
+                        boldItal.AddToClassList("transcript__body");
+                        boldItal.AddToClassList("markdown-bold");
+                        boldItal.AddToClassList("markdown-italic");
+                        parent.Add(boldItal);
+                        pos = close + 3;
+                        continue;
+                    }
+                    else
+                    {
+                        var label = new Label("***");
+                        label.AddToClassList("transcript__body");
+                        parent.Add(label);
+                        pos += 3;
+                        continue;
+                    }
+                }
+
                 if (marker == "**")
                 {
                     int close = text.IndexOf("**", pos + 2, StringComparison.Ordinal);
@@ -302,7 +530,31 @@ namespace NeonCompanion.Runtime.UI.UITK
                         continue;
                     }
                 }
-                else if (marker == "*")
+
+                if (marker == "~~")
+                {
+                    int close = text.IndexOf("~~", pos + 2, StringComparison.Ordinal);
+                    if (close >= 0)
+                    {
+                        string inner = text.Substring(pos + 2, close - (pos + 2));
+                        var strike = new Label(inner);
+                        strike.AddToClassList("transcript__body");
+                        strike.AddToClassList("markdown-strike");
+                        parent.Add(strike);
+                        pos = close + 2;
+                        continue;
+                    }
+                    else
+                    {
+                        var label = new Label("~~");
+                        label.AddToClassList("transcript__body");
+                        parent.Add(label);
+                        pos += 2;
+                        continue;
+                    }
+                }
+
+                if (marker == "*")
                 {
                     int close = text.IndexOf("*", pos + 1, StringComparison.Ordinal);
                     if (close >= 0)
@@ -324,7 +576,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                         continue;
                     }
                 }
-                else if (marker == "`")
+
+                if (marker == "`")
                 {
                     int close = text.IndexOf("`", pos + 1, StringComparison.Ordinal);
                     if (close >= 0)
@@ -346,7 +599,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                         continue;
                     }
                 }
-                else if (marker == "[")
+
+                if (marker == "[")
                 {
                     int closeBracket = text.IndexOf("]", pos + 1, StringComparison.Ordinal);
                     if (closeBracket >= 0)
@@ -378,12 +632,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                             }
                         }
                     }
-                    var plain = new Label("[");
-                    plain.AddToClassList("transcript__body");
-                    parent.Add(plain);
+                    var plain2 = new Label("[");
+                    plain2.AddToClassList("transcript__body");
+                    parent.Add(plain2);
                     pos += 1;
                     continue;
                 }
+
                 pos++;
             }
         }

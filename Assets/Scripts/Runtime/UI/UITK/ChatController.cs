@@ -2585,9 +2585,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
         {
             VisualElement bodyElement;
-            if (isAssistant && !string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
+            if (!string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
             {
                 bodyElement = MarkdownRenderer.Render(text);
+                if (!isAssistant)
+                    bodyElement.AddToClassList("transcript__body--user");
             }
             else
             {
