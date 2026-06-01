@@ -90,7 +90,7 @@
 | U-39 | Ветвление диалога | 📋 | M3 | |
 | U-40 | Звуки уведомлений | ✅ | M2 | Verified: PCM beep plays on new assistant reply |
 | U-41 | Отображение картинок в чате | ❌ | M2 | Broken: attachment inserts text token [attachment: filename] not actual image upload. Agent sees text token, not image data. Need multipart upload or base64 via API |
-| U-42 | Вставка изображений из буфера обмена | ⏳ | M2 | Partially fixed: text paste works (004941c), image paste detects file paths but upload still broken |
+| U-42 | Вставка изображений из буфера обмена | ⏳ | M2 | Fixed in fff8d2d: full Windows clipboard bitmap support (PNG/JFIF/CF_DIB via user32+kernel32 P/Invoke), DIB→PNG conversion, text paste no longer intercepted. Needs Felix review |
 | U-43 | Мульти-агент чат | 📋 | M3 | |
 | U-44 | Drag-and-drop файлов в чат | ❌ | M2 | Broken: nothing can be dragged into app window at all |
 | U-45 | Очередь сообщений | ✅ | M2 | Verified: queue visible when sending while response in progress |
