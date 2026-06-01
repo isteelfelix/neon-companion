@@ -90,7 +90,7 @@
 | U-39 | Ветвление диалога | 📋 | M3 | |
 | U-40 | Звуки уведомлений | ✅ | M2 | Verified: PCM beep plays on new assistant reply |
 | U-41 | Отображение картинок в чате | ❌ | M2 | Broken: attachment inserts text token [attachment: filename] not actual image upload. Agent sees text token, not image data. Need multipart upload or base64 via API |
-| U-42 | Вставка изображений из буфера обмена | ⏳ | M2 | Partially fixed: text paste works (004941c), image paste detects file paths but upload still broken |
+| U-42 | Вставка изображений из буфера обмена | ✅ | M2 | Verified by Felix: full Windows clipboard bitmap support (PNG/JFIF/CF_DIB via P/Invoke), DIB→PNG conversion, text paste no longer intercepted, composer preview works |
 | U-43 | Мульти-агент чат | 📋 | M3 | |
 | U-44 | Drag-and-drop файлов в чат | ❌ | M2 | Broken: nothing can be dragged into app window at all |
 | U-45 | Очередь сообщений | ✅ | M2 | Verified: queue visible when sending while response in progress |
@@ -100,6 +100,7 @@
 | U-49 | Входящие вложения от AI | ❌ | M2 | Broken: agent sends MEDIA:/path as plain text, app doesn't recognize MEDIA: protocol or render file attachments |
 | U-50 | Баг: анимированный аватар в вкладке Статика | ✅ | M2 | Verified by Felix: mode check before null guard + HideAllAvatarImageOverlays |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
+| U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
