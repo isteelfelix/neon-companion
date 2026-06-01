@@ -1,4 +1,5 @@
 using NeonCompanion.Runtime.Api;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
@@ -60,6 +61,47 @@ namespace NeonCompanion.Runtime.Core
             var modelDiscoveryService = new ModelDiscoveryService(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
 
+            // Backend selector — global mode switch (Hermes vs OpenAI)
+            var backendSelector = gameObject.AddComponent<GlobalBackendSelector>();
+            backendSelector.Initialize(
+                hermesWsUrl: "wss://neon-dev.top/api/ws",
+                hermesRestUrl: "https://neon-dev.top",
+                settingsRepo: settings,
+                secretStore: secrets
+            );
+
+            // Load saved backend mode
+            var savedSettings = settings.Load();
+            if (savedSettings != null)
+            {
+                backendSelector.LoadFromSettings(savedSettings);
+                // Apply saved Hermes token
+                string savedToken = secrets.GetSecret("hermes_token");
+                if (!string.IsNullOrEmpty(savedToken))
+                    backendSelector.HermesToken = savedToken;
+            }
+
+            // Wire backend mode changes to ChatService transport
+            backendSelector.OnModeChanged += mode =>
+            {
+                if (mode == BackendMode.Hermes && backendSelector.SessionManager != null)
+                    chatService.SetTransport(backendSelector.SessionManager);
+                else
+                    chatService.SetTransport(null);
+            };
+
+            // Apply initially loaded mode too (LoadFromSettings does not emit OnModeChanged)
+            if (backendSelector.CurrentMode == BackendMode.Hermes && backendSelector.SessionManager != null)
+                chatService.SetTransport(backendSelector.SessionManager);
+            else
+                chatService.SetTransport(null);
+
+            // Auto-connect Hermes if saved mode was Hermes
+            if (backendSelector.CurrentMode == BackendMode.Hermes)
+            {
+                _ = backendSelector.ConnectHermes();
+            }
+
             // Apply avatar system prompt
             var settingsData = settings.Load();
             if (settingsData != null && settingsData.useSystemPrompt)
@@ -110,6 +152,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<ModelDiscoveryService>(modelDiscoveryService);
             services.Register<ChatService>(chatService);
             services.Register<ILocalizationService>(localizationService);
+            services.Register<GlobalBackendSelector>(backendSelector);
 
             var pluginManager = GetComponent<PluginManager>();
             if (pluginManager == null)

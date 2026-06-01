@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Api.Models;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -18,10 +19,48 @@ namespace NeonCompanion.Runtime.Chat
         private readonly IAiClient _aiClient;
         private readonly ProviderManager _providerManager;
         private readonly IChatSessionRepository _sessionRepository;
+        private IChatTransport _chatTransport;
         private ChatViewModel _currentChatViewModel;
         private ChatSession _currentSession;
         private ProviderConfig _currentProvider;
+
+        // Hermes streaming state
+        private Action<string> _hermesStreamTokenCallback;
+        private Action<string, string, string, string> _hermesToolProgressCallback;
+        private ChatMessage _hermesStreamingMessage;
+        private System.Text.StringBuilder _hermesStreamBuffer;
+        private bool _hermesStreamActive;
+
         public event Action<string> OnAssistantResponse;
+
+        /// <summary>Active chat transport for current backend mode (Hermes or null for OpenAI).</summary>
+        public IChatTransport ChatTransport => _chatTransport;
+
+        /// <summary>Set or clear the active chat transport (called by GlobalBackendSelector on mode change).</summary>
+        public void SetTransport(IChatTransport transport)
+        {
+            // Unwire old transport
+            if (_chatTransport != null)
+            {
+                _chatTransport.OnStreamStarted -= HandleHermesStreamStarted;
+                _chatTransport.OnDelta -= HandleHermesDelta;
+                _chatTransport.OnComplete -= HandleHermesComplete;
+                _chatTransport.OnToolUpdate -= HandleHermesToolUpdate;
+                _chatTransport.OnError -= HandleHermesError;
+            }
+
+            _chatTransport = transport;
+
+            // Wire new transport
+            if (_chatTransport != null)
+            {
+                _chatTransport.OnStreamStarted += HandleHermesStreamStarted;
+                _chatTransport.OnDelta += HandleHermesDelta;
+                _chatTransport.OnComplete += HandleHermesComplete;
+                _chatTransport.OnToolUpdate += HandleHermesToolUpdate;
+                _chatTransport.OnError += HandleHermesError;
+            }
+        }
 
         public float Temperature { get; set; } = 0.7f;
         public int MaxTokens { get; set; } = 512;
@@ -223,6 +262,21 @@ namespace NeonCompanion.Runtime.Chat
 
         public async Task StartNewSessionAsync()
         {
+            // Hermes mode: create server-side session. Do not silently fall back to OpenAI/local mode.
+            if (_chatTransport != null)
+            {
+                if (!_chatTransport.IsConnected)
+                {
+                    var selector = GlobalBackendSelector.Instance;
+                    if (selector != null)
+                        await selector.ConnectHermes();
+                }
+
+                await StartHermesSessionAsync();
+                return;
+            }
+
+            // OpenAI mode: local session
             if (_currentProvider == null)
                 _currentProvider = await ResolveProviderAsync();
 
@@ -247,8 +301,144 @@ namespace NeonCompanion.Runtime.Chat
             NeonLogger.Log("New chat session started.");
         }
 
+        /// <summary>
+        /// Create a new Hermes session via WebSocket.
+        /// </summary>
+        private async Task StartHermesSessionAsync()
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.SessionManager == null)
+                return;
+
+            var response = await selector.SessionManager.CreateSession();
+
+            // Create local session record
+            if (_currentProvider == null)
+                _currentProvider = await ResolveProviderAsync();
+
+            _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
+            _currentChatViewModel.ProviderSessionId = response.session_id;
+            _currentChatViewModel.SelectedModel = response.info?.model ?? _currentProvider?.defaultModel;
+            ApplyGenerationSettings();
+
+            _currentSession = new ChatSession
+            {
+                sessionId = Guid.NewGuid().ToString(),
+                providerId = _currentProvider?.id,
+                providerSessionId = response.session_id,
+                selectedModel = response.info?.model ?? _currentProvider?.defaultModel,
+                title = response.info?.title ?? "Hermes session",
+                updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                messages = new List<ChatMessage>(),
+                folder = string.Empty
+            };
+
+            SaveCurrentSession();
+            NeonLogger.Log("Hermes session created: " + response.session_id);
+        }
+
+        /// <summary>
+        /// Resume an existing Hermes session via WebSocket.
+        /// </summary>
+        public async Task ResumeHermesSessionAsync(string hermesSessionId)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.SessionManager == null)
+                return;
+
+            var response = await selector.SessionManager.ResumeSession(hermesSessionId);
+
+            if (_currentProvider == null)
+                _currentProvider = await ResolveProviderAsync();
+
+            _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
+            _currentChatViewModel.ProviderSessionId = hermesSessionId;
+            _currentChatViewModel.SelectedModel = response.info?.model ?? _currentProvider?.defaultModel;
+            ApplyGenerationSettings();
+
+            // Load messages from response
+            _currentChatViewModel.Messages.Clear();
+            if (response.messages != null)
+            {
+                for (int i = 0; i < response.messages.Length; i++)
+                {
+                    var msg = response.messages[i];
+                    if (msg == null) continue;
+                    _currentChatViewModel.Messages.Add(new Data.Models.ChatMessage
+                    {
+                        role = msg.role ?? "assistant",
+                        content = msg.text ?? "",
+                        unixTimeSeconds = msg.timestamp ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    });
+                }
+            }
+
+            _currentSession = new ChatSession
+            {
+                sessionId = Guid.NewGuid().ToString(),
+                providerId = _currentProvider?.id,
+                providerSessionId = hermesSessionId,
+                selectedModel = response.info?.model ?? _currentProvider?.defaultModel,
+                title = response.info?.title ?? "Hermes session",
+                updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                messages = new List<ChatMessage>(_currentChatViewModel.Messages),
+                folder = string.Empty
+            };
+
+            SaveCurrentSession();
+            NeonLogger.Log("Hermes session resumed: " + hermesSessionId);
+        }
+
+        /// <summary>
+        /// Fetch list of Hermes sessions from REST API.
+        /// </summary>
+        public async Task<List<HermesSession>> GetHermesSessionsAsync()
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.RestClient == null)
+                return new List<HermesSession>();
+
+            try
+            {
+                var result = await selector.RestClient.ListSessions(40);
+                if (result?.sessions == null)
+                    return new List<HermesSession>();
+                return new List<HermesSession>(result.sessions);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[ChatService] Failed to fetch Hermes sessions: " + ex.Message);
+                return new List<HermesSession>();
+            }
+        }
+
+        /// <summary>
+        /// Delete a Hermes session via REST API.
+        /// </summary>
+        public async Task DeleteHermesSessionAsync(string hermesSessionId)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.RestClient == null)
+                return;
+
+            try
+            {
+                await selector.RestClient.DeleteSession(hermesSessionId);
+                NeonLogger.Log("Hermes session deleted: " + hermesSessionId);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[ChatService] Failed to delete Hermes session: " + ex.Message);
+            }
+        }
+
         public void CancelCurrentGeneration()
         {
+            if (_chatTransport != null && _chatTransport.IsConnected)
+            {
+                _chatTransport.Interrupt();
+                return;
+            }
             _currentChatViewModel?.CancelGeneration();
         }
 
@@ -275,6 +465,14 @@ namespace NeonCompanion.Runtime.Chat
             Action<string> onStreamToken = null,
             Action<string, string, string, string> onToolProgress = null)
         {
+            // Hermes backend: route through WebSocket transport
+            if (_chatTransport != null && _chatTransport.IsConnected)
+            {
+                await SendViaTransport(message, onStreamToken, onToolProgress);
+                return;
+            }
+
+            // OpenAI backend: existing HTTP path
             if (_currentChatViewModel == null)
             {
                 await GetOrCreateChatAsync();
@@ -304,6 +502,152 @@ namespace NeonCompanion.Runtime.Chat
             EmitLatestAssistantResponse();
 
             SaveCurrentSession();
+        }
+
+        /// <summary>
+        /// Send a message via Hermes WebSocket transport.
+        /// </summary>
+        private async Task SendViaTransport(string message, Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
+        {
+            if (_chatTransport == null)
+                return;
+
+            // Store callbacks for streaming events
+            _hermesStreamTokenCallback = onStreamToken;
+            _hermesToolProgressCallback = onToolProgress;
+            _hermesStreamBuffer = new System.Text.StringBuilder();
+            _hermesStreamActive = false;
+
+            await EnsureHermesSessionReadyAsync();
+
+            // Add user message to local history
+            if (_currentChatViewModel == null)
+            {
+                await GetOrCreateChatAsync();
+            }
+            _currentChatViewModel.Messages.Add(new ChatMessage
+            {
+                role = "user",
+                content = message,
+                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            });
+
+            // Send via WebSocket
+            await _chatTransport.SendMessage(message);
+            SaveCurrentSession();
+        }
+
+        /// <summary>
+        /// Ensure the Hermes WebSocket transport has an active server-side session before sending.
+        /// </summary>
+        private async Task EnsureHermesSessionReadyAsync()
+        {
+            var selector = GlobalBackendSelector.Instance;
+            var sessionManager = selector?.SessionManager;
+            if (sessionManager == null)
+                throw new InvalidOperationException("Hermes session manager is not available.");
+
+            if (!sessionManager.IsConnected)
+                await selector.ConnectHermes();
+
+            if (!string.IsNullOrEmpty(sessionManager.ActiveSessionId))
+                return;
+
+            if (_currentSession != null && !string.IsNullOrWhiteSpace(_currentSession.providerSessionId))
+                await ResumeHermesSessionAsync(_currentSession.providerSessionId);
+            else
+                await StartHermesSessionAsync();
+        }
+
+        // === Hermes Transport Event Handlers ===
+
+        private void HandleHermesStreamStarted()
+        {
+            if (_currentChatViewModel == null)
+                return;
+
+            _hermesStreamActive = true;
+            _hermesStreamBuffer = new System.Text.StringBuilder();
+
+            // Create streaming assistant message
+            _hermesStreamingMessage = new ChatMessage
+            {
+                role = "assistant",
+                content = string.Empty,
+                model = string.Empty,
+                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            };
+            _currentChatViewModel.Messages.Add(_hermesStreamingMessage);
+        }
+
+        private void HandleHermesDelta(string text)
+        {
+            if (!_hermesStreamActive || _hermesStreamingMessage == null)
+                return;
+
+            _hermesStreamBuffer.Append(text);
+            _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
+
+            // Notify UI
+            _hermesStreamTokenCallback?.Invoke(text);
+        }
+
+        private void HandleHermesComplete(string finalText)
+        {
+            if (_hermesStreamingMessage != null)
+            {
+                // Apply final text if we got one
+                if (!string.IsNullOrEmpty(finalText))
+                {
+                    _hermesStreamingMessage.content = finalText;
+                }
+                else if (_hermesStreamBuffer.Length > 0)
+                {
+                    _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
+                }
+            }
+
+            _hermesStreamActive = false;
+            _hermesStreamingMessage = null;
+            _hermesStreamBuffer = null;
+            _hermesStreamTokenCallback = null;
+            _hermesToolProgressCallback = null;
+
+            EmitLatestAssistantResponse();
+            SaveCurrentSession();
+        }
+
+        private void HandleHermesToolUpdate(ToolCallUpdate update)
+        {
+            if (_hermesStreamingMessage == null || update == null)
+                return;
+
+            // Add tool segment to streaming message
+            if (_hermesStreamingMessage.segments == null)
+                _hermesStreamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
+
+            string status = update.status == ToolCallStatus.Running ? "running" : "complete";
+            string emoji = update.status == ToolCallStatus.Running ? "⏳" : "✅";
+
+            _hermesStreamingMessage.segments.Add(new ChatMessageSegment
+            {
+                kind = ChatMessageSegment.ToolKind,
+                key = (update.name ?? "") + "\x01" + (update.toolId ?? ""),
+                tool = update.name ?? "",
+                label = update.toolId ?? "",
+                emoji = emoji,
+                status = status
+            });
+
+            _hermesToolProgressCallback?.Invoke(update.name, update.toolId, emoji, status);
+        }
+
+        private void HandleHermesError(string error)
+        {
+            NeonLogger.Log("[Hermes] Error: " + error);
+            _hermesStreamActive = false;
+            _hermesStreamingMessage = null;
+            _hermesStreamBuffer = null;
         }
 
         public async Task<ModelSwitchResult> SetCurrentSessionModelAsync(string modelId)

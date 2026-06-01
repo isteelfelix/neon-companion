@@ -354,6 +354,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = _settingsController.BindLocalizationEventsAsync();
             _navigationController.ShowChat();
 
+            // Subscribe to backend mode changes for nav visibility
+            var backendSelector = Core.GlobalBackendSelector.Instance;
+            if (backendSelector != null)
+            {
+                backendSelector.OnModeChanged += OnBackendModeChangedForNav;
+                // Apply current mode
+                _navigationController.ApplyBackendModeVisibility(
+                    backendSelector.CurrentMode == Core.BackendMode.Hermes ? "hermes" : "openai");
+            }
+
             _ = RefreshAsync();
         }
 
@@ -371,6 +381,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (tex != null) UnityEngine.Object.Destroy(tex);
             _customTextures.Clear();
             _isBound = false;
+
+            // Unsubscribe from backend mode changes
+            var backendSelector = Core.GlobalBackendSelector.Instance;
+            if (backendSelector != null)
+                backendSelector.OnModeChanged -= OnBackendModeChangedForNav;
+        }
+
+        private void OnBackendModeChangedForNav(Core.BackendMode mode)
+        {
+            string modeStr = mode == Core.BackendMode.Hermes ? "hermes" : "openai";
+            _navigationController.ApplyBackendModeVisibility(modeStr);
         }
 
         private void Bind(VisualElement root)
@@ -716,6 +737,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 EditMaxTokens        = _root.Q<TextField>("edit-maxtokens"),
                 EditTemperature      = _root.Q<Slider>("edit-temperature"),
                 EditBackendType      = _root.Q<NeonDropdown>("edit-backend-type"),
+                GlobalBackendMode    = _root.Q<NeonDropdown>("global-backend-mode"),
+                BackendModeHint      = _root.Q<Label>("backend-mode-hint"),
                 EditorProviderShort  = _root.Q<Label>("editor-provider-short"),
                 EditorProviderName   = _root.Q<Label>("editor-provider-name"),
                 EditorProviderStatus = _root.Q<Label>("editor-provider-status"),

@@ -361,3 +361,34 @@
 .icon--eye-off {
     background-image: url("project://database/Assets/UI/Icons/eye-off.svg");
 }
+
+/* ---- Global backend mode selector ---- */
+
+.backend-selector {
+    flex-direction: row;
+    align-items: center;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-1);
+    border-radius: 14px;
+}
+
+.backend-selector > .label {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.backend-selector > .input {
+    width: 220px;
+}
+
+.backend-selector__hint {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-left: 12px;
+    white-space: normal;
+}

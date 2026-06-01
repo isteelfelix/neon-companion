@@ -16,6 +16,13 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <!-- Global backend mode selector -->
+        <ui:VisualElement class="backend-selector">
+            <ui:Label text="Бэкенд приложения" class="label" />
+            <nc:NeonDropdown name="global-backend-mode" class="input" />
+            <ui:Label name="backend-mode-hint" text="" class="backend-selector__hint" />
+        </ui:VisualElement>
+
         <ui:VisualElement class="split">
             <ui:ScrollView name="providers-list" class="providers-list" />
 

@@ -1724,3 +1724,35 @@
 .lightbox__close:hover {
     background-color: rgba(255, 255, 255, 0.28);
 }
+
+/* ---- Hermes Clarify Choice Buttons ---- */
+
+.clarify-choices {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    margin-left: 40px;
+}
+
+.clarify-choices__btn {
+    padding: 6px 14px;
+    margin: 3px 4px;
+    border-width: 1px;
+    border-color: var(--accent);
+    border-radius: 10px;
+    background-color: rgba(124, 122, 237, 0.08);
+    color: var(--accent);
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.clarify-choices__btn:hover {
+    background-color: rgba(124, 122, 237, 0.18);
+}
+
+.clarify-choices__btn:disabled {
+    border-color: var(--line-2);
+    background-color: var(--bg-2);
+    color: var(--text-3);
+    opacity: 0.6;
+}

@@ -22,5 +22,10 @@ namespace NeonCompanion.Runtime.Data.Models
         public string closeHotkey = "Escape";
         public string toolPermissionMode = "manual";
         public List<string> alwaysApprovedTools = new List<string>();
+
+        // Hermes backend
+        public string backendMode = "openai"; // "openai" | "hermes"
+        public string hermesWsUrl = "wss://neon-dev.top/api/ws";
+        public string hermesRestUrl = "https://neon-dev.top";
     }
 }

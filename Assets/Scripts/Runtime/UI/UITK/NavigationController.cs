@@ -293,6 +293,54 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _navProvidersCount.text = "0";
         }
 
+        /// <summary>
+        /// Hide specific nav items by name. Used for feature gating (e.g. hide kanban/cron in OpenAI mode).
+        /// </summary>
+        public void HideNavItems(params string[] itemNames)
+        {
+            if (itemNames == null || itemNames.Length == 0)
+                return;
+
+            var hidden = new HashSet<string>(itemNames);
+            for (int i = 0; i < _navItems.Count; i++)
+            {
+                var nav = _navItems[i];
+                if (nav == null) continue;
+
+                string name = nav.name ?? "";
+                if (hidden.Contains(name))
+                    nav.style.display = DisplayStyle.None;
+            }
+        }
+
+        /// <summary>
+        /// Show all nav items (reset visibility).
+        /// </summary>
+        public void ShowAllNavItems()
+        {
+            for (int i = 0; i < _navItems.Count; i++)
+            {
+                var nav = _navItems[i];
+                if (nav != null)
+                    nav.style.display = DisplayStyle.Flex;
+            }
+        }
+
+        /// <summary>
+        /// Apply backend mode visibility rules.
+        /// </summary>
+        public void ApplyBackendModeVisibility(string backendMode)
+        {
+            ShowAllNavItems();
+
+            // In OpenAI mode, hide Hermes-only tabs
+            if (string.Equals(backendMode, "openai", StringComparison.OrdinalIgnoreCase))
+            {
+                // Future Hermes-only tabs go here:
+                // HideNavItems("nav-kanban", "nav-cron");
+            }
+        }
+
         private void SetActiveNav(VisualElement active)
         {
             foreach (var navItem in _navItems)

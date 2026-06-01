@@ -201,6 +201,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             CopyRequested += OnCopyClicked;
             RegenerateRequested += OnRegenerateClicked;
 
+            // Subscribe to Hermes transport clarify/approval events
+            SubscribeToHermesTransportEvents();
+
             if (_contextMenu != null)
             {
                 _contextMenu.OnEditRequested += OnEditMessageRequested;
@@ -340,6 +343,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             CopyRequested -= OnCopyClicked;
             RegenerateRequested -= OnRegenerateClicked;
+            UnsubscribeFromHermesTransportEvents();
 
             if (_contextMenu != null)
             {
@@ -3756,6 +3760,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private bool IsCurrentProviderHermes()
         {
+            // Check global backend mode first
+            var selector = GlobalBackendSelector.Instance;
+            if (selector != null && selector.CurrentMode == BackendMode.Hermes)
+                return true;
+
             var provider = _currentChatService != null ? _currentChatService.CurrentProvider : null;
             if (provider == null)
                 return false;
@@ -3769,6 +3778,199 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return true;
 
             return false;
+        }
+
+        // === Hermes Transport Events ===
+
+        private void SubscribeToHermesTransportEvents()
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector == null)
+                return;
+
+            selector.OnModeChanged += OnBackendModeChanged;
+            OnBackendModeChanged(selector.CurrentMode);
+        }
+
+        private void UnsubscribeFromHermesTransportEvents()
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector != null)
+                selector.OnModeChanged -= OnBackendModeChanged;
+
+            if (_hermesTransport != null)
+            {
+                _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
+                _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
+                _hermesTransport = null;
+            }
+        }
+
+        private void OnBackendModeChanged(BackendMode mode)
+        {
+            // Unsubscribe from old transport
+            if (_hermesTransport != null)
+            {
+                _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
+                _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
+            }
+
+            // Subscribe to new transport
+            if (mode == BackendMode.Hermes)
+            {
+                var selector = GlobalBackendSelector.Instance;
+                if (selector != null && selector.SessionManager != null)
+                {
+                    _hermesTransport = selector.SessionManager;
+                    _hermesTransport.OnClarifyRequest += OnHermesClarifyRequest;
+                    _hermesTransport.OnApprovalRequest += OnHermesApprovalRequest;
+                }
+            }
+            else
+            {
+                _hermesTransport = null;
+            }
+        }
+
+        private IChatTransport _hermesTransport;
+
+        private void OnHermesClarifyRequest(ClarifyRequest request)
+        {
+            if (request == null)
+                return;
+
+            // Show clarify question as system message
+            string question = request.question ?? "Clarify?";
+            _d.ShowSystemMessage?.Invoke("[Hermes] " + question);
+
+            // Create choice buttons in the chat
+            if (request.choices != null && request.choices.Length > 0)
+            {
+                ShowClarifyChoices(request);
+            }
+            else
+            {
+                // No choices — free text input needed, auto-respond for now
+                _ = AutoRespondToClarify(request, "ok");
+            }
+        }
+
+        private void ShowClarifyChoices(ClarifyRequest request)
+        {
+            if (_d.MessagesList == null || request.choices == null)
+                return;
+
+            var container = new VisualElement();
+            container.AddToClassList("clarify-choices");
+            container.style.marginTop = 4;
+            container.style.marginLeft = 40;
+            container.style.flexDirection = FlexDirection.Row;
+            container.style.flexWrap = Wrap.Wrap;
+
+            for (int i = 0; i < request.choices.Length; i++)
+            {
+                string choice = request.choices[i];
+                var btn = new Button(() => OnClarifyChoiceSelected(request, choice))
+                {
+                    text = choice
+                };
+                btn.AddToClassList("clarify-choices__btn");
+                container.Add(btn);
+            }
+
+            _d.MessagesList.Add(container);
+            ScrollTranscriptToBottom();
+        }
+
+        private void OnClarifyChoiceSelected(ClarifyRequest request, string choice)
+        {
+            // Remove choice buttons
+            // (they'll be cleaned up on next message, but disable them now)
+            DisableClarifyButtons();
+
+            // Show user's choice as system message
+            _d.ShowSystemMessage?.Invoke("[You] " + choice);
+
+            // Send response
+            _ = SendClarifyResponse(request, choice);
+        }
+
+        private async System.Threading.Tasks.Task SendClarifyResponse(ClarifyRequest request, string answer)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.SessionManager == null)
+                return;
+
+            await selector.SessionManager.RespondToClarify(request.requestId, answer);
+        }
+
+        private async System.Threading.Tasks.Task AutoRespondToClarify(ClarifyRequest request, string defaultAnswer)
+        {
+            await System.Threading.Tasks.Task.Delay(100);
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.SessionManager == null)
+                return;
+
+            string answer = defaultAnswer ?? "ok";
+            await selector.SessionManager.RespondToClarify(request.requestId, answer);
+        }
+
+        private void DisableClarifyButtons()
+        {
+            if (_d.MessagesList == null)
+                return;
+
+            var buttons = _d.MessagesList.Query<Button>().ToList();
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                if (buttons[i].parent != null &&
+                    buttons[i].parent.ClassListContains("clarify-choices"))
+                {
+                    buttons[i].SetEnabled(false);
+                }
+            }
+        }
+
+        private void OnHermesApprovalRequest(ApprovalRequest request)
+        {
+            if (request == null)
+                return;
+
+            _ = HandleHermesApprovalRequestAsync(request);
+        }
+
+        private async System.Threading.Tasks.Task HandleHermesApprovalRequestAsync(ApprovalRequest request)
+        {
+            if (request == null || _currentApprovalPrompt != null)
+                return;
+
+            var toolReq = new ToolCallRequest
+            {
+                id = request.requestId,
+                toolName = request.type ?? "approval",
+                description = request.description ?? "Approval needed",
+                parameters = new System.Collections.Generic.Dictionary<string, string>()
+            };
+
+            bool approved = await RequestToolApproval(toolReq);
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.SessionManager != null)
+                await selector.SessionManager.RespondToApproval(request.requestId, approved);
+
+            if (!approved)
+            {
+                try
+                {
+                    if (_isSending || _isStreamingResponse)
+                        OnStopClicked();
+                }
+                catch (Exception ex)
+                {
+                    NeonLogger.LogError("Error stopping on Hermes approval reject: " + ex);
+                }
+            }
         }
 
         private Dictionary<string, string> ParseToolArguments(string argumentsJson)

@@ -38,6 +38,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             public TextField EditMaxTokens;
             public Slider EditTemperature;
             public NeonDropdown EditBackendType;
+            // UI — global backend mode selector
+            public NeonDropdown GlobalBackendMode;
+            public Label BackendModeHint;
             // UI — editor header
             public Label EditorProviderShort;
             public Label EditorProviderName;
@@ -141,6 +144,19 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.EditApiKeyToggle.RegisterCallback<ClickEvent>(OnApiKeyToggleClicked);
             if (_d.EditModel != null)
                 _d.EditModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
+
+            // Global backend mode selector
+            if (_d.GlobalBackendMode != null)
+            {
+                _d.GlobalBackendMode.choices = new List<string> { "OpenAI (HTTP REST)", "Hermes (WebSocket)" };
+                var selector = GlobalBackendSelector.Instance;
+                var currentMode = selector != null && selector.CurrentMode == BackendMode.Hermes
+                    ? "Hermes (WebSocket)"
+                    : "OpenAI (HTTP REST)";
+                _d.GlobalBackendMode.SetValueWithoutNotify(currentMode);
+                UpdateBackendModeHint(currentMode);
+                _d.GlobalBackendMode.RegisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
+            }
         }
 
         public void UnregisterCallbacks()
@@ -165,6 +181,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.EditApiKeyToggle.UnregisterCallback<ClickEvent>(OnApiKeyToggleClicked);
             if (_d.EditModel != null)
                 _d.EditModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
+
+            if (_d.GlobalBackendMode != null)
+                _d.GlobalBackendMode.UnregisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
         }
 
         // ============================================================
@@ -1003,6 +1022,37 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (string.Equals(_d.EditModelPreset?.value, CustomModelPresetValue, StringComparison.Ordinal))
                 _lastCustomModel = evt?.newValue ?? string.Empty;
+        }
+
+        private void OnGlobalBackendModeChanged(ChangeEvent<string> evt)
+        {
+            string selected = evt?.newValue;
+            if (string.IsNullOrEmpty(selected))
+                return;
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector == null)
+                return;
+
+            BackendMode mode;
+            if (selected.Contains("Hermes"))
+                mode = BackendMode.Hermes;
+            else
+                mode = BackendMode.OpenAI;
+
+            selector.SetMode(mode);
+            UpdateBackendModeHint(selected);
+        }
+
+        private void UpdateBackendModeHint(string selected)
+        {
+            if (_d.BackendModeHint == null)
+                return;
+
+            if (!string.IsNullOrEmpty(selected) && selected.Contains("Hermes"))
+                _d.BackendModeHint.text = "WebSocket транспорт, сессии, tools, крон, канбан";
+            else
+                _d.BackendModeHint.text = "HTTP REST, чистый чат";
         }
 
         private void SyncModelPresetUi(string currentModel)
