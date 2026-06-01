@@ -64,17 +64,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                 chatMsg.tool_calls = CloneToolCalls(response.tool_calls);
             }
 
-            if (response != null && response.attachments != null && response.attachments.Count > 0)
-            {
-                var localAtts = new List<ChatAttachment>();
-                for (int i = 0; i < response.attachments.Count; i++)
-                {
-                    var cached = await DownloadAndCacheAttachment(response.attachments[i]);
-                    if (cached != null)
-                        localAtts.Add(cached);
-                }
-                chatMsg.attachments = localAtts;
-            }
+            await ApplyIncomingAttachmentsAsync(chatMsg, response);
 
             Messages.Add(chatMsg);
         }
@@ -133,7 +123,8 @@ namespace NeonCompanion.Runtime.UI.Chat
                 foreach (var message in Messages)
                 {
                     bool hasText = !string.IsNullOrWhiteSpace(message?.content);
-                    bool hasAttachments = message?.attachments != null && message.attachments.Count > 0;
+                    bool canSendAttachments = message != null && string.Equals(message.role, "user", StringComparison.OrdinalIgnoreCase);
+                    bool hasAttachments = canSendAttachments && message.attachments != null && message.attachments.Count > 0;
                     bool hasToolCalls = message != null && message.tool_calls != null && message.tool_calls.Count > 0;
                     bool hasToolCallRef = !string.IsNullOrEmpty(message?.tool_call_id);
                     if (string.IsNullOrWhiteSpace(message?.role) || (!hasText && !hasAttachments && !hasToolCalls && !hasToolCallRef))
@@ -143,7 +134,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                     {
                         role = message.role,
                         content = message.content,
-                        attachments = ToAiAttachments(message.attachments),
+                        attachments = canSendAttachments ? ToAiAttachments(message.attachments) : new List<AiChatAttachment>(),
                         tool_call_id = message.tool_call_id,
                         tool_calls = CloneToolCalls(message.tool_calls)
                     });
@@ -201,17 +192,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                     {
                         streamMsg.tool_calls = CloneToolCalls(response.tool_calls);
                     }
-                    if (response != null && response.attachments != null && response.attachments.Count > 0)
-                    {
-                        var localAtts = new List<ChatAttachment>();
-                        for (int i = 0; i < response.attachments.Count; i++)
-                        {
-                            var cached = await DownloadAndCacheAttachment(response.attachments[i]);
-                            if (cached != null)
-                                localAtts.Add(cached);
-                        }
-                        streamMsg.attachments = localAtts;
-                    }
+                    await ApplyIncomingAttachmentsAsync(streamMsg, response);
                 }
                 else
                 {
@@ -386,6 +367,359 @@ namespace NeonCompanion.Runtime.UI.Chat
             return clone;
         }
 
+        private async Task ApplyIncomingAttachmentsAsync(ChatMessage chatMsg, AiChatResponse response)
+        {
+            if (chatMsg == null)
+                return;
+
+            string originalContent = chatMsg.content;
+            List<string> originalSegmentText = SnapshotTextSegments(chatMsg);
+
+            var incoming = new List<AiChatAttachment>();
+            if (response != null && response.attachments != null && response.attachments.Count > 0)
+            {
+                for (int i = 0; i < response.attachments.Count; i++)
+                {
+                    if (response.attachments[i] != null)
+                        incoming.Add(response.attachments[i]);
+                }
+            }
+
+            int mediaMarkerStart = incoming.Count;
+            ExtractMediaMarkerAttachments(chatMsg, incoming);
+            int mediaMarkerCount = incoming.Count - mediaMarkerStart;
+            if (incoming.Count == 0)
+                return;
+
+            var localAtts = new List<ChatAttachment>();
+            if (chatMsg.attachments != null && chatMsg.attachments.Count > 0)
+                localAtts.AddRange(CloneAttachments(chatMsg.attachments));
+
+            bool downloadedMediaMarker = false;
+            for (int i = 0; i < incoming.Count; i++)
+            {
+                var cached = await DownloadAndCacheAttachment(incoming[i]);
+                if (cached != null)
+                {
+                    localAtts.Add(cached);
+                    if (i >= mediaMarkerStart)
+                        downloadedMediaMarker = true;
+                }
+            }
+
+            chatMsg.attachments = localAtts;
+            if (mediaMarkerCount > 0 && !downloadedMediaMarker)
+            {
+                RestoreTextSegments(chatMsg, originalContent, originalSegmentText);
+            }
+        }
+
+        private static List<string> SnapshotTextSegments(ChatMessage message)
+        {
+            var snapshot = new List<string>();
+            if (message == null || message.segments == null)
+                return snapshot;
+
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                var segment = message.segments[i];
+                if (segment != null && string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
+                    snapshot.Add(segment.text);
+            }
+
+            return snapshot;
+        }
+
+        private static void RestoreTextSegments(ChatMessage message, string content, List<string> segmentTexts)
+        {
+            if (message == null)
+                return;
+
+            message.content = content ?? string.Empty;
+            if (message.segments == null || segmentTexts == null)
+                return;
+
+            int textIndex = 0;
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                var segment = message.segments[i];
+                if (segment == null || !string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (textIndex < segmentTexts.Count)
+                    segment.text = segmentTexts[textIndex];
+                textIndex++;
+            }
+        }
+
+        private void ExtractMediaMarkerAttachments(ChatMessage message, List<AiChatAttachment> attachments)
+        {
+            if (message == null || attachments == null)
+                return;
+
+            message.content = ExtractMediaMarkersFromText(message.content, attachments);
+
+            if (message.segments == null)
+                return;
+
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                var segment = message.segments[i];
+                if (segment == null || !string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                segment.text = ExtractMediaMarkersFromText(segment.text, attachments);
+            }
+        }
+
+        private string ExtractMediaMarkersFromText(string text, List<AiChatAttachment> attachments)
+        {
+            if (string.IsNullOrEmpty(text) || attachments == null)
+                return text ?? string.Empty;
+
+            string normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            string[] lines = normalized.Split('\n');
+            var kept = new List<string>(lines.Length);
+            bool changed = false;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                string mediaPath;
+                if (TryReadMediaMarker(line, out mediaPath))
+                {
+                    var attachment = CreateMediaMarkerAttachment(mediaPath);
+                    if (attachment != null && !ContainsIncomingAttachment(attachments, attachment.path))
+                        attachments.Add(attachment);
+                    changed = true;
+                    continue;
+                }
+
+                kept.Add(line);
+            }
+
+            if (!changed)
+                return text;
+
+            return TrimBlankEdges(string.Join("\n", kept.ToArray()));
+        }
+
+        private static bool TryReadMediaMarker(string line, out string mediaPath)
+        {
+            mediaPath = null;
+            if (string.IsNullOrWhiteSpace(line))
+                return false;
+
+            string trimmed = line.Trim();
+            const string marker = "MEDIA:";
+            bool isMediaMarker = trimmed.StartsWith(marker, StringComparison.OrdinalIgnoreCase);
+            if (!isMediaMarker)
+                return TryReadMarkdownImageMarker(trimmed, out mediaPath);
+
+            string value = trimmed.Substring(marker.Length).Trim();
+            if (value.Length >= 2)
+            {
+                bool quoted = (value[0] == '"' && value[value.Length - 1] == '"') ||
+                              (value[0] == '\'' && value[value.Length - 1] == '\'') ||
+                              (value[0] == '`' && value[value.Length - 1] == '`');
+                if (quoted)
+                    value = value.Substring(1, value.Length - 2).Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            mediaPath = value;
+            return true;
+        }
+
+        private static bool TryReadMarkdownImageMarker(string trimmedLine, out string mediaPath)
+        {
+            mediaPath = null;
+            if (string.IsNullOrWhiteSpace(trimmedLine))
+                return false;
+
+            if (!trimmedLine.StartsWith("![", StringComparison.Ordinal))
+                return false;
+
+            int labelEnd = trimmedLine.IndexOf("](", StringComparison.Ordinal);
+            if (labelEnd < 0)
+                return false;
+
+            int pathStart = labelEnd + 2;
+            int pathEnd = trimmedLine.LastIndexOf(')');
+            if (pathEnd <= pathStart)
+                return false;
+
+            string value = trimmedLine.Substring(pathStart, pathEnd - pathStart).Trim();
+            if (value.Length >= 2)
+            {
+                bool quoted = (value[0] == '"' && value[value.Length - 1] == '"') ||
+                              (value[0] == '\'' && value[value.Length - 1] == '\'') ||
+                              (value[0] == '`' && value[value.Length - 1] == '`');
+                if (quoted)
+                    value = value.Substring(1, value.Length - 2).Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            if (!LooksLikeIncomingMediaPath(value))
+                return false;
+
+            mediaPath = value;
+            return true;
+        }
+
+        private static bool LooksLikeIncomingMediaPath(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            if (value.StartsWith("MEDIA:", StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith("/root/", StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith("root/", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            string ext = Path.GetExtension(value);
+            return !string.IsNullOrEmpty(ext) &&
+                   (string.Equals(ext, ".png", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ext, ".jpg", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ext, ".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ext, ".gif", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ext, ".webp", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ext, ".bmp", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private AiChatAttachment CreateMediaMarkerAttachment(string mediaPath)
+        {
+            if (string.IsNullOrWhiteSpace(mediaPath))
+                return null;
+
+            string resolvedPath = ResolveMediaMarkerPath(mediaPath);
+            string ext = GetFileExtensionFromUrl(mediaPath);
+            return new AiChatAttachment
+            {
+                kind = "image",
+                name = DeriveFileNameFromUrl(mediaPath, ext),
+                path = resolvedPath,
+                mediaType = GuessMediaTypeFromExtension(ext)
+            };
+        }
+
+        private static bool ContainsIncomingAttachment(List<AiChatAttachment> attachments, string path)
+        {
+            if (attachments == null || string.IsNullOrWhiteSpace(path))
+                return false;
+
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                var attachment = attachments[i];
+                if (attachment == null)
+                    continue;
+
+                if (string.Equals(attachment.path, path, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private string ResolveMediaMarkerPath(string mediaPath)
+        {
+            string path = (mediaPath ?? string.Empty).Trim();
+            const string mediaPrefix = "MEDIA:";
+            if (path.StartsWith(mediaPrefix, StringComparison.OrdinalIgnoreCase))
+                path = path.Substring(mediaPrefix.Length).Trim();
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            if (path.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("file:", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                File.Exists(path))
+            {
+                return path;
+            }
+
+            string normalizedPath = path.Replace('\\', '/');
+            const string hermesRoot = "/root/hermes";
+            const string hermesHiddenRoot = "/root/.hermes";
+            if (normalizedPath.StartsWith(hermesRoot, StringComparison.OrdinalIgnoreCase))
+                normalizedPath = normalizedPath.Substring(hermesRoot.Length);
+            else if (normalizedPath.StartsWith(hermesHiddenRoot, StringComparison.OrdinalIgnoreCase))
+                normalizedPath = normalizedPath.Substring(hermesHiddenRoot.Length);
+            else if (normalizedPath.StartsWith("root/hermes/", StringComparison.OrdinalIgnoreCase))
+                normalizedPath = "/" + normalizedPath.Substring("root/hermes/".Length);
+            else if (normalizedPath.StartsWith("root/.hermes/", StringComparison.OrdinalIgnoreCase))
+                normalizedPath = "/" + normalizedPath.Substring("root/.hermes/".Length);
+
+            string baseUrl = normalizedPath.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase)
+                ? GetProviderOriginUrl()
+                : GetProviderMediaBaseUrl();
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                return path;
+
+            if (!normalizedPath.StartsWith("/", StringComparison.Ordinal))
+                normalizedPath = "/" + normalizedPath;
+
+            return baseUrl.TrimEnd('/') + normalizedPath;
+        }
+
+        private string GetProviderMediaBaseUrl()
+        {
+            string baseUrl = (_provider != null ? _provider.baseUrl : null) ?? string.Empty;
+            baseUrl = baseUrl.Trim().TrimEnd('/');
+            if (string.IsNullOrEmpty(baseUrl))
+                return string.Empty;
+
+            if (baseUrl.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+                baseUrl = baseUrl.Substring(0, baseUrl.Length - "/chat/completions".Length).TrimEnd('/');
+            if (baseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+                baseUrl = baseUrl.Substring(0, baseUrl.Length - 3).TrimEnd('/');
+
+            return baseUrl;
+        }
+
+        private string GetProviderOriginUrl()
+        {
+            string baseUrl = GetProviderMediaBaseUrl();
+            if (string.IsNullOrEmpty(baseUrl))
+                return baseUrl;
+
+            try
+            {
+                var uri = new Uri(baseUrl);
+                return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+            }
+            catch
+            {
+                return baseUrl;
+            }
+        }
+
+        private static string TrimBlankEdges(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            int start = 0;
+            int end = value.Length - 1;
+
+            while (start <= end && (value[start] == '\n' || value[start] == ' ' || value[start] == '\t'))
+                start++;
+
+            while (end >= start && (value[end] == '\n' || value[end] == ' ' || value[end] == '\t'))
+                end--;
+
+            if (start > end)
+                return string.Empty;
+
+            return value.Substring(start, end - start + 1);
+        }
+
         private async Task<ChatAttachment> DownloadAndCacheAttachment(AiChatAttachment aiAtt)
         {
             if (aiAtt == null || string.IsNullOrWhiteSpace(aiAtt.path))
@@ -393,9 +727,11 @@ namespace NeonCompanion.Runtime.UI.Chat
 
             string url = aiAtt.path.Trim();
 
-            // If already a local path or data URL, return as-is (no download needed)
-            if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
-                url.StartsWith("file:", StringComparison.OrdinalIgnoreCase) ||
+            if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                return CacheDataUrlAttachment(aiAtt, url);
+
+            // If already a local path, return as-is (no download needed)
+            if (url.StartsWith("file:", StringComparison.OrdinalIgnoreCase) ||
                 File.Exists(url))
             {
                 return new ChatAttachment
@@ -435,8 +771,6 @@ namespace NeonCompanion.Runtime.UI.Chat
                         return null;
                     }
 
-                    File.WriteAllBytes(localPath, data);
-
                     string mediaType = !string.IsNullOrWhiteSpace(aiAtt.mediaType) ? aiAtt.mediaType : GuessMediaTypeFromExtension(ext);
                     string ct = req.GetResponseHeader("Content-Type");
                     if (string.IsNullOrWhiteSpace(aiAtt.mediaType) && !string.IsNullOrWhiteSpace(ct))
@@ -444,6 +778,14 @@ namespace NeonCompanion.Runtime.UI.Chat
                         int semi = ct.IndexOf(';');
                         mediaType = semi > 0 ? ct.Substring(0, semi).Trim() : ct.Trim();
                     }
+
+                    if (!IsSupportedImagePayload(data, mediaType, ext))
+                    {
+                        NeonLogger.LogWarning("Incoming attachment did not look like an image from " + url + " (Content-Type: " + (ct ?? "<none>") + ")");
+                        return null;
+                    }
+
+                    File.WriteAllBytes(localPath, data);
 
                     string attName = !string.IsNullOrWhiteSpace(aiAtt.name) ? aiAtt.name : DeriveFileNameFromUrl(url, ext);
 
@@ -463,6 +805,90 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
         }
 
+        private ChatAttachment CacheDataUrlAttachment(AiChatAttachment aiAtt, string dataUrl)
+        {
+            if (string.IsNullOrWhiteSpace(dataUrl))
+                return null;
+
+            try
+            {
+                int comma = dataUrl.IndexOf(',');
+                if (comma < 0)
+                    return null;
+
+                string meta = dataUrl.Substring(0, comma);
+                string payload = dataUrl.Substring(comma + 1);
+                if (meta.IndexOf(";base64", StringComparison.OrdinalIgnoreCase) < 0)
+                    return null;
+
+                string mediaType = aiAtt != null && !string.IsNullOrWhiteSpace(aiAtt.mediaType)
+                    ? aiAtt.mediaType
+                    : ExtractDataUrlMediaType(meta);
+                string ext = GetExtensionFromMediaType(mediaType);
+                byte[] data = Convert.FromBase64String(payload);
+                if (!IsSupportedImagePayload(data, mediaType, ext))
+                    return null;
+
+                string dir = Path.Combine(Application.persistentDataPath, "Attachments");
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
+                string localPath = Path.Combine(dir, Guid.NewGuid().ToString("N") + ext);
+                File.WriteAllBytes(localPath, data);
+
+                return new ChatAttachment
+                {
+                    kind = "image",
+                    name = aiAtt != null && !string.IsNullOrWhiteSpace(aiAtt.name) ? aiAtt.name : "image" + ext,
+                    path = localPath,
+                    mediaType = mediaType
+                };
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("CacheDataUrlAttachment failed: " + ex.Message);
+                return null;
+            }
+        }
+
+        private static string ExtractDataUrlMediaType(string meta)
+        {
+            if (string.IsNullOrWhiteSpace(meta))
+                return "image/png";
+
+            const string prefix = "data:";
+            if (!meta.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return "image/png";
+
+            string mediaType = meta.Substring(prefix.Length);
+            int semi = mediaType.IndexOf(';');
+            if (semi >= 0)
+                mediaType = mediaType.Substring(0, semi);
+
+            return string.IsNullOrWhiteSpace(mediaType) ? "image/png" : mediaType.Trim();
+        }
+
+        private static string GetExtensionFromMediaType(string mediaType)
+        {
+            if (string.IsNullOrWhiteSpace(mediaType))
+                return ".png";
+
+            string mt = mediaType.Trim().ToLowerInvariant();
+            if (mt == "image/png")
+                return ".png";
+            if (mt == "image/jpeg" || mt == "image/jpg")
+                return ".jpg";
+            if (mt == "image/webp")
+                return ".webp";
+            if (mt == "image/gif")
+                return ".gif";
+            if (mt == "image/bmp")
+                return ".bmp";
+            if (mt == "image/svg+xml")
+                return ".svg";
+            return ".png";
+        }
+
         private static string GetFileExtensionFromUrl(string url)
         {
             if (string.IsNullOrWhiteSpace(url))
@@ -478,6 +904,49 @@ namespace NeonCompanion.Runtime.UI.Chat
             if (string.IsNullOrEmpty(ext) || ext.Length > 5)
                 return ".png";
             return ext.ToLowerInvariant();
+        }
+
+        private static bool IsSupportedImagePayload(byte[] data, string mediaType, string ext)
+        {
+            if (data == null || data.Length < 4)
+                return false;
+
+            if (HasImageMagic(data))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(mediaType) &&
+                !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string e = (ext ?? string.Empty).ToLowerInvariant();
+            return e == ".svg";
+        }
+
+        private static bool HasImageMagic(byte[] data)
+        {
+            if (data == null || data.Length < 4)
+                return false;
+
+            if (data.Length >= 8 &&
+                data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
+                data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A)
+                return true;
+
+            if (data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF)
+                return true;
+
+            if (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38)
+                return true;
+
+            if (data[0] == 0x42 && data[1] == 0x4D)
+                return true;
+
+            if (data.Length >= 12 &&
+                data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+                data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50)
+                return true;
+
+            return false;
         }
 
         private static string GuessMediaTypeFromExtension(string ext)
