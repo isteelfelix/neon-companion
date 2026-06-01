@@ -47,7 +47,7 @@ namespace NeonCompanion.Runtime.Platform
             if (bridge == null)
                 bridge = host.AddComponent<WebSpeechBridge>();
 
-            DontDestroyOnLoad(host);
+            UnityEngine.Object.DontDestroyOnLoad(host);
             return bridge;
 #elif UNITY_EDITOR || UNITY_STANDALONE_WIN
             if (host == null)
@@ -57,7 +57,7 @@ namespace NeonCompanion.Runtime.Platform
             if (bridge == null)
                 bridge = host.AddComponent<WebSpeechBridge>();
 
-            DontDestroyOnLoad(host);
+            UnityEngine.Object.DontDestroyOnLoad(host);
             return bridge;
 #elif UNITY_IOS && !UNITY_EDITOR
             // iOS: for now use WebSpeechBridge (will be extended with native AVSpeech/SFSpeech in IOS-05)
@@ -69,7 +69,7 @@ namespace NeonCompanion.Runtime.Platform
             if (bridge == null)
                 bridge = host.AddComponent<WebSpeechBridge>();
 
-            DontDestroyOnLoad(host);
+            UnityEngine.Object.DontDestroyOnLoad(host);
             return bridge;
 #else
             Debug.LogWarning("[NeonCompanion] Voice not supported on this platform. Returning stub.");
@@ -96,7 +96,9 @@ namespace NeonCompanion.Runtime.Platform
         public bool IsSpeaking => false;
         public bool IsAvailable => false;
 
+#pragma warning disable 0067
         public event System.Action<string> OnSpeechRecognized;
+#pragma warning restore 0067
         public event System.Action OnPlaybackComplete;
 
         public void StartRecording() { }

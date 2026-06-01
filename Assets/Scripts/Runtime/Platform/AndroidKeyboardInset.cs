@@ -16,7 +16,9 @@ namespace NeonCompanion.Runtime.Platform
         public static bool IsKeyboardVisible { get; private set; }
         public static float KeyboardHeight { get; private set; }
 
+#pragma warning disable 0067
         public static event Action<bool, float> OnKeyboardVisibilityChanged;
+#pragma warning restore 0067
 
         /// <summary>
         /// Call this periodically or from a MonoBehaviour Update on Android.

@@ -672,7 +672,7 @@
 .app.platform-mobile .settings-panel,
 .app.platform-mobile .avatar-panel {
     /* make side panels behave better on portrait */
-    max-width: 85vw;
+    max-width: 85%;
 }
 
 
@@ -691,7 +691,7 @@
 
 /* Full mobile readiness - additional panels and components */
 .app.platform-mobile .avatar-panel {
-    max-height: 45vh;
+    max-height: 45%;
 }
 
 .app.platform-mobile .settings-content {
@@ -723,7 +723,7 @@
 }
 
 .app.platform-android .composer {
-    padding-bottom: calc(var(--safe-area-bottom, 0px) + 12px);
+    padding-bottom: 24px;
     padding-top: 8px;
 }
 

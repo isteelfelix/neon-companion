@@ -1480,16 +1480,6 @@
 }
 
 .app.platform-android .message {
-    max-width: 85
-/* ============================================================
-   Android-specific chat enhancements (PL-04)
-   ============================================================ */
-
-.app.platform-android .composer {
-    padding-bottom: 28px;
-}
-
-.app.platform-android .message {
     max-width: 85%;
     font-size: 15px;
     padding: 10px 14px;
