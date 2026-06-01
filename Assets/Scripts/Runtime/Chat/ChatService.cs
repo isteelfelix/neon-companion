@@ -505,7 +505,7 @@ namespace NeonCompanion.Runtime.Chat
             Action<string, string, string, string> onToolProgress = null)
         {
             // Hermes backend: route through WebSocket transport
-            if (_chatTransport != null && _chatTransport.IsConnected)
+            if (_chatTransport != null)
             {
                 await SendViaTransport(message, onStreamToken, onToolProgress);
                 return;
