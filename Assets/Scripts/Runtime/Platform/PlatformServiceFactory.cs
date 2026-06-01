@@ -36,6 +36,23 @@ namespace NeonCompanion.Runtime.Platform
             return new DefaultPlatformInfoService();
         }
 
+        public static IFileDropService CreateFileDropService(GameObject host = null)
+        {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            if (host == null)
+                host = GameObject.Find("FileDropBridge") ?? new GameObject("FileDropBridge");
+
+            var bridge = host.GetComponent<WindowsFileDropService>();
+            if (bridge == null)
+                bridge = host.AddComponent<WindowsFileDropService>();
+
+            UnityEngine.Object.DontDestroyOnLoad(host);
+            return bridge;
+#else
+            return new StubFileDropService();
+#endif
+        }
+
         public static IVoiceService CreateVoiceService(GameObject host = null)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -86,6 +103,18 @@ namespace NeonCompanion.Runtime.Platform
         public Task<string> PickImagePathAsync() => Task.FromResult<string>(null);
         public Task<string> PickFileAsync(string extension) => Task.FromResult<string>(null);
         public Task<string> PickSavePathAsync(string defaultFileName, string extension) => Task.FromResult<string>(null);
+    }
+
+    public sealed class StubFileDropService : IFileDropService
+    {
+#pragma warning disable 0067
+        public event System.Action<System.Collections.Generic.IReadOnlyList<string>> FilesDropped;
+#pragma warning restore 0067
+
+        public bool IsAvailable => false;
+
+        public void Start() { }
+        public void Stop() { }
     }
 
     /// <summary>

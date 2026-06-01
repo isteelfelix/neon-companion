@@ -41,6 +41,7 @@ namespace NeonCompanion.Runtime.Core
             // (см. docs/16_Platform_Architecture.md)
             var filePicker = PlatformServiceFactory.CreateFilePickerService();
             var platformInfo = PlatformServiceFactory.CreatePlatformInfoService();
+            var fileDrop = PlatformServiceFactory.CreateFileDropService(gameObject);
             var voiceService = PlatformServiceFactory.CreateVoiceService(gameObject);
 #if UNITY_ANDROID && !UNITY_EDITOR
             AndroidPermissionHelper.RequestPermission(AndroidPermissionHelper.RECORD_AUDIO);
@@ -95,6 +96,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<ISecretStore>(secrets);
             services.Register<IFilePickerService>(filePicker);
             services.Register<IPlatformInfoService>(platformInfo);
+            services.Register<IFileDropService>(fileDrop);
             services.Register<IVoiceService>(voiceService);
             services.Register<IProviderConfigRepository>(providers);
             services.Register<IChatSessionRepository>(sessions);

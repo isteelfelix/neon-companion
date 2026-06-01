@@ -92,7 +92,7 @@
 | U-41 | Отображение картинок в чате | ❌ | M2 | Broken: attachment inserts text token [attachment: filename] not actual image upload. Agent sees text token, not image data. Need multipart upload or base64 via API |
 | U-42 | Вставка изображений из буфера обмена | ✅ | M2 | Verified by Felix: full Windows clipboard bitmap support (PNG/JFIF/CF_DIB via P/Invoke), DIB→PNG conversion, text paste no longer intercepted, composer preview works |
 | U-43 | Мульти-агент чат | 📋 | M3 | |
-| U-44 | Drag-and-drop файлов в чат | ❌ | M2 | Broken: nothing can be dragged into app window at all |
+| U-44 | Drag-and-drop файлов в чат | ✅ | M2 | Verified by Felix: Windows standalone drag-and-drop works; dropped supported files become pending composer attachments/previews |
 | U-45 | Очередь сообщений | ✅ | M2 | Verified: queue visible when sending while response in progress |
 | U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
 | U-47 | Система команд в чате | ✅ | M2 | Работает |

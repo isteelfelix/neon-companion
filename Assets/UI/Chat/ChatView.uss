@@ -615,6 +615,18 @@
     bottom: 0;
 }
 
+.composer__preview-file {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 22px;
+    bottom: 8px;
+    color: var(--text-1);
+    font-size: 10px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
 /* Hover hint on thumb */
 .composer__preview-thumb:hover {
     border-color: rgba(255, 255, 255, 0.35);

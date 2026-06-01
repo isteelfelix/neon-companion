@@ -36,6 +36,7 @@
   "chat.search.next": "Next match",
   "chat.search.close": "Close search",
   "chat.preview.remove": "Remove",
+  "chat.drop.no_supported_files": "Could not attach files. Images and text documents are supported.",
   "chat.context.usage": "~{0} / {1} tokens",
   "settings.title": "Settings",
   "settings.page.title": "Settings",

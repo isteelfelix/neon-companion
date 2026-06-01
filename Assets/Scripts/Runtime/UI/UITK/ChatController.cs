@@ -81,6 +81,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isStreamingResponse;
         private bool _isVoiceRecording;
         private bool _isDragOver;
+        private bool _callbacksRegistered;
+        private IFileDropService _fileDropService;
         private bool _hasUnreadNotification;
         private ChatService _currentChatService;
         private VisualElement _streamingBubble;
@@ -184,6 +186,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void RegisterCallbacks()
         {
+            _callbacksRegistered = true;
+
             RegisterClick(_d.SendButton, OnSendClicked);
             RegisterClick(_d.StopButton, OnStopClicked);
             RegisterClick(_d.SummarizeButton, OnSummarizeClicked);
@@ -316,12 +320,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                 chatMain.RegisterCallback<DragLeaveEvent>(OnDragLeave);
             }
 #endif
+            _ = BindRuntimeFileDropAsync();
 
             Application.focusChanged += OnApplicationFocusChanged;
         }
 
         public void UnregisterCallbacks()
         {
+            _callbacksRegistered = false;
+
             UnregisterClick(_d.SendButton, OnSendClicked);
             UnregisterClick(_d.StopButton, OnStopClicked);
             UnregisterClick(_d.SummarizeButton, OnSummarizeClicked);
@@ -433,6 +440,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 chatMain.UnregisterCallback<DragLeaveEvent>(OnDragLeave);
             }
 #endif
+            UnbindRuntimeFileDrop();
 
             Application.focusChanged -= OnApplicationFocusChanged;
         }
@@ -2098,17 +2106,26 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (!string.IsNullOrEmpty(attachment.path) && System.IO.File.Exists(attachment.path))
                 {
-                    var img = new Image();
-                    img.AddToClassList("composer__preview-img");
-                    img.scaleMode = ScaleMode.ScaleAndCrop;
-                    img.schedule.Execute(() => LoadImageAsync(img, attachment.path));
-                    string previewPath = attachment.path; // capture for closure
-                    img.RegisterCallback<ClickEvent>(evt =>
+                    if (attachment.kind == "image" || IsImageFile(attachment.path))
                     {
-                        ShowImageLightbox(previewPath);
-                        evt.StopPropagation();
-                    });
-                    thumb.Add(img);
+                        var img = new Image();
+                        img.AddToClassList("composer__preview-img");
+                        img.scaleMode = ScaleMode.ScaleAndCrop;
+                        img.schedule.Execute(() => LoadImageAsync(img, attachment.path));
+                        string previewPath = attachment.path; // capture for closure
+                        img.RegisterCallback<ClickEvent>(evt =>
+                        {
+                            ShowImageLightbox(previewPath);
+                            evt.StopPropagation();
+                        });
+                        thumb.Add(img);
+                    }
+                    else
+                    {
+                        var fileLabel = new Label(GetAttachmentDisplayName(attachment));
+                        fileLabel.AddToClassList("composer__preview-file");
+                        thumb.Add(fileLabel);
+                    }
                 }
 
                 var removeBtn = new Button(() => RemovePendingAttachment(index));
@@ -2173,6 +2190,59 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Drag and Drop (U-44) =====
 
+        private async Task BindRuntimeFileDropAsync()
+        {
+            if (_fileDropService != null)
+                return;
+
+            try
+            {
+                var app = await _d.GetAppAsync();
+                if (!_callbacksRegistered || app == null)
+                    return;
+
+                IFileDropService fileDrop = null;
+                if (!app.Services.TryGet<IFileDropService>(out fileDrop) || fileDrop == null || !fileDrop.IsAvailable)
+                    return;
+
+                _fileDropService = fileDrop;
+                _fileDropService.FilesDropped += OnRuntimeFilesDropped;
+                _fileDropService.Start();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("File drop binding failed: " + ex.Message);
+            }
+        }
+
+        private void UnbindRuntimeFileDrop()
+        {
+            if (_fileDropService == null)
+                return;
+
+            _fileDropService.FilesDropped -= OnRuntimeFilesDropped;
+            _fileDropService.Stop();
+            _fileDropService = null;
+        }
+
+        private void OnRuntimeFilesDropped(IReadOnlyList<string> paths)
+        {
+            _isDragOver = false;
+            _d.Composer?.parent?.RemoveFromClassList("chat-main--drag-over");
+
+            int added = AddPendingAttachmentsFromPaths(paths);
+            if (added > 0)
+            {
+                RenderComposerPreviews();
+                _d.MessageInput?.Focus();
+                return;
+            }
+
+            _d.ShowSystemMessage?.Invoke(LocalizationExtensions.Get(
+                "chat.drop.no_supported_files",
+                "Не удалось добавить файлы: поддерживаются изображения и текстовые документы."));
+        }
+
 #if UNITY_EDITOR
         private void OnDragUpdated(DragUpdatedEvent evt)
         {
@@ -2200,33 +2270,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (paths == null || paths.Length == 0)
                 return;
 
-            for (int i = 0; i < paths.Length; i++)
-            {
-                string path = paths[i];
-                if (string.IsNullOrEmpty(path))
-                    continue;
-
-                // Skip non-file entries (folders, etc.)
-                if (!System.IO.File.Exists(path))
-                    continue;
-
-                string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
-                if (IsSupportedFile(ext))
-                {
-                    if (IsImageExtension(ext) && !IsFileSizeOk(path))
-                        continue;
-
-                    _pendingComposerAttachments.Add(new ChatAttachment
-                    {
-                        kind = IsImageExtension(ext) ? "image" : "file",
-                        name = System.IO.Path.GetFileName(path),
-                        path = path,
-                        mediaType = GuessImageMediaType(path)
-                    });
-                }
-            }
-
-            RenderComposerPreviews();
+            int added = AddPendingAttachmentsFromPaths(paths);
+            if (added > 0)
+                RenderComposerPreviews();
             evt.StopPropagation();
         }
 
@@ -2249,6 +2295,42 @@ namespace NeonCompanion.Runtime.UI.UITK
             return paths != null && paths.Length > 0;
         }
 #endif
+
+        private int AddPendingAttachmentsFromPaths(IReadOnlyList<string> paths)
+        {
+            if (paths == null || paths.Count == 0)
+                return 0;
+
+            int added = 0;
+            for (int i = 0; i < paths.Count; i++)
+            {
+                string path = paths[i];
+                if (string.IsNullOrEmpty(path))
+                    continue;
+
+                if (!System.IO.File.Exists(path))
+                    continue;
+
+                string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
+                if (!IsSupportedFile(ext))
+                    continue;
+
+                if (IsImageExtension(ext) && !IsFileSizeOk(path))
+                    continue;
+
+                bool isImage = IsImageExtension(ext);
+                _pendingComposerAttachments.Add(new ChatAttachment
+                {
+                    kind = isImage ? "image" : "file",
+                    name = System.IO.Path.GetFileName(path),
+                    path = path,
+                    mediaType = isImage ? GuessImageMediaType(path) : GuessFileMediaType(path)
+                });
+                added++;
+            }
+
+            return added;
+        }
 
         private static void SetDragCopyVisualMode()
         {
@@ -2278,6 +2360,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (ext == ".cs" || ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" || ext == ".cpp" || ext == ".h" || ext == ".csproj")
                 return true;
             return false;
+        }
+
+        private static string GuessFileMediaType(string path)
+        {
+            string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
+            if (ext == ".pdf") return "application/pdf";
+            if (ext == ".json") return "application/json";
+            if (ext == ".xml") return "application/xml";
+            if (ext == ".csv") return "text/csv";
+            if (ext == ".md") return "text/markdown";
+            if (ext == ".txt") return "text/plain";
+            if (ext == ".cs" || ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" || ext == ".cpp" || ext == ".h" || ext == ".csproj")
+                return "text/plain";
+            return "application/octet-stream";
         }
 
         private static bool IsImageExtension(string ext)
