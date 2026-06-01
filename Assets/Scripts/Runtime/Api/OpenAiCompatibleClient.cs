@@ -389,9 +389,14 @@ namespace NeonCompanion.Runtime.Api
             sb.Append(",\"content\":");
 
             bool hasAttachments = message?.attachments != null && message.attachments.Count > 0;
+            bool hasToolCalls = message?.tool_calls != null && message.tool_calls.Count > 0;
             if (!hasAttachments)
             {
-                AppendJsonString(sb, message?.content ?? string.Empty);
+                if (hasToolCalls && string.IsNullOrEmpty(message?.content))
+                    sb.Append("null");
+                else
+                    AppendJsonString(sb, message?.content ?? string.Empty);
+                AppendToolMessageFieldsJson(sb, message);
                 sb.Append('}');
                 return;
             }
@@ -423,7 +428,45 @@ namespace NeonCompanion.Runtime.Api
             }
 
             sb.Append(']');
+            AppendToolMessageFieldsJson(sb, message);
             sb.Append('}');
+        }
+
+        private static void AppendToolMessageFieldsJson(StringBuilder sb, AiChatMessage message)
+        {
+            if (message == null)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(message.tool_call_id))
+            {
+                sb.Append(",\"tool_call_id\":");
+                AppendJsonString(sb, message.tool_call_id);
+            }
+
+            if (message.tool_calls != null && message.tool_calls.Count > 0)
+            {
+                sb.Append(",\"tool_calls\":[");
+                for (int i = 0; i < message.tool_calls.Count; i++)
+                {
+                    if (i > 0)
+                        sb.Append(',');
+                    AppendToolCallJson(sb, message.tool_calls[i]);
+                }
+                sb.Append(']');
+            }
+        }
+
+        private static void AppendToolCallJson(StringBuilder sb, ToolCall toolCall)
+        {
+            sb.Append('{');
+            AppendJsonProperty(sb, "id", toolCall?.id ?? string.Empty, isFirst: true);
+            sb.Append(",\"type\":");
+            AppendJsonString(sb, string.IsNullOrWhiteSpace(toolCall?.type) ? "function" : toolCall.type);
+            sb.Append(",\"function\":{");
+            AppendJsonProperty(sb, "name", toolCall?.function?.name ?? string.Empty, isFirst: true);
+            sb.Append(",\"arguments\":");
+            AppendJsonString(sb, toolCall?.function?.arguments ?? "{}");
+            sb.Append("}}");
         }
 
         private static string BuildImageDataUrl(AiChatAttachment attachment)
@@ -613,7 +656,7 @@ namespace NeonCompanion.Runtime.Api
             string tokenProperty = useCompletionTokens ? "max_completion_tokens" : "max_tokens";
             sb.Append(",\"").Append(tokenProperty).Append("\":").Append(maxTokens);
 
-            if (tools != null && tools.Count > 0)
+            if (capabilities != null && capabilities.SupportsFunctionTools && tools != null && tools.Count > 0)
             {
                 sb.Append(",\"tools\":[");
                 for (int i = 0; i < tools.Count; i++)
@@ -992,6 +1035,9 @@ namespace NeonCompanion.Runtime.Api
 
         private static string ExtractJsonStringValue(string json, string key, int startFrom)
         {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key))
+                return null;
+
             string keyMarker = $"\"{key}\"";
             int pos = startFrom;
             while (pos < json.Length)
@@ -1020,6 +1066,52 @@ namespace NeonCompanion.Runtime.Api
                 return sb.ToString();
             }
             return null;
+        }
+
+        private static int ExtractJsonIntValue(string json, string key, int startFrom)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key))
+                return -1;
+
+            string keyMarker = $"\"{key}\"";
+            int pos = Math.Max(0, startFrom);
+            while (pos < json.Length)
+            {
+                int keyIdx = json.IndexOf(keyMarker, pos, StringComparison.Ordinal);
+                if (keyIdx < 0)
+                    return -1;
+
+                int p = keyIdx + keyMarker.Length;
+                while (p < json.Length && char.IsWhiteSpace(json[p]))
+                    p++;
+                if (p >= json.Length || json[p] != ':')
+                {
+                    pos = keyIdx + keyMarker.Length;
+                    continue;
+                }
+
+                p++;
+                while (p < json.Length && char.IsWhiteSpace(json[p]))
+                    p++;
+
+                int start = p;
+                while (p < json.Length && char.IsDigit(json[p]))
+                    p++;
+
+                if (p <= start)
+                {
+                    pos = keyIdx + keyMarker.Length;
+                    continue;
+                }
+
+                int value;
+                if (int.TryParse(json.Substring(start, p - start), out value))
+                    return value;
+
+                return -1;
+            }
+
+            return -1;
         }
 
         public async Task<AiChatResponse> SendMessageStreamAsync(
@@ -1084,6 +1176,8 @@ namespace NeonCompanion.Runtime.Api
                 int lastProcessed = 0;
                 bool emittedAnyToken = false;
                 var collected = new StringBuilder();
+                var toolCallAccumulator = new StreamingToolCallAccumulator();
+                var sseState = new SseParseState();
                 Action<string> emitToken = token =>
                 {
                     if (string.IsNullOrEmpty(token))
@@ -1102,14 +1196,14 @@ namespace NeonCompanion.Runtime.Api
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
-                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, emitToken, flushPartialLine: false, onToolProgress: onToolProgress);
+                    lastProcessed = ParseSseText(webRequest.downloadHandler.text, lastProcessed, emitToken, flushPartialLine: false, onToolProgress: onToolProgress, toolCallAccumulator: toolCallAccumulator, state: sseState);
 
                     await Task.Yield();
                 }
 
                 // Drain any data that arrived after the last yield
                 string finalStreamingText = webRequest.downloadHandler?.text ?? string.Empty;
-                ParseSseText(finalStreamingText, lastProcessed, emitToken, flushPartialLine: true, onToolProgress: onToolProgress);
+                ParseSseText(finalStreamingText, lastProcessed, emitToken, flushPartialLine: true, onToolProgress: onToolProgress, toolCallAccumulator: toolCallAccumulator, state: sseState);
 
                 if (webRequest.result != UnityWebRequest.Result.Success)
                 {
@@ -1120,7 +1214,7 @@ namespace NeonCompanion.Runtime.Api
 
                 // Some providers ignore `stream=true` and return a normal JSON completion.
                 AiChatResponse fallbackResponse = null;
-                if (!emittedAnyToken)
+                if (!emittedAnyToken && !toolCallAccumulator.HasToolCalls)
                 {
                     var fallback = ExtractContentFromStreamingPayload(finalStreamingText);
                     if (string.IsNullOrWhiteSpace(fallback))
@@ -1157,7 +1251,7 @@ namespace NeonCompanion.Runtime.Api
                         responseProviderSessionId = fallbackResponse.providerSessionId;
                 }
 
-                if (!emittedAnyToken)
+                if (!emittedAnyToken && !toolCallAccumulator.HasToolCalls)
                 {
                     throw new InvalidOperationException("Streaming response contained no tokens. Check provider endpoint, model id, and streaming compatibility.");
                 }
@@ -1169,6 +1263,11 @@ namespace NeonCompanion.Runtime.Api
                     content = collected.ToString(),
                     receivedAtUtc = DateTime.UtcNow
                 };
+
+                if (toolCallAccumulator.HasToolCalls)
+                {
+                    streamFinal.tool_calls = toolCallAccumulator.ToToolCalls();
+                }
 
                 if (streamFinal.tool_calls == null || streamFinal.tool_calls.Count == 0)
                 {
@@ -1429,18 +1528,201 @@ namespace NeonCompanion.Runtime.Api
             public string ProviderSessionId;
         }
 
+        private sealed class SseParseState
+        {
+            public string PendingEventType;
+        }
+
+        private sealed class StreamingToolCallAccumulator
+        {
+            private sealed class ToolCallState
+            {
+                public string Id;
+                public string Type = "function";
+                public string Name;
+                public StringBuilder Arguments = new StringBuilder();
+                public bool EmittedRequest;
+            }
+
+            private readonly List<ToolCallState> _states = new List<ToolCallState>();
+
+            public bool HasToolCalls
+            {
+                get
+                {
+                    for (int i = 0; i < _states.Count; i++)
+                    {
+                        if (!string.IsNullOrWhiteSpace(_states[i].Name))
+                            return true;
+                    }
+
+                    return false;
+                }
+            }
+
+            public void ProcessPayload(string payload, Action<string, string, string, string> onToolProgress)
+            {
+                if (string.IsNullOrWhiteSpace(payload))
+                    return;
+
+                if (payload.IndexOf("\"tool_calls\"", StringComparison.Ordinal) >= 0 &&
+                    TryExtractNamedArray(payload, "tool_calls", out string arrayJson))
+                {
+                    int pos = 0;
+                    while (TryReadNextObject(arrayJson, pos, out string itemJson, out int nextPos))
+                    {
+                        ApplyToolCallDelta(itemJson, onToolProgress);
+                        pos = nextPos;
+                    }
+                }
+                else if (payload.IndexOf("\"function_call\"", StringComparison.Ordinal) >= 0)
+                {
+                    ApplyLegacyFunctionCallDelta(payload, onToolProgress);
+                }
+            }
+
+            public List<ToolCall> ToToolCalls()
+            {
+                var result = new List<ToolCall>();
+                for (int i = 0; i < _states.Count; i++)
+                {
+                    var state = _states[i];
+                    if (state == null || string.IsNullOrWhiteSpace(state.Name))
+                        continue;
+
+                    var call = new ToolCall();
+                    call.id = string.IsNullOrWhiteSpace(state.Id) ? "call_" + i.ToString() : state.Id;
+                    call.type = string.IsNullOrWhiteSpace(state.Type) ? "function" : state.Type;
+                    call.function = new ToolCallFunction();
+                    call.function.name = state.Name;
+                    call.function.arguments = state.Arguments != null ? state.Arguments.ToString() : string.Empty;
+                    result.Add(call);
+                }
+
+                return result;
+            }
+
+            private void ApplyToolCallDelta(string itemJson, Action<string, string, string, string> onToolProgress)
+            {
+                int index = ExtractJsonIntValue(itemJson, "index", 0);
+                if (index < 0)
+                    index = 0;
+
+                var state = GetState(index);
+                string id = ExtractJsonStringValue(itemJson, "id", 0);
+                if (!string.IsNullOrEmpty(id))
+                    state.Id = id;
+
+                string type = ExtractJsonStringValue(itemJson, "type", 0);
+                if (!string.IsNullOrEmpty(type))
+                    state.Type = type;
+
+                int functionIdx = itemJson.IndexOf("\"function\"", StringComparison.Ordinal);
+                int searchStart = functionIdx >= 0 ? functionIdx : 0;
+
+                string name = ExtractJsonStringValue(itemJson, "name", searchStart);
+                if (!string.IsNullOrEmpty(name))
+                    state.Name = name;
+
+                string argsDelta = ExtractJsonStringValue(itemJson, "arguments", searchStart);
+                if (!string.IsNullOrEmpty(argsDelta))
+                    state.Arguments.Append(argsDelta);
+
+                EmitRequestOnce(state, onToolProgress);
+            }
+
+            private void ApplyLegacyFunctionCallDelta(string payload, Action<string, string, string, string> onToolProgress)
+            {
+                var state = GetState(0);
+                int functionIdx = payload.IndexOf("\"function_call\"", StringComparison.Ordinal);
+                int searchStart = functionIdx >= 0 ? functionIdx : 0;
+
+                string name = ExtractJsonStringValue(payload, "name", searchStart);
+                if (!string.IsNullOrEmpty(name))
+                    state.Name = name;
+
+                string argsDelta = ExtractJsonStringValue(payload, "arguments", searchStart);
+                if (!string.IsNullOrEmpty(argsDelta))
+                    state.Arguments.Append(argsDelta);
+
+                EmitRequestOnce(state, onToolProgress);
+            }
+
+            private ToolCallState GetState(int index)
+            {
+                while (_states.Count <= index)
+                    _states.Add(new ToolCallState());
+
+                return _states[index];
+            }
+
+            private static void EmitRequestOnce(ToolCallState state, Action<string, string, string, string> onToolProgress)
+            {
+                if (state == null || state.EmittedRequest || string.IsNullOrWhiteSpace(state.Name) || onToolProgress == null)
+                    return;
+
+                state.EmittedRequest = true;
+                onToolProgress.Invoke(state.Name, state.Name, "\uD83D\uDD27", "requesting");
+            }
+
+            private static bool TryReadNextObject(string json, int start, out string objectJson, out int nextPos)
+            {
+                objectJson = null;
+                nextPos = start;
+                if (string.IsNullOrEmpty(json))
+                    return false;
+
+                int objectStart = json.IndexOf('{', Math.Max(0, start));
+                if (objectStart < 0)
+                    return false;
+
+                int depth = 0;
+                bool inString = false;
+                for (int i = objectStart; i < json.Length; i++)
+                {
+                    char c = json[i];
+                    if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+                    {
+                        inString = !inString;
+                        continue;
+                    }
+
+                    if (inString)
+                        continue;
+
+                    if (c == '{')
+                        depth++;
+                    else if (c == '}')
+                    {
+                        depth--;
+                        if (depth == 0)
+                        {
+                            objectJson = json.Substring(objectStart, i - objectStart + 1);
+                            nextPos = i + 1;
+                            return true;
+                        }
+                    }
+                }
+
+                nextPos = json.Length;
+                return false;
+            }
+        }
+
         private static int ParseSseText(
             string text,
             int offset,
             Action<string> onToken,
             bool flushPartialLine,
-            Action<string, string, string, string> onToolProgress = null)
+            Action<string, string, string, string> onToolProgress = null,
+            StreamingToolCallAccumulator toolCallAccumulator = null,
+            SseParseState state = null)
         {
             if (string.IsNullOrEmpty(text) || offset >= text.Length)
                 return Math.Max(0, offset);
 
             int searchFrom = offset;
-            string pendingEventType = null;
+            string pendingEventType = state != null ? state.PendingEventType : null;
 
             while (searchFrom < text.Length)
             {
@@ -1461,6 +1743,8 @@ namespace NeonCompanion.Runtime.Api
                 {
                     // SSE event boundary — reset pending event type
                     pendingEventType = null;
+                    if (state != null)
+                        state.PendingEventType = null;
                     continue;
                 }
 
@@ -1468,6 +1752,8 @@ namespace NeonCompanion.Runtime.Api
                 if (line.StartsWith("event:", StringComparison.OrdinalIgnoreCase))
                 {
                     pendingEventType = line.Length > 6 ? line.Substring(6).Trim() : string.Empty;
+                    if (state != null)
+                        state.PendingEventType = pendingEventType;
                     continue;
                 }
 
@@ -1493,6 +1779,8 @@ namespace NeonCompanion.Runtime.Api
                 {
                     ParseAndEmitToolProgress(payload, onToolProgress);
                     pendingEventType = null;
+                    if (state != null)
+                        state.PendingEventType = null;
                     continue;
                 }
 
@@ -1503,12 +1791,17 @@ namespace NeonCompanion.Runtime.Api
                     {
                         ParseAndEmitToolRequest(payload, onToolProgress);
                         pendingEventType = null;
+                        if (state != null)
+                            state.PendingEventType = null;
                         continue;
                     }
 
                     // Minimal detection of tool_calls in SSE chunks (generic OpenAI-compatible providers)
                     TryDetectAndEmitToolCallRequest(payload, onToolProgress);
                 }
+
+                if (toolCallAccumulator != null)
+                    toolCallAccumulator.ProcessPayload(payload, onToolProgress);
 
                 string delta = ExtractDeltaContent(payload);
                 if (!string.IsNullOrEmpty(delta))
@@ -1525,8 +1818,10 @@ namespace NeonCompanion.Runtime.Api
 
             string tool = ExtractJsonStringValue(json, "tool", 0) ?? string.Empty;
             string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? string.Empty;
-            string label = ExtractJsonStringValue(json, "label", 0) ?? string.Empty;
+            string label = ExtractJsonStringValue(json, "label", 0) ?? ExtractJsonStringValue(json, "description", 0) ?? string.Empty;
             string status = ExtractJsonStringValue(json, "status", 0) ?? string.Empty;
+            if (string.IsNullOrEmpty(status) && LooksLikeApprovalText(label))
+                status = "approval_required";
 
             onToolProgress.Invoke(tool, label, emoji, status);
         }
@@ -1541,7 +1836,21 @@ namespace NeonCompanion.Runtime.Api
             string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? "\uD83D\uDD27"; // 🔧
             string label = ExtractJsonStringValue(json, "label", 0) ?? ExtractJsonStringValue(json, "description", 0) ?? tool;
 
-            onToolProgress.Invoke(tool, label, emoji, "requesting");
+            onToolProgress.Invoke(tool, label, emoji, "approval_required");
+        }
+
+        private static bool LooksLikeApprovalText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            string lower = value.ToLowerInvariant();
+            return lower.IndexOf("approval", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf("approve", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf("confirm", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf("permission", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf("разреш", StringComparison.Ordinal) >= 0 ||
+                   lower.IndexOf("подтверж", StringComparison.Ordinal) >= 0;
         }
 
         // Minimal OpenAI tool_calls detection (no full delta accumulation; enough to surface approval prompt)

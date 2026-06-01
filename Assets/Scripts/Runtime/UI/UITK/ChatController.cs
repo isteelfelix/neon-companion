@@ -1162,8 +1162,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _streamingLabel = null;
             ScrollTranscriptToBottom();
 
-            // Wire tool call detection to approval flow (Part B)
-            if (IsApprovalRequestStatus(status))
+            // Hermes executes tools server-side, so its approval request must be
+            // surfaced from streaming progress. Generic OpenAI local tools still
+            // block in ProcessAgentToolLoopAsync before ToolExecutor runs.
+            if (ShouldPromptForStreamingApproval(status))
             {
                 var req = new ToolCallRequest
                 {
@@ -1172,7 +1174,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     description = !string.IsNullOrEmpty(label) ? label : tool,
                     parameters = new Dictionary<string, string>()
                 };
-                _ = HandleApprovalRequestAsync(req);
+                _ = HandleStreamingApprovalRequestAsync(req);
             }
         }
 
@@ -3728,8 +3730,44 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return true;
             if (string.Equals(status, "pending_approval", StringComparison.OrdinalIgnoreCase))
                 return true;
+            if (status.IndexOf("approve", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (status.IndexOf("confirm", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (status.IndexOf("permission", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (status.IndexOf("waiting", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
             if (status.IndexOf("request", StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
+            return false;
+        }
+
+        private bool ShouldPromptForStreamingApproval(string status)
+        {
+            if (!IsApprovalRequestStatus(status))
+                return false;
+
+            if (!string.Equals(status, "requesting", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return IsCurrentProviderHermes();
+        }
+
+        private bool IsCurrentProviderHermes()
+        {
+            var provider = _currentChatService != null ? _currentChatService.CurrentProvider : null;
+            if (provider == null)
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(provider.backendType) &&
+                string.Equals(provider.backendType, "hermes", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(provider.defaultModel) &&
+                provider.defaultModel.IndexOf("hermes", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
             return false;
         }
 
@@ -3790,31 +3828,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             return result;
         }
 
-        private async Task HandleApprovalRequestAsync(ToolCallRequest request)
-        {
-            if (request == null)
-                return;
-            if (_currentApprovalPrompt != null)
-                return; // one at a time
-
-            bool approved = await RequestToolApproval(request);
-            if (!approved)
-            {
-                // Reject: stop generation to pause tool execution (server-side protocol is future work)
-                try
-                {
-                    if (_isSending || _isStreamingResponse)
-                    {
-                        OnStopClicked();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    NeonLogger.LogError("Error stopping on tool reject: " + ex);
-                }
-            }
-        }
-
         private async Task<bool> RequestToolApproval(ToolCallRequest request)
         {
             if (request == null)
@@ -3861,6 +3874,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             return approved;
+        }
+
+        private async Task HandleStreamingApprovalRequestAsync(ToolCallRequest request)
+        {
+            if (request == null)
+                return;
+            if (_currentApprovalPrompt != null)
+                return;
+
+            bool approved = await RequestToolApproval(request);
+            if (!approved)
+            {
+                try
+                {
+                    if (_isSending || _isStreamingResponse)
+                        OnStopClicked();
+                }
+                catch (Exception ex)
+                {
+                    NeonLogger.LogError("Error stopping on tool reject: " + ex);
+                }
+            }
         }
 
         private async Task ProcessAgentToolLoopAsync(ChatService chat, bool originalStreaming)

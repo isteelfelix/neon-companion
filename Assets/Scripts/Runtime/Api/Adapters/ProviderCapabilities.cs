@@ -15,6 +15,9 @@ namespace NeonCompanion.Runtime.Api.Adapters
         /// <summary>Бэкенд шлёт hermes.tool.progress SSE события.</summary>
         public bool SupportsToolProgress { get; set; }
 
+        /// <summary>Бэкенд принимает стандартное OpenAI поле tools/function calling.</summary>
+        public bool SupportsFunctionTools { get; set; }
+
         /// <summary>Бэкенд использует max_completion_tokens вместо max_tokens.</summary>
         public bool UsesMaxCompletionTokens { get; set; }
 

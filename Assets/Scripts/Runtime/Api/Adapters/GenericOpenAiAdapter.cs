@@ -14,6 +14,7 @@ namespace NeonCompanion.Runtime.Api.Adapters
                 SupportsModelSwitch = false,
                 SupportsInventory = false,
                 SupportsToolProgress = false,
+                SupportsFunctionTools = true,
                 UsesMaxCompletionTokens = false,
                 RequiresTemperatureOmission = false,
                 ForceNonStreaming = false,

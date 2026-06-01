@@ -16,6 +16,7 @@ namespace NeonCompanion.Runtime.Api.Adapters
                 SupportsModelSwitch = false, // Model switch is local — model sent in request.model field
                 SupportsInventory = true,
                 SupportsToolProgress = true,
+                SupportsFunctionTools = false,
                 UsesMaxCompletionTokens = false,
                 RequiresTemperatureOmission = false,
                 ForceNonStreaming = false,

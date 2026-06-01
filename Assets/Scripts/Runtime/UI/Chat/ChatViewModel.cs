@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Models;
+using NeonCompanion.Runtime.Api.Tools;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
@@ -147,7 +148,8 @@ namespace NeonCompanion.Runtime.UI.Chat
                     temperature = Temperature,
                     maxTokens = MaxTokens,
                     systemPrompt = SystemPrompt,
-                    messages = requestMessages
+                    messages = requestMessages,
+                    tools = ToolRegistry.GetToolDefinitions()
                 };
 
                 NeonLogger.Log($"ChatViewModel request: provider={_provider.id}, model={request.model}, providerSessionId={request.providerSessionId ?? "<null>"}, messages={requestMessages.Count}");

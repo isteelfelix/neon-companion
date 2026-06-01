@@ -96,7 +96,7 @@
 | U-45 | Очередь сообщений | ✅ | M2 | Verified: queue visible when sending while response in progress |
 | U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
 | U-47 | Система команд в чате | ✅ | M2 | Работает |
-| U-48 | Agent Approval System (Part B) | ❌ | M2 | Not working: approval prompt doesn't appear in neon-companion before tool execution @@
+| U-48 | Agent Approval System (Part B) | ⏳ | M2 | Implemented: local OpenAI tool-call approval blocks before ToolExecutor; Hermes SSE approval/request/progress statuses now surface an in-chat approval prompt. Awaiting Felix verification @@
 | U-49 | Входящие вложения от AI | ⏳ | M2 | Client-side fixed in 7ce26be (MEDIA: parsing, path resolution, magic bytes). Blocked: gateway serves HTML instead of actual images — needs gateway-level image serving layer |
 | U-50 | Баг: анимированный аватар в вкладке Статика | ✅ | M2 | Verified by Felix: mode check before null guard + HideAllAvatarImageOverlays |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
