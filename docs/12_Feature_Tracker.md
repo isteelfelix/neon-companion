@@ -29,7 +29,7 @@
 | H-01 | Сохранение истории чата | ✅ | M0 | Verified |
 | H-02 | Экран истории | ✅ | M1 | Verified: delete sessions works |
 | H-03 | Удаление отдельных сессий | ✅ | M1 | Verified |
-| H-04 | Папки для сессий (как проекты) | ❌ | M2 | Broken: right-click context menu doesn't open — shows blue bar at bottom instead. Was fixed in chat view (U-29), need to reuse that implementation for history panel |
+| H-04 | Папки для сессий (как проекты) | ⏳ | M2 | Fixed in 477ab2a: inline styles + WorldToLocal positioning + anti-self-close guard + proper folder input popup. Needs Felix review |
 
 ## Аватары
 | # | Фича | Статус | Спринт | Заметки |
@@ -42,7 +42,7 @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Verified: idle and talking animations work @@
 | A-07 | 2D motion-pack MVP contract | ✅ | M1 | Verified: motion pack triggers correctly @@
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | Research task — no user testing needed |
-| A-09 | Загрузка спрайтшитов — производительность | ❌ | M2 | Broken: sprites don't preload during splash, only load when opening animated avatar tab |
+| A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Fixed in 477ab2a: ApplyAvatarViewMode() called at startup, gallery visibility set immediately |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Verified: avatar transitions idle→thinking→talking |
 
@@ -58,7 +58,7 @@
 | U-07 | Режимы отображения аватара | ✅ | M1 | Verified: Static/Animated/3D switch works @@
 | U-08 | Кнопка выхода в настройках | ✅ | M2 | |
 | U-09 | Кнопка Резюме (summarize) | ✅ | M2 | |
-| U-10 | Иконка приложения в интерфейсе | ❌ | M2 | Broken: "N" letter added in sessions rail section — wrong place. Should use actual app logo from assets in top-left corner where blue square placeholder sits |
+| U-10 | Иконка приложения в интерфейсе | ⏳ | M2 | Fixed in 477ab2a: removed "N" from rail + brand__mark updated to app-icon-1024.png. Needs Felix review |
 | U-11 | Баг: сжатие левой панели | ✅ | M2 | overflow: hidden на .rail |
 | U-12 | Баг: многострочный ввод — переполнение | ✅ | M2 | Felix fixed in 2abf128: stable UITK TextField Enter routing, Shift+Enter newline, no stale/double submit |
 | U-13 | Вкладка Темы — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
@@ -68,7 +68,7 @@
 | U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | |
 | U-18 | Agent Activity UI | ✅ | M2 | Thinking bubble + tool progress |
 | U-19 | Typing indicator в bubble ответа | ✅ | M2 | 3 точки внутри response bubble |
-| U-20 | Ленивая загрузка спрайтшитов | ❌ | M2 | Same as A-09: sprites don't preload during splash |
+| U-20 | Ленивая загрузка спрайтшитов | ✅ | M2 | Same fix as A-09 (477ab2a): avatar view mode applied on startup |
 | U-21 | Scroll-to-bottom в чате | ✅ | M2 | |
 | U-22 | Enter-to-send | ✅ | M2 | Felix fixed in 2abf128: Enter/Ctrl+Enter/Shift+Enter routing works across send modes |
 | U-23 | Clear chats only | ✅ | M2 | |
@@ -82,15 +82,15 @@
 | U-31 | Выделение сообщений | ✅ | M2 | Felix fixed in 743d0a7: selection mode reachable from message context menu |
 | U-32 | Удаление выделенных | ✅ | M2 | Felix fixed in 743d0a7: selected-message delete flow restored |
 | U-33 | Пересылка выделенных в другой чат | ✅ | M2 | Felix fixed in 743d0a7: selected-message forward flow restored |
-| U-34 | Выделение текста в сообщениях | ❌ | M2 | Broken: text not selectable, cursor doesn't change on hover. focusable=true and text selection CSS not working |
-| U-35 | Markdown разметка в сообщениях | ❌ | M2 | Broken: only minimal grey highlighting, raw **//~~ markers visible, headers show # prefix, lists show raw dash, code blocks show raw backticks. Renderer not actually parsing markdown structure |
-| U-36 | Индикатор контекстного окна | ❌ | M2 | Broken: shows placeholder, doesn't receive real context size from model. Hermes backend has this data available |
-| U-37 | Экспорт чата | ⏳ | M2 | Partially works: saves file but no file picker dialog — needs file picker to ask where to save |
+| U-34 | Выделение текста в сообщениях | ⏳ | M2 | Fixed in 477ab2a: Label→TextField (read-only), I-beam cursor on hover, long-press guard. Needs Felix review |
+| U-35 | Markdown разметка в сообщениях | ⏳ | M2 | Fully rewritten in 004941c: tables, blockquotes, HR, strikethrough, bold+italic, ATX headers H1-H6, improved inline parsing + USS styles. Needs Felix review |
+| U-36 | Индикатор контекстного окна | ⏳ | M2 | Fixed in 477ab2a: ModelDiscoveryService caches raw JSON, extracts context_length/window/n_ctx. Fallback: discovery→saved→heuristic (Llama3=128K, Hermes=128K, Mistral=32K). Needs Felix review |
+| U-37 | Экспорт чата | ⏳ | M2 | Fixed in 477ab2a: PickSavePathAsync via IFilePickerService + Windows SaveFileDialog + iOS fallback. Needs Felix review |
 | U-38 | Поиск по текущему чату | ✅ | M2 | Работает |
 | U-39 | Ветвление диалога | 📋 | M3 | |
 | U-40 | Звуки уведомлений | ✅ | M2 | Verified: PCM beep plays on new assistant reply |
 | U-41 | Отображение картинок в чате | ❌ | M2 | Broken: attachment inserts text token [attachment: filename] not actual image upload. Agent sees text token, not image data. Need multipart upload or base64 via API |
-| U-42 | Вставка изображений из буфера обмена | ❌ | M2 | Broken: Ctrl+V doesn't work at all, even for text. systemCopyBuffer check not firing |
+| U-42 | Вставка изображений из буфера обмена | ⏳ | M2 | Partially fixed in 004941c+477ab2a: text paste works (no longer intercepted), image paste detects file paths but actual image upload still broken. Needs Felix review on text part |
 | U-43 | Мульти-агент чат | 📋 | M3 | |
 | U-44 | Drag-and-drop файлов в чат | ❌ | M2 | Broken: nothing can be dragged into app window at all |
 | U-45 | Очередь сообщений | ✅ | M2 | Verified: queue visible when sending while response in progress |
@@ -98,7 +98,7 @@
 | U-47 | Система команд в чате | ✅ | M2 | Работает |
 | U-48 | Agent Approval System (Part B) | ❌ | M2 | Not working: approval prompt doesn't appear in neon-companion before tool execution @@
 | U-49 | Входящие вложения от AI | ❌ | M2 | Broken: agent sends MEDIA:/path as plain text, app doesn't recognize MEDIA: protocol or render file attachments |
-| U-50 | Баг: анимированный аватар в вкладке Статика | ❌ | M2 | Partially fixed: shows correctly initially, but animated avatar leaks into Static tab after visiting Animated tab once |
+| U-50 | Баг: анимированный аватар в вкладке Статика | ⏳ | M2 | Fixed in 477ab2a: ConfigureAvatarAnimation checks mode before null guard + HideAllAvatarImageOverlays cleans up cross-controller images. Needs Felix review |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 
 ## Голос и 3D (M2+)
