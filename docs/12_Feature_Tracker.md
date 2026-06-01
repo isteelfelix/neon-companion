@@ -19,7 +19,7 @@
 | C-05 | Локализация UI | ✅ | M1 | Verified: all UI elements in Russian, no raw keys |
 | C-06 | Авто-обнаружение моделей (ModelDiscoveryService) | ✅ | M1 | Verified: models discovered from /v1/models |
 | C-07 | Модель-пикер в чате | ⏳ | M1 | NeonDropdown в topbar + overlay — UI works, model list shows, switching works for OpenAI but not for Hermes (captured in C-10) |
-| C-08 | Вложения в чате | ❌ | M1 | Broken: attach inserts text token not actual image (same as U-41) |
+| C-08 | Вложения в чате | ✅ | M1 | Verified by Felix (same fix as U-41) |
 | C-09 | Сессионная маршрутизация моделей | ✅ | M1 | Verified: Hermes knows current model per session |
 | C-10 | Provider Adapter архитектура | ❌ | M2 | Partially works: model switching OK for OpenAI but broken for Hermes — model list shows but switching has no effect, agent always uses default Hermes model |
 
@@ -89,7 +89,7 @@
 | U-38 | Поиск по текущему чату | ✅ | M2 | Работает |
 | U-39 | Ветвление диалога | 📋 | M3 | |
 | U-40 | Звуки уведомлений | ✅ | M2 | Verified: PCM beep plays on new assistant reply |
-| U-41 | Отображение картинок в чате | ❌ | M2 | Broken: attachment inserts text token [attachment: filename] not actual image upload. Agent sees text token, not image data. Need multipart upload or base64 via API |
+| U-41 | Отображение картинок в чате | ✅ | M2 | Verified by Felix |
 | U-42 | Вставка изображений из буфера обмена | ✅ | M2 | Verified by Felix: full Windows clipboard bitmap support (PNG/JFIF/CF_DIB via P/Invoke), DIB→PNG conversion, text paste no longer intercepted, composer preview works |
 | U-43 | Мульти-агент чат | 📋 | M3 | |
 | U-44 | Drag-and-drop файлов в чат | ✅ | M2 | Verified by Felix: Windows standalone drag-and-drop works; dropped supported files become pending composer attachments/previews |
@@ -97,7 +97,7 @@
 | U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
 | U-47 | Система команд в чате | ✅ | M2 | Работает |
 | U-48 | Agent Approval System (Part B) | ❌ | M2 | Not working: approval prompt doesn't appear in neon-companion before tool execution @@
-| U-49 | Входящие вложения от AI | ❌ | M2 | Broken: agent sends MEDIA:/path as plain text, app doesn't recognize MEDIA: protocol or render file attachments |
+| U-49 | Входящие вложения от AI | ⏳ | M2 | Client-side fixed in 7ce26be (MEDIA: parsing, path resolution, magic bytes). Blocked: gateway serves HTML instead of actual images — needs gateway-level image serving layer |
 | U-50 | Баг: анимированный аватар в вкладке Статика | ✅ | M2 | Verified by Felix: mode check before null guard + HideAllAvatarImageOverlays |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 | U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
