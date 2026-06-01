@@ -91,6 +91,12 @@ namespace NeonCompanion.Runtime.Chat
                 return _currentChatViewModel;
 
             _currentProvider = await ResolveProviderAsync(preferredProviderId);
+            if (_currentProvider == null)
+            {
+                NeonLogger.LogWarning("[ChatService] No provider configured — chat view model not created.");
+                return null;
+            }
+
             SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             _currentChatViewModel.ProviderSessionId = _currentSession?.providerSessionId;
@@ -126,7 +132,7 @@ namespace NeonCompanion.Runtime.Chat
                 if (remaining.Count > 0)
                     await SwitchToSessionAsync(remaining[0]);
                 else
-                    await StartNewSessionAsync();
+                    ClearCurrentSessionWithoutSaving();
             }
         }
 
@@ -265,11 +271,32 @@ namespace NeonCompanion.Runtime.Chat
             // Hermes mode: create server-side session. Do not silently fall back to OpenAI/local mode.
             if (_chatTransport != null)
             {
+                if (_currentProvider == null)
+                    _currentProvider = await ResolveProviderAsync();
+                if (_currentProvider == null)
+                {
+                    NeonLogger.LogWarning("[ChatService] No provider configured — Hermes session not created.");
+                    return;
+                }
+
+                var selector = GlobalBackendSelector.Instance;
+                if (selector != null)
+                {
+                    // Point the transport at the active Hermes provider's URL/key before connecting.
+                    if (IsHermesProvider(_currentProvider))
+                        selector.ConfigureHermesEndpoint(_currentProvider.baseUrl, _currentProvider.apiKey);
+
+                    if (!_chatTransport.IsConnected)
+                        await selector.ConnectHermes();
+                }
+
                 if (!_chatTransport.IsConnected)
                 {
-                    var selector = GlobalBackendSelector.Instance;
-                    if (selector != null)
-                        await selector.ConnectHermes();
+                    // Connect failed (already logged once by GlobalBackendSelector). Abort here
+                    // instead of calling CreateSession on a dead gateway, which would throw a
+                    // noisy "Gateway not connected" stack trace.
+                    NeonLogger.LogWarning("[ChatService] Hermes backend not connected — session not created. Check provider URL/key.");
+                    return;
                 }
 
                 await StartHermesSessionAsync();
@@ -279,6 +306,11 @@ namespace NeonCompanion.Runtime.Chat
             // OpenAI mode: local session
             if (_currentProvider == null)
                 _currentProvider = await ResolveProviderAsync();
+            if (_currentProvider == null)
+            {
+                NeonLogger.LogWarning("[ChatService] No provider configured — session not created.");
+                return;
+            }
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             _currentChatViewModel.ProviderSessionId = null;
@@ -299,6 +331,13 @@ namespace NeonCompanion.Runtime.Chat
 
             SaveCurrentSession();
             NeonLogger.Log("New chat session started.");
+        }
+
+        /// <summary>True if the provider is configured to use the Hermes backend.</summary>
+        internal static bool IsHermesProvider(ProviderConfig provider)
+        {
+            return provider != null
+                && string.Equals(provider.backendType, "hermes", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -477,6 +516,14 @@ namespace NeonCompanion.Runtime.Chat
             {
                 await GetOrCreateChatAsync();
             }
+
+            if (_currentProvider == null || _currentChatViewModel == null)
+                throw new InvalidOperationException("Provider is not configured.");
+
+            if (_currentSession == null)
+                await StartNewSessionAsync();
+            if (_currentSession == null)
+                throw new InvalidOperationException("Chat session is not ready.");
 
             _currentChatViewModel.UseStreaming = UseStreaming;
             _currentChatViewModel.InputMessage = message;
@@ -787,7 +834,7 @@ namespace NeonCompanion.Runtime.Chat
             }
             else
             {
-                await StartNewSessionAsync();
+                ClearCurrentSessionWithoutSaving();
             }
         }
 
@@ -938,6 +985,34 @@ namespace NeonCompanion.Runtime.Chat
 
             if (_currentChatViewModel != null)
                 _currentChatViewModel.ProviderSessionId = null;
+        }
+
+        public void ClearActiveProviderState()
+        {
+            _currentProvider = null;
+            _currentSession = null;
+            _currentChatViewModel = null;
+        }
+
+        public void ClearCurrentSessionState()
+        {
+            ClearCurrentSessionWithoutSaving();
+        }
+
+        private void ClearCurrentSessionWithoutSaving()
+        {
+            _currentSession = null;
+
+            if (_currentProvider == null)
+            {
+                _currentChatViewModel = null;
+                return;
+            }
+
+            _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
+            _currentChatViewModel.ProviderSessionId = null;
+            _currentChatViewModel.SelectedModel = _currentProvider.defaultModel;
+            ApplyGenerationSettings();
         }
     }
 }

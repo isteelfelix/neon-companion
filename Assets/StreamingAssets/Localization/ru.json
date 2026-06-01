@@ -125,7 +125,7 @@
   "topbar.avatars.title": "Аватары",
   "topbar.avatars.subtitle": "{0} образов · {1}",
   "topbar.providers.title": "Провайдеры",
-  "topbar.providers.subtitle": "OpenAI-совместимые провайдеры",
+  "topbar.providers.subtitle": "Провайдеры приложения",
   "topbar.history.title": "История чатов",
   "topbar.history.subtitle.saved": "Сохраненные сессии",
   "topbar.history.subtitle.search": "Поиск: {0}",
@@ -133,7 +133,7 @@
   "topbar.themes.subtitle": "Форма, ореол и дыхание для аватара",
   "topbar.settings.title": "Настройки",
   "providers.page.title": "Провайдеры",
-  "providers.page.subtitle": "Подключи любой OpenAI-совместимый API и переключайся прямо из чата.",
+  "providers.page.subtitle": "Подключи OpenAI-совместимый API или Hermes backend и переключайся прямо из чата.",
   "providers.connection.config": "Конфигурация подключения",
   "providers.field.name": "Название",
   "providers.field.baseurl": "Базовый URL",
@@ -219,6 +219,9 @@
   "providers.test.checking": "Проверяем соединение...",
   "providers.test.build_failed": "Не удалось собрать настройки провайдера.",
   "providers.test.failed": "Проверка подключения не выполнена. Проверь адрес, модель и параметры доступа.",
+  "providers.test.ws_ok": "OK · WebSocket · {0} ms",
+  "providers.test.ws_timeout": "WebSocket: таймаут подключения.",
+  "providers.test.ws_failed": "WebSocket: не удалось установить соединение.",
   "providers.models.empty": "Сервер не вернул список моделей.",
   "providers.models.pick_hint": "Выбери модель. Для Hermes дождёмся подтверждения переключения перед отправкой.",
   "providers.models.choose": "Выбрать модель",
@@ -334,5 +337,6 @@
   "chat.selection.count": "Выбрано: {0}",
   "chat.selection.forward": "Переслать",
   "chat.selection.pick_session": "Выберите чат для пересылки",
-  "chat.selection.forward_done": "Переслано сообщений: {0}"
+  "chat.selection.forward_done": "Переслано сообщений: {0}",
+  "common.close": "Закрыть"
 }

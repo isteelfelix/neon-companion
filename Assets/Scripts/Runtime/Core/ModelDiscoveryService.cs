@@ -24,7 +24,7 @@ namespace NeonCompanion.Runtime.Core
             if (provider == null || string.IsNullOrWhiteSpace(provider.baseUrl))
                 return null;
 
-            var cacheKey = $"{provider.baseUrl}|{provider.apiKey}";
+            var cacheKey = $"{provider.backendType}|{provider.baseUrl}|{provider.apiKey}";
             if (_cache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
@@ -58,7 +58,7 @@ namespace NeonCompanion.Runtime.Core
             if (provider == null || string.IsNullOrEmpty(modelId))
                 return 0;
 
-            var cacheKey = $"{provider.baseUrl}|{provider.apiKey}";
+            var cacheKey = $"{provider.backendType}|{provider.baseUrl}|{provider.apiKey}";
             if (!_jsonCache.TryGetValue(cacheKey, out string json) || string.IsNullOrEmpty(json))
                 return 0;
 

@@ -91,6 +91,8 @@ namespace NeonCompanion.Runtime.Data.Repositories
                     defaultModel = provider.defaultModel,
                     temperature = provider.temperature,
                     maxTokens = provider.maxTokens,
+                    contextWindow = provider.contextWindow,
+                    backendType = provider.backendType,
                     isEnabled = provider.isEnabled
                 });
             }

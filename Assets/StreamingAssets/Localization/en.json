@@ -125,7 +125,7 @@
   "topbar.avatars.title": "Avatars",
   "topbar.avatars.subtitle": "{0} profiles · {1}",
   "topbar.providers.title": "Providers",
-  "topbar.providers.subtitle": "OpenAI-compatible providers",
+  "topbar.providers.subtitle": "Application providers",
   "topbar.history.title": "Chat History",
   "topbar.history.subtitle.saved": "Saved sessions",
   "topbar.history.subtitle.search": "Search: {0}",
@@ -133,7 +133,7 @@
   "topbar.themes.subtitle": "Shape, halo, and breathing for avatar",
   "topbar.settings.title": "Settings",
   "providers.page.title": "Providers",
-  "providers.page.subtitle": "Connect any OpenAI-compatible API and switch right from chat.",
+  "providers.page.subtitle": "Connect an OpenAI-compatible API or Hermes backend and switch right from chat.",
   "providers.connection.config": "Connection configuration",
   "providers.field.name": "Name",
   "providers.field.baseurl": "Base URL",
@@ -219,6 +219,9 @@
   "providers.test.checking": "Checking connection...",
   "providers.test.build_failed": "Failed to build provider settings.",
   "providers.test.failed": "Connection test failed. Check base URL, model, and access settings.",
+  "providers.test.ws_ok": "OK · WebSocket · {0} ms",
+  "providers.test.ws_timeout": "WebSocket: connection timed out.",
+  "providers.test.ws_failed": "WebSocket: could not establish a connection.",
   "providers.models.empty": "The server did not return a model list.",
   "providers.models.pick_hint": "Pick a model. For Hermes, Neon waits for switch confirmation before sending messages.",
   "providers.models.choose": "Choose model",
@@ -334,5 +337,6 @@
   "chat.selection.count": "Selected: {0}",
   "chat.selection.forward": "Forward",
   "chat.selection.pick_session": "Pick a chat to forward to",
-  "chat.selection.forward_done": "Forwarded {0} messages"
+  "chat.selection.forward_done": "Forwarded {0} messages",
+  "common.close": "Close"
 }

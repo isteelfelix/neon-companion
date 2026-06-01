@@ -131,7 +131,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public int MaxReconnectDelayMs { get; set; } = 30000;
 
         public ConnectionState State => _state;
-        public event Action<ConnectionState> OnStateChanged;
         public event Action<GatewayEvent> OnEvent;
 
         // === Connection ===
@@ -159,7 +158,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
             catch (Exception ex)
             {
                 SetState(ConnectionState.Error);
-                Debug.LogError("[HermesGateway] Connection failed: " + ex.Message);
+                // Logged once at the caller (GlobalBackendSelector). Keep this a warning
+                // to avoid a duplicate red error + stack on every reconnect attempt.
+                Debug.LogWarning("[HermesGateway] Connection failed: " + ex.Message);
                 throw;
             }
         }
@@ -233,7 +234,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     true,
                     CancellationToken.None);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 _pending.TryRemove(id, out _);
                 throw;
@@ -370,10 +371,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void DispatchEvent(GatewayEvent evt)
         {
+            // Copy the handler list inside the lock: a handler (e.g. the gateway.ready one) may
+            // call Off() and mutate the underlying list while we iterate it on the same context,
+            // which would throw "Collection was modified" and kill the receive loop.
             List<Action<GatewayEvent>> handlers = null;
             lock (_lock)
             {
-                _eventHandlers.TryGetValue(evt.Type, out handlers);
+                if (_eventHandlers.TryGetValue(evt.Type, out var list) && list != null)
+                    handlers = new List<Action<GatewayEvent>>(list);
             }
             if (handlers != null)
             {
@@ -392,7 +397,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
             List<Action<GatewayEvent>> anyHandlers = null;
             lock (_lock)
             {
-                _eventHandlers.TryGetValue("*", out anyHandlers);
+                if (_eventHandlers.TryGetValue("*", out var list) && list != null)
+                    anyHandlers = new List<Action<GatewayEvent>>(list);
             }
             if (anyHandlers != null)
             {

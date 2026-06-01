@@ -992,6 +992,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 foreach (var p in providers)
                     await app.ProviderManager.DeleteProviderAsync(p.id);
 
+                var chat = await _deps.GetChatService();
+                if (chat != null)
+                    chat.ClearActiveProviderState();
+
                 app.Settings.Save(new AppSettings());
 
                 _deps.ResetServiceCache?.Invoke();
@@ -1023,10 +1027,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 app.Chats.SaveAll(new List<ChatSession>());
 
                 // Reset the in-memory ChatService state so it doesn't write the
-                // old session back on the next send
+                // old session back on the next send.
                 var chat = await _deps.GetChatService();
                 if (chat != null)
-                    await chat.StartNewSessionAsync();
+                    chat.ClearCurrentSessionState();
 
                 _deps.SetCurrentSessionId?.Invoke(string.Empty);
                 _deps.SetCurrentSessionTitle?.Invoke(string.Empty);

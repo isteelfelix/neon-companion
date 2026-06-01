@@ -8,7 +8,7 @@
         <ui:VisualElement class="page__head">
             <ui:VisualElement class="page__head-copy">
                 <ui:Label text="Провайдеры" class="page__title" />
-                <ui:Label text="Подключи любой OpenAI-совместимый API и переключайся прямо из чата." class="page__subtitle" />
+                <ui:Label text="Подключи OpenAI-совместимый API или Hermes backend и переключайся прямо из чата." class="page__subtitle" />
             </ui:VisualElement>
             <ui:VisualElement class="page__actions">
                 <ui:Button name="import-provider-btn" text="Импорт" class="btn" />
@@ -70,11 +70,6 @@
                         <ui:Label text="Макс. токенов" class="label" />
                         <ui:TextField name="edit-maxtokens" class="input input--mono" />
                     </ui:VisualElement>
-                </ui:VisualElement>
-
-                <ui:VisualElement class="field">
-                    <ui:Label text="Тип бэкенда" class="label" />
-                    <nc:NeonDropdown name="edit-backend-type" class="input" />
                 </ui:VisualElement>
 
                 <ui:VisualElement name="test-row" class="testrow">

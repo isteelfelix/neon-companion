@@ -10,6 +10,7 @@ namespace NeonCompanion.Runtime.UI.UITK
     {
         public Func<bool> CanLeaveProviderEditor;
         public Action<string, string> SetTopbar;
+        public Action<bool> SetChatModelPickerVisible;
         public Action<VisualElement> ShowArea;
         public Action RefreshProvidersListAsync;
         public Func<Task> RefreshSessionsFromCacheAsync;
@@ -139,6 +140,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_deps != null && _deps.SetTopbar != null)
                 _deps.SetTopbar(title, subtitle);
+            if (_deps != null && _deps.SetChatModelPickerVisible != null)
+                _deps.SetChatModelPickerVisible(true);
 
             if (_deps != null && _deps.ShowArea != null && _deps.ChatPanel != null)
                 _deps.ShowArea(_deps.ChatPanel);
@@ -161,6 +164,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     LocalizationExtensions.Get("topbar.avatars.title", "Аватары"),
                     LocalizationExtensions.GetFormat("topbar.avatars.subtitle", "{0} образов · {1}", total, displayName));
             }
+            if (_deps != null && _deps.SetChatModelPickerVisible != null)
+                _deps.SetChatModelPickerVisible(false);
 
             if (_deps != null && _deps.ShowArea != null && _deps.AvatarsPanel != null)
                 _deps.ShowArea(_deps.AvatarsPanel);
@@ -174,8 +179,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _deps.SetTopbar(
                     LocalizationExtensions.Get("topbar.providers.title", "Провайдеры"),
-                    LocalizationExtensions.Get("topbar.providers.subtitle", "OpenAI-совместимые провайдеры"));
+                    LocalizationExtensions.Get("topbar.providers.subtitle", "Провайдеры приложения"));
             }
+            if (_deps != null && _deps.SetChatModelPickerVisible != null)
+                _deps.SetChatModelPickerVisible(false);
 
             if (_deps != null && _deps.ShowArea != null && _deps.ProvidersPanel != null)
                 _deps.ShowArea(_deps.ProvidersPanel);
@@ -208,6 +215,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     LocalizationExtensions.Get("topbar.history.title", "История чатов"),
                     sub);
             }
+            if (_deps != null && _deps.SetChatModelPickerVisible != null)
+                _deps.SetChatModelPickerVisible(false);
 
             if (_deps != null && _deps.ShowArea != null && _deps.HistoryPanel != null)
                 _deps.ShowArea(_deps.HistoryPanel);
@@ -229,6 +238,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     LocalizationExtensions.Get("topbar.themes.title", "Темы"),
                     LocalizationExtensions.Get("topbar.themes.subtitle", "Форма, ореол и дыхание для аватара"));
             }
+            if (_deps != null && _deps.SetChatModelPickerVisible != null)
+                _deps.SetChatModelPickerVisible(false);
 
             if (_deps != null && _deps.ShowArea != null && _deps.ThemesPanel != null)
                 _deps.ShowArea(_deps.ThemesPanel);
@@ -247,6 +258,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     LocalizationExtensions.Get("topbar.settings.title", "Настройки"),
                     string.Empty);
             }
+            if (_deps != null && _deps.SetChatModelPickerVisible != null)
+                _deps.SetChatModelPickerVisible(false);
 
             if (_deps != null && _deps.ShowArea != null && _deps.SettingsPanel != null)
                 _deps.ShowArea(_deps.SettingsPanel);

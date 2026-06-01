@@ -3,6 +3,7 @@ using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
+using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Data.Secrets;
 using NeonCompanion.Runtime.Data.Storage;
@@ -81,6 +82,9 @@ namespace NeonCompanion.Runtime.Core
                     backendSelector.HermesToken = savedToken;
             }
 
+            // Let the backend selector derive the Hermes endpoint from the active provider.
+            backendSelector.SetActiveProviderResolver(() => chatService.CurrentProvider);
+
             // Wire backend mode changes to ChatService transport
             backendSelector.OnModeChanged += mode =>
             {
@@ -99,7 +103,7 @@ namespace NeonCompanion.Runtime.Core
             // Auto-connect Hermes if saved mode was Hermes
             if (backendSelector.CurrentMode == BackendMode.Hermes)
             {
-                _ = backendSelector.ConnectHermes();
+                _ = ConnectHermesFromActiveProviderAsync(backendSelector, providerManager);
             }
 
             // Apply avatar system prompt
@@ -161,6 +165,34 @@ namespace NeonCompanion.Runtime.Core
             services.Register<PluginManager>(pluginManager);
 
             NeonLogger.Log("App bootstrap completed.");
+        }
+
+        /// <summary>
+        /// Resolve the active Hermes provider, point the backend selector at its URL/key,
+        /// then connect. Keeps the WS transport in sync with the configured provider.
+        /// </summary>
+        private static async System.Threading.Tasks.Task ConnectHermesFromActiveProviderAsync(
+            GlobalBackendSelector backendSelector,
+            ProviderManager providerManager)
+        {
+            var all = await providerManager.GetAllProvidersAsync();
+            ProviderConfig hermesProvider = null;
+            if (all != null)
+            {
+                foreach (var p in all)
+                {
+                    if (ChatService.IsHermesProvider(p))
+                    {
+                        hermesProvider = p;
+                        break;
+                    }
+                }
+            }
+
+            if (hermesProvider != null)
+                backendSelector.ConfigureHermesEndpoint(hermesProvider.baseUrl, hermesProvider.apiKey);
+
+            await backendSelector.ConnectHermes();
         }
     }
 }

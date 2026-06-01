@@ -273,7 +273,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             Add("settings.support", "Поддержать", "Support");
 
             Add("providers.page.title", "Провайдеры", "Providers");
-            Add("providers.page.subtitle", "Подключи любой OpenAI-совместимый API и переключайся прямо из чата.", "Connect any OpenAI-compatible API and switch right from chat.");
+            Add("providers.page.subtitle", "Подключи OpenAI-совместимый API или Hermes backend и переключайся прямо из чата.", "Connect an OpenAI-compatible API or Hermes backend and switch right from chat.");
             Add("providers.connection.config", "Конфигурация подключения", "Connection configuration");
             Add("providers.field.name", "Название", "Name");
             Add("providers.field.baseurl", "Базовый URL", "Base URL");
@@ -619,6 +619,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 CanLeaveProviderEditor = _providersController.CanLeaveProviderEditor,
                 SetTopbar = (title, sub) => SetTopbar(title, sub),
+                SetChatModelPickerVisible = SetChatModelPickerVisible,
                 ShowArea = ShowArea,
                 RefreshProvidersListAsync = () => { _ = _providersController.RefreshProvidersListAsync(); },
                 RefreshSessionsFromCacheAsync = () => RefreshSessionsFromCacheAsync(),
@@ -736,7 +737,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 EditModelCustomWrap  = _root.Q<VisualElement>("edit-model-custom-wrap"),
                 EditMaxTokens        = _root.Q<TextField>("edit-maxtokens"),
                 EditTemperature      = _root.Q<Slider>("edit-temperature"),
-                EditBackendType      = _root.Q<NeonDropdown>("edit-backend-type"),
                 GlobalBackendMode    = _root.Q<NeonDropdown>("global-backend-mode"),
                 BackendModeHint      = _root.Q<Label>("backend-mode-hint"),
                 EditorProviderShort  = _root.Q<Label>("editor-provider-short"),
@@ -958,6 +958,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_topbarSep, hasSubtitle ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
+        private void SetChatModelPickerVisible(bool visible)
+        {
+            if (_providersController == null)
+                return;
+
+            if (visible)
+                _providersController.ShowTopbarModelPicker();
+            else
+                _providersController.HideTopbarModelPicker();
+        }
+
         private static void SetDisplay(VisualElement element, DisplayStyle display)
         {
             if (element != null)
@@ -1118,6 +1129,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void SetNoProviderState()
         {
             AddSystemMessage(LocalizationExtensions.Get("provider.not_configured.hint", "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ."));
+            _providersController.ClearProviderHeader();
             if (_sendButton != null)
                 _sendButton.SetEnabled(false);
         }
@@ -1275,7 +1287,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_providersPanel != null && _providersPanel.style.display != DisplayStyle.None)
             {
-                SetTopbar(LocalizationExtensions.Get("topbar.providers.title", "Провайдеры"), LocalizationExtensions.Get("topbar.providers.subtitle", "OpenAI-совместимые провайдеры"));
+                SetTopbar(LocalizationExtensions.Get("topbar.providers.title", "Провайдеры"), LocalizationExtensions.Get("topbar.providers.subtitle", "Провайдеры приложения"));
                 return;
             }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -37,7 +38,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             public VisualElement EditModelCustomWrap;
             public TextField EditMaxTokens;
             public Slider EditTemperature;
-            public NeonDropdown EditBackendType;
             // UI — global backend mode selector
             public NeonDropdown GlobalBackendMode;
             public Label BackendModeHint;
@@ -77,8 +77,14 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const string ActiveProviderClass  = "provider--active";
         private const string EditingProviderClass = "provider--editing";
         private const string CustomModelPresetValue = "Custom / manual";
-        private const string GenericBackendValue = "Generic (OpenAI-compatible)";
-        private const string HermesBackendValue = "Hermes";
+        private const string OpenAiBackendModeValue = "OpenAI (HTTP REST)";
+        private const string HermesBackendModeValue = "Hermes (WebSocket)";
+        private BackendMode _providersBackendMode = BackendMode.OpenAI;
+
+        private bool SelectedBackendIsHermes()
+        {
+            return _providersBackendMode == BackendMode.Hermes;
+        }
 
         private Deps _d;
 
@@ -94,6 +100,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isApplyingModelSwitch;
         private bool _editModelUsesCustomMode;
         private bool _syncingModelPresetUi;
+        private bool _syncingGlobalBackendModeUi;
         private string _lastCustomModel = string.Empty;
         private IReadOnlyList<string> _discoveredModels;
         private IVisualElementScheduledItem _autoDiscoverSchedule;
@@ -148,13 +155,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Global backend mode selector
             if (_d.GlobalBackendMode != null)
             {
-                _d.GlobalBackendMode.choices = new List<string> { "OpenAI (HTTP REST)", "Hermes (WebSocket)" };
-                var selector = GlobalBackendSelector.Instance;
-                var currentMode = selector != null && selector.CurrentMode == BackendMode.Hermes
-                    ? "Hermes (WebSocket)"
-                    : "OpenAI (HTTP REST)";
-                _d.GlobalBackendMode.SetValueWithoutNotify(currentMode);
-                UpdateBackendModeHint(currentMode);
+                _d.GlobalBackendMode.choices = new List<string> { OpenAiBackendModeValue, HermesBackendModeValue };
+                // This is the Providers page filter, not the active chat backend.
+                // Do not initialize it from GlobalBackendSelector; that would make a chat on
+                // OpenAI repaint the provider editor away from a Hermes draft/provider.
+                SyncGlobalBackendModeUi(_providersBackendMode);
                 _d.GlobalBackendMode.RegisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
             }
         }
@@ -204,7 +209,25 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            var providers = await app.ProviderManager.GetAllProvidersAsync();
+            var allProviders = await app.ProviderManager.GetAllProvidersAsync();
+            var chat = await _d.GetChatServiceAsync();
+            var activeProvider = chat?.CurrentProvider;
+            if (_editingProvider == null && activeProvider != null && allProviders.Any(p => p != null && p.id == activeProvider.id))
+            {
+                BackendMode activeMode = ChatService.IsHermesProvider(activeProvider)
+                    ? BackendMode.Hermes
+                    : BackendMode.OpenAI;
+                if (_providersBackendMode != activeMode)
+                    SyncGlobalBackendModeUi(activeMode);
+            }
+
+            // Providers are isolated per backend: Hermes mode shows only Hermes providers,
+            // OpenAI mode shows only OpenAI-compatible ones.
+            bool hermesMode = SelectedBackendIsHermes();
+            var providers = allProviders
+                .Where(p => ChatService.IsHermesProvider(p) == hermesMode)
+                .ToList();
+
             if (_d.NavProvidersCount != null)
                 _d.NavProvidersCount.text = providers.Count.ToString();
 
@@ -214,7 +237,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            var chat = await _d.GetChatServiceAsync();
             string activeProviderId = chat?.CurrentProvider?.id;
 
             for (int i = 0; i < providers.Count; i++)
@@ -312,6 +334,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             actions.Add(useButton);
             actions.Add(editButton);
             actions.Add(deleteButton);
+            // Action clicks must not bubble to the card's click handler (which opens the editor).
+            actions.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
 
             var toggle = new VisualElement();
             toggle.AddToClassList("toggle");
@@ -322,7 +346,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             toggle.RegisterCallback<ClickEvent>(evt =>
             {
                 evt.StopPropagation();
-                SwitchProvider(provider);
+                // Toggle sets the active provider but stays on the Providers page.
+                // "Использовать" is the action that also opens the chat.
+                _ = SwitchProviderAsync(provider, navigateToChat: false);
             });
 
             container.Add(logo);
@@ -348,15 +374,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editingProvider = ProviderConfig.CreateDefault(
                 LocalizationExtensions.Get("providers.new_provider", "Новый провайдер"),
                 "https://api.openai.com/v1");
+
+            // New providers inherit the active backend mode (see BuildProviderDraftFromEditor).
+            if (SelectedBackendIsHermes())
+            {
+                _editingProvider.backendType = "hermes";
+                _editingProvider.baseUrl = "https://neon-dev.top";
+                _editingProvider.defaultModel = string.Empty;
+            }
+            else
+            {
+                _editingProvider.backendType = null;
+            }
+
             _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
             _editModelUsesCustomMode = false;
             _discoveredModels = null;
-
-            if (_d.EditBackendType != null)
-            {
-                _d.EditBackendType.choices = new List<string> { GenericBackendValue, HermesBackendValue };
-                _d.EditBackendType.SetValueWithoutNotify(GenericBackendValue);
-            }
 
             ShowProviderEditPanel();
         }
@@ -372,6 +405,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _cancelPending = false;
             _editingProviderSource = provider;
             _editingProvider = CloneProvider(provider);
+            SyncGlobalBackendModeUi(ChatService.IsHermesProvider(_editingProvider)
+                ? BackendMode.Hermes
+                : BackendMode.OpenAI);
             _lastCustomModel = _editingProvider.defaultModel ?? string.Empty;
             _editModelUsesCustomMode = false;
             _discoveredModels = null;
@@ -412,15 +448,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.EditMaxTokens != null)
                 _d.EditMaxTokens.SetValueWithoutNotify(_editingProvider.maxTokens.ToString());
 
-            if (_d.EditBackendType != null)
-            {
-                var choices = new List<string> { GenericBackendValue, HermesBackendValue };
-                _d.EditBackendType.choices = choices;
-                string currentBackend = string.IsNullOrEmpty(_editingProvider.backendType)
-                    ? GenericBackendValue
-                    : HermesBackendValue;
-                _d.EditBackendType.SetValueWithoutNotify(currentBackend);
-            }
+            // Temperature / max tokens only apply to the OpenAI HTTP path. Hermes drives
+            // generation server-side (session.create ignores them), so hide that row.
+            var generationRow = _d.EditTemperature?.parent?.parent;
+            SetDisplay(generationRow, ChatService.IsHermesProvider(_editingProvider)
+                ? DisplayStyle.None
+                : DisplayStyle.Flex);
 
             SetTestRow(null, string.Empty);
             _d.ProviderEditPanel.style.display = DisplayStyle.Flex;
@@ -450,17 +483,36 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (draft == null)
                     return;
 
+                SyncGlobalBackendModeUi(ChatService.IsHermesProvider(draft)
+                    ? BackendMode.Hermes
+                    : BackendMode.OpenAI);
+
                 await app.ProviderManager.SaveProviderAsync(draft);
+
+                bool endpointChanged = _editingProviderSource == null ||
+                    !string.Equals(_editingProviderSource.baseUrl, draft.baseUrl, StringComparison.Ordinal) ||
+                    !string.Equals(_editingProviderSource.apiKey, draft.apiKey, StringComparison.Ordinal);
 
                 var chat = await _d.GetChatServiceAsync();
                 if (chat?.CurrentProvider?.id == draft.id)
                 {
                     bool resetRemoteSession = _editingProviderSource != null &&
-                        (!string.Equals(_editingProviderSource.baseUrl, draft.baseUrl, StringComparison.Ordinal) ||
-                         !string.Equals(_editingProviderSource.apiKey, draft.apiKey, StringComparison.Ordinal) ||
+                        (endpointChanged ||
                          !string.Equals(_editingProviderSource.defaultModel, draft.defaultModel, StringComparison.Ordinal));
                     await chat.ApplyProviderConfigAsync(draft, resetRemoteSession);
                     SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
+
+                    // Active Hermes provider edited — re-point the transport and reconnect so the
+                    // new URL/key take effect right away (otherwise the old socket lingers).
+                    if (ChatService.IsHermesProvider(draft) && endpointChanged)
+                    {
+                        var selector = GlobalBackendSelector.Instance;
+                        if (selector != null)
+                        {
+                            selector.ConfigureHermesEndpoint(draft.baseUrl, draft.apiKey);
+                            await selector.ReconnectHermes();
+                        }
+                    }
                 }
                 else if (_editingProviderSource?.id == draft.id)
                 {
@@ -525,19 +577,32 @@ namespace NeonCompanion.Runtime.UI.UITK
                     SetDisplay(_d.ProviderEditPanel, DisplayStyle.None);
                 }
 
-                if (deletedCurrent)
+                // Pick a fallback among the REMAINING providers of the active backend.
+                // Do not call GetActiveProviderAsync — it recreates a default provider when the
+                // list empties, which would make the deletion look like it never happened.
+                var remaining = await app.ProviderManager.GetAllProvidersAsync();
+                bool hermesMode = SelectedBackendIsHermes();
+                var fallbackProvider = remaining.FirstOrDefault(p => ChatService.IsHermesProvider(p) == hermesMode);
+
+                if (deletedCurrent && fallbackProvider != null)
                 {
-                    var fallbackProvider = await app.ProviderManager.GetActiveProviderAsync();
-                    await SwitchProviderAsync(fallbackProvider);
+                    // Switch active provider in place — stay on the Providers page, don't open chat.
+                    await SwitchProviderAsync(fallbackProvider, navigateToChat: false);
                     return;
                 }
 
                 var settings = app.Settings.Load() ?? new AppSettings();
                 if (string.Equals(settings.activeProviderId, provider.id, StringComparison.Ordinal))
                 {
-                    var fallbackProvider = await app.ProviderManager.GetActiveProviderAsync();
-                    settings.activeProviderId = fallbackProvider?.id ?? settings.activeProviderId;
+                    settings.activeProviderId = fallbackProvider?.id;
                     app.Settings.Save(settings);
+                }
+
+                if (deletedCurrent && fallbackProvider == null)
+                {
+                    if (chat != null)
+                        chat.ClearActiveProviderState();
+                    ClearProviderHeader();
                 }
 
                 await RefreshProvidersListAsync();
@@ -553,10 +618,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = SwitchProviderAsync(provider);
         }
 
-        private async Task SwitchProviderAsync(ProviderConfig provider)
+        private async Task SwitchProviderAsync(ProviderConfig provider, bool navigateToChat = true)
         {
             try
             {
+                var selector = GlobalBackendSelector.Instance;
+                if (selector != null)
+                {
+                    BackendMode providerMode = ChatService.IsHermesProvider(provider)
+                        ? BackendMode.Hermes
+                        : BackendMode.OpenAI;
+
+                    if (selector.CurrentMode != providerMode)
+                        await selector.SetMode(providerMode);
+                    SyncGlobalBackendModeUi(providerMode);
+                }
+
                 var chat = await _d.GetChatServiceAsync();
                 if (chat == null)
                     return;
@@ -588,7 +665,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_d.LoadSessionsAsync != null)
                     await _d.LoadSessionsAsync();
                 await RefreshProvidersListAsync();
-                if (_d.ShowChat != null)
+                if (navigateToChat && _d.ShowChat != null)
                     _d.ShowChat();
             }
             catch (Exception ex)
@@ -626,6 +703,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
                 }
 
+                // Hermes providers speak WebSocket JSON-RPC, not HTTP REST — test the actual transport.
+                if (ChatService.IsHermesProvider(draft))
+                {
+                    await TestHermesConnectionAsync(draft);
+                    return;
+                }
+
                 var result = await app.AiClient.TestConnectionAsync(draft);
                 SetTestRow(result.Success, result.Message);
 
@@ -641,6 +725,54 @@ namespace NeonCompanion.Runtime.UI.UITK
             finally
             {
                 if (_d.TestProviderBtn != null) _d.TestProviderBtn.SetEnabled(true);
+            }
+        }
+
+        private async Task TestHermesConnectionAsync(ProviderConfig draft)
+        {
+            string wsUrl = GlobalBackendSelector.BuildHermesWsUrl(draft.baseUrl);
+            if (!string.IsNullOrEmpty(draft.apiKey))
+                wsUrl += (wsUrl.Contains("?") ? "&" : "?") + "token=" + Uri.EscapeDataString(draft.apiKey);
+
+            var gateway = new HermesGateway { RequestTimeoutMs = 8000 };
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var connectTask = gateway.Connect(wsUrl);
+                var done = await Task.WhenAny(connectTask, Task.Delay(8000));
+                if (done != connectTask)
+                {
+                    SetTestRow(false, LocalizationExtensions.Get("providers.test.ws_timeout", "WebSocket: таймаут подключения."));
+                    if (_d.TriggerAvatarConfused != null) _d.TriggerAvatarConfused();
+                    // Observe the eventual fault so it is not surfaced as an unhandled exception.
+                    _ = connectTask.ContinueWith(t => { var _ignored = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                    return;
+                }
+
+                await connectTask; // surface any connection exception
+                stopwatch.Stop();
+
+                if (gateway.State == ConnectionState.Open)
+                {
+                    SetTestRow(true, LocalizationExtensions.GetFormat("providers.test.ws_ok", "OK · WebSocket · {0} ms", stopwatch.ElapsedMilliseconds));
+                    await DiscoverModelsForDraftAsync(draft, CancellationToken.None);
+                }
+                else
+                {
+                    SetTestRow(false, LocalizationExtensions.Get("providers.test.ws_failed", "WebSocket: не удалось установить соединение."));
+                    if (_d.TriggerAvatarConfused != null) _d.TriggerAvatarConfused();
+                }
+            }
+            catch (Exception ex)
+            {
+                SetTestRow(false, "WebSocket: " + ex.Message);
+                if (_d.TriggerAvatarConfused != null) _d.TriggerAvatarConfused();
+            }
+            finally
+            {
+                try { await gateway.Close(); }
+                catch { }
+                gateway.Dispose();
             }
         }
 
@@ -732,10 +864,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await _d.GetAppAsync();
                 var chat = await _d.GetChatServiceAsync();
                 var provider = chat?.CurrentProvider;
-                if (app == null || chat == null || provider == null)
+                if (app == null || chat == null || provider == null || string.IsNullOrWhiteSpace(provider.id))
                 {
+                    ClearProviderHeader();
                     if (_d.AddSystemMessage != null)
-                        _d.AddSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
+                        _d.AddSystemMessage(LocalizationExtensions.Get("provider.not_configured.hint", "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ."));
                     return;
                 }
 
@@ -1026,22 +1159,31 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnGlobalBackendModeChanged(ChangeEvent<string> evt)
         {
+            if (_syncingGlobalBackendModeUi)
+                return;
+
             string selected = evt?.newValue;
             if (string.IsNullOrEmpty(selected))
                 return;
 
-            var selector = GlobalBackendSelector.Instance;
-            if (selector == null)
-                return;
+            BackendMode mode = string.Equals(selected, HermesBackendModeValue, StringComparison.Ordinal)
+                ? BackendMode.Hermes
+                : BackendMode.OpenAI;
 
-            BackendMode mode;
-            if (selected.Contains("Hermes"))
-                mode = BackendMode.Hermes;
-            else
-                mode = BackendMode.OpenAI;
+            // This dropdown is a Providers-page filter/editor bucket, not the active chat backend.
+            // The active backend changes only when the user explicitly clicks "Use" on a provider.
+            SyncGlobalBackendModeUi(mode);
 
-            selector.SetMode(mode);
-            UpdateBackendModeHint(selected);
+            // Reset the editor: a provider from the previous backend must not stay open in the
+            // editor (saving it there could otherwise look like it belongs to the new backend).
+            _cancelPending = false;
+            _editingProvider = null;
+            _editingProviderSource = null;
+            SetDisplay(_d.ProviderEditPanel, DisplayStyle.None);
+
+            // Switching the Providers tab must not activate or create chat sessions.
+            // It only changes which provider bucket the editor/list works with.
+            _ = RefreshProvidersListAsync();
         }
 
         private void UpdateBackendModeHint(string selected)
@@ -1049,10 +1191,26 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.BackendModeHint == null)
                 return;
 
-            if (!string.IsNullOrEmpty(selected) && selected.Contains("Hermes"))
+            if (string.Equals(selected, HermesBackendModeValue, StringComparison.Ordinal))
                 _d.BackendModeHint.text = "WebSocket транспорт, сессии, tools, крон, канбан";
             else
                 _d.BackendModeHint.text = "HTTP REST, чистый чат";
+        }
+
+        private void SyncGlobalBackendModeUi(BackendMode mode)
+        {
+            _providersBackendMode = mode;
+            string value = mode == BackendMode.Hermes
+                ? HermesBackendModeValue
+                : OpenAiBackendModeValue;
+
+            _syncingGlobalBackendModeUi = true;
+            if (_d.GlobalBackendMode != null)
+            {
+                _d.GlobalBackendMode.SetValueWithoutNotify(value);
+            }
+            UpdateBackendModeHint(value);
+            _syncingGlobalBackendModeUi = false;
         }
 
         private void SyncModelPresetUi(string currentModel)
@@ -1139,6 +1297,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.TopbarModelPicker.SetValueWithoutNotify(target);
         }
 
+        public void ShowTopbarModelPicker()
+        {
+            SetDisplay(_d.TopbarModelPicker, DisplayStyle.Flex);
+        }
+
+        public void HideTopbarModelPicker()
+        {
+            SetDisplay(_d.TopbarModelPicker, DisplayStyle.None);
+        }
+
         // ============================================================
         // Provider field change handlers
         // ============================================================
@@ -1192,6 +1360,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await _d.GetAppAsync();
                 if (app == null || ct.IsCancellationRequested) return;
 
+                if (ChatService.IsHermesProvider(currentDraft))
+                {
+                    await DiscoverModelsForDraftAsync(currentDraft, ct);
+                    return;
+                }
+
                 var result = await app.AiClient.TestConnectionAsync(currentDraft, ct);
                 if (ct.IsCancellationRequested) return;
 
@@ -1205,6 +1379,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             catch (Exception ex)
             {
                 NeonLogger.LogWarning($"Auto-discover models failed: {ex.Message}");
+            }
+        }
+
+        private async Task DiscoverModelsForDraftAsync(ProviderConfig draft, CancellationToken cancellationToken)
+        {
+            var app = await _d.GetAppAsync();
+            if (app == null || cancellationToken.IsCancellationRequested)
+                return;
+
+            ModelDiscoveryService discovery = null;
+            app.Services.TryGet<ModelDiscoveryService>(out discovery);
+            if (discovery == null)
+                return;
+
+            var models = await discovery.DiscoverModelsAsync(draft, cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
+            if (models != null && models.Count > 0)
+            {
+                SyncModelPresetFromDiscovery(models, GetCurrentModelValue());
+                SyncTopbarModelPicker(GetCurrentModelValue());
             }
         }
 
@@ -1243,7 +1439,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void SetProviderHeader(ProviderConfig provider, string currentModel = null)
         {
             if (provider == null)
+            {
+                ClearProviderHeader();
                 return;
+            }
 
             string shortName = BuildProviderShort(provider);
             string displayName = string.IsNullOrWhiteSpace(provider.displayName)
@@ -1264,6 +1463,26 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.RailProviderModel != null)
                 _d.RailProviderModel.text = model;
             SyncTopbarModelPicker(model);
+        }
+
+        public void ClearProviderHeader()
+        {
+            string empty = string.Empty;
+            if (_d.ProviderShort != null)
+                _d.ProviderShort.text = LocalizationExtensions.Get("provider.short.default", "API");
+            if (_d.ProviderName != null)
+                _d.ProviderName.text = LocalizationExtensions.Get("provider.status.none", "нет провайдера");
+            if (_d.ProviderModel != null)
+                _d.ProviderModel.text = empty;
+            if (_d.RailProviderName != null)
+                _d.RailProviderName.text = LocalizationExtensions.Get("provider.status.none", "нет провайдера");
+            if (_d.RailProviderModel != null)
+                _d.RailProviderModel.text = empty;
+            if (_d.TopbarModelPicker != null)
+            {
+                _d.TopbarModelPicker.choices = new List<string>();
+                _d.TopbarModelPicker.SetValueWithoutNotify(empty);
+            }
         }
 
         // ============================================================
@@ -1321,13 +1540,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.EditMaxTokens != null && int.TryParse(_d.EditMaxTokens.value, out int tokens))
                 draft.maxTokens = tokens;
 
-            if (_d.EditBackendType != null)
-            {
-                string selected = _d.EditBackendType.value;
-                draft.backendType = string.Equals(selected, HermesBackendValue, StringComparison.Ordinal)
-                    ? "hermes"
-                    : null;
-            }
+            // Backend type is fixed when the provider editor opens/creates the draft.
+            // Saving must never migrate a provider between Hermes and OpenAI just because
+            // the active chat backend or filter dropdown changed while editing.
 
             return draft;
         }

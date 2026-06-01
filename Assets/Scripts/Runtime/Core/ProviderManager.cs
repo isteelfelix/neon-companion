@@ -39,17 +39,7 @@ namespace NeonCompanion.Runtime.Core
                 return providers[0];
             }
 
-            var defaultProvider = new ProviderConfig
-            {
-                id = "default",
-                displayName = "OpenAI",
-                baseUrl = "https://api.openai.com/v1",
-                defaultModel = "gpt-4o-mini",
-                apiKey = ""
-            };
-
-            await _repository.SaveAllAsync(new List<ProviderConfig> { defaultProvider });
-            return defaultProvider;
+            return null;
         }
 
         public async Task<List<ProviderConfig>> GetAllProvidersAsync()

@@ -5,6 +5,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Core;
@@ -81,11 +82,29 @@ namespace NeonCompanion.Runtime.Core
         private const float MaxReconnectDelay = 30f;
         private bool _shouldReconnect;
         private Coroutine _reconnectCoroutine;
+        private bool _isSwitchingMode;
 
         // === Dependencies (set from AppBootstrap) ===
 
         private IAppSettingsRepository _settingsRepo;
         private ISecretStore _secretStore;
+        private Func<ProviderConfig> _activeProviderResolver;
+
+        /// <summary>
+        /// Supplies the currently active provider so the Hermes transport can derive its
+        /// WS URL/token from it. Set once from AppBootstrap.
+        /// </summary>
+        public void SetActiveProviderResolver(Func<ProviderConfig> resolver)
+        {
+            _activeProviderResolver = resolver;
+        }
+
+        private static bool IsHermesProviderConfig(ProviderConfig provider)
+        {
+            return provider != null
+                && !string.IsNullOrWhiteSpace(provider.baseUrl)
+                && string.Equals(provider.backendType, "hermes", StringComparison.OrdinalIgnoreCase);
+        }
 
         // === Lifecycle ===
 
@@ -116,40 +135,55 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
-        /// Switch the backend mode. Disconnects current transport, creates new one, auto-connects.
+        /// Switch the backend mode. Disconnects the current transport and sets up the new one.
+        /// Connection itself is driven by activating a provider (see ConnectHermes), so switching
+        /// to Hermes without a configured provider does not spam failed-connect attempts.
         /// </summary>
-        public async void SetMode(BackendMode mode)
+        public async Task SetMode(BackendMode mode)
         {
             if (CurrentMode == mode)
                 return;
 
-            NeonLogger.Log("[Backend] Switching from " + CurrentMode + " to " + mode);
+            // Guard against re-entrancy: the dropdown can fire ChangeEvent again while we are
+            // awaiting the disconnect below, which previously nulled ActiveTransport mid-flight.
+            if (_isSwitchingMode)
+                return;
+            _isSwitchingMode = true;
 
-            // Stop reconnect attempts for old mode
-            StopReconnect();
-
-            // Disconnect current transport
-            if (ActiveTransport != null)
+            try
             {
-                ActiveTransport.OnStateChanged -= HandleTransportStateChanged;
-                try { await ActiveTransport.Disconnect(); }
-                catch (Exception ex) { Debug.LogWarning("[Backend] Disconnect error: " + ex.Message); }
-                ActiveTransport.Dispose();
-                ActiveTransport = null;
+                NeonLogger.Log("[Backend] Switching from " + CurrentMode + " to " + mode);
+
+                // Stop reconnect attempts for old mode
+                StopReconnect();
+
+                // Disconnect current transport. Capture it locally so a concurrent path nulling
+                // the field during the await can't turn Dispose() into a NullReferenceException.
+                var transport = ActiveTransport;
+                if (transport != null)
+                {
+                    transport.OnStateChanged -= HandleTransportStateChanged;
+                    try { await transport.Disconnect(); }
+                    catch (Exception ex) { Debug.LogWarning("[Backend] Disconnect error: " + ex.Message); }
+                    transport.Dispose();
+                    if (ReferenceEquals(ActiveTransport, transport))
+                        ActiveTransport = null;
+                }
+
+                CleanupHermes();
+                CurrentMode = mode;
+
+                if (mode == BackendMode.Hermes)
+                    SetupHermes();
+
+                SaveSettings();
+                OnModeChanged?.Invoke(mode);
+                NeonLogger.Log("[Backend] Mode set to " + mode);
             }
-
-            CleanupHermes();
-            CurrentMode = mode;
-
-            if (mode == BackendMode.Hermes)
+            finally
             {
-                SetupHermes();
-                await ConnectHermes();
+                _isSwitchingMode = false;
             }
-
-            SaveSettings();
-            OnModeChanged?.Invoke(mode);
-            NeonLogger.Log("[Backend] Mode set to " + mode);
         }
 
         /// <summary>
@@ -161,6 +195,21 @@ namespace NeonCompanion.Runtime.Core
                 return;
             if (SessionManager.IsConnected)
                 return;
+
+            // Pull the WS URL/token from the active Hermes provider so every connect uses the
+            // currently selected provider — not a stale default.
+            var activeProvider = _activeProviderResolver != null ? _activeProviderResolver() : null;
+            if (IsHermesProviderConfig(activeProvider))
+            {
+                ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
+            }
+            else if (string.IsNullOrEmpty(HermesToken))
+            {
+                // No active Hermes provider and nothing previously configured — don't attempt a
+                // connect to the default URL (that just produces noise). Wait for a provider.
+                NeonLogger.Log("[Backend] No active Hermes provider — connect skipped.");
+                return;
+            }
 
             _shouldReconnect = true;
 
@@ -180,6 +229,24 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
+        /// Disconnect (if connected) and connect again — used after the active Hermes provider's
+        /// URL or key changes so the new endpoint takes effect immediately.
+        /// </summary>
+        public async System.Threading.Tasks.Task ReconnectHermes()
+        {
+            if (CurrentMode != BackendMode.Hermes || SessionManager == null)
+                return;
+
+            if (SessionManager.IsConnected)
+            {
+                try { await SessionManager.Disconnect(); }
+                catch (Exception ex) { Debug.LogWarning("[Backend] Reconnect disconnect error: " + ex.Message); }
+            }
+
+            await ConnectHermes();
+        }
+
+        /// <summary>
         /// Save the Hermes API token to secrets store.
         /// </summary>
         public void SetToken(string token)
@@ -190,6 +257,57 @@ namespace NeonCompanion.Runtime.Core
             // Update REST client
             if (RestClient != null)
                 RestClient.Configure(HermesRestUrl, HermesToken);
+        }
+
+        /// <summary>
+        /// Derive the Hermes WS/REST endpoint and token from the active Hermes provider.
+        /// The provider's baseUrl becomes the WebSocket URL; its apiKey becomes the token.
+        /// Call this before connecting so the transport targets the right server.
+        /// </summary>
+        public void ConfigureHermesEndpoint(string baseUrl, string apiKey)
+        {
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                HermesWsUrl = BuildHermesWsUrl(baseUrl);
+                HermesRestUrl = NormalizeRestUrl(baseUrl);
+                if (RestClient != null)
+                    RestClient.Configure(HermesRestUrl, HermesToken);
+            }
+
+            if (apiKey != null)
+                SetToken(apiKey);
+        }
+
+        /// <summary>
+        /// Convert a provider base URL (e.g. https://neon-dev.top) into a Hermes
+        /// WebSocket URL (wss://neon-dev.top/api/ws).
+        /// </summary>
+        public static string BuildHermesWsUrl(string baseUrl)
+        {
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                return "wss://neon-dev.top/api/ws";
+
+            string url = baseUrl.Trim();
+            if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                url = "wss://" + url.Substring("https://".Length);
+            else if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                url = "ws://" + url.Substring("http://".Length);
+            else if (!url.StartsWith("ws://", StringComparison.OrdinalIgnoreCase)
+                  && !url.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
+                url = "wss://" + url;
+
+            url = url.TrimEnd('/');
+            if (url.IndexOf("/api/ws", StringComparison.OrdinalIgnoreCase) < 0)
+                url = url + "/api/ws";
+
+            return url;
+        }
+
+        private static string NormalizeRestUrl(string baseUrl)
+        {
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                return "https://neon-dev.top";
+            return baseUrl.Trim().TrimEnd('/');
         }
 
         /// <summary>
