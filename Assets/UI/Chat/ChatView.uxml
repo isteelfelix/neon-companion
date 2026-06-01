@@ -11,15 +11,18 @@
             <ui:ScrollView name="messages-list" class="transcript" />
 
             <ui:VisualElement name="composer" class="composer">
-                <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить токен вложения" />
-                <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />
-                <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." multiline="true" />
-                <ui:VisualElement class="composer__hint">
-                    <ui:Label text="⌘" class="kbd" />
-                    <ui:Label text="↵" class="kbd" />
+                <ui:VisualElement name="composer-previews" class="composer__previews" style="display: none;" />
+                <ui:VisualElement name="composer-controls" class="composer__controls">
+                    <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить вложение" />
+                    <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />
+                    <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." multiline="true" />
+                    <ui:VisualElement class="composer__hint">
+                        <ui:Label text="⌘" class="kbd" />
+                        <ui:Label text="↵" class="kbd" />
+                    </ui:VisualElement>
+                    <ui:Button name="send-button" text="Отправить" class="btn btn--primary composer__send" />
+                    <ui:Button name="stop-button" text="■" class="iconbtn" tooltip="Остановить генерацию" style="display: none;" />
                 </ui:VisualElement>
-                <ui:Button name="send-button" text="Отправить" class="btn btn--primary composer__send" />
-                <ui:Button name="stop-button" text="■" class="iconbtn" tooltip="Остановить генерацию" style="display: none;" />
             </ui:VisualElement>
 
             <!-- Scroll-to-bottom: last child so it paints on top of composer -->

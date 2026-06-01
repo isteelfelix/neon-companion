@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -45,143 +44,135 @@ namespace NeonCompanion.Runtime.Platform
         }
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        // ── Windows file dialogs via comdlg32.dll (no System.Windows.Forms dependency) ──
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private struct OPENFILENAME
+        {
+            public int    lStructSize;
+            public IntPtr hwndOwner;
+            public IntPtr hInstance;
+            public string lpstrFilter;
+            public IntPtr lpstrCustomFilter;
+            public int    nMaxCustFilter;
+            public int    nFilterIndex;
+            public IntPtr lpstrFile;
+            public int    nMaxFile;
+            public IntPtr lpstrFileTitle;
+            public int    nMaxFileTitle;
+            public string lpstrInitialDir;
+            public string lpstrTitle;
+            public int    Flags;
+            public short  nFileOffset;
+            public short  nFileExtension;
+            public string lpstrDefExt;
+            public IntPtr lCustData;
+            public IntPtr lpfnHook;
+            public string lpTemplateName;
+            public IntPtr pvReserved;
+            public int    dwReserved;
+            public int    FlagsEx;
+        }
+
+        [System.Runtime.InteropServices.DllImport("comdlg32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+        private static extern bool GetOpenFileNameW(ref OPENFILENAME ofn);
+
+        [System.Runtime.InteropServices.DllImport("comdlg32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+        private static extern bool GetSaveFileNameW(ref OPENFILENAME ofn);
+
+        private const int OFN_FILEMUSTEXIST   = 0x00001000;
+        private const int OFN_PATHMUSTEXIST   = 0x00000800;
+        private const int OFN_NOCHANGEDIR     = 0x00000008;
+        private const int OFN_OVERWRITEPROMPT = 0x00000002;
+        private const int OFN_EXPLORER        = 0x00080000;
+        private const int OFN_HIDEREADONLY    = 0x00000004;
+
         private static Task<string> PickWindowsFilePathAsync(string extension)
         {
-            var completion = new TaskCompletionSource<string>();
-            var thread = new Thread(() => completion.TrySetResult(PickWindowsFilePath(extension)));
-
-            try
-            {
-                thread.SetApartmentState(ApartmentState.STA);
-                thread.IsBackground = true;
-                thread.Start();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[NeonCompanion] Windows file picker thread failed: {ex.Message}");
-                completion.TrySetResult(null);
-            }
-
-            return completion.Task;
+            var tcs = new TaskCompletionSource<string>();
+            var t = new Thread(() => tcs.TrySetResult(ShowComdlgDialog(extension, isSave: false, defaultName: null)));
+            try { t.SetApartmentState(ApartmentState.STA); t.IsBackground = true; t.Start(); }
+            catch (Exception ex) { Debug.LogWarning("[NeonCompanion] File picker thread: " + ex.Message); tcs.TrySetResult(null); }
+            return tcs.Task;
         }
 
         private static Task<string> PickWindowsSavePathAsync(string defaultName, string extension)
         {
-            var completion = new TaskCompletionSource<string>();
-            var thread = new Thread(() => completion.TrySetResult(PickWindowsSavePath(defaultName, extension)));
-            try
-            {
-                thread.SetApartmentState(ApartmentState.STA);
-                thread.IsBackground = true;
-                thread.Start();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[NeonCompanion] Windows save dialog thread failed: {ex.Message}");
-                completion.TrySetResult(null);
-            }
-            return completion.Task;
+            var tcs = new TaskCompletionSource<string>();
+            var t = new Thread(() => tcs.TrySetResult(ShowComdlgDialog(extension, isSave: true, defaultName: defaultName)));
+            try { t.SetApartmentState(ApartmentState.STA); t.IsBackground = true; t.Start(); }
+            catch (Exception ex) { Debug.LogWarning("[NeonCompanion] Save dialog thread: " + ex.Message); tcs.TrySetResult(null); }
+            return tcs.Task;
         }
 
-        private static string PickWindowsSavePath(string defaultName, string extension)
+        private static string ShowComdlgDialog(string extension, bool isSave, string defaultName)
         {
             try
             {
-                var dialogType = FindType("System.Windows.Forms.SaveFileDialog");
-                var resultType = FindType("System.Windows.Forms.DialogResult");
-                if (dialogType == null || resultType == null)
-                    return null;
+                const int bufLen = 32768;
+                IntPtr buf = System.Runtime.InteropServices.Marshal.AllocHGlobal(bufLen * 2);
+                try
+                {
+                    // Zero the buffer
+                    for (int i = 0; i < bufLen * 2; i++)
+                        System.Runtime.InteropServices.Marshal.WriteByte(buf, i, 0);
 
-                string ext = (extension ?? "md").TrimStart('.');
-                string filter = $"Markdown (*.{ext})|*.{ext}|All files (*.*)|*.*";
+                    // Write default filename if provided
+                    if (!string.IsNullOrEmpty(defaultName))
+                    {
+                        byte[] nameBytes = System.Text.Encoding.Unicode.GetBytes(defaultName);
+                        int copyLen = Math.Min(nameBytes.Length, (bufLen - 2) * 2);
+                        System.Runtime.InteropServices.Marshal.Copy(nameBytes, 0, buf, copyLen);
+                    }
 
-                var dialog = Activator.CreateInstance(dialogType);
-                SetProperty(dialogType, dialog, "Title", "Save Chat Export");
-                SetProperty(dialogType, dialog, "Filter", filter);
-                SetProperty(dialogType, dialog, "FileName", defaultName ?? ("chat-export." + ext));
-                SetProperty(dialogType, dialog, "DefaultExt", ext);
-                SetProperty(dialogType, dialog, "OverwritePrompt", true);
+                    string ext = string.IsNullOrEmpty(extension)
+                        ? "txt"
+                        : extension.Split(',')[0].Trim().TrimStart('.');
 
-                var result = dialogType.GetMethod("ShowDialog", Type.EmptyTypes)?.Invoke(dialog, null);
-                var ok = Enum.Parse(resultType, "OK");
-                string path = Equals(result, ok)
-                    ? dialogType.GetProperty("FileName")?.GetValue(dialog) as string
-                    : null;
+                    string filter = isSave
+                        ? "Markdown (*." + ext + ")\0*." + ext + "\0All files (*.*)\0*.*\0\0"
+                        : BuildOpenFilter(extension);
 
-                (dialog as IDisposable)?.Dispose();
-                return string.IsNullOrWhiteSpace(path) ? null : path;
+                    var ofn = new OPENFILENAME();
+                    ofn.lStructSize  = System.Runtime.InteropServices.Marshal.SizeOf(typeof(OPENFILENAME));
+                    ofn.hwndOwner    = IntPtr.Zero;
+                    ofn.lpstrFilter  = filter;
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFile    = buf;
+                    ofn.nMaxFile     = bufLen;
+                    ofn.lpstrTitle   = isSave ? "Save Chat Export" : "Select Image";
+                    ofn.lpstrDefExt  = ext;
+                    ofn.Flags        = OFN_NOCHANGEDIR | OFN_EXPLORER | OFN_HIDEREADONLY
+                        | (isSave
+                            ? OFN_OVERWRITEPROMPT
+                            : OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST);
+
+                    bool ok = isSave ? GetSaveFileNameW(ref ofn) : GetOpenFileNameW(ref ofn);
+                    if (!ok) return null;
+
+                    string result = System.Runtime.InteropServices.Marshal.PtrToStringUni(buf);
+                    return string.IsNullOrWhiteSpace(result) ? null : result;
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.FreeHGlobal(buf);
+                }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[NeonCompanion] Windows save dialog failed: {ex.Message}");
+                Debug.LogWarning("[NeonCompanion] comdlg32 dialog failed: " + ex.Message);
                 return null;
             }
         }
 
-        private static string PickWindowsFilePath(string extension)
+        private static string BuildOpenFilter(string extension)
         {
-            try
-            {
-                var dialogType = FindType("System.Windows.Forms.OpenFileDialog");
-                var resultType = FindType("System.Windows.Forms.DialogResult");
-                if (dialogType == null || resultType == null)
-                    return null;
-
-                bool isImage = extension.Contains("png") || extension.Contains("jpg");
-                string exts = string.Join(";", Array.ConvertAll(extension.Split(','), e => $"*.{e.Trim()}"));
-                string filter = isImage
-                    ? $"Image files ({exts})|{exts}|All files (*.*)|*.*"
-                    : $"Files ({exts})|{exts}|All files (*.*)|*.*";
-
-                var dialog = Activator.CreateInstance(dialogType);
-                SetProperty(dialogType, dialog, "Title", isImage ? "Select image" : "Select file");
-                SetProperty(dialogType, dialog, "Filter", filter);
-                SetProperty(dialogType, dialog, "CheckFileExists", true);
-                SetProperty(dialogType, dialog, "Multiselect", false);
-
-                var result = dialogType.GetMethod("ShowDialog", Type.EmptyTypes)?.Invoke(dialog, null);
-                var ok = Enum.Parse(resultType, "OK");
-                string fileName = Equals(result, ok)
-                    ? dialogType.GetProperty("FileName")?.GetValue(dialog) as string
-                    : null;
-
-                (dialog as IDisposable)?.Dispose();
-                return string.IsNullOrWhiteSpace(fileName) ? null : fileName;
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[NeonCompanion] Windows file picker failed: {ex.Message}");
-                return null;
-            }
-        }
-
-        private static void SetProperty(Type type, object instance, string propertyName, object value)
-        {
-            type.GetProperty(propertyName)?.SetValue(instance, value);
-        }
-
-        private static Type FindType(string typeName)
-        {
-            var type = Type.GetType(typeName);
-            if (type != null)
-                return type;
-
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                type = assembly.GetType(typeName);
-                if (type != null)
-                    return type;
-            }
-
-            try
-            {
-                var assembly = Assembly.Load("System.Windows.Forms");
-                return assembly.GetType(typeName);
-            }
-            catch
-            {
-                return null;
-            }
+            bool isImage = extension.Contains("png") || extension.Contains("jpg");
+            string label = isImage ? "Images" : "Files";
+            string parts = string.Join(";", Array.ConvertAll(
+                extension.Split(new char[]{','}, StringSplitOptions.RemoveEmptyEntries),
+                e => "*." + e.Trim().TrimStart('.')));
+            return label + " (" + parts + ")\0" + parts + "\0All files (*.*)\0*.*\0\0";
         }
 #endif
 

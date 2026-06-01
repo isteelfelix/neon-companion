@@ -103,6 +103,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private float _composerInputHeight = -1f;
         private int _lastComposerEnterEventFrame = -1;
         private VisualElement _composerPreviews;
+        private VisualElement _lightbox;
 
         // Message queue (U-45)
         private readonly Queue<QueuedMessage> _messageQueue = new Queue<QueuedMessage>();
@@ -233,15 +234,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 QueueComposerHeightUpdate();
             }
 
-            // Create preview strip dynamically — inserted BEFORE composer in parent column
-            if (_d.Composer?.parent != null)
+            if (_d.Composer != null)
             {
-                _composerPreviews = new VisualElement();
-                _composerPreviews.name = "composer-previews";
-                _composerPreviews.AddToClassList("composer__previews");
+                _composerPreviews = _d.Composer.Q<VisualElement>("composer-previews");
+                if (_composerPreviews == null)
+                {
+                    _composerPreviews = new VisualElement();
+                    _composerPreviews.name = "composer-previews";
+                    _composerPreviews.AddToClassList("composer__previews");
+                    _d.Composer.Insert(0, _composerPreviews);
+                }
                 _composerPreviews.style.display = DisplayStyle.None;
-                int composerIndex = _d.Composer.parent.IndexOf(_d.Composer);
-                _d.Composer.parent.Insert(composerIndex, _composerPreviews);
             }
 
             // Context window indicator
@@ -385,6 +388,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             CancelInlineEdit();
             CloseSearch();
             DismissSessionPicker();
+            HideLightbox();
             if (_searchBar != null)
             {
                 _searchBar.RemoveFromHierarchy();
@@ -447,8 +451,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool hasCtrl = evt.ctrlKey || evt.commandKey;
 
-            // Ctrl+V — only intercept if clipboard looks like an image file path (U-42).
-            // For plain text, let the event fall through so UITK TextField handles paste natively.
+            // Ctrl+V — three cases (U-42):
+            // A) clipboard text is a path to image file → attach as image
+            // B) clipboard has bitmap data (CF_DIB) regardless of text → extract image
+            // C) clipboard has only text → fall through so UITK TextField handles natively
             if (hasCtrl && evt.keyCode == KeyCode.V)
             {
                 string clip = GUIUtility.systemCopyBuffer;
@@ -456,6 +462,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     evt.StopPropagation();
                     _ = PasteImageFromClipboardAsync();
+                    return;
+                }
+                if (ClipboardHasBitmapData())
+                {
+                    evt.StopPropagation();
+                    _ = PasteWindowsClipboardImageAsync();
                     return;
                 }
                 // Text content: do not intercept — UITK handles paste natively.
@@ -675,6 +687,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var pendingAttachments = CloneAttachments(_pendingComposerAttachments);
             string message = StripAttachmentTokens(composerText, pendingAttachments);
             _d.MessageInput.value = string.Empty;
+            ClearPendingComposerAttachments();
             QueueComposerHeightUpdate();
             SetSending(true);
             _d.GetAvatarAnimationController?.Invoke()?.TriggerSend();
@@ -771,7 +784,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                     await chat.SendMessageAsync(message, pendingAttachments);
                 }
 
-                ClearPendingComposerAttachments();
                 _d.PlayNotificationSound?.Invoke();
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await _d.LoadSessionsAsync();
@@ -1698,6 +1710,220 @@ namespace NeonCompanion.Runtime.UI.UITK
                 || ext == ".gif" || ext == ".webp" || ext == ".bmp";
         }
 
+        // ── Windows clipboard bitmap support (PNG/JFIF/CF_DIB via user32 / kernel32 P/Invoke) ──
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        private const uint ClipboardFormatDib = 8;
+        private const uint ClipboardFormatDibV5 = 17;
+
+        private sealed class ClipboardImageData
+        {
+            public byte[] Bytes;
+            public bool IsDib;
+            public string Extension;
+            public string MediaType;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsClipboardFormatAvailable(uint format);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint RegisterClipboardFormat(string lpszFormat);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool OpenClipboard(IntPtr hWnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool CloseClipboard();
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetClipboardData(uint format);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern IntPtr GlobalLock(IntPtr hMem);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool GlobalUnlock(IntPtr hMem);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern int GlobalSize(IntPtr hMem);
+
+        private static bool ClipboardHasBitmapData()
+        {
+            try
+            {
+                if (IsClipboardFormatAvailable(ClipboardFormatDib) ||
+                    IsClipboardFormatAvailable(ClipboardFormatDibV5))
+                    return true;
+
+                uint pngFormat = RegisterClipboardFormat("PNG");
+                uint jfifFormat = RegisterClipboardFormat("JFIF");
+                return (pngFormat != 0 && IsClipboardFormatAvailable(pngFormat)) ||
+                       (jfifFormat != 0 && IsClipboardFormatAvailable(jfifFormat));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // Reads encoded image bytes first, then raw DIB bytes, on an STA thread.
+        private static Task<ClipboardImageData> GetClipboardImageDataAsync()
+        {
+            var tcs = new TaskCompletionSource<ClipboardImageData>();
+            var t = new System.Threading.Thread(() =>
+            {
+                if (!OpenClipboard(IntPtr.Zero)) { tcs.TrySetResult(null); return; }
+                try
+                {
+                    uint pngFormat = RegisterClipboardFormat("PNG");
+                    byte[] png = GetClipboardBytes(pngFormat);
+                    if (png != null && png.Length > 0)
+                    {
+                        tcs.TrySetResult(new ClipboardImageData
+                        {
+                            Bytes = png,
+                            Extension = ".png",
+                            MediaType = "image/png",
+                            IsDib = false
+                        });
+                        return;
+                    }
+
+                    uint jfifFormat = RegisterClipboardFormat("JFIF");
+                    byte[] jfif = GetClipboardBytes(jfifFormat);
+                    if (jfif != null && jfif.Length > 0)
+                    {
+                        tcs.TrySetResult(new ClipboardImageData
+                        {
+                            Bytes = jfif,
+                            Extension = ".jpg",
+                            MediaType = "image/jpeg",
+                            IsDib = false
+                        });
+                        return;
+                    }
+
+                    byte[] dib = GetClipboardBytes(ClipboardFormatDibV5);
+                    if (dib == null || dib.Length == 0)
+                        dib = GetClipboardBytes(ClipboardFormatDib);
+
+                    if (dib != null && dib.Length > 0)
+                    {
+                        tcs.TrySetResult(new ClipboardImageData
+                        {
+                            Bytes = dib,
+                            Extension = ".png",
+                            MediaType = "image/png",
+                            IsDib = true
+                        });
+                        return;
+                    }
+
+                    tcs.TrySetResult(null);
+                }
+                finally { CloseClipboard(); }
+            });
+            try { t.SetApartmentState(System.Threading.ApartmentState.STA); t.IsBackground = true; t.Start(); }
+            catch { tcs.TrySetResult(null); }
+            return tcs.Task;
+        }
+
+        private static byte[] GetClipboardBytes(uint format)
+        {
+            if (format == 0 || !IsClipboardFormatAvailable(format))
+                return null;
+
+            IntPtr hData = GetClipboardData(format);
+            if (hData == IntPtr.Zero)
+                return null;
+
+            int size = GlobalSize(hData);
+            if (size <= 0)
+                return null;
+
+            IntPtr ptr = GlobalLock(hData);
+            if (ptr == IntPtr.Zero)
+                return null;
+
+            try
+            {
+                byte[] bytes = new byte[size];
+                System.Runtime.InteropServices.Marshal.Copy(ptr, bytes, 0, size);
+                return bytes;
+            }
+            finally
+            {
+                GlobalUnlock(hData);
+            }
+        }
+
+        // Converts raw DIB bytes to a PNG temp file using Unity's Texture2D.
+        // Must be called from the main thread (Texture2D API requirement).
+        private static string DibToPngFile(byte[] dib)
+        {
+            if (dib == null || dib.Length < 40) return null;
+            try
+            {
+                int headerSize  = BitConverter.ToInt32(dib, 0);
+                int width       = BitConverter.ToInt32(dib, 4);
+                int height      = BitConverter.ToInt32(dib, 8);
+                short bpp       = BitConverter.ToInt16(dib, 14);
+                int compression = BitConverter.ToInt32(dib, 16);
+                int clrUsed     = BitConverter.ToInt32(dib, 32);
+
+                if (width <= 0 || height == 0 ||
+                    (compression != 0 && compression != 3) ||
+                    (bpp != 24 && bpp != 32))
+                    return null; // only uncompressed 24/32 bpp supported
+
+                bool bottomUp = height > 0;
+                if (height < 0) height = -height;
+
+                int extraHeaderBytes = 0;
+                if (compression == 3 && headerSize == 40)
+                    extraHeaderBytes = bpp == 32 ? 16 : 12; // BI_BITFIELDS masks after BITMAPINFOHEADER
+
+                int colorTableSize = bpp <= 8 ? (clrUsed > 0 ? clrUsed : (1 << bpp)) * 4 : 0;
+                int pixelOffset = headerSize + extraHeaderBytes + colorTableSize;
+                if (pixelOffset >= dib.Length) return null;
+
+                int bytesPerPixel = bpp / 8;
+                int stride = bpp == 32 ? width * 4 : ((width * 3 + 3) / 4) * 4;
+
+                var colors = new Color32[width * height];
+                for (int y = 0; y < height; y++)
+                {
+                    int srcY = bottomUp ? y : (height - 1 - y);
+                    int rowBase = pixelOffset + srcY * stride;
+                    for (int x = 0; x < width; x++)
+                    {
+                        int off = rowBase + x * bytesPerPixel;
+                        if (off + 2 >= dib.Length) break;
+                        byte b = dib[off];
+                        byte g = dib[off + 1];
+                        byte r = dib[off + 2];
+                        byte a = (bpp == 32 && off + 3 < dib.Length) ? dib[off + 3] : (byte)255;
+                        colors[y * width + x] = new Color32(r, g, b, a);
+                    }
+                }
+
+                var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                tex.SetPixels32(colors);
+                tex.Apply();
+                byte[] png = tex.EncodeToPNG();
+                UnityEngine.Object.Destroy(tex);
+
+                if (png == null || png.Length == 0) return null;
+
+                string path = System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(),
+                    "neon-paste-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".png");
+                System.IO.File.WriteAllBytes(path, png);
+                return path;
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("DIB→PNG failed: " + ex.Message);
+                return null;
+            }
+        }
+#else
+        private static bool ClipboardHasBitmapData() { return false; }
+#endif
+
         private Task PasteImageFromClipboardAsync()
         {
             try
@@ -1743,6 +1969,61 @@ namespace NeonCompanion.Runtime.UI.UITK
             return Task.CompletedTask;
         }
 
+        // Extracts a bitmap image from the Windows clipboard (screenshots, images copied from browser etc.)
+        // Uses reflection + STA thread so it works without a direct System.Drawing reference.
+        private async Task PasteWindowsClipboardImageAsync()
+        {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            // Read image data on an STA thread (P/Invoke only), then convert DIB on main thread if needed.
+            ClipboardImageData imageData = await GetClipboardImageDataAsync();
+            if (imageData == null || imageData.Bytes == null || imageData.Bytes.Length == 0)
+            {
+                _d.ShowSystemMessage(LocalizationExtensions.Get("chat.paste.image_failed", "Не удалось извлечь изображение из буфера."));
+                return;
+            }
+
+            string tempPath = imageData.IsDib
+                ? DibToPngFile(imageData.Bytes)
+                : WriteClipboardImageFile(imageData.Bytes, imageData.Extension);
+            if (string.IsNullOrEmpty(tempPath))
+            {
+                _d.ShowSystemMessage(LocalizationExtensions.Get("chat.paste.image_failed", "Не удалось извлечь изображение из буфера."));
+                return;
+            }
+
+            string fileName = "clipboard-" + DateTime.Now.ToString("HHmmss") + ".png";
+            _pendingComposerAttachments.Add(new ChatAttachment
+            {
+                kind = "image",
+                name = fileName,
+                path = tempPath,
+                mediaType = string.IsNullOrEmpty(imageData.MediaType) ? "image/png" : imageData.MediaType
+            });
+            RenderComposerPreviews();
+            _d.MessageInput?.Focus();
+#else
+            await Task.CompletedTask;
+#endif
+        }
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        private static string WriteClipboardImageFile(byte[] bytes, string extension)
+        {
+            if (bytes == null || bytes.Length == 0)
+                return null;
+
+            string ext = string.IsNullOrEmpty(extension) ? ".png" : extension;
+            if (!ext.StartsWith(".", StringComparison.Ordinal))
+                ext = "." + ext;
+
+            string path = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "neon-paste-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ext);
+            System.IO.File.WriteAllBytes(path, bytes);
+            return path;
+        }
+#endif
+
         private void OnAttachClicked()
         {
             _ = AttachImageTokenAsync();
@@ -1769,12 +2050,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 });
 
                 RenderComposerPreviews();
-
-                string token = $"[attachment: {fileName}]";
-                string current = _d.MessageInput.value ?? string.Empty;
-                _d.MessageInput.value = string.IsNullOrWhiteSpace(current)
-                    ? token
-                    : $"{current.TrimEnd()} {token}";
                 _d.MessageInput.Focus();
             }
             catch (Exception ex)
@@ -1796,6 +2071,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var restored = CloneAttachments(attachments);
             for (int i = 0; i < restored.Count; i++)
                 _pendingComposerAttachments.Add(restored[i]);
+            RenderComposerPreviews();
         }
 
         private void RenderComposerPreviews()
@@ -1824,8 +2100,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     var img = new Image();
                     img.AddToClassList("composer__preview-img");
-                    img.scaleMode = ScaleMode.ScaleToFit;
+                    img.scaleMode = ScaleMode.ScaleAndCrop;
                     img.schedule.Execute(() => LoadImageAsync(img, attachment.path));
+                    string previewPath = attachment.path; // capture for closure
+                    img.RegisterCallback<ClickEvent>(evt =>
+                    {
+                        ShowImageLightbox(previewPath);
+                        evt.StopPropagation();
+                    });
                     thumb.Add(img);
                 }
 
@@ -1859,8 +2141,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (index < 0 || index >= _pendingComposerAttachments.Count) return;
             _pendingComposerAttachments.RemoveAt(index);
 
-            // Also remove the [attachment: ...] token from the text input
-            // Simple approach: rebuild tokens from remaining attachments
+            // Keep the composer text clean if it still contains legacy attachment tokens.
             string text = _d.MessageInput?.value ?? string.Empty;
             string rebuilt = BuildComposerTextWithAttachments(text, _pendingComposerAttachments);
             if (_d.MessageInput != null)
@@ -1871,24 +2152,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private static string BuildComposerTextWithAttachments(string composerText, IReadOnlyList<ChatAttachment> attachments)
         {
-            string text = StripAllAttachmentTokens(composerText ?? string.Empty).Trim();
-            if (attachments != null)
-            {
-                for (int i = 0; i < attachments.Count; i++)
-                {
-                    var a = attachments[i];
-                    if (a == null || string.IsNullOrWhiteSpace(a.name))
-                        continue;
-                    string token = $"[attachment: {a.name}]";
-                    if (text.IndexOf(token, StringComparison.Ordinal) < 0)
-                    {
-                        if (!string.IsNullOrEmpty(text))
-                            text += " ";
-                        text += token;
-                    }
-                }
-            }
-            return text;
+            return StripAllAttachmentTokens(composerText ?? string.Empty).Trim();
         }
 
         private static string StripAllAttachmentTokens(string text)
@@ -2415,7 +2679,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (!HasRenderableMessageContent(message))
                     continue;
 
-                var row = CreateMessageElement(message);
+                var row = CreateMessageElement(message, ShowImageLightbox, ScrollTranscriptToBottom);
                 // Tag with model index so context menu / edit can identify which message it represents
                 row.userData = i;
                 var bubbleForTag = row.Q<VisualElement>(className: "transcript__bubble");
@@ -2469,7 +2733,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return container;
         }
 
-        internal static VisualElement CreateMessageElement(ChatMessage message)
+        internal static VisualElement CreateMessageElement(ChatMessage message, Action<string> onImageClick = null, Action onImageLoaded = null)
         {
             string role = NormalizeRole(message.role);
 
@@ -2540,7 +2804,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                         var imageElement = new Image();
                         imageElement.AddToClassList("transcript__image");
                         imageElement.scaleMode = ScaleMode.ScaleToFit;
-                        LoadImageAsync(imageElement, attachment.path);
+                        LoadImageAsync(imageElement, attachment.path, onImageLoaded);
+                        string imgPath = attachment.path; // capture for closure
+                        if (onImageClick != null)
+                        {
+                            imageElement.RegisterCallback<ClickEvent>(evt =>
+                            {
+                                onImageClick(imgPath);
+                                evt.StopPropagation();
+                            });
+                        }
                         attachmentWrap.Add(imageElement);
                     }
                     else
@@ -2710,6 +2983,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             // laid out — otherwise we measure a stale height and stop short of
             // the just-added message.
             list.schedule.Execute(PinTranscriptToBottom);
+            list.schedule.Execute(PinTranscriptToBottom).StartingIn(50);
+            list.schedule.Execute(PinTranscriptToBottom).StartingIn(150);
+            list.schedule.Execute(PinTranscriptToBottom).StartingIn(300);
 
             if (_pinBottomQueued)
                 return;
@@ -2913,7 +3189,150 @@ namespace NeonCompanion.Runtime.UI.UITK
             return !string.IsNullOrWhiteSpace(attachment.name) ? attachment.name : "image";
         }
 
-        private static async void LoadImageAsync(Image imageElement, string path)
+        // ── Image Lightbox ──────────────────────────────────────────
+
+        private void ShowImageLightbox(string imagePath)
+        {
+            if (string.IsNullOrEmpty(imagePath)) return;
+
+            VisualElement root = GetOverlayRoot();
+            if (root == null) return;
+
+            HideLightbox();
+
+            _lightbox = new VisualElement();
+            _lightbox.name = "image-lightbox";
+            _lightbox.AddToClassList("lightbox");
+            _lightbox.focusable = true;
+            _lightbox.pickingMode = PickingMode.Position;
+            ApplyFullscreenOverlayLayout(_lightbox);
+
+            // Click on the dark background closes the overlay
+            _lightbox.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == _lightbox)
+                {
+                    HideLightbox();
+                    evt.StopPropagation();
+                }
+            });
+
+            // ESC closes the overlay (requires focus — set below)
+            _lightbox.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                {
+                    HideLightbox();
+                    evt.StopPropagation();
+                }
+            });
+
+            // Image element — ScaleToFit preserves aspect ratio within the USS-defined bounds
+            var imgEl = new Image();
+            imgEl.AddToClassList("lightbox__image");
+            imgEl.scaleMode = ScaleMode.ScaleToFit;
+            ApplyLightboxImageLayout(imgEl);
+            // Stop propagation so click on image itself does NOT close the overlay
+            imgEl.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+            LoadImageAsync(imgEl, imagePath);
+            _lightbox.Add(imgEl);
+
+            // Close button (×) — top-right corner
+            var closeBtn = new Button(HideLightbox);
+            closeBtn.text = "×";
+            closeBtn.AddToClassList("lightbox__close");
+            ApplyLightboxCloseLayout(closeBtn);
+            _lightbox.Add(closeBtn);
+
+            root.Add(_lightbox);
+            _lightbox.BringToFront();
+
+            // Focus after layout tick so ESC key events are received
+            _lightbox.schedule.Execute(() => _lightbox?.Focus()).StartingIn(50);
+        }
+
+        private void HideLightbox()
+        {
+            if (_lightbox == null) return;
+            _lightbox.RemoveFromHierarchy();
+            _lightbox = null;
+        }
+
+        private VisualElement GetOverlayRoot()
+        {
+            if (_d.MessagesList != null && _d.MessagesList.panel != null)
+                return _d.MessagesList.panel.visualTree;
+
+            if (_d.Composer != null && _d.Composer.panel != null)
+                return _d.Composer.panel.visualTree;
+
+            if (_transcriptContextRoot != null && _transcriptContextRoot.panel != null)
+                return _transcriptContextRoot.panel.visualTree;
+
+            return null;
+        }
+
+        private static void ApplyFullscreenOverlayLayout(VisualElement overlay)
+        {
+            if (overlay == null)
+                return;
+
+            overlay.style.position = Position.Absolute;
+            overlay.style.left = 0;
+            overlay.style.right = 0;
+            overlay.style.top = 0;
+            overlay.style.bottom = 0;
+            overlay.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.87f));
+            overlay.style.alignItems = Align.Center;
+            overlay.style.justifyContent = Justify.Center;
+        }
+
+        private static void ApplyLightboxImageLayout(Image image)
+        {
+            if (image == null)
+                return;
+
+            image.style.width = Length.Percent(80f);
+            image.style.height = Length.Percent(80f);
+            image.style.borderTopLeftRadius = 8f;
+            image.style.borderTopRightRadius = 8f;
+            image.style.borderBottomLeftRadius = 8f;
+            image.style.borderBottomRightRadius = 8f;
+            image.style.borderTopWidth = 1f;
+            image.style.borderRightWidth = 1f;
+            image.style.borderBottomWidth = 1f;
+            image.style.borderLeftWidth = 1f;
+            image.style.borderTopColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+            image.style.borderRightColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+            image.style.borderBottomColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+            image.style.borderLeftColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+        }
+
+        private static void ApplyLightboxCloseLayout(Button closeButton)
+        {
+            if (closeButton == null)
+                return;
+
+            closeButton.style.position = Position.Absolute;
+            closeButton.style.top = 16f;
+            closeButton.style.right = 16f;
+            closeButton.style.width = 36f;
+            closeButton.style.height = 36f;
+            closeButton.style.minWidth = 36f;
+            closeButton.style.minHeight = 36f;
+            closeButton.style.borderTopLeftRadius = 18f;
+            closeButton.style.borderTopRightRadius = 18f;
+            closeButton.style.borderBottomLeftRadius = 18f;
+            closeButton.style.borderBottomRightRadius = 18f;
+            closeButton.style.paddingLeft = 0f;
+            closeButton.style.paddingRight = 0f;
+            closeButton.style.paddingTop = 0f;
+            closeButton.style.paddingBottom = 0f;
+        }
+
+        // ────────────────────────────────────────────────────────────
+
+        private static async void LoadImageAsync(Image imageElement, string path, Action onLoaded = null)
         {
             if (imageElement == null || string.IsNullOrEmpty(path))
                 return;
@@ -2933,6 +3352,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                         if (dh != null)
                         {
                             imageElement.image = dh.texture;
+                            if (onLoaded != null)
+                                onLoaded();
                         }
                     }
                 }

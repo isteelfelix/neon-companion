@@ -516,8 +516,8 @@
 .composer {
     min-height: 54px;
     flex-shrink: 0;
-    flex-direction: row;
-    align-items: flex-end;
+    flex-direction: column;
+    align-items: stretch;
     background-color: var(--bg-2);
     border-width: 1px;
     border-color: var(--line-2);
@@ -525,6 +525,12 @@
     padding: 8px 8px 8px 14px;
     transition-property: border-color;
     transition-duration: 0.15s;
+}
+
+.composer__controls {
+    flex-direction: row;
+    align-items: flex-end;
+    min-height: 36px;
 }
 
 .mic-btn--recording {
@@ -583,29 +589,50 @@
 .composer__previews {
     flex-direction: row;
     flex-wrap: wrap;
-    padding: 6px 8px 0;
+    padding: 0 0 8px 0;
+    flex-shrink: 0;
 }
 
 .composer__preview-thumb {
-    width: 64px;
-    height: 64px;
-    border-radius: 6px;
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
     overflow: hidden;
+    border-width: 1px;
+    border-color: rgba(255,255,255,0.12);
+    background-color: rgba(0,0,0,0.25);
+    margin-right: 6px;
+    margin-bottom: 4px;
 }
 
+/* Image fills the entire thumb — positioned absolute so remove button overlays on top */
 .composer__preview-img {
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
 }
 
+/* Hover hint on thumb */
+.composer__preview-thumb:hover {
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* × button overlaid in top-right corner */
 .composer__preview-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
     width: 18px;
     height: 18px;
-    min-width: 0;
-    min-height: 0;
+    min-width: 18px;
+    min-height: 18px;
     padding: 0;
     border-radius: 9px;
-    background-color: rgba(0,0,0,0.6);
+    border-width: 0;
+    background-color: rgba(0,0,0,0.65);
     color: #fff;
     font-size: 12px;
     -unity-text-align: middle-center;
@@ -1405,6 +1432,13 @@
     margin-bottom: 4px;
     border-width: 1px;
     border-color: var(--line-2);
+    transition-property: opacity, border-color;
+    transition-duration: 0.15s;
+}
+
+.transcript__image:hover {
+    border-color: rgba(255, 255, 255, 0.42);
+    opacity: 0.88;
 }
 
 /* Context window indicator */
@@ -1633,4 +1667,48 @@
 .app.platform-mobile .composer__input {
     font-size: 15px;
     min-height: 40px;
+}
+
+/* ============== Image Lightbox (click-to-preview) ============== */
+
+.lightbox {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.87);
+    align-items: center;
+    justify-content: center;
+}
+
+/* Image is sized to 80% of lightbox; ScaleToFit in C# keeps aspect ratio */
+.lightbox__image {
+    width: 80%;
+    height: 80%;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.lightbox__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 18px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.25);
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 20px;
+    -unity-text-align: middle-center;
+    padding: 0;
+}
+
+.lightbox__close:hover {
+    background-color: rgba(255, 255, 255, 0.28);
 }
