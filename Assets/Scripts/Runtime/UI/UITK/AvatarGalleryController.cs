@@ -268,6 +268,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarUploadTile.RegisterCallback<ClickEvent>(_ => OnAvatarUploadClicked());
 
             RegisterAvatarGalleryCallbacks();
+
+            // Apply initial gallery visibility so gallery-animated / gallery-3d are
+            // hidden from the start (their UXML default is Flex, not None).
+            ApplyAvatarViewMode();
         }
 
         public void UnregisterCallbacks()
@@ -1115,10 +1119,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_avatar3DImage, DisplayStyle.None);
         }
 
+        private void HideAllAvatarImageOverlays()
+        {
+            if (_avatarArt == null) return;
+            var imgs = _avatarArt.Query<Image>().ToList();
+            for (int k = 0; k < imgs.Count; k++)
+                SetDisplay(imgs[k], DisplayStyle.None);
+        }
+
         private bool ConfigureAvatarAnimation(AvatarProfile profile)
         {
             EnsureAvatarAnimationImage();
             EnsureAvatar3DImage();
+
+            // Check mode BEFORE null guard so we always clean up image overlays from
+            // other controllers (e.g. MainViewController also adds an Image to _avatarArt).
+            if (_avatarViewMode != AvatarViewMode.Animated)
+            {
+                if (_avatarAnimator != null) _avatarAnimator.Stop();
+                if (_avatarArtImage != null) _avatarArtImage.sprite = null;
+                HideAllAvatarImageOverlays();
+                return false;
+            }
 
             if (_avatarAnimator == null || _avatarArtImage == null)
             {
@@ -1126,14 +1148,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                     "_avatarAnimator=" + (_avatarAnimator == null ? "null" : "ok") +
                     " _avatarArtImage=" + (_avatarArtImage == null ? "null" : "ok") +
                     " _avatarArt=" + (_avatarArt == null ? "null" : "ok"));
-                return false;
-            }
-
-            if (_avatarViewMode != AvatarViewMode.Animated)
-            {
-                _avatarAnimator.Stop();
-                _avatarArtImage.sprite = null;
-                SetDisplay(_avatarArtImage, DisplayStyle.None);
                 return false;
             }
 

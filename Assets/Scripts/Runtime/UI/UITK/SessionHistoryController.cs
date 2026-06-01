@@ -57,6 +57,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _sessionContextMenu;
         private EventCallback<PointerDownEvent> _sessionMenuOutsideHandler;
         private VisualElement _sessionMenuRoot;
+        private float _sessionMenuIgnoreUntil;
+        private IVisualElementScheduledItem _sessionMenuOutsideSchedule;
         private VisualElement _folderInputPopup;
         private EventCallback<PointerDownEvent> _folderInputOutsideHandler;
         private VisualElement _folderInputRoot;
@@ -525,6 +527,25 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var menu = new VisualElement();
             menu.AddToClassList("session-context-menu");
+            // Inline fallback so the menu renders correctly regardless of stylesheet scope
+            menu.style.flexDirection = FlexDirection.Column;
+            menu.style.backgroundColor = new Color(0.118f, 0.137f, 0.196f, 0.98f);
+            menu.style.borderTopWidth = 1f;
+            menu.style.borderRightWidth = 1f;
+            menu.style.borderBottomWidth = 1f;
+            menu.style.borderLeftWidth = 1f;
+            menu.style.borderTopColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            menu.style.borderRightColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            menu.style.borderBottomColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            menu.style.borderLeftColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            menu.style.borderTopLeftRadius = 8f;
+            menu.style.borderTopRightRadius = 8f;
+            menu.style.borderBottomLeftRadius = 8f;
+            menu.style.borderBottomRightRadius = 8f;
+            menu.style.paddingTop = 4f;
+            menu.style.paddingBottom = 4f;
+            menu.style.paddingLeft = 4f;
+            menu.style.paddingRight = 4f;
 
             string currentF = string.IsNullOrWhiteSpace(session.folder) ? "" : session.folder.Trim();
 
@@ -565,32 +586,73 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sessionContextMenu = menu;
             _sessionMenuRoot = root;
 
-            var b = target.worldBound;
-            float left = b.xMax + 6f;
-            float top = position.y - 8f;
+            // Convert pointer position to root-local coordinates (mirrors MessageContextMenu.ShowAt)
+            Vector2 localPos = root.WorldToLocal(position);
+            float left = localPos.x + 8f;
+            float top = localPos.y + 4f;
             if (left < 0f) left = 0f;
             if (top < 0f) top = 0f;
+            float maxLeft = root.layout.width - 180f;
+            float maxTop = root.layout.height - 220f;
+            if (maxLeft < 0f) maxLeft = 0f;
+            if (maxTop < 0f) maxTop = 0f;
+            if (left > maxLeft) left = maxLeft;
+            if (top > maxTop) top = maxTop;
 
+            menu.style.position = Position.Absolute;
             menu.style.left = left;
             menu.style.top = top;
             menu.style.minWidth = 160f;
+            menu.style.display = DisplayStyle.Flex;
+            menu.style.visibility = Visibility.Visible;
 
             root.Add(menu);
+            menu.BringToFront();
+
+            // Ignore outside-pointer close right after open to avoid self-close from the opening click
+            _sessionMenuIgnoreUntil = Time.realtimeSinceStartup + 0.15f;
 
             _sessionMenuOutsideHandler = OnSessionMenuOutside;
-            root.RegisterCallback(_sessionMenuOutsideHandler, TrickleDown.TrickleDown);
+            if (_sessionMenuOutsideSchedule != null)
+            {
+                _sessionMenuOutsideSchedule.Pause();
+                _sessionMenuOutsideSchedule = null;
+            }
+            _sessionMenuOutsideSchedule = root.schedule.Execute(() =>
+            {
+                if (_sessionMenuRoot != null && _sessionMenuOutsideHandler != null)
+                    _sessionMenuRoot.RegisterCallback(_sessionMenuOutsideHandler, TrickleDown.TrickleDown);
+                _sessionMenuOutsideSchedule = null;
+            }).StartingIn(16);
         }
 
         private VisualElement CreateFolderMenuItem(string icon, string labelText, Action onClick)
         {
             var item = new VisualElement();
             item.AddToClassList("message-context-menu__item");
+            // Inline fallback styles (CSS may be template-scoped and unavailable here)
+            item.style.flexDirection = FlexDirection.Row;
+            item.style.alignItems = Align.Center;
+            item.style.paddingLeft = 12f;
+            item.style.paddingRight = 16f;
+            item.style.paddingTop = 6f;
+            item.style.paddingBottom = 6f;
+            item.style.borderTopLeftRadius = 4f;
+            item.style.borderTopRightRadius = 4f;
+            item.style.borderBottomLeftRadius = 4f;
+            item.style.borderBottomRightRadius = 4f;
+            item.style.minHeight = 28f;
 
             var iconLabel = new Label(icon);
             iconLabel.AddToClassList("message-context-menu__icon");
+            iconLabel.style.marginRight = 8f;
+            iconLabel.style.fontSize = 14f;
+            iconLabel.style.width = 18f;
 
             var textLabel = new Label(labelText);
             textLabel.AddToClassList("message-context-menu__label");
+            textLabel.style.fontSize = 13f;
+            textLabel.style.color = new Color(0.878f, 0.878f, 0.878f, 1f); // #e0e0e0
 
             item.Add(iconLabel);
             item.Add(textLabel);
@@ -602,14 +664,24 @@ namespace NeonCompanion.Runtime.UI.UITK
                     onClick.Invoke();
             });
 
-            item.RegisterCallback<PointerEnterEvent>(_ => item.AddToClassList("message-context-menu__item--hover"));
-            item.RegisterCallback<PointerLeaveEvent>(_ => item.RemoveFromClassList("message-context-menu__item--hover"));
+            item.RegisterCallback<PointerEnterEvent>(_ =>
+            {
+                item.AddToClassList("message-context-menu__item--hover");
+                item.style.backgroundColor = new Color(1f, 1f, 1f, 0.08f);
+            });
+            item.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                item.RemoveFromClassList("message-context-menu__item--hover");
+                item.style.backgroundColor = Color.clear;
+            });
 
             return item;
         }
 
         private void OnSessionMenuOutside(PointerDownEvent evt)
         {
+            if (Time.realtimeSinceStartup < _sessionMenuIgnoreUntil)
+                return;
             if (_sessionContextMenu != null && _sessionContextMenu.worldBound.Contains(evt.position))
                 return;
             HideSessionMenus();
@@ -620,12 +692,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_sessionContextMenu != null && _sessionContextMenu.parent != null)
                 _sessionContextMenu.RemoveFromHierarchy();
 
+            if (_sessionMenuOutsideSchedule != null)
+            {
+                _sessionMenuOutsideSchedule.Pause();
+                _sessionMenuOutsideSchedule = null;
+            }
+
             if (_sessionMenuRoot != null && _sessionMenuOutsideHandler != null)
                 _sessionMenuRoot.UnregisterCallback(_sessionMenuOutsideHandler, TrickleDown.TrickleDown);
 
             _sessionContextMenu = null;
             _sessionMenuRoot = null;
             _sessionMenuOutsideHandler = null;
+            _sessionMenuIgnoreUntil = 0f;
 
             HideFolderInputPopup();
         }
@@ -639,19 +718,44 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var popup = new VisualElement();
             popup.AddToClassList("folder-name-input-popup");
+            // Inline fallback styles (CSS may be template-scoped)
+            popup.style.flexDirection = FlexDirection.Column;
+            popup.style.backgroundColor = new Color(0.118f, 0.137f, 0.196f, 0.98f);
+            popup.style.borderTopWidth = 1f;
+            popup.style.borderRightWidth = 1f;
+            popup.style.borderBottomWidth = 1f;
+            popup.style.borderLeftWidth = 1f;
+            popup.style.borderTopColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            popup.style.borderRightColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            popup.style.borderBottomColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            popup.style.borderLeftColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            popup.style.borderTopLeftRadius = 8f;
+            popup.style.borderTopRightRadius = 8f;
+            popup.style.borderBottomLeftRadius = 8f;
+            popup.style.borderBottomRightRadius = 8f;
+            popup.style.paddingTop = 10f;
+            popup.style.paddingBottom = 10f;
+            popup.style.paddingLeft = 10f;
+            popup.style.paddingRight = 10f;
+            popup.style.position = Position.Absolute;
 
-            var titleLabel = new Label(LocalizationExtensions.Get("session.folder.input_title", "New folder name"));
+            var titleLabel = new Label(LocalizationExtensions.Get("session.folder.input_title", "Название папки"));
             titleLabel.AddToClassList("folder-name-input-popup__title");
+            titleLabel.style.fontSize = 12f;
+            titleLabel.style.color = new Color(0.62f, 0.66f, 0.78f, 1f);
+            titleLabel.style.marginBottom = 6f;
 
             var input = new TextField();
             input.AddToClassList("folder-name-input-popup__input");
+            input.style.marginBottom = 8f;
 
             var btnRow = new VisualElement();
             btnRow.style.flexDirection = FlexDirection.Row;
             btnRow.style.justifyContent = Justify.FlexEnd;
 
             var cancelBtn = new Button();
-            cancelBtn.text = LocalizationExtensions.Get("session.folder.cancel", "Cancel");
+            cancelBtn.text = LocalizationExtensions.Get("session.folder.cancel", "Отмена");
+            cancelBtn.style.marginRight = 4f;
             cancelBtn.RegisterCallback<ClickEvent>(evt =>
             {
                 evt.StopPropagation();
@@ -660,7 +764,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var capturedSession = session;
             var createBtn = new Button();
-            createBtn.text = LocalizationExtensions.Get("session.folder.create", "Create");
+            createBtn.text = LocalizationExtensions.Get("session.folder.create", "Создать");
             createBtn.RegisterCallback<ClickEvent>(evt =>
             {
                 evt.StopPropagation();
@@ -685,17 +789,27 @@ namespace NeonCompanion.Runtime.UI.UITK
             _folderInputPopup = popup;
             _folderInputRoot = root;
 
-            var b = target.worldBound;
-            float left = b.xMax + 6f;
-            float top = b.yMin;
+            // Convert position to root-local coordinates
+            Vector2 localPos = root.WorldToLocal(position);
+            float left = localPos.x + 8f;
+            float top = localPos.y + 4f;
             if (left < 0f) left = 0f;
             if (top < 0f) top = 0f;
+            float maxLeft = root.layout.width - 220f;
+            float maxTop = root.layout.height - 160f;
+            if (maxLeft < 0f) maxLeft = 0f;
+            if (maxTop < 0f) maxTop = 0f;
+            if (left > maxLeft) left = maxLeft;
+            if (top > maxTop) top = maxTop;
 
             popup.style.left = left;
             popup.style.top = top;
-            popup.style.minWidth = 180f;
+            popup.style.minWidth = 200f;
+            popup.style.display = DisplayStyle.Flex;
+            popup.style.visibility = Visibility.Visible;
 
             root.Add(popup);
+            popup.BringToFront();
 
             _folderInputOutsideHandler = OnFolderInputOutside;
             root.RegisterCallback(_folderInputOutsideHandler, TrickleDown.TrickleDown);
@@ -749,9 +863,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (start == null)
                 return null;
 
-            var el = start;
+            // Return the panel visual tree directly (same as MessageContextMenu.GetDocumentRoot)
+            // so that overlays added here are siblings of everything else and BringToFront works
             var panelVisualTree = start.panel != null ? start.panel.visualTree : null;
-            while (el.parent != null && el.parent != panelVisualTree)
+            if (panelVisualTree != null)
+                return panelVisualTree;
+
+            var el = start;
+            while (el.parent != null)
                 el = el.parent;
             return el;
         }

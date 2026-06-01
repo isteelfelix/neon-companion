@@ -82,12 +82,28 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             var item = new VisualElement();
             item.AddToClassList("message-context-menu__item");
+            item.style.flexDirection = FlexDirection.Row;
+            item.style.alignItems = Align.Center;
+            item.style.paddingLeft = 12f;
+            item.style.paddingRight = 16f;
+            item.style.paddingTop = 6f;
+            item.style.paddingBottom = 6f;
+            item.style.borderTopLeftRadius = 4f;
+            item.style.borderTopRightRadius = 4f;
+            item.style.borderBottomLeftRadius = 4f;
+            item.style.borderBottomRightRadius = 4f;
+            item.style.minHeight = 28f;
 
             var iconLabel = new Label(icon);
             iconLabel.AddToClassList("message-context-menu__icon");
+            iconLabel.style.marginRight = 8f;
+            iconLabel.style.fontSize = 14f;
+            iconLabel.style.width = 18f;
 
             var textLabel = new Label(labelText);
             textLabel.AddToClassList("message-context-menu__label");
+            textLabel.style.fontSize = 13f;
+            textLabel.style.color = new Color(0.878f, 0.878f, 0.878f, 1f); // #e0e0e0
 
             item.Add(iconLabel);
             item.Add(textLabel);
@@ -99,8 +115,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                     onClick.Invoke();
             });
 
-            item.RegisterCallback<PointerEnterEvent>(_ => item.AddToClassList("message-context-menu__item--hover"));
-            item.RegisterCallback<PointerLeaveEvent>(_ => item.RemoveFromClassList("message-context-menu__item--hover"));
+            item.RegisterCallback<PointerEnterEvent>(_ =>
+            {
+                item.AddToClassList("message-context-menu__item--hover");
+                item.style.backgroundColor = new Color(1f, 1f, 1f, 0.08f);
+            });
+            item.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                item.RemoveFromClassList("message-context-menu__item--hover");
+                item.style.backgroundColor = Color.clear;
+            });
 
             return item;
         }

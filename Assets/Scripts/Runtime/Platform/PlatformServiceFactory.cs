@@ -85,6 +85,7 @@ namespace NeonCompanion.Runtime.Platform
     {
         public Task<string> PickImagePathAsync() => Task.FromResult<string>(null);
         public Task<string> PickFileAsync(string extension) => Task.FromResult<string>(null);
+        public Task<string> PickSavePathAsync(string defaultFileName, string extension) => Task.FromResult<string>(null);
     }
 
     /// <summary>

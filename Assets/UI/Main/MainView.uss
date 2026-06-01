@@ -90,7 +90,7 @@
     width: 26px;
     height: 26px;
     border-radius: 8px;
-    background-image: url("project://database/Assets/UI/Avatars/brand-mark.png");
+    background-image: url("project://database/Assets/UI/Branding/app-icon-1024.png");
     -unity-background-scale-mode: stretch-to-fill;
     margin-right: 10px;
 }

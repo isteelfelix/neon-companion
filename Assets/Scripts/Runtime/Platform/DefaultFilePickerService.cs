@@ -31,6 +31,19 @@ namespace NeonCompanion.Runtime.Platform
 #endif
         }
 
+        public Task<string> PickSavePathAsync(string defaultFileName, string extension)
+        {
+#if UNITY_EDITOR
+            string ext = (extension ?? "md").TrimStart('.');
+            string path = UnityEditor.EditorUtility.SaveFilePanel("Save Chat Export", "", defaultFileName, ext);
+            return Task.FromResult(string.IsNullOrEmpty(path) ? null : path);
+#elif UNITY_STANDALONE_WIN
+            return PickWindowsSavePathAsync(defaultFileName, extension);
+#else
+            return Task.FromResult<string>(null);
+#endif
+        }
+
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
         private static Task<string> PickWindowsFilePathAsync(string extension)
         {
@@ -50,6 +63,59 @@ namespace NeonCompanion.Runtime.Platform
             }
 
             return completion.Task;
+        }
+
+        private static Task<string> PickWindowsSavePathAsync(string defaultName, string extension)
+        {
+            var completion = new TaskCompletionSource<string>();
+            var thread = new Thread(() => completion.TrySetResult(PickWindowsSavePath(defaultName, extension)));
+            try
+            {
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.IsBackground = true;
+                thread.Start();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[NeonCompanion] Windows save dialog thread failed: {ex.Message}");
+                completion.TrySetResult(null);
+            }
+            return completion.Task;
+        }
+
+        private static string PickWindowsSavePath(string defaultName, string extension)
+        {
+            try
+            {
+                var dialogType = FindType("System.Windows.Forms.SaveFileDialog");
+                var resultType = FindType("System.Windows.Forms.DialogResult");
+                if (dialogType == null || resultType == null)
+                    return null;
+
+                string ext = (extension ?? "md").TrimStart('.');
+                string filter = $"Markdown (*.{ext})|*.{ext}|All files (*.*)|*.*";
+
+                var dialog = Activator.CreateInstance(dialogType);
+                SetProperty(dialogType, dialog, "Title", "Save Chat Export");
+                SetProperty(dialogType, dialog, "Filter", filter);
+                SetProperty(dialogType, dialog, "FileName", defaultName ?? ("chat-export." + ext));
+                SetProperty(dialogType, dialog, "DefaultExt", ext);
+                SetProperty(dialogType, dialog, "OverwritePrompt", true);
+
+                var result = dialogType.GetMethod("ShowDialog", Type.EmptyTypes)?.Invoke(dialog, null);
+                var ok = Enum.Parse(resultType, "OK");
+                string path = Equals(result, ok)
+                    ? dialogType.GetProperty("FileName")?.GetValue(dialog) as string
+                    : null;
+
+                (dialog as IDisposable)?.Dispose();
+                return string.IsNullOrWhiteSpace(path) ? null : path;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[NeonCompanion] Windows save dialog failed: {ex.Message}");
+                return null;
+            }
         }
 
         private static string PickWindowsFilePath(string extension)

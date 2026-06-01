@@ -395,11 +395,35 @@
     color: var(--text-0);
     font-size: 13px;
     white-space: normal;
-    --unity-text-selection-color: rgba(124, 122, 237, 0.35);
 }
 
 .transcript__body--user {
     white-space: pre-wrap;
+}
+
+/* TextField used in place of Label so text is user-selectable (U-34).
+   Strip all visual chrome so it looks identical to a plain label. */
+.transcript__body > .unity-text-field__input,
+.transcript__body > .unity-base-text-field__input {
+    background-color: transparent;
+    border-width: 0;
+    padding: 0;
+    color: var(--text-0);
+    font-size: 13px;
+    white-space: normal;
+}
+
+/* Text cursor when hovering over selectable message text.
+   Isolated block — if 'cursor: text' is unsupported, only this block is dropped. */
+.transcript__body > .unity-text-field__input,
+.transcript__body > .unity-base-text-field__input {
+    cursor: text;
+}
+
+.transcript__body--user > .unity-text-field__input,
+.transcript__body--user > .unity-base-text-field__input {
+    white-space: pre-wrap;
+    color: var(--text-1);
 }
 
 /* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */

@@ -36,6 +36,12 @@ namespace NeonCompanion.Runtime.Platform.iOS
             return tcs.Task;
         }
 
+        public Task<string> PickSavePathAsync(string defaultFileName, string extension)
+        {
+            // iOS does not support a traditional save-file dialog; caller uses persistentDataPath fallback.
+            return Task.FromResult<string>(null);
+        }
+
         public Task<string> PickFileAsync(string extension)
         {
             var tcs = new TaskCompletionSource<string>();

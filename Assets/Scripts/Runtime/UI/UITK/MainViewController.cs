@@ -431,21 +431,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sessionsList = root.Q<ScrollView>("sessions-list");
             _historySessionsList = root.Q<ScrollView>("history-panel-sessions-list");
 
-            // U-10: add visible app brand icon in sidebar header (dynamic, no UXML change)
-            var railHead = root.Q(className: "rail__sessions-head");
-            if (railHead != null)
-            {
-                var brand = new Label("N");
-                brand.AddToClassList("rail__brand-icon");
-                brand.style.fontSize = 11;
-                brand.style.unityFontStyleAndWeight = FontStyle.Bold;
-                brand.style.color = new Color(0.49f, 0.48f, 0.93f, 1f); // accent indigo
-                brand.style.marginRight = 6;
-                brand.style.marginLeft = 4;
-                brand.style.alignSelf = Align.Center;
-                // Insert as first child so it sits left of "Сессии" label
-                railHead.Insert(0, brand);
-            }
             if (_sessionsList != null)
                 _sessionsList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             if (_historySessionsList != null)
@@ -2021,11 +2006,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // In Static gallery mode the user explicitly wants the still PNG, not animation.
             // Only load sprites when the Animated (or future 3D-anim) tab is active.
+            // Hide ALL Image overlays (not just ours) to prevent AvatarGalleryController's
+            // image from leaking when MVC manages the avatar independently.
             if (_avatarViewMode != AvatarViewMode.Animated)
             {
                 _avatarAnimator.Stop();
                 _avatarArtImage.sprite = null;
-                SetDisplay(_avatarArtImage, DisplayStyle.None);
+                if (_avatarArt != null)
+                {
+                    var imgs = _avatarArt.Query<Image>().ToList();
+                    for (int k = 0; k < imgs.Count; k++)
+                        SetDisplay(imgs[k], DisplayStyle.None);
+                }
                 return false;
             }
 

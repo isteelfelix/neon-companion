@@ -84,7 +84,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _hasUnreadNotification;
         private ChatService _currentChatService;
         private VisualElement _streamingBubble;
-        private Label _streamingLabel;
+        private TextField _streamingLabel;
         private VisualElement _streamingTypingDots;
         private IVisualElementScheduledItem _inlineTypingSchedule;
         private int _inlineTypingFrame;
@@ -447,12 +447,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool hasCtrl = evt.ctrlKey || evt.commandKey;
 
-            // Ctrl+V paste image
+            // Ctrl+V — only intercept if clipboard looks like an image file path (U-42).
+            // For plain text, let the event fall through so UITK TextField handles paste natively.
             if (hasCtrl && evt.keyCode == KeyCode.V)
             {
-                evt.StopPropagation();
-                _ = PasteImageFromClipboardAsync();
-                return;
+                string clip = GUIUtility.systemCopyBuffer;
+                if (!string.IsNullOrEmpty(clip) && IsImageFilePath(clip) && System.IO.File.Exists(clip))
+                {
+                    evt.StopPropagation();
+                    _ = PasteImageFromClipboardAsync();
+                    return;
+                }
+                // Text content: do not intercept — UITK handles paste natively.
             }
 
             bool isEnterKey = evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
@@ -1074,9 +1080,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_streamingLabel != null || _streamingBubble == null)
                 return;
 
-            _streamingLabel = new Label(string.Empty);
+            _streamingLabel = new TextField();
+            _streamingLabel.isReadOnly = true;
+            _streamingLabel.multiline = true;
+            _streamingLabel.value = string.Empty;
             _streamingLabel.AddToClassList("transcript__body");
-            _streamingLabel.focusable = true;
+            ApplyTextCursor(_streamingLabel);
 
             // Insert body before stats footer (if present) so stats appears after content in layout.
             // (Stats is appended at end of CreateMessageElement; dynamic adds would otherwise bury it.)
@@ -1106,7 +1115,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             EnsureStreamingLabel();
             if (_streamingLabel != null)
-                _streamingLabel.text += token;
+                _streamingLabel.value += token;
 
             if (!string.IsNullOrEmpty(token))
             {
@@ -1301,9 +1310,27 @@ namespace NeonCompanion.Runtime.UI.UITK
                     sb.AppendLine();
                 }
 
-                string fileName = "chat-export-" + now.ToString("yyyy-MM-dd-HHmmss") + ".md";
+                string defaultFileName = "chat-export-" + now.ToString("yyyy-MM-dd-HHmmss") + ".md";
                 string content = sb.ToString();
-                string path = System.IO.Path.Combine(Application.persistentDataPath, fileName);
+
+                // Ask user where to save (U-37). Fall back to persistentDataPath if dialog unavailable.
+                string path = null;
+                try
+                {
+                    var app = await _d.GetAppAsync();
+                    if (app != null)
+                    {
+                        NeonCompanion.Runtime.Platform.IFilePickerService picker = null;
+                        app.Services.TryGet<NeonCompanion.Runtime.Platform.IFilePickerService>(out picker);
+                        if (picker != null)
+                            path = await picker.PickSavePathAsync(defaultFileName, "md");
+                    }
+                }
+                catch { /* dialog failure — fall through to default path */ }
+
+                if (string.IsNullOrEmpty(path))
+                    path = System.IO.Path.Combine(Application.persistentDataPath, defaultFileName);
+
                 System.IO.File.WriteAllText(path, content);
                 string exportedFile = System.IO.Path.GetFileName(path);
 
@@ -1661,6 +1688,15 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ===== Attachments =====
+
+        private static bool IsImageFilePath(string text)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length > 512)
+                return false;
+            string ext = System.IO.Path.GetExtension(text)?.ToLowerInvariant();
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg"
+                || ext == ".gif" || ext == ".webp" || ext == ".bmp";
+        }
 
         private Task PasteImageFromClipboardAsync()
         {
@@ -2252,7 +2288,28 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var chat = _d.GetChatServiceAsync().Result;
             var provider = chat?.CurrentProvider;
-            int contextWindow = provider != null && provider.contextWindow > 0 ? provider.contextWindow : GuessContextWindow(provider);
+
+            // Prefer real context_length from discovery API (U-36), then saved value, then heuristic guess.
+            int contextWindow = 0;
+            if (provider != null)
+            {
+                string modelId = chat.CurrentSessionModel ?? provider.defaultModel;
+                try
+                {
+                    var app = _d.GetAppAsync().Result;
+                    NeonCompanion.Runtime.Core.ModelDiscoveryService disc = null;
+                    if (app?.Services != null)
+                        app.Services.TryGet<NeonCompanion.Runtime.Core.ModelDiscoveryService>(out disc);
+                    if (disc != null && !string.IsNullOrEmpty(modelId))
+                        contextWindow = disc.GetContextWindowForModel(provider, modelId);
+                }
+                catch { /* non-critical */ }
+
+                if (contextWindow <= 0 && provider.contextWindow > 0)
+                    contextWindow = provider.contextWindow;
+                if (contextWindow <= 0)
+                    contextWindow = GuessContextWindow(provider, chat.CurrentSessionModel);
+            }
 
             if (contextWindow <= 0)
             {
@@ -2280,22 +2337,38 @@ namespace NeonCompanion.Runtime.UI.UITK
                 .Replace("{1}", contextWindow.ToString("N0"));
         }
 
-        private static int GuessContextWindow(ProviderConfig provider)
+        private static int GuessContextWindow(ProviderConfig provider, string selectedModel = null)
         {
-            if (provider == null || string.IsNullOrEmpty(provider.defaultModel))
-                return 8192; // safe default for unknown
+            // Use the currently-selected model when available; fall back to the provider default.
+            string modelId = !string.IsNullOrEmpty(selectedModel) ? selectedModel
+                : (provider != null ? provider.defaultModel : null);
 
-            string m = provider.defaultModel.ToLowerInvariant();
+            if (string.IsNullOrEmpty(modelId))
+                return 8192;
+
+            string m = modelId.ToLowerInvariant();
+            // Large-context flagship models
             if (m.Contains("gpt-4o") || m.Contains("gpt-4-turbo") || m.Contains("claude-3") || m.Contains("gemini-1.5"))
                 return 128000;
-            if (m.Contains("gpt-4") || m.Contains("claude"))
-                return 8192;
-            if (m.Contains("gpt-3.5") || m.Contains("llama3") || m.Contains("llama-3"))
-                return 16384;
+            // Llama 3 / 3.1 / 3.2 — 128 k by default
+            if (m.Contains("llama-3") || m.Contains("llama3") || m.Contains("llama_3"))
+                return 131072;
+            // Hermes models (Nous-Hermes, hermes-3, etc.) typically 128 k
+            if (m.Contains("hermes"))
+                return 131072;
+            // Mistral / Mixtral
             if (m.Contains("mistral") || m.Contains("mixtral"))
                 return 32768;
+            // GPT-4 classic
+            if (m.Contains("gpt-4") || m.Contains("claude"))
+                return 8192;
+            // GPT-3.5
+            if (m.Contains("gpt-3.5"))
+                return 16384;
+            // Small models
             if (m.Contains("phi") || m.Contains("gemma"))
                 return 4096;
+            // Generic local / unknown
             return 8192;
         }
 
@@ -2593,10 +2666,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             else
             {
-                bodyElement = new Label(text);
-                bodyElement.AddToClassList("transcript__body");
+                var tf = new TextField();
+                tf.isReadOnly = true;
+                tf.multiline = true;
+                tf.value = text;
+                tf.AddToClassList("transcript__body");
                 if (!isAssistant)
-                    bodyElement.AddToClassList("transcript__body--user");
+                    tf.AddToClassList("transcript__body--user");
+                ApplyTextCursor(tf);
+                bodyElement = tf;
             }
             MakeTranscriptLabelsFocusable(bodyElement);
             return bodyElement;
@@ -3436,6 +3514,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
+            // Do not start long-press / selection mode when the left-click landed on a
+            // selectable transcript TextField — the user is selecting text, not the message.
+            if (evt.button == 0 && IsInsideSelectableTextField(evt.target as VisualElement))
+                return;
+
             VisualElement bubble = ResolveBubbleFromEvent(evt.target as VisualElement, pos);
             if (bubble == null)
                 return;
@@ -3601,6 +3684,52 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             return false;
+        }
+
+        // Returns true if 'el' is inside (or is) a read-only transcript TextField.
+        // Used to skip long-press selection when the user is selecting text (U-34).
+        private static bool IsInsideSelectableTextField(VisualElement el)
+        {
+            while (el != null)
+            {
+                if (el is TextField && el.ClassListContains("transcript__body"))
+                    return true;
+                el = el.parent;
+            }
+            return false;
+        }
+
+        // Registers mouse-enter/leave callbacks that swap to a text I-beam cursor (U-34).
+        private static Texture2D s_TextCursorTex;
+
+        private static void ApplyTextCursor(VisualElement el)
+        {
+            el.RegisterCallback<MouseEnterEvent>(_ =>
+                UnityEngine.Cursor.SetCursor(GetTextCursorTexture(), new Vector2(4, 11), CursorMode.ForceSoftware));
+            el.RegisterCallback<MouseLeaveEvent>(_ =>
+                UnityEngine.Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto));
+        }
+
+        private static Texture2D GetTextCursorTexture()
+        {
+            if (s_TextCursorTex != null)
+                return s_TextCursorTex;
+
+            const int w = 10, h = 22;
+            s_TextCursorTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var px = new Color32[w * h];
+            var c = new Color32(220, 220, 220, 255);
+            var t = new Color32(0, 0, 0, 0);
+            for (int i = 0; i < px.Length; i++) px[i] = t;
+            // top crossbar (Unity: y=0 is bottom, top rows = h-1 and h-2)
+            for (int x = 2; x <= 7; x++) { px[(h - 1) * w + x] = c; px[(h - 2) * w + x] = c; }
+            // bottom crossbar
+            for (int x = 2; x <= 7; x++) { px[0 * w + x] = c; px[1 * w + x] = c; }
+            // vertical stem (center x = 4 or 5, use 4)
+            for (int y = 2; y <= h - 3; y++) px[y * w + 4] = c;
+            s_TextCursorTex.SetPixels32(px);
+            s_TextCursorTex.Apply(false);
+            return s_TextCursorTex;
         }
 
         private VisualElement ResolveBubbleFromEvent(VisualElement target, Vector2 panelPosition)
