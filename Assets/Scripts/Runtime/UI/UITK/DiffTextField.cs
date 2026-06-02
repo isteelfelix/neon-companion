@@ -6,71 +6,72 @@ using UnityEngine.UIElements;
 namespace NeonCompanion.Runtime.UI.UITK
 {
     /// <summary>
-    /// TextField с кастомной отрисовкой diff-подсветки.
+    /// TextField с diff-подсветкой через colored background elements.
     /// Наследует от TextField → нативный текст, selection, Ctrl+C.
-    /// Подписывается на generateVisualContent → рисует цветные фоны.
+    /// Цветные фоны — через отдельные VisualElement позиционированные поверх текста.
     /// </summary>
     internal class DiffTextField : TextField
     {
         private struct DiffLine
         {
-            public int startIndex;
-            public int endIndex;
+            public int lineIndex;
             public Color bgColor;
-            public Color textColor;
         }
 
         private List<DiffLine> _diffLines = new List<DiffLine>();
-        private bool _isDiff;
+        private VisualElement _highlightLayer;
+        private string _lastText;
 
         public DiffTextField()
         {
             isReadOnly = true;
             multiline = true;
-            generateVisualContent += OnGenerateVisualContent;
+
+            // Highlight layer sits behind the text
+            _highlightLayer = new VisualElement();
+            _highlightLayer.pickingMode = PickingMode.Ignore;
+            _highlightLayer.style.position = Position.Absolute;
+            _highlightLayer.style.left = 0;
+            _highlightLayer.style.right = 0;
+            _highlightLayer.style.top = 0;
+            _highlightLayer.style.bottom = 0;
+            _highlightLayer.style.flexDirection = FlexDirection.Column;
+            Insert(0, _highlightLayer);
+
+            // Rebuild highlights when text or size changes
+            RegisterCallback<ChangeEvent<string>>(_ => RebuildHighlights());
+            RegisterCallback<GeometryChangedEvent>(_ => RebuildHighlights());
         }
 
-        /// <summary>
-        /// Set plain text content (no diff highlighting).
-        /// </summary>
         public void SetText(string text)
         {
-            _isDiff = false;
             _diffLines.Clear();
+            _lastText = text;
             value = text ?? "";
+            RebuildHighlights();
         }
 
-        /// <summary>
-        /// Set diff content with colored line highlighting.
-        /// </summary>
         public void SetDiff(string text)
         {
-            _isDiff = true;
             _diffLines.Clear();
+            _lastText = text;
             ParseDiffLines(text ?? "");
             value = text ?? "";
+            RebuildHighlights();
         }
-
-        // ============================================================
-        //  DIFF PARSING — compute char ranges for colored lines
-        // ============================================================
 
         private void ParseDiffLines(string text)
         {
-            var green = new Color(0.29f, 0.87f, 0.5f, 0.2f);
-            var red = new Color(0.97f, 0.44f, 0.44f, 0.2f);
+            var green = new Color(0.29f, 0.87f, 0.5f, 0.25f);
+            var red = new Color(0.97f, 0.44f, 0.44f, 0.25f);
             var blue = new Color(0.37f, 0.65f, 0.98f, 0.15f);
 
-            int charIdx = 0;
             var lines = text.Split('\n');
-
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i];
-                int lineStart = charIdx;
-                int lineEnd = charIdx + line.Length;
-
                 Color bg = Color.clear;
+
                 if (line.StartsWith("+") && !line.StartsWith("+++"))
                     bg = green;
                 else if (line.StartsWith("-") && !line.StartsWith("---"))
@@ -80,111 +81,32 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (bg.a > 0)
                 {
-                    _diffLines.Add(new DiffLine
-                    {
-                        startIndex = lineStart,
-                        endIndex = lineEnd,
-                        bgColor = bg
-                    });
+                    _diffLines.Add(new DiffLine { lineIndex = i, bgColor = bg });
                 }
-
-                charIdx = lineEnd + 1; // +1 for \n
             }
         }
 
-        // ============================================================
-        //  MESH GENERATION — draw colored rectangles behind text
-        // ============================================================
-
-        private void OnGenerateVisualContent(MeshGenerationContext mgc)
+        private void RebuildHighlights()
         {
-            if (!_isDiff || _diffLines.Count == 0) return;
+            _highlightLayer.Clear();
 
-            // Get text input element for character coordinates
-            var textInput = this.Q<VisualElement>("unity-text-input");
-            if (textInput == null) return;
+            if (_diffLines.Count == 0) return;
 
-            var worldBound = textInput.worldBound;
-            var localOrigin = worldBound.position;
+            float lineHeight = 20f; // approximate
+            float containerWidth = resolvedStyle.width > 0 ? resolvedStyle.width : 400;
 
-            // For each diff line, draw a colored rectangle
             foreach (var dl in _diffLines)
             {
-                DrawLineBackground(mgc, dl, localOrigin, textInput);
+                var highlight = new VisualElement();
+                highlight.style.position = Position.Absolute;
+                highlight.style.left = 0;
+                highlight.style.width = Length.Percent(100);
+                highlight.style.top = dl.lineIndex * lineHeight;
+                highlight.style.height = lineHeight;
+                highlight.style.backgroundColor = dl.bgColor;
+                highlight.pickingMode = PickingMode.Ignore;
+                _highlightLayer.Add(highlight);
             }
-        }
-
-        private void DrawLineBackground(MeshGenerationContext mgc, DiffLine dl, Vector2 localOrigin, VisualElement textInput)
-        {
-            // Estimate line height and position from character index
-            // TextField renders text with a known line height
-            float lineHeight = 20f; // approximate for 14px font
-            float fontSize = 14f;
-
-            // Count newlines before this line to get Y position
-            string fullText = value ?? "";
-            int lineIndex = 0;
-            for (int i = dl.startIndex; i > 0 && i < fullText.Length; i--)
-            {
-                if (fullText[i] == '\n') lineIndex++;
-            }
-
-            float y = lineIndex * lineHeight;
-            float lineWidth = resolvedStyle.width > 0 ? resolvedStyle.width : textInput.resolvedStyle.width;
-            float rectHeight = lineHeight;
-
-            // Allocate a quad for the background
-            var mesh = mgc.Allocate(4, 6);
-            var verts = mesh.vertices;
-            var colors32 = mesh.colors;
-            var indices = mesh.indices;
-            var uvs = mesh.uvs;
-
-            Color bg = dl.bgColor;
-
-            // Rectangle vertices
-            verts[0] = new Vector3(0, y + rectHeight, 0);           // top-left
-            verts[1] = new Vector3(lineWidth, y + rectHeight, 0);   // top-right
-            verts[2] = new Vector3(lineWidth, y, 0);                 // bottom-right
-            verts[3] = new Vector3(0, y, 0);                         // bottom-left
-
-            // Colors
-            colors32[0] = bg;
-            colors32[1] = bg;
-            colors32[2] = bg;
-            colors32[3] = bg;
-
-            // UVs (white texture)
-            uvs[0] = Vector4.zero;
-            uvs[1] = Vector4.zero;
-            uvs[2] = Vector4.zero;
-            uvs[3] = Vector4.zero;
-
-            // Indices
-            indices[0] = 0; indices[1] = 1; indices[2] = 2;
-            indices[3] = 0; indices[4] = 2; indices[5] = 3;
-        }
-    }
-
-    /// <summary>
-    /// Markdown-aware TextField with formatted display.
-    /// Shows formatted text via labels, uses TextField for selection.
-    /// </summary>
-    internal class MarkdownTextField : TextField
-    {
-        private string _rawText;
-
-        public MarkdownTextField()
-        {
-            isReadOnly = true;
-            multiline = true;
-        }
-
-        public void SetMarkdown(string text)
-        {
-            _rawText = text ?? "";
-            // For now, show plain text — formatted rendering comes later
-            value = _rawText;
         }
     }
 }
