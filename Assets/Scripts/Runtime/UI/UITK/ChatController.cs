@@ -3180,11 +3180,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
         {
             VisualElement bodyElement;
+
+            // Use SelectableMarkdownElement for formatted + selectable text
             if (!string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
             {
-                bodyElement = MarkdownRenderer.Render(text);
+                var smb = new SelectableMarkdownElement();
+                smb.SetMarkdown(text);
+                smb.AddToClassList("transcript__body");
+                smb.style.flexGrow = 1;
+                smb.style.minHeight = 20;
                 if (!isAssistant)
-                    bodyElement.AddToClassList("transcript__body--user");
+                    smb.AddToClassList("transcript__body--user");
+                bodyElement = smb;
             }
             else
             {
@@ -3198,7 +3205,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ApplyTextCursor(tf);
                 bodyElement = tf;
             }
-            MakeTranscriptLabelsFocusable(bodyElement);
             return bodyElement;
         }
 

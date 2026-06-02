@@ -67,23 +67,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (!string.IsNullOrEmpty(inlineDiff))
             {
-                // Render diff with color coding
-                var diffContainer = new VisualElement();
-                diffContainer.AddToClassList("tool-entry__diff");
-                string[] lines = inlineDiff.Split('\n');
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    var line = new Label(lines[i]);
-                    line.AddToClassList("tool-entry__diff-line");
-                    if (lines[i].StartsWith("+") && !lines[i].StartsWith("+++"))
-                        line.AddToClassList("tool-entry__diff-line--add");
-                    else if (lines[i].StartsWith("-") && !lines[i].StartsWith("---"))
-                        line.AddToClassList("tool-entry__diff-line--del");
-                    else if (lines[i].StartsWith("@@"))
-                        line.AddToClassList("tool-entry__diff-line--hunk");
-                    diffContainer.Add(line);
-                }
-                details.Add(diffContainer);
+                var diffView = new SelectableMarkdownElement();
+                diffView.SetDiff(inlineDiff);
+                diffView.AddToClassList("tool-entry__diff");
+                diffView.style.flexGrow = 1;
+                diffView.style.minHeight = 20;
+                details.Add(diffView);
             }
             else
             {
