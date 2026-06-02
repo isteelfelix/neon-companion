@@ -197,7 +197,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (run.strikethrough)
             {
-                label.style.textDecoration = TextDecoration.LineThrough;
+                // textDecoration not available in Unity 6.2 UITK — skip
             }
 
             return label;
@@ -333,7 +333,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnPointerDown(PointerDownEvent evt)
         {
-            focusController?.Focus(this);
+            // Focus this element
+            Focus();
             _isSelecting = true;
             _anchorChar = 0;
             _focusChar = 0;
