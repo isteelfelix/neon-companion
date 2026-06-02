@@ -287,6 +287,22 @@ namespace NeonCompanion.Runtime.Api.Hermes
         }
 
         /// <summary>
+        /// Switch model for current session via gateway slash command.
+        /// </summary>
+        public async Task<bool> SwitchModelAsync(string modelId, string providerSlug = null)
+        {
+            string cmd = $"/model {modelId}";
+            if (!string.IsNullOrEmpty(providerSlug))
+                cmd += $" --provider {providerSlug}";
+
+            var result = await _gateway.Request<object>(
+                "slash.exec",
+                new { session_id = ActiveSessionId, command = cmd }
+            );
+            return result != null;
+        }
+
+        /// <summary>
         /// Fetch model options grouped by provider from the gateway.
         /// </summary>
         public async Task<ModelOptionsResponse> GetModelOptionsAsync()

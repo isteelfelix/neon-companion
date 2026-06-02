@@ -1392,27 +1392,39 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             try
             {
-                var chat = await _d.GetChatServiceAsync();
-                if (chat == null)
-                    return;
-
                 if (_modelPickerStatus != null)
                     _modelPickerStatus.text = $"Применяем модель: {modelId}";
 
-                var result = await chat.SetCurrentSessionModelAsync(modelId);
-                if (!result.Success)
+                // For Hermes WS backend, use slash.exec via gateway
+                var selector = GlobalBackendSelector.Instance;
+                var sessionManager = selector?.SessionManager;
+                if (sessionManager != null && sessionManager.IsConnected)
                 {
-                    string failure = string.IsNullOrWhiteSpace(result.Message)
-                        ? LocalizationExtensions.Get("providers.model_switch_failed", "Не удалось применить модель.")
-                        : result.Message;
-                    if (_modelPickerStatus != null)
-                        _modelPickerStatus.text = failure;
-                    if (_d.AddSystemMessage != null)
-                        _d.AddSystemMessage(failure);
-                    return;
+                    bool ok = await sessionManager.SwitchModelAsync(modelId, providerSlug);
+                    if (!ok)
+                    {
+                        if (_modelPickerStatus != null)
+                            _modelPickerStatus.text = "Не удалось переключить модель.";
+                        return;
+                    }
+                }
+                else
+                {
+                    // Fallback for non-WS backends
+                    var chat = await _d.GetChatServiceAsync();
+                    if (chat == null) return;
+                    var result = await chat.SetCurrentSessionModelAsync(modelId);
+                    if (!result.Success)
+                    {
+                        string failure = string.IsNullOrWhiteSpace(result.Message)
+                            ? "Не удалось применить модель."
+                            : result.Message;
+                        if (_modelPickerStatus != null)
+                            _modelPickerStatus.text = failure;
+                        return;
+                    }
                 }
 
-                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 if (_d.LoadSessionsAsync != null)
                     await _d.LoadSessionsAsync();
                 CloseModelPicker();
