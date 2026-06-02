@@ -197,7 +197,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (run.strikethrough)
             {
-                label.style.color = new Color(label.color.r, label.color.g, label.color.b, 0.5f);
+                // Strikethrough: dim the text (TextDecoration not available)
+                label.style.opacity = 0.5f;
             }
 
             return label;
