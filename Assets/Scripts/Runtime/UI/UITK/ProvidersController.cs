@@ -1037,7 +1037,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     try
                     {
                         var options = await sessionManager.GetModelOptionsAsync();
-                        if (options?.providers != null && options.providers.Count > 0)
+                        if (options?.providers != null && options.providers.Length > 0)
                         {
                             PopulateModelPickerFromOptions(options, options.model ?? chat.CurrentSessionModel);
                             _modelPickerStatus.text = LocalizationExtensions.Get("providers.models.pick_hint", "Выбери модель.");
@@ -1292,12 +1292,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             foreach (var provider in options.providers)
             {
                 var models = provider.models;
-                if (models == null || models.Count == 0)
+                if (models == null || models.Length == 0)
                     continue;
 
-                bool isCurrentProvider = provider.isCurrent ||
+                bool isCurrentProvider = (provider.is_current == true) ||
                     string.Equals(provider.slug, options.provider, StringComparison.OrdinalIgnoreCase);
-                bool hasActive = models.Exists(m => string.Equals(m, currentModel, StringComparison.Ordinal));
+                bool hasActive = Array.Exists(models, m => string.Equals(m, currentModel, StringComparison.Ordinal));
                 bool expanded = isCurrentProvider || hasActive;
 
                 // Provider group header
@@ -1310,7 +1310,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 arrow.AddToClassList("model-picker__group-arrow");
 
                 string providerDisplayName = !string.IsNullOrEmpty(provider.name) ? provider.name : provider.slug;
-                var groupLabel = new Label($"{providerDisplayName.ToUpperInvariant()}  ({models.Count})");
+                var groupLabel = new Label($"{providerDisplayName.ToUpperInvariant()}  ({models.Length})");
                 groupLabel.AddToClassList("model-picker__group-label");
 
                 groupBtn.Add(arrow);
@@ -1346,7 +1346,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 // Model items
-                var unavailable = new HashSet<string>(provider.unavailableModels ?? new List<string>());
+                var unavailable = new HashSet<string>(provider.unavailable_models ?? new string[0]);
                 foreach (var model in models)
                 {
                     bool isSelected = string.Equals(model, currentModel, StringComparison.Ordinal);

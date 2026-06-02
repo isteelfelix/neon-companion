@@ -50,11 +50,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string[] models;
         public bool? is_current;
         public bool? free_tier;
+        public string warning;
+        public string[] unavailable_models;
+        public int total_models;
     }
 
     [Serializable]
     public class ModelOptionsResponse
     {
+        public string model;
+        public string provider;
         public ModelOptionProvider[] providers;
     }
 
