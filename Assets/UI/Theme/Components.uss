@@ -484,7 +484,9 @@
 }
 
 .model-picker__group--active {
-    border-left: 2px solid var(--accent-glow);
+    border-left-width: 2px;
+    border-left-color: var(--accent-glow);
+    border-left-style: solid;
 }
 
 .model-picker__warning {
