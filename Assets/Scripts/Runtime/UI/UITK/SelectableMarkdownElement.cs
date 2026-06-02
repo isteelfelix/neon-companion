@@ -197,7 +197,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (run.strikethrough)
             {
-                label.style.textDecoration = TextDecoration.LineThrough;
+                label.style.color = new Color(label.color.r, label.color.g, label.color.b, 0.5f);
             }
 
             return label;
