@@ -108,12 +108,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 evt.StopPropagation();
             });
 
-            // I-beam cursor on header for text selection
-            header.RegisterCallback<MouseEnterEvent>(evt =>
-            {
-                header.style.cursor = new Cursor();
-                header.style.cursor = CursorStyle.Arrow;
-            });
 
             return root;
         }
