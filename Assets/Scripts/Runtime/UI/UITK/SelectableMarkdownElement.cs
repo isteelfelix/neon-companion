@@ -1,50 +1,65 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
+using UnityEngine.TextCore;
+using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK
 {
     /// <summary>
-    /// A VisualElement that renders markdown/diff text with formatted runs
+    /// Custom VisualElement that renders markdown/diff text with proper formatting
     /// and supports text selection via pointer events + Ctrl+C.
+    /// Uses MeshGenerationContext for character-level rendering.
     /// </summary>
     internal class SelectableMarkdownElement : VisualElement
     {
-        // === Parsed runs ===
+        private struct CharInfo
+        {
+            public Rect rect;      // bounding rect in local coords
+            public int lineIndex;  // which line
+            public int colIndex;   // which column
+        }
+
         private struct TextRun
         {
             public string text;
             public bool bold;
             public bool italic;
             public bool code;
-            public bool strikethrough;
             public Color color;
         }
 
-        private struct DiffRun
+        private struct DiffLine
         {
             public string text;
             public Color bgColor;
             public Color textColor;
         }
 
-        // === State ===
-        private int _anchorChar;
-        private int _focusChar;
-        private bool _isSelecting;
-        private string _plainText;
+        // State
+        private string _plainText = "";
         private List<TextRun> _runs;
-        private List<DiffRun> _diffRuns;
+        private List<DiffLine> _diffLines;
         private bool _isDiff;
 
-        // === Internal labels for rendering ===
-        private VisualElement _contentContainer;
-        private List<Label> _lineLabels = new List<Label>();
-        private string _fontName;
+        // Layout cache
+        private List<CharInfo> _charInfos = new List<CharInfo>();
+        private int _lineCount;
+        private float _maxLineWidth;
 
-        public string PlainText => _plainText ?? "";
+        // Selection
+        private int _selStart;
+        private int _selEnd;
+        private bool _isSelecting;
+
+        // Rendering params
+        private const float FontSize = 14f;
+        private const float LineHeight = 20f;
+        private const float CharWidth = 8.4f; // approx for 14px
+        private const float SpaceWidth = 4.2f;
+
+        public string PlainText => _plainText;
 
         public SelectableMarkdownElement()
         {
@@ -53,28 +68,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             style.flexDirection = FlexDirection.Column;
             style.overflow = Overflow.Hidden;
 
-            _contentContainer = new VisualElement();
-            _contentContainer.style.flexDirection = FlexDirection.Column;
-            Add(_contentContainer);
-
-            RegisterCallback<AttachToPanelEvent>(_ => AttachEvents());
-            RegisterCallback<DetachFromPanelEvent>(_ => DetachEvents());
-        }
-
-        private void AttachEvents()
-        {
-            RegisterCallback<PointerDownEvent>(OnPointerDown);
-            RegisterCallback<PointerMoveEvent>(OnPointerMove);
-            RegisterCallback<PointerUpEvent>(OnPointerUp);
-            RegisterCallback<KeyDownEvent>(OnKeyDown);
-        }
-
-        private void DetachEvents()
-        {
-            UnregisterCallback<PointerDownEvent>(OnPointerDown);
-            UnregisterCallback<PointerMoveEvent>(OnPointerMove);
-            UnregisterCallback<PointerUpEvent>(OnPointerUp);
-            UnregisterCallback<KeyDownEvent>(OnKeyDown);
+            // Register for mesh generation
+            RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         }
 
         // ============================================================
@@ -86,122 +81,264 @@ namespace NeonCompanion.Runtime.UI.UITK
             _isDiff = false;
             _runs = ParseMarkdown(text);
             _plainText = text ?? "";
-            RebuildVisual();
+            RebuildLayout();
+            MarkDirtyRepaint();
         }
 
         public void SetDiff(string text)
         {
             _isDiff = true;
-            _diffRuns = ParseDiff(text);
+            _diffLines = ParseDiff(text);
             _plainText = text ?? "";
-            RebuildVisual();
+            RebuildLayout();
+            MarkDirtyRepaint();
         }
 
         // ============================================================
-        //  VISUAL REBUILD — Label-based rendering
+        //  LAYOUT — compute character positions
         // ============================================================
 
-        private void RebuildVisual()
+        private void RebuildLayout()
         {
-            _contentContainer.Clear();
-            _lineLabels.Clear();
+            _charInfos.Clear();
+            _lineCount = 0;
+            _maxLineWidth = 0;
 
-            if (_isDiff)
-                RebuildDiff();
-            else
-                RebuildMarkdown();
+            float containerWidth = resolvedStyle.width > 10 ? resolvedStyle.width : 600;
+            float x = 0;
+            int line = 0;
+
+            if (_isDiff && _diffLines != null)
+            {
+                foreach (var dl in _diffLines)
+                {
+                    foreach (char c in dl.text)
+                    {
+                        if (c == '\n')
+                        {
+                            if (x > _maxLineWidth) _maxLineWidth = x;
+                            x = 0;
+                            line++;
+                            continue;
+                        }
+
+                        float w = c == ' ' ? SpaceWidth : CharWidth;
+                        if (x + w > containerWidth && x > 0)
+                        {
+                            if (x > _maxLineWidth) _maxLineWidth = x;
+                            x = 0;
+                            line++;
+                        }
+
+                        _charInfos.Add(new CharInfo
+                        {
+                            rect = new Rect(x, line * LineHeight, w, LineHeight),
+                            lineIndex = line,
+                            colIndex = _charInfos.Count
+                        });
+                        x += w;
+                    }
+                    // newline after each diff line
+                    if (x > _maxLineWidth) _maxLineWidth = x;
+                    x = 0;
+                    line++;
+                }
+            }
+            else if (_runs != null)
+            {
+                foreach (var run in _runs)
+                {
+                    if (run.text == "\n")
+                    {
+                        if (x > _maxLineWidth) _maxLineWidth = x;
+                        x = 0;
+                        line++;
+                        continue;
+                    }
+
+                    foreach (char c in run.text)
+                    {
+                        if (c == '\n')
+                        {
+                            if (x > _maxLineWidth) _maxLineWidth = x;
+                            x = 0;
+                            line++;
+                            continue;
+                        }
+
+                        float w = (run.code ? CharWidth * 0.9f : CharWidth);
+                        if (x + w > containerWidth && x > 0)
+                        {
+                            if (x > _maxLineWidth) _maxLineWidth = x;
+                            x = 0;
+                            line++;
+                        }
+
+                        _charInfos.Add(new CharInfo
+                        {
+                            rect = new Rect(x, line * LineHeight, w, LineHeight),
+                            lineIndex = line,
+                            colIndex = _charInfos.Count
+                        });
+                        x += w;
+                    }
+                }
+            }
+
+            if (x > _maxLineWidth) _maxLineWidth = x;
+            _lineCount = line + 1;
+
+            // Update element height
+            style.height = _lineCount * LineHeight;
         }
 
-        private void RebuildMarkdown()
+        private void OnGeometryChanged(GeometryChangedEvent evt)
         {
-            if (_runs == null) return;
+            if (Mathf.Abs(evt.newRect.width - evt.oldRect.width) > 1)
+            {
+                RebuildLayout();
+                MarkDirtyRepaint();
+            }
+        }
 
-            // Group runs into lines
-            var currentLine = new VisualElement();
-            currentLine.style.flexDirection = FlexDirection.Row;
-            currentLine.style.flexWrap = Wrap.Wrap;
-            currentLine.style.alignItems = Align.FlexStart;
+        // ============================================================
+        //  MESH RENDERING
+        // ============================================================
 
+        protected override void GenerateVisualContent(MeshGenerationContext mgc)
+        {
+            if (_charInfos.Count == 0) return;
+
+            var mesh = mgc.Allocate(_charInfos.Count * 4, _charInfos.Count * 6);
+            var vertices = mesh.vertices;
+            var uvs = mesh.uvs;
+            var indices = mesh.indices;
+            var colors = mesh.colors;
+
+            // Get font metrics from the panel
+            var font = panel?.context?.settings?.fallbackOSFont ?? Font.CreateDynamicFontFromOSFont("Arial", (int)FontSize);
+            var fontAsset = GetFontAsset();
+
+            int vertIdx = 0;
+            int charIdx = 0;
+
+            if (_isDiff && _diffLines != null)
+            {
+                charIdx = RenderDiffMesh(mesh, vertices, uvs, indices, colors, charIdx, fontAsset);
+            }
+            else if (_runs != null)
+            {
+                charIdx = RenderMarkdownMesh(mesh, vertices, uvs, indices, colors, charIdx, fontAsset);
+            }
+        }
+
+        private int RenderMarkdownMesh(MeshWriteData mesh, Vector3[] vertices, Vector4[] uvs, int[] indices, Color32[] colors, int charIdx, FontAsset fontAsset)
+        {
             foreach (var run in _runs)
             {
-                if (run.text == "\n")
+                if (run.text == "\n") continue;
+
+                Color col = GetRunColor(run);
+
+                foreach (char c in run.text)
                 {
-                    _contentContainer.Add(currentLine);
-                    currentLine = new VisualElement();
-                    currentLine.style.flexDirection = FlexDirection.Row;
-                    currentLine.style.flexWrap = Wrap.Wrap;
-                    currentLine.style.alignItems = Align.FlexStart;
-                    continue;
+                    if (c == ' ' || charIdx >= _charInfos.Count) { charIdx++; continue; }
+
+                    var ci = _charInfos[charIdx];
+                    DrawChar(mesh, vertices, uvs, indices, colors, ci.rect, c, col, charIdx, fontAsset);
+                    charIdx++;
                 }
-
-                var label = CreateRunLabel(run);
-                currentLine.Add(label);
             }
-
-            _contentContainer.Add(currentLine);
+            return charIdx;
         }
 
-        private void RebuildDiff()
+        private int RenderDiffMesh(MeshWriteData mesh, Vector3[] vertices, Vector4[] uvs, int[] indices, Color32[] colors, int charIdx, FontAsset fontAsset)
         {
-            if (_diffRuns == null) return;
-
-            foreach (var run in _diffRuns)
+            foreach (var dl in _diffLines)
             {
-                var lineRow = new VisualElement();
-                lineRow.style.flexDirection = FlexDirection.Row;
-                lineRow.style.alignItems = Align.FlexStart;
-
-                if (run.bgColor.a > 0)
+                foreach (char c in dl.text)
                 {
-                    lineRow.style.backgroundColor = new Color(run.bgColor.r, run.bgColor.g, run.bgColor.b, run.bgColor.a);
+                    if (charIdx >= _charInfos.Count) break;
+
+                    var ci = _charInfos[charIdx];
+                    DrawChar(mesh, vertices, uvs, indices, colors, ci.rect, c, dl.textColor, charIdx, fontAsset);
+                    charIdx++;
                 }
-
-                var label = new Label(run.text);
-                label.style.color = run.textColor;
-                label.style.fontSize = 13;
-                label.style.whiteSpace = WhiteSpace.Normal;
-                label.focusable = false;
-                lineRow.Add(label);
-
-                _lineLabels.Add(label);
-                _contentContainer.Add(lineRow);
+                charIdx++; // skip newline
             }
+            return charIdx;
         }
 
-        private Label CreateRunLabel(TextRun run)
+        private void DrawChar(MeshWriteData mesh, Vector3[] verts, Vector4[] uvs, int[] indices, Color32[] colors, Rect r, char c, Color col, int idx, FontAsset fontAsset)
         {
-            var label = new Label(run.text);
-            label.focusable = false;
+            int vi = idx * 4;
+            int ii = idx * 6;
 
-            // Apply formatting via USS-compatible inline styles
-            label.style.fontSize = run.code ? 12 : 14;
-            label.style.color = GetRunColor(run);
+            if (vi + 4 > verts.Length || ii + 6 > indices.Length) return;
 
-            if (run.bold)
-                label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            if (run.italic)
-                label.style.unityFontStyleAndWeight = FontStyle.Italic;
-            if (run.bold && run.italic)
-                label.style.unityFontStyleAndWeight = FontStyle.BoldAndItalic;
+            // Quad vertices
+            verts[vi + 0] = new Vector3(r.x, r.y + r.height, 0);
+            verts[vi + 1] = new Vector3(r.x + r.width, r.y + r.height, 0);
+            verts[vi + 2] = new Vector3(r.x + r.width, r.y, 0);
+            verts[vi + 3] = new Vector3(r.x, r.y, 0);
 
-            if (run.code)
+            // UVs — simple atlas lookup or fallback
+            if (fontAsset != null && fontAsset.TryGetCharacter(c, out Glyph glyph))
             {
-                label.style.backgroundColor = new Color(0.2f, 0.2f, 0.25f, 0.8f);
-                label.style.paddingLeft = 4;
-                label.style.paddingRight = 4;
-                label.style.borderTopLeftRadius = 3;
-                label.style.borderTopRightRadius = 3;
-                label.style.borderBottomLeftRadius = 3;
-                label.style.borderBottomRightRadius = 3;
+                var rect = glyph.glyphRect;
+                var texSize = new Vector2(fontAsset.atlasWidth, fontAsset.atlasHeight);
+
+                float u0 = rect.x / texSize.x;
+                float v0 = 1f - (rect.y + rect.height) / texSize.y;
+                float u1 = (rect.x + rect.width) / texSize.x;
+                float v1 = 1f - rect.y / texSize.y;
+
+                uvs[vi + 0] = new Vector4(u0, v1, 0, 0);
+                uvs[vi + 1] = new Vector4(u1, v1, 0, 0);
+                uvs[vi + 2] = new Vector4(u1, v0, 0, 0);
+                uvs[vi + 3] = new Vector4(u0, v0, 0, 0);
+
+                mesh.SetTexture(fontAsset.atlasTexture);
+            }
+            else
+            {
+                // Fallback: white quad (glyph not in atlas)
+                uvs[vi + 0] = Vector4.zero;
+                uvs[vi + 1] = Vector4.zero;
+                uvs[vi + 2] = Vector4.zero;
+                uvs[vi + 3] = Vector4.zero;
             }
 
-            if (run.strikethrough)
+            // Colors
+            colors[vi + 0] = col;
+            colors[vi + 1] = col;
+            colors[vi + 2] = col;
+            colors[vi + 3] = col;
+
+            // Indices (two triangles)
+            indices[ii + 0] = vi;
+            indices[ii + 1] = vi + 1;
+            indices[ii + 2] = vi + 2;
+            indices[ii + 3] = vi;
+            indices[ii + 4] = vi + 2;
+            indices[ii + 5] = vi + 3;
+        }
+
+        private FontAsset GetFontAsset()
+        {
+            // Try to get the default font asset from the panel
+            if (panel?.context?.styleRenderer != null)
             {
-                // Strikethrough: dim the text (TextDecoration not available)
-                label.style.opacity = 0.5f;
+                var settings = panel.context?.settings;
+                if (settings != null)
+                {
+                    // PanelSettings has a defaultFontAsset in newer Unity versions
+                    // Fallback: use Arial SDF if available
+                }
             }
 
-            return label;
+            // Try loading Arial SDF from project
+            return Resources.Load<FontAsset>("Fonts & Materials/Arial SDF");
         }
 
         private static Color GetRunColor(TextRun run)
@@ -214,7 +351,81 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ============================================================
-        //  MARKDOWN PARSER
+        //  SELECTION — pointer events
+        // ============================================================
+
+        protected override void ExecuteDefaultAction(EventBase evt)
+        {
+            base.ExecuteDefaultAction(evt);
+
+            if (evt is PointerDownEvent pointerDown)
+            {
+                Focus();
+                _isSelecting = true;
+                _selStart = HitTest(pointerDown.localPosition);
+                _selEnd = _selStart;
+                this.CapturePointer(pointerDown.pointerId);
+                MarkDirtyRepaint();
+            }
+            else if (evt is PointerMoveEvent pointerMove && _isSelecting)
+            {
+                int newEnd = HitTest(pointerMove.localPosition);
+                if (newEnd != _selEnd)
+                {
+                    _selEnd = newEnd;
+                    MarkDirtyRepaint();
+                }
+            }
+            else if (evt is PointerUpEvent pointerUp && _isSelecting)
+            {
+                _isSelecting = false;
+                this.ReleasePointer(pointerUp.pointerId);
+                MarkDirtyRepaint();
+            }
+            else if (evt is KeyDownEvent keyDown)
+            {
+                if ((keyDown.ctrlKey || keyDown.commandKey) && keyDown.keyCode == KeyCode.C)
+                {
+                    string selected = GetSelectedText();
+                    if (!string.IsNullOrEmpty(selected))
+                    {
+                        GUIUtility.systemCopyBuffer = selected;
+                        keyDown.StopPropagation();
+                    }
+                }
+                else if ((keyDown.ctrlKey || keyDown.commandKey) && keyDown.keyCode == KeyCode.A)
+                {
+                    _selStart = 0;
+                    _selEnd = _plainText?.Length ?? 0;
+                    MarkDirtyRepaint();
+                    keyDown.StopPropagation();
+                }
+            }
+        }
+
+        private int HitTest(Vector2 localPos)
+        {
+            for (int i = 0; i < _charInfos.Count; i++)
+            {
+                if (_charInfos[i].rect.Contains(localPos))
+                    return i;
+            }
+            return Mathf.Clamp(_charInfos.Count - 1, 0, _charInfos.Count);
+        }
+
+        private int SelMin => Mathf.Min(_selStart, _selEnd);
+        private int SelMax => Mathf.Max(_selStart, _selEnd);
+
+        private string GetSelectedText()
+        {
+            if (SelMin == SelMax) return "";
+            int start = Mathf.Clamp(SelMin, 0, _plainText.Length);
+            int end = Mathf.Clamp(SelMax, 0, _plainText.Length);
+            return _plainText.Substring(start, end - start);
+        }
+
+        // ============================================================
+        //  PARSERS (same as before)
         // ============================================================
 
         private static List<TextRun> ParseMarkdown(string text)
@@ -223,157 +434,62 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (string.IsNullOrEmpty(text)) return runs;
 
             var lines = text.Split('\n');
-            var buf = new StringBuilder();
-            bool bold = false, italic = false, code = false, strike = false;
+            var buf = new System.Text.StringBuilder();
+            bool bold = false, italic = false, code = false;
 
-            void FlushRun()
+            void Flush()
             {
                 if (buf.Length > 0)
                 {
-                    runs.Add(new TextRun { text = buf.ToString(), bold = bold, italic = italic, code = code, strikethrough = strike, color = Color.white });
+                    runs.Add(new TextRun { text = buf.ToString(), bold = bold, italic = italic, code = code, color = Color.white });
                     buf.Clear();
                 }
             }
 
             for (int li = 0; li < lines.Length; li++)
             {
-                string line = lines[li];
-
-                if (li > 0)
-                {
-                    FlushRun();
-                    runs.Add(new TextRun { text = "\n" });
-                }
+                if (li > 0) { Flush(); runs.Add(new TextRun { text = "\n" }); }
 
                 int pos = 0;
+                string line = lines[li];
                 while (pos < line.Length)
                 {
-                    // Bold: **text**
                     if (pos + 1 < line.Length && line[pos] == '*' && line[pos + 1] == '*')
-                    {
-                        FlushRun();
-                        bold = !bold;
-                        pos += 2;
-                        continue;
-                    }
-
-                    // Strikethrough: ~~text~~
+                    { Flush(); bold = !bold; pos += 2; continue; }
                     if (pos + 1 < line.Length && line[pos] == '~' && line[pos + 1] == '~')
-                    {
-                        FlushRun();
-                        strike = !strike;
-                        pos += 2;
-                        continue;
-                    }
-
-                    // Italic: *text*
-                    if (line[pos] == '*' && (pos + 1 < line.Length && line[pos + 1] != '*'))
-                    {
-                        FlushRun();
-                        italic = !italic;
-                        pos++;
-                        continue;
-                    }
-
-                    // Code: `text`
+                    { Flush(); pos += 2; continue; } // skip strikethrough content
+                    if (line[pos] == '*' && pos + 1 < line.Length && line[pos + 1] != '*')
+                    { Flush(); italic = !italic; pos++; continue; }
                     if (line[pos] == '`')
-                    {
-                        FlushRun();
-                        code = !code;
-                        pos++;
-                        continue;
-                    }
+                    { Flush(); code = !code; pos++; continue; }
 
                     buf.Append(line[pos]);
                     pos++;
                 }
             }
-
-            FlushRun();
+            Flush();
             return runs;
         }
 
-        // ============================================================
-        //  DIFF PARSER
-        // ============================================================
-
-        private static List<DiffRun> ParseDiff(string text)
+        private static List<DiffLine> ParseDiff(string text)
         {
-            var runs = new List<DiffRun>();
-            if (string.IsNullOrEmpty(text)) return runs;
+            var lines = new List<DiffLine>();
+            if (string.IsNullOrEmpty(text)) return lines;
 
             var green = new Color(0.29f, 0.87f, 0.5f);
             var red = new Color(0.97f, 0.44f, 0.44f);
             var blue = new Color(0.37f, 0.65f, 0.98f);
             var dim = new Color(0.7f, 0.7f, 0.7f);
 
-            var lines = text.Split('\n');
-            for (int i = 0; i < lines.Length; i++)
+            foreach (var raw in text.Split('\n'))
             {
-                string line = lines[i];
-                Color fg = Color.white;
+                Color fg = raw.StartsWith("+") && !raw.StartsWith("+++") ? green
+                    : raw.StartsWith("-") && !raw.StartsWith("---") ? red
+                    : raw.StartsWith("@@") ? blue : dim;
 
-                if (line.StartsWith("+") && !line.StartsWith("+++"))
-                    fg = green;
-                else if (line.StartsWith("-") && !line.StartsWith("---"))
-                    fg = red;
-                else if (line.StartsWith("@@"))
-                    fg = blue;
-                else
-                    fg = dim;
-
-                runs.Add(new DiffRun { text = line, bgColor = fg * new Color(1, 1, 1, 0.1f), textColor = fg });
+                lines.Add(new DiffLine { text = raw, bgColor = fg * new Color(1, 1, 1, 0.1f), textColor = fg });
             }
-
-            return runs;
-        }
-
-        // ============================================================
-        //  SELECTION (basic pointer-based)
-        // ============================================================
-
-        private void OnPointerDown(PointerDownEvent evt)
-        {
-            // Focus this element
-            Focus();
-            _isSelecting = true;
-            _anchorChar = 0;
-            _focusChar = 0;
-            this.CapturePointer(evt.pointerId);
-        }
-
-        private void OnPointerMove(PointerMoveEvent evt)
-        {
-            if (!_isSelecting) return;
-            // Basic: select all on drag (full implementation needs char-level hit testing)
-            _focusChar = _plainText.Length;
-        }
-
-        private void OnPointerUp(PointerUpEvent evt)
-        {
-            if (!_isSelecting) return;
-            _isSelecting = false;
-            this.ReleasePointer(evt.pointerId);
-        }
-
-        private void OnKeyDown(KeyDownEvent evt)
-        {
-            if ((evt.ctrlKey || evt.commandKey) && evt.keyCode == KeyCode.C)
-            {
-                if (!string.IsNullOrEmpty(_plainText))
-                {
-                    GUIUtility.systemCopyBuffer = _plainText;
-                    evt.StopPropagation();
-                }
-            }
-
-            // Select all: Ctrl+A
-            if ((evt.ctrlKey || evt.commandKey) && evt.keyCode == KeyCode.A)
-            {
-                _anchorChar = 0;
-                _focusChar = _plainText?.Length ?? 0;
-                evt.StopPropagation();
-            }
+            return lines;
         }
     }
 }
