@@ -122,6 +122,7 @@ namespace NeonCompanion.Runtime.Core
 
             using (var webRequest = UnityEngine.Networking.UnityWebRequest.Get(endpoint))
             {
+                webRequest.timeout = 8;
                 if (!string.IsNullOrWhiteSpace(apiKey))
                     webRequest.SetRequestHeader("Authorization", $"Bearer {apiKey}");
 

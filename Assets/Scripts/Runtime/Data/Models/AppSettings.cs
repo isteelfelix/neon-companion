@@ -7,6 +7,8 @@ namespace NeonCompanion.Runtime.Data.Models
     public class AppSettings
     {
         public string activeProviderId;
+        public string activeOpenAiProviderId;
+        public string activeHermesProviderId;
         public string activeAvatarId = "neon";
         public bool saveChatHistory = true;
         public bool streaming = true;

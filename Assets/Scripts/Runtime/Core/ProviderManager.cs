@@ -28,18 +28,55 @@ namespace NeonCompanion.Runtime.Core
             if (!string.IsNullOrWhiteSpace(preferredProviderId))
             {
                 var preferredProvider = await GetProviderByIdAsync(preferredProviderId);
-                if (preferredProvider != null)
+                if (preferredProvider != null && preferredProvider.isEnabled)
                     return preferredProvider;
             }
 
             var providers = await _repository.GetAllAsync();
 
-            if (providers.Count > 0)
+            for (int i = 0; i < providers.Count; i++)
             {
-                return providers[0];
+                var provider = providers[i];
+                if (provider != null && provider.isEnabled)
+                    return provider;
             }
 
             return null;
+        }
+
+        public async Task<ProviderConfig> GetActiveProviderForBackendAsync(BackendMode mode, string preferredProviderId = null, bool fallbackToFirst = true)
+        {
+            bool hermesMode = mode == BackendMode.Hermes;
+
+            if (!string.IsNullOrWhiteSpace(preferredProviderId))
+            {
+                var preferredProvider = await GetProviderByIdAsync(preferredProviderId);
+                if (IsEnabledProviderForBackend(preferredProvider, hermesMode))
+                    return preferredProvider;
+            }
+
+            if (!fallbackToFirst)
+                return null;
+
+            var providers = await _repository.GetAllAsync();
+            for (int i = 0; i < providers.Count; i++)
+            {
+                var provider = providers[i];
+                if (IsEnabledProviderForBackend(provider, hermesMode))
+                    return provider;
+            }
+
+            return null;
+        }
+
+        private static bool IsEnabledProviderForBackend(ProviderConfig provider, bool hermesMode)
+        {
+            if (provider == null || !provider.isEnabled)
+                return false;
+
+            bool providerIsHermes = !string.IsNullOrWhiteSpace(provider.backendType)
+                && string.Equals(provider.backendType, "hermes", System.StringComparison.OrdinalIgnoreCase);
+            return providerIsHermes == hermesMode;
         }
 
         public async Task<List<ProviderConfig>> GetAllProvidersAsync()

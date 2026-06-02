@@ -203,10 +203,8 @@ namespace NeonCompanion.Runtime.Core
             {
                 ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
             }
-            else if (string.IsNullOrEmpty(HermesToken))
+            else
             {
-                // No active Hermes provider and nothing previously configured — don't attempt a
-                // connect to the default URL (that just produces noise). Wait for a provider.
                 NeonLogger.Log("[Backend] No active Hermes provider — connect skipped.");
                 return;
             }

@@ -101,6 +101,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _editModelUsesCustomMode;
         private bool _syncingModelPresetUi;
         private bool _syncingGlobalBackendModeUi;
+        private bool _refreshingProvidersList;
+        private bool _providerListRefreshPending;
         private string _lastCustomModel = string.Empty;
         private IReadOnlyList<string> _discoveredModels;
         private IVisualElementScheduledItem _autoDiscoverSchedule;
@@ -156,10 +158,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.GlobalBackendMode != null)
             {
                 _d.GlobalBackendMode.choices = new List<string> { OpenAiBackendModeValue, HermesBackendModeValue };
-                // This is the Providers page filter, not the active chat backend.
-                // Do not initialize it from GlobalBackendSelector; that would make a chat on
-                // OpenAI repaint the provider editor away from a Hermes draft/provider.
-                SyncGlobalBackendModeUi(_providersBackendMode);
+                var selector = GlobalBackendSelector.Instance;
+                BackendMode initialMode = selector != null ? selector.CurrentMode : _providersBackendMode;
+                SyncGlobalBackendModeUi(initialMode);
                 _d.GlobalBackendMode.RegisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
             }
         }
@@ -197,6 +198,30 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public async Task RefreshProvidersListAsync()
         {
+            if (_refreshingProvidersList)
+            {
+                _providerListRefreshPending = true;
+                return;
+            }
+
+            _refreshingProvidersList = true;
+            try
+            {
+                do
+                {
+                    _providerListRefreshPending = false;
+                    await RefreshProvidersListCoreAsync();
+                }
+                while (_providerListRefreshPending);
+            }
+            finally
+            {
+                _refreshingProvidersList = false;
+            }
+        }
+
+        private async Task RefreshProvidersListCoreAsync()
+        {
             if (_d.ProvidersList == null)
                 return;
 
@@ -211,15 +236,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var allProviders = await app.ProviderManager.GetAllProvidersAsync();
             var chat = await _d.GetChatServiceAsync();
-            var activeProvider = chat?.CurrentProvider;
-            if (_editingProvider == null && activeProvider != null && allProviders.Any(p => p != null && p.id == activeProvider.id))
-            {
-                BackendMode activeMode = ChatService.IsHermesProvider(activeProvider)
-                    ? BackendMode.Hermes
-                    : BackendMode.OpenAI;
-                if (_providersBackendMode != activeMode)
-                    SyncGlobalBackendModeUi(activeMode);
-            }
 
             // Providers are isolated per backend: Hermes mode shows only Hermes providers,
             // OpenAI mode shows only OpenAI-compatible ones.
@@ -242,7 +258,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             for (int i = 0; i < providers.Count; i++)
             {
                 var provider = providers[i];
-                bool isActive = string.IsNullOrEmpty(activeProviderId) ? i == 0 : provider.id == activeProviderId;
+                bool isActive = !string.IsNullOrEmpty(activeProviderId) && provider.id == activeProviderId;
                 _d.ProvidersList.Add(CreateProviderListItem(provider, isActive));
 
                 if (_editingProvider == null && isActive)
@@ -316,10 +332,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var actions = new VisualElement();
             actions.AddToClassList("provider__actions");
-            var useButton = new Button(() => SwitchProvider(provider))
-            {
-                text = LocalizationExtensions.Get("providers.action.use", "Использовать")
-            };
             var editButton = new Button(() => StartEditingProvider(provider))
             {
                 text = LocalizationExtensions.Get("providers.action.edit", "Изменить")
@@ -328,10 +340,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 text = LocalizationExtensions.Get("providers.action.delete", "Удалить")
             };
-            useButton.AddToClassList("btn");
             editButton.AddToClassList("btn");
             deleteButton.AddToClassList("btn");
-            actions.Add(useButton);
             actions.Add(editButton);
             actions.Add(deleteButton);
             // Action clicks must not bubble to the card's click handler (which opens the editor).
@@ -346,9 +356,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             toggle.RegisterCallback<ClickEvent>(evt =>
             {
                 evt.StopPropagation();
-                // Toggle sets the active provider but stays on the Providers page.
-                // "Использовать" is the action that also opens the chat.
-                _ = SwitchProviderAsync(provider, navigateToChat: false);
+                _ = ToggleProviderEnabledAsync(provider);
             });
 
             container.Add(logo);
@@ -379,7 +387,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (SelectedBackendIsHermes())
             {
                 _editingProvider.backendType = "hermes";
-                _editingProvider.baseUrl = "https://neon-dev.top";
+                _editingProvider.baseUrl = string.Empty;
                 _editingProvider.defaultModel = string.Empty;
             }
             else
@@ -459,7 +467,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.ProviderEditPanel.style.display = DisplayStyle.Flex;
             _ = RefreshProvidersListAsync();
 
-            if (!string.IsNullOrWhiteSpace(_editingProvider.baseUrl))
+            if (_editingProviderSource != null && !string.IsNullOrWhiteSpace(_editingProvider.baseUrl))
                 _ = AutoDiscoverModelsAsync();
         }
 
@@ -582,21 +590,39 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // list empties, which would make the deletion look like it never happened.
                 var remaining = await app.ProviderManager.GetAllProvidersAsync();
                 bool hermesMode = SelectedBackendIsHermes();
-                var fallbackProvider = remaining.FirstOrDefault(p => ChatService.IsHermesProvider(p) == hermesMode);
+                var fallbackProvider = remaining.FirstOrDefault(p => p != null && p.isEnabled && ChatService.IsHermesProvider(p) == hermesMode);
 
                 if (deletedCurrent && fallbackProvider != null)
                 {
-                    // Switch active provider in place — stay on the Providers page, don't open chat.
-                    await SwitchProviderAsync(fallbackProvider, navigateToChat: false);
+                    // Restore an active provider in place — stay on the Providers page and do
+                    // not create a chat session.
+                    if (chat != null)
+                    {
+                        chat.SetActiveProviderWithoutSession(fallbackProvider);
+                        SetProviderHeader(fallbackProvider);
+                        SetCurrentSessionUi(string.Empty, string.Empty);
+                        if (_d.RenderMessages != null)
+                            _d.RenderMessages();
+                    }
+
+                    var fallbackSettings = app.Settings.Load() ?? new AppSettings();
+                    fallbackSettings.activeProviderId = fallbackProvider.id;
+                    SetActiveProviderIdForMode(fallbackSettings, _providersBackendMode, fallbackProvider.id);
+                    app.Settings.Save(fallbackSettings);
+
+                    await RefreshProvidersListAsync();
+                    if (_d.LoadSessionsAsync != null)
+                        await _d.LoadSessionsAsync();
                     return;
                 }
 
                 var settings = app.Settings.Load() ?? new AppSettings();
                 if (string.Equals(settings.activeProviderId, provider.id, StringComparison.Ordinal))
-                {
                     settings.activeProviderId = fallbackProvider?.id;
-                    app.Settings.Save(settings);
-                }
+                string savedForMode = GetActiveProviderIdForMode(settings, _providersBackendMode);
+                if (string.Equals(savedForMode, provider.id, StringComparison.Ordinal))
+                    SetActiveProviderIdForMode(settings, _providersBackendMode, fallbackProvider?.id);
+                app.Settings.Save(settings);
 
                 if (deletedCurrent && fallbackProvider == null)
                 {
@@ -618,17 +644,130 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = SwitchProviderAsync(provider);
         }
 
-        private async Task SwitchProviderAsync(ProviderConfig provider, bool navigateToChat = true)
+        private async Task ToggleProviderEnabledAsync(ProviderConfig provider)
         {
+            if (provider == null)
+                return;
+
             try
             {
+                var app = await _d.GetAppAsync();
+                if (app == null)
+                    return;
+
+                var updated = CloneProvider(provider);
+                BackendMode providerMode = ChatService.IsHermesProvider(updated) ? BackendMode.Hermes : BackendMode.OpenAI;
+                var settings = app.Settings.Load() ?? new AppSettings();
+                var activeChat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+                string savedForMode = GetActiveProviderIdForMode(settings, providerMode);
+                bool isActive = string.Equals(savedForMode, provider.id, StringComparison.Ordinal)
+                    || string.Equals(activeChat?.CurrentProvider?.id, provider.id, StringComparison.Ordinal);
+                bool activateProvider = !provider.isEnabled || !isActive;
+
+                updated.isEnabled = activateProvider;
+                await app.ProviderManager.SaveProviderAsync(updated);
+
+                if (activateProvider)
+                {
+                    var allProviders = await app.ProviderManager.GetAllProvidersAsync();
+                    bool hermesMode = providerMode == BackendMode.Hermes;
+                    for (int i = 0; i < allProviders.Count; i++)
+                    {
+                        var other = allProviders[i];
+                        if (other == null || string.Equals(other.id, updated.id, StringComparison.Ordinal))
+                            continue;
+                        if (ChatService.IsHermesProvider(other) != hermesMode)
+                            continue;
+                        if (!other.isEnabled)
+                            continue;
+
+                        var disabledOther = CloneProvider(other);
+                        disabledOther.isEnabled = false;
+                        await app.ProviderManager.SaveProviderAsync(disabledOther);
+                    }
+
+                    var selector = GlobalBackendSelector.Instance;
+                    if (selector != null)
+                    {
+                        if (selector.CurrentMode != providerMode)
+                            await selector.SetMode(providerMode);
+                        SyncGlobalBackendModeUi(providerMode);
+                    }
+
+                    activeChat = await _d.GetChatServiceAsync();
+                    if (activeChat != null)
+                    {
+                        activeChat.SetActiveProviderWithoutSession(updated);
+                        SetProviderHeader(updated);
+                        SetCurrentSessionUi(string.Empty, string.Empty);
+                    }
+
+                    settings.activeProviderId = updated.id;
+                    SetActiveProviderIdForMode(settings, providerMode, updated.id);
+                    app.Settings.Save(settings);
+
+                    if (_d.RenderMessages != null)
+                        _d.RenderMessages();
+                }
+                else
+                {
+                    if (string.Equals(settings.activeProviderId, updated.id, StringComparison.Ordinal))
+                        settings.activeProviderId = null;
+                    if (string.Equals(savedForMode, updated.id, StringComparison.Ordinal))
+                        SetActiveProviderIdForMode(settings, providerMode, null);
+                    app.Settings.Save(settings);
+                }
+
+                if (_editingProvider != null && string.Equals(_editingProvider.id, updated.id, StringComparison.Ordinal))
+                    _editingProvider.isEnabled = updated.isEnabled;
+                if (_editingProviderSource != null && string.Equals(_editingProviderSource.id, updated.id, StringComparison.Ordinal))
+                    _editingProviderSource = updated;
+
+                var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+                if (chat?.CurrentProvider != null && string.Equals(chat.CurrentProvider.id, updated.id, StringComparison.Ordinal))
+                {
+                    if (updated.isEnabled)
+                    {
+                        await chat.ApplyProviderConfigAsync(updated);
+                        SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
+                    }
+                    else
+                    {
+                        chat.ClearActiveProviderState();
+                        if (_d.SetCurrentSessionId != null)
+                            _d.SetCurrentSessionId(string.Empty);
+                        if (_d.SetCurrentSessionTitle != null)
+                            _d.SetCurrentSessionTitle(string.Empty);
+                        ClearProviderHeader();
+                        if (_d.RenderMessages != null)
+                            _d.RenderMessages();
+                    }
+                }
+
+                await RefreshProvidersListAsync();
+                if (_d.LoadSessionsAsync != null)
+                    await _d.LoadSessionsAsync();
+                UpdateEditorStatus();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+        }
+
+        private async Task SwitchProviderAsync(ProviderConfig provider, bool navigateToChat = true)
+        {
+            if (provider == null || !provider.isEnabled)
+                return;
+
+            try
+            {
+                BackendMode providerMode = ChatService.IsHermesProvider(provider)
+                    ? BackendMode.Hermes
+                    : BackendMode.OpenAI;
                 var selector = GlobalBackendSelector.Instance;
                 if (selector != null)
                 {
-                    BackendMode providerMode = ChatService.IsHermesProvider(provider)
-                        ? BackendMode.Hermes
-                        : BackendMode.OpenAI;
-
                     if (selector.CurrentMode != providerMode)
                         await selector.SetMode(providerMode);
                     SyncGlobalBackendModeUi(providerMode);
@@ -644,7 +783,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (app != null)
                 {
                     var s = app.Settings.Load() ?? new AppSettings();
-                    s.activeProviderId = chat.CurrentProvider?.id ?? provider?.id ?? s.activeProviderId;
+                    string activeId = chat.CurrentProvider?.id ?? provider?.id ?? s.activeProviderId;
+                    s.activeProviderId = activeId;
+                    SetActiveProviderIdForMode(s, providerMode, activeId);
                     app.Settings.Save(s);
                 }
                 else
@@ -730,6 +871,13 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task TestHermesConnectionAsync(ProviderConfig draft)
         {
+            if (draft == null || string.IsNullOrWhiteSpace(draft.baseUrl))
+            {
+                SetTestRow(false, LocalizationExtensions.Get("providers.test.base_url_required", "Укажите базовый URL Hermes backend."));
+                if (_d.TriggerAvatarConfused != null) _d.TriggerAvatarConfused();
+                return;
+            }
+
             string wsUrl = GlobalBackendSelector.BuildHermesWsUrl(draft.baseUrl);
             if (!string.IsNullOrEmpty(draft.apiKey))
                 wsUrl += (wsUrl.Contains("?") ? "&" : "?") + "token=" + Uri.EscapeDataString(draft.apiKey);
@@ -1170,9 +1318,28 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ? BackendMode.Hermes
                 : BackendMode.OpenAI;
 
-            // This dropdown is a Providers-page filter/editor bucket, not the active chat backend.
-            // The active backend changes only when the user explicitly clicks "Use" on a provider.
+            _ = ApplyGlobalBackendModeChangeAsync(mode);
+        }
+
+        private async Task ApplyGlobalBackendModeChangeAsync(BackendMode mode)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            BackendMode previousMode = selector != null ? selector.CurrentMode : _providersBackendMode;
             SyncGlobalBackendModeUi(mode);
+
+            try
+            {
+                await SaveCurrentActiveProviderForModeAsync(previousMode);
+
+                if (selector != null && selector.CurrentMode != mode)
+                    await selector.SetMode(mode);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+
+            await RestoreActiveProviderForModeAsync(mode);
 
             // Reset the editor: a provider from the previous backend must not stay open in the
             // editor (saving it there could otherwise look like it belongs to the new backend).
@@ -1181,9 +1348,91 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editingProviderSource = null;
             SetDisplay(_d.ProviderEditPanel, DisplayStyle.None);
 
-            // Switching the Providers tab must not activate or create chat sessions.
-            // It only changes which provider bucket the editor/list works with.
-            _ = RefreshProvidersListAsync();
+            // Switching backend changes the visible provider/session bucket, but it must not
+            // auto-connect Hermes or create chat sessions. Connection happens when a provider is
+            // explicitly used or a Hermes message needs transport.
+            await RefreshProvidersListAsync();
+            if (_d.LoadSessionsAsync != null)
+                await _d.LoadSessionsAsync();
+        }
+
+        private async Task SaveCurrentActiveProviderForModeAsync(BackendMode mode)
+        {
+            var app = await _d.GetAppAsync();
+            if (app == null)
+                return;
+
+            var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+            var provider = chat?.CurrentProvider;
+            if (provider == null || ChatService.IsHermesProvider(provider) != (mode == BackendMode.Hermes))
+                return;
+
+            var settings = app.Settings.Load() ?? new AppSettings();
+            SetActiveProviderIdForMode(settings, mode, provider.id);
+            settings.activeProviderId = provider.id;
+            app.Settings.Save(settings);
+        }
+
+        private async Task RestoreActiveProviderForModeAsync(BackendMode mode)
+        {
+            var app = await _d.GetAppAsync();
+            var chat = await _d.GetChatServiceAsync();
+            if (app == null || chat == null)
+                return;
+
+            var settings = app.Settings.Load() ?? new AppSettings();
+            string preferredId = GetActiveProviderIdForMode(settings, mode);
+            var provider = await app.ProviderManager.GetActiveProviderForBackendAsync(mode, preferredId, true);
+
+            if (provider == null)
+            {
+                chat.ClearActiveProviderState();
+                ClearProviderHeader();
+                SetCurrentSessionUi(string.Empty, string.Empty);
+                if (_d.RenderMessages != null)
+                    _d.RenderMessages();
+                return;
+            }
+
+            chat.SetActiveProviderWithoutSession(provider);
+            SetProviderHeader(provider);
+            SetCurrentSessionUi(string.Empty, string.Empty);
+            if (_d.RenderMessages != null)
+                _d.RenderMessages();
+
+            settings.activeProviderId = provider.id;
+            SetActiveProviderIdForMode(settings, mode, provider.id);
+            app.Settings.Save(settings);
+        }
+
+        private void SetCurrentSessionUi(string sessionId, string title)
+        {
+            if (_d.SetCurrentSessionId != null)
+                _d.SetCurrentSessionId(sessionId ?? string.Empty);
+            if (_d.SetCurrentSessionTitle != null)
+                _d.SetCurrentSessionTitle(title ?? string.Empty);
+        }
+
+        private static string GetActiveProviderIdForMode(AppSettings settings, BackendMode mode)
+        {
+            if (settings == null)
+                return null;
+
+            string modeSpecific = mode == BackendMode.Hermes
+                ? settings.activeHermesProviderId
+                : settings.activeOpenAiProviderId;
+            return string.IsNullOrWhiteSpace(modeSpecific) ? settings.activeProviderId : modeSpecific;
+        }
+
+        private static void SetActiveProviderIdForMode(AppSettings settings, BackendMode mode, string providerId)
+        {
+            if (settings == null)
+                return;
+
+            if (mode == BackendMode.Hermes)
+                settings.activeHermesProviderId = providerId;
+            else
+                settings.activeOpenAiProviderId = providerId;
         }
 
         private void UpdateBackendModeHint(string selected)
@@ -1563,6 +1812,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 defaultModel = source.defaultModel,
                 temperature  = source.temperature,
                 maxTokens    = source.maxTokens,
+                contextWindow = source.contextWindow,
                 isEnabled    = source.isEnabled,
                 backendType  = source.backendType
             };

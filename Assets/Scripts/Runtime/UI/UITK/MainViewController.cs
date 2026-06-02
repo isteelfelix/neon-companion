@@ -392,6 +392,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             string modeStr = mode == Core.BackendMode.Hermes ? "hermes" : "openai";
             _navigationController.ApplyBackendModeVisibility(modeStr);
+            _ = _sessionHistoryController.RefreshSessionsFromCacheAsync();
         }
 
         private void Bind(VisualElement root)
@@ -572,6 +573,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _chatController.InitState();
             _isBound = true;
+            _ = _settingsController.LoadSettingsAsync();
         }
 
         private SettingsControllerDeps BuildSettingsControllerDeps()
@@ -756,7 +758,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 IsBound              = () => _isBound,
                 SaveSettings         = () => _settingsController.SaveSettings(),
                 LoadSessionsAsync    = () => LoadSessionsAsync(_chatService),
-                RenderMessages       = () => RenderMessages(null),
+                RenderMessages       = () => RenderMessages(_chatService?.CurrentChatViewModel?.Messages),
                 AddSystemMessage     = AddSystemMessage,
                 TriggerAvatarConfused = TriggerAvatarConfused,
                 ShowChat             = _navigationController.ShowChat,
@@ -1097,6 +1099,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 var app = await GetAppAsync();
                 if (!_isBound || app == null) return;
+
+                _avatarGalleryController.RefreshCustomAvatarGallery(app);
+
                 // Применяем Safe Area и платформенные классы (PL-04)
                 new PlatformLayoutAdapter().Apply(_root, app.Services.GetRequired<IPlatformInfoService>());
                 await _settingsController.BindLocalizationEventsAsync();
@@ -1169,7 +1174,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (settingsSnap != null)
                 _chatService.SaveChatHistory = settingsSnap.saveChatHistory;
 
-            await _chatService.GetOrCreateChatAsync(settingsSnap?.activeProviderId);
             if (string.IsNullOrEmpty(_currentSessionId))
                 _currentSessionId = _chatService.CurrentSessionId ?? string.Empty;
             return _chatService;
@@ -2789,164 +2793,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (dot != null) dot.style.opacity = opacity;
         }
 
-
-        private void OnAvatarUploadClicked()
-        {
-            _ = UploadAvatarAsync();
-        }
-
-        private async Task UploadAvatarAsync()
-        {
-            try
-            {
-                var app = await GetAppAsync();
-                if (app == null) return;
-
-                var filePicker = app.Services.GetRequired<IFilePickerService>();
-                string path = await filePicker.PickFileAsync("png,glb,gltf");
-                if (string.IsNullOrEmpty(path)) return;
-
-                string fileName = System.IO.Path.GetFileNameWithoutExtension(path);
-                string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
-                bool is3D = extension == ".glb" || extension == ".gltf";
-                string destDir  = System.IO.Path.Combine(Application.persistentDataPath, "Avatars");
-                System.IO.Directory.CreateDirectory(destDir);
-                string destPath = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(path));
-                System.IO.File.Copy(path, destPath, overwrite: true);
-
-                float cropScale = 1f;
-                float cropOffsetX = 0f;
-                float cropOffsetY = 0f;
-
-                // Show crop editor for 2D images (not 3D models)
-                if (!is3D)
-                {
-                    cropScale = 1f;
-                    cropOffsetX = 0f;
-                    cropOffsetY = 0f;
-                    bool cropCancelled = false;
-
-                    var cropResult = await ShowCropEditorAsync(destPath,
-                        () => { cropCancelled = true; });
-
-                    if (cropCancelled)
-                    {
-                        try { System.IO.File.Delete(destPath); } catch { }
-                        return;
-                    }
-
-                    cropScale = cropResult.scale;
-                    cropOffsetX = cropResult.offsetX;
-                    cropOffsetY = cropResult.offsetY;
-                }
-
-                var all = app.Avatars.GetAll();
-                string profileId = ResolveCustomAvatarId(fileName, destPath, all);
-                var modelAnimations = new List<string>();
-
-                if (is3D)
-                {
-                    var loadResult = await Avatar3DLoader.LoadAsync(destPath);
-                    if (loadResult.Success && loadResult.Instance != null)
-                    {
-                        modelAnimations.AddRange(loadResult.AnimationNames);
-                        Destroy(loadResult.Instance);
-                    }
-                }
-
-                var profile = new NeonCompanion.Runtime.Data.Models.AvatarProfile
-                {
-                    id        = profileId,
-                    name      = fileName,
-                    imagePath = is3D ? string.Empty : destPath,
-                    modelPath = is3D ? destPath : string.Empty,
-                    isBuiltIn = false,
-                    is3D = is3D,
-                    modelAnimationClips = modelAnimations,
-                    avatarScale = cropScale,
-                    avatarOffsetX = cropOffsetX,
-                    avatarOffsetY = cropOffsetY
-                };
-
-                int existing = all.FindIndex(a => a != null && a.id == profile.id);
-                if (existing >= 0) all[existing] = profile;
-                else all.Add(profile);
-                app.Avatars.SaveAll(all);
-
-                RefreshCustomAvatarGallery(app);
-
-                // Auto-select the uploaded avatar (force re-selection even if same ID)
-                if (_activeAvatarId == profile.id) _activeAvatarId = string.Empty;
-                SelectAvatar(profile.id);
-
-                AddSystemMessage(is3D
-                    ? LocalizationExtensions.GetFormat("avatar.upload.success.3d", "3D аватар «{0}» загружен.", fileName)
-                    : LocalizationExtensions.GetFormat("avatar.upload.success", "Аватар «{0}» загружен.", fileName));
-            }
-            catch (Exception ex)
-            {
-                AddSystemMessage(LocalizationExtensions.Get("avatar.upload.failed", "Не удалось загрузить аватар."));
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        private System.Threading.Tasks.Task<NeonCompanion.Runtime.UI.Avatars.AvatarCropResult> ShowCropEditorAsync(
-            string imagePath, Action onCancelled)
-        {
-            var tcs = new System.Threading.Tasks.TaskCompletionSource<NeonCompanion.Runtime.UI.Avatars.AvatarCropResult>();
-
-            var bytes = System.IO.File.ReadAllBytes(imagePath);
-            var tex = new Texture2D(2, 2);
-            if (!tex.LoadImage(bytes))
-            {
-                Destroy(tex);
-                tcs.TrySetResult(new NeonCompanion.Runtime.UI.Avatars.AvatarCropResult { scale = 1f });
-                return tcs.Task;
-            }
-
-            // Find existing crop settings for this image
-            float existScale = 1f;
-            float existOffsetX = 0f;
-            float existOffsetY = 0f;
-
-            var root = _root.Q<VisualElement>("avatar-crop-root");
-            if (root == null)
-            {
-                // Create a dedicated root for the crop overlay
-                root = new VisualElement();
-                root.name = "avatar-crop-root";
-                root.style.position = Position.Absolute;
-                root.style.left = 0;
-                root.style.top = 0;
-                root.style.right = 0;
-                root.style.bottom = 0;
-                root.style.zIndex = 9999;
-                _root.Add(root);
-            }
-            else
-            {
-                root.Clear();
-            }
-
-            var editor = new NeonCompanion.Runtime.UI.Avatars.AvatarCropEditor(
-                root, tex, existScale, existOffsetX, existOffsetY);
-
-            editor.Confirmed += result =>
-            {
-                Destroy(tex);
-                tcs.TrySetResult(result);
-            };
-
-            editor.Cancelled += () =>
-            {
-                Destroy(tex);
-                onCancelled?.Invoke();
-                tcs.TrySetResult(new NeonCompanion.Runtime.UI.Avatars.AvatarCropResult { scale = 1f });
-            };
-
-            editor.Show();
-            return tcs.Task;
-        }
 
         private string ResolveCustomAvatarId(string fileName, string imagePath, List<AvatarProfile> allProfiles)
         {

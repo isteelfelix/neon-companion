@@ -79,6 +79,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!_d.IsBound())
                 return;
 
+            var visibleSessions = FilterSessionsForCurrentBackend(allSessions, providers);
             string currentSessionId = _d.GetCurrentSessionId();
             string currentSessionTitle = string.Empty;
 
@@ -91,7 +92,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Sync display title from the actual current session
             if (!string.IsNullOrEmpty(currentSessionId))
             {
-                var active = allSessions.Find(s => s.sessionId == currentSessionId);
+                var active = visibleSessions.Find(s => s.sessionId == currentSessionId);
                 if (active != null)
                 {
                     currentSessionTitle = string.IsNullOrWhiteSpace(active.title) || active.title == "New chat"
@@ -108,18 +109,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.SetCurrentSession(currentSessionId, currentSessionTitle);
 
             if (_d.NavChatCount != null)
-                _d.NavChatCount.text = allSessions.Count.ToString();
+                _d.NavChatCount.text = visibleSessions.Count.ToString();
 
             if (_d.TopbarTitle != null && _d.ChatPanel != null && _d.ChatPanel.style.display != DisplayStyle.None)
                 _d.TopbarTitle.text = _d.GetChatTitle();
 
-            RenderSessionList(allSessions, providers);
+            RenderSessionList(visibleSessions, providers);
         }
 
         public void RenderSessionList(List<ChatSession> allSessions, List<ProviderConfig> providers)
         {
             if (_d.SessionsList == null && _d.HistorySessionsList == null) return;
 
+            allSessions = FilterSessionsForCurrentBackend(allSessions, providers);
+            if (_d.NavChatCount != null)
+                _d.NavChatCount.text = allSessions.Count.ToString();
             HideSessionMenus();
             UpdateKnownFolders(allSessions);
 
@@ -216,7 +220,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var allSessions = await chat.GetAllSessionsAsync();
                 var app = await _d.GetAppAsync();
                 var providers = app != null ? await app.ProviderManager.GetAllProvidersAsync() : new List<ProviderConfig>();
-                if (_d.IsBound()) RenderSessionList(allSessions, providers);
+                if (_d.IsBound()) RenderSessionList(FilterSessionsForCurrentBackend(allSessions, providers), providers);
             }
             catch (Exception ex)
             {
@@ -268,6 +272,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (currentSessionId == sessionId)
                 {
                     _d.SetCurrentSession(chat.CurrentSessionId ?? string.Empty, string.Empty);
+                    _d.SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
+                    _d.RenderMessages();
+                }
+                else if (string.IsNullOrEmpty(chat.CurrentSessionId))
+                {
+                    _d.SetCurrentSession(string.Empty, string.Empty);
                     _d.SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                     _d.RenderMessages();
                 }
@@ -368,6 +378,35 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return LocalizationExtensions.GetFormat("history.provider.named", "Провайдер: {0}", provider.displayName);
 
             return LocalizationExtensions.GetFormat("history.provider.named", "Провайдер: {0}", ShortProviderId(session.providerId));
+        }
+
+        private static List<ChatSession> FilterSessionsForCurrentBackend(List<ChatSession> sessions, List<ProviderConfig> providers)
+        {
+            if (sessions == null)
+                return new List<ChatSession>();
+
+            var selector = GlobalBackendSelector.Instance;
+            BackendMode mode = selector != null ? selector.CurrentMode : BackendMode.OpenAI;
+            bool hermesMode = mode == BackendMode.Hermes;
+            return sessions.FindAll(s => IsSessionForBackend(s, providers, hermesMode));
+        }
+
+        private static bool IsSessionForBackend(ChatSession session, List<ProviderConfig> providers, bool hermesMode)
+        {
+            if (session == null)
+                return false;
+
+            ProviderConfig provider = null;
+            if (!string.IsNullOrWhiteSpace(session.providerId) && providers != null)
+                provider = providers.Find(p => p != null && string.Equals(p.id, session.providerId, StringComparison.Ordinal));
+
+            if (provider != null)
+                return provider.isEnabled && ChatService.IsHermesProvider(provider) == hermesMode;
+
+            if (!string.IsNullOrWhiteSpace(session.providerSessionId))
+                return hermesMode;
+
+            return !hermesMode;
         }
 
         private static string ShortProviderId(string providerId)

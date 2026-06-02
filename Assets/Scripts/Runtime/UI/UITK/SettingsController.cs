@@ -180,7 +180,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _themesPreviewAvatar = root.Q<VisualElement>("themes-preview-avatar");
 
             UpdateClearDataButtonState();
-            _ = LoadSettingsAsync();
         }
 
         // ============================================================
@@ -496,7 +495,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Load / Save settings
         // ============================================================
 
-        private async Task LoadSettingsAsync()
+        internal async Task LoadSettingsAsync()
         {
             try
             {
@@ -605,7 +604,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 s.closeHotkey      = _closeHotkey;
 
                 var chatService = _deps.GetChatServiceSync?.Invoke();
-                s.activeProviderId = chatService?.CurrentProvider?.id ?? s.activeProviderId;
+                if (chatService?.CurrentProvider != null)
+                {
+                    string providerId = chatService.CurrentProvider.id;
+                    s.activeProviderId = providerId;
+                    var selector = GlobalBackendSelector.Instance;
+                    BackendMode mode = selector != null ? selector.CurrentMode : BackendMode.OpenAI;
+                    if (mode == BackendMode.Hermes)
+                        s.activeHermesProviderId = providerId;
+                    else
+                        s.activeOpenAiProviderId = providerId;
+                }
 
                 app.Settings.Save(s);
 

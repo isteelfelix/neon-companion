@@ -88,6 +88,9 @@ namespace NeonCompanion.Runtime.Chat
 
         public async Task<ChatViewModel> GetOrCreateChatAsync(string preferredProviderId = null)
         {
+            if (_currentProvider != null && !_currentProvider.isEnabled)
+                ClearActiveProviderState();
+
             if (_currentChatViewModel != null)
                 return _currentChatViewModel;
 
@@ -130,8 +133,9 @@ namespace NeonCompanion.Runtime.Chat
             if (_currentSession?.sessionId == sessionId)
             {
                 var remaining = GetSortedSessions();
-                if (remaining.Count > 0)
-                    await SwitchToSessionAsync(remaining[0]);
+                var fallback = await FindFallbackSessionAsync(remaining);
+                if (fallback != null)
+                    await SwitchToSessionAsync(fallback);
                 else
                     ClearCurrentSessionWithoutSaving();
             }
@@ -169,11 +173,21 @@ namespace NeonCompanion.Runtime.Chat
             var preferredProvider = sessionProvider == null
                 ? await TryGetProviderByIdAsync(preferredProviderId)
                 : null;
+            var currentProvider = _currentProvider != null && _currentProvider.isEnabled
+                ? _currentProvider
+                : null;
 
             _currentProvider = sessionProvider
                 ?? preferredProvider
-                ?? _currentProvider
-                ?? await _providerManager.GetActiveProviderAsync();
+                ?? currentProvider
+                ?? await GetActiveProviderForCurrentBackendAsync();
+
+            if (_currentProvider == null || !_currentProvider.isEnabled)
+            {
+                ClearCurrentSessionWithoutSaving();
+                NeonLogger.LogWarning("[ChatService] Session provider is not available — session not opened.");
+                return;
+            }
 
             SyncFromProvider(_currentProvider);
 
@@ -225,6 +239,21 @@ namespace NeonCompanion.Runtime.Chat
 
             await StartNewSessionAsync();
             NeonLogger.Log($"Switched to provider: {newProvider.displayName}");
+        }
+
+        public void SetActiveProviderWithoutSession(ProviderConfig provider)
+        {
+            if (provider == null || !provider.isEnabled)
+            {
+                ClearActiveProviderState();
+                return;
+            }
+
+            _currentProvider = provider;
+            SyncFromProvider(_currentProvider);
+            _currentSession = null;
+            _currentChatViewModel = null;
+            NeonLogger.Log($"Active provider restored: {provider.displayName}");
         }
 
         public Task ApplyProviderConfigAsync(ProviderConfig updatedProvider, bool resetRemoteSession = false)
@@ -543,6 +572,8 @@ namespace NeonCompanion.Runtime.Chat
             // Hermes), bring it up on demand and route through it instead of POSTing.
             if (_currentProvider == null)
                 _currentProvider = await ResolveProviderAsync();
+            if (_currentProvider == null || !_currentProvider.isEnabled)
+                throw new InvalidOperationException("Provider is not configured.");
             if (IsHermesProvider(_currentProvider))
             {
                 await EnsureHermesTransportAsync();
@@ -565,7 +596,7 @@ namespace NeonCompanion.Runtime.Chat
                 await GetOrCreateChatAsync();
             }
 
-            if (_currentProvider == null || _currentChatViewModel == null)
+            if (_currentProvider == null || !_currentProvider.isEnabled || _currentChatViewModel == null)
                 throw new InvalidOperationException("Provider is not configured.");
 
             if (_currentSession == null)
@@ -836,7 +867,9 @@ namespace NeonCompanion.Runtime.Chat
             if (sourceMessages == null || sourceMessages.Count == 0)
                 return LocalizationExtensions.Get("chat.summary.empty", "Пока нет сообщений для краткого пересказа.");
 
-            var provider = _currentProvider ?? await _providerManager.GetActiveProviderAsync();
+            var provider = _currentProvider != null && _currentProvider.isEnabled
+                ? _currentProvider
+                : await GetActiveProviderForCurrentBackendAsync();
             if (provider == null)
                 return LocalizationExtensions.Get("chat.summary.provider_not_configured", "Провайдер не настроен.");
 
@@ -903,14 +936,51 @@ namespace NeonCompanion.Runtime.Chat
         private async Task LoadLatestSessionAsync(string preferredProviderId = null)
         {
             var sessions = GetSortedSessions();
-            if (sessions.Count > 0)
+            var fallback = await FindFallbackSessionAsync(sessions, preferredProviderId);
+            if (fallback != null)
             {
-                await SwitchToSessionAsync(sessions[0], preferredProviderId);
+                await SwitchToSessionAsync(fallback, preferredProviderId);
+                return;
             }
-            else
+
+            ClearCurrentSessionWithoutSaving();
+        }
+
+        private async Task<ChatSession> FindFallbackSessionAsync(List<ChatSession> sessions, string preferredProviderId = null)
+        {
+            if (sessions == null)
+                return null;
+
+            var selector = GlobalBackendSelector.Instance;
+            bool hasBackendMode = selector != null;
+            bool hermesMode = hasBackendMode && selector.CurrentMode == BackendMode.Hermes;
+
+            for (int i = 0; i < sessions.Count; i++)
             {
-                ClearCurrentSessionWithoutSaving();
+                var session = sessions[i];
+                if (session == null)
+                    continue;
+
+                ProviderConfig provider = null;
+                if (!string.IsNullOrWhiteSpace(session.providerId))
+                    provider = await TryGetProviderByIdAsync(session.providerId);
+                else if (!string.IsNullOrWhiteSpace(preferredProviderId))
+                    provider = await TryGetProviderByIdAsync(preferredProviderId);
+                else if (_currentProvider != null && _currentProvider.isEnabled)
+                    provider = _currentProvider;
+                else
+                    provider = await GetActiveProviderForCurrentBackendAsync();
+
+                if (provider == null)
+                    continue;
+
+                if (hasBackendMode && IsHermesProvider(provider) != hermesMode)
+                    continue;
+
+                return session;
             }
+
+            return null;
         }
 
         private async Task<ProviderConfig> ResolveProviderAsync(string providerId = null)
@@ -918,11 +988,18 @@ namespace NeonCompanion.Runtime.Chat
             if (!string.IsNullOrWhiteSpace(providerId))
             {
                 var provider = await _providerManager.GetProviderByIdAsync(providerId);
-                if (provider != null)
+                if (provider != null && provider.isEnabled)
                     return provider;
             }
 
-            return await _providerManager.GetActiveProviderAsync();
+            return _currentProvider != null && _currentProvider.isEnabled ? _currentProvider : null;
+        }
+
+        private async Task<ProviderConfig> GetActiveProviderForCurrentBackendAsync(string preferredProviderId = null, bool fallbackToFirst = true)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            BackendMode mode = selector != null ? selector.CurrentMode : BackendMode.OpenAI;
+            return await _providerManager.GetActiveProviderForBackendAsync(mode, preferredProviderId, fallbackToFirst);
         }
 
         private async Task<ProviderConfig> TryGetProviderByIdAsync(string providerId)
@@ -930,7 +1007,8 @@ namespace NeonCompanion.Runtime.Chat
             if (string.IsNullOrWhiteSpace(providerId))
                 return null;
 
-            return await _providerManager.GetProviderByIdAsync(providerId);
+            var provider = await _providerManager.GetProviderByIdAsync(providerId);
+            return provider != null && provider.isEnabled ? provider : null;
         }
 
         private void SaveCurrentSession()
@@ -1069,6 +1147,15 @@ namespace NeonCompanion.Runtime.Chat
             _currentChatViewModel = null;
         }
 
+        public bool CurrentProviderMatchesBackend(BackendMode mode)
+        {
+            if (_currentProvider == null)
+                return true;
+
+            bool hermesMode = mode == BackendMode.Hermes;
+            return IsHermesProvider(_currentProvider) == hermesMode;
+        }
+
         public void ClearCurrentSessionState()
         {
             ClearCurrentSessionWithoutSaving();
@@ -1077,17 +1164,7 @@ namespace NeonCompanion.Runtime.Chat
         private void ClearCurrentSessionWithoutSaving()
         {
             _currentSession = null;
-
-            if (_currentProvider == null)
-            {
-                _currentChatViewModel = null;
-                return;
-            }
-
-            _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
-            _currentChatViewModel.ProviderSessionId = null;
-            _currentChatViewModel.SelectedModel = _currentProvider.defaultModel;
-            ApplyGenerationSettings();
+            _currentChatViewModel = null;
         }
     }
 }

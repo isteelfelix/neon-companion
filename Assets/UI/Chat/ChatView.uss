@@ -298,6 +298,11 @@
     white-space: normal;
 }
 
+.transcript__empty-action {
+    align-self: flex-start;
+    margin-top: 14px;
+}
+
 .transcript__row {
     flex-direction: row;
     margin-bottom: 10px;

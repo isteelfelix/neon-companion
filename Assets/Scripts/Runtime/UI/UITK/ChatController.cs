@@ -712,10 +712,18 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (chat == null)
                 {
                     _d.ShowSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
+                    RestoreComposerDraft(message, pendingAttachments);
                     return;
                 }
 
                 _currentChatService = chat;
+
+                if (chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled || chat.CurrentChatViewModel == null)
+                {
+                    _d.ShowSystemMessage(LocalizationExtensions.Get("provider.not_configured.hint", "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ."));
+                    RestoreComposerDraft(message, pendingAttachments);
+                    return;
+                }
 
                 bool streaming = _d.UseStreaming();
                 chat.UseStreaming = streaming;
@@ -837,7 +845,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.MessageInput.value = composerText;
                 QueueComposerHeightUpdate();
                 RestorePendingComposerAttachments(pendingAttachments);
-                _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
+                if (chat == null || chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled)
+                    _d.RenderMessages(null);
+                else
+                    _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
                 _d.ShowSystemMessage(ex.Message);
                 NeonLogger.LogError(ex.ToString());
                 _d.TriggerAvatarConfused();
@@ -963,8 +974,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task<bool> HandleNewCommandAsync()
         {
-            await StartNewSessionAsync();
-            _d.ShowSystemMessage("Новая сессия начата.");
+            bool started = await StartNewSessionAsync();
+            if (started)
+                _d.ShowSystemMessage(LocalizationExtensions.Get("chat.new.started", "Новая сессия начата."));
             return true;
         }
 
@@ -2088,6 +2100,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             RenderComposerPreviews();
         }
 
+        private void RestoreComposerDraft(string message, IReadOnlyList<ChatAttachment> attachments)
+        {
+            if (_d.MessageInput != null)
+                _d.MessageInput.value = message ?? string.Empty;
+            RestorePendingComposerAttachments(attachments);
+            QueueComposerHeightUpdate();
+        }
+
         private void RenderComposerPreviews()
         {
             if (_composerPreviews == null) return;
@@ -2438,7 +2458,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = ExportChatAsync();
         }
 
-        public async Task StartNewSessionAsync()
+        public async Task<bool> StartNewSessionAsync()
         {
             try
             {
@@ -2448,9 +2468,21 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 var chat = await _d.GetChatServiceAsync();
                 if (chat == null)
-                    return;
+                {
+                    _d.ShowSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
+                    return false;
+                }
 
                 await chat.StartNewSessionAsync();
+                if (string.IsNullOrEmpty(chat.CurrentSessionId) || chat.CurrentChatViewModel == null)
+                {
+                    _d.RenderMessages(null);
+                    _d.ShowSystemMessage(LocalizationExtensions.Get(
+                        "chat.create.no_provider",
+                        "Провайдер не выбран. Настройте провайдера и активируйте его, чтобы создать чат."));
+                    return false;
+                }
+
                 ClearPendingComposerAttachments();
                 _messageQueue.Clear();
                 RenderQueueIndicator();
@@ -2462,10 +2494,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await _d.LoadSessionsAsync();
                 _d.ShowChat();
+                return true;
             }
             catch (Exception ex)
             {
+                _d.ShowSystemMessage(LocalizationExtensions.Get(
+                    "chat.create.no_provider",
+                    "Провайдер не выбран. Настройте провайдера и активируйте его, чтобы создать чат."));
                 NeonLogger.LogError(ex.ToString());
+                return false;
             }
         }
 
@@ -2763,6 +2800,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessagesList == null)
                 return;
 
+            bool hasSession = messages != null;
+            SetDisplay(_d.Composer, hasSession ? DisplayStyle.Flex : DisplayStyle.None);
             CancelInlineEdit();
             if (IsSearchBarVisible())
                 CloseSearch();
@@ -2770,7 +2809,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (messages == null || messages.Count == 0)
             {
-                _d.MessagesList.Add(CreateEmptyTranscript());
+                _d.MessagesList.Add(CreateEmptyTranscript(hasSession));
                 return;
             }
 
@@ -2812,26 +2851,45 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (!hasVisibleMessages)
             {
-                _d.MessagesList.Add(CreateEmptyTranscript());
+                _d.MessagesList.Add(CreateEmptyTranscript(true));
                 return;
             }
 
             ScrollTranscriptToBottom();
         }
 
-        private static VisualElement CreateEmptyTranscript()
+        private VisualElement CreateEmptyTranscript(bool hasSession)
         {
             var container = new VisualElement();
             container.AddToClassList("transcript__empty");
 
-            var title = new Label(LocalizationExtensions.Get("chat.empty.title", "Пока нет сообщений"));
+            string titleText = hasSession
+                ? LocalizationExtensions.Get("chat.empty.title", "Пока нет сообщений")
+                : LocalizationExtensions.Get("chat.empty.no_session.title", "Чат не создан");
+            var title = new Label(titleText);
             title.AddToClassList("transcript__empty-title");
 
-            var body = new Label(LocalizationExtensions.Get("chat.empty.body", "Начни диалог ниже, и здесь появится полная история текущей сессии."));
+            string bodyText = hasSession
+                ? LocalizationExtensions.Get("chat.empty.body", "Начни диалог ниже, и здесь появится полная история текущей сессии.")
+                : LocalizationExtensions.Get("chat.empty.no_session.body", "Создай новый чат, чтобы начать диалог с активным провайдером.");
+            var body = new Label(bodyText);
             body.AddToClassList("transcript__empty-body");
 
             container.Add(title);
             container.Add(body);
+
+            if (!hasSession)
+            {
+                var createButton = new Button(OnNewSessionClicked)
+                {
+                    text = LocalizationExtensions.Get("chat.empty.create", "Создать новый чат")
+                };
+                createButton.AddToClassList("btn");
+                createButton.AddToClassList("btn--primary");
+                createButton.AddToClassList("transcript__empty-action");
+                container.Add(createButton);
+            }
+
             return container;
         }
 

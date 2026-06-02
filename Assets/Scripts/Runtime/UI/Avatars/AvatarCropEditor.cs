@@ -19,7 +19,8 @@ namespace NeonCompanion.Runtime.UI.Avatars
         private const float CircleSize = 300f;
         private const float MinScale = 0.5f;
         private const float MaxScale = 3.0f;
-        private const float ZoomSpeed = 0.003f;
+        private const float ZoomStep = 1.12f;
+        private const float WheelZoomFactor = 0.0012f;
 
         private readonly VisualElement _root;
         private readonly VisualElement _overlay;
@@ -30,6 +31,7 @@ namespace NeonCompanion.Runtime.UI.Avatars
         private readonly Button _confirmBtn;
 
         private Texture2D _texture;
+        private float _coverScale = 1f;
         private float _scale = 1f;
         private float _offsetX;
         private float _offsetY;
@@ -45,7 +47,6 @@ namespace NeonCompanion.Runtime.UI.Avatars
         {
             _root = root;
             _texture = texture;
-            _scale = Mathf.Clamp(existingScale, MinScale, MaxScale);
             _offsetX = existingOffsetX;
             _offsetY = existingOffsetY;
 
@@ -62,6 +63,7 @@ namespace NeonCompanion.Runtime.UI.Avatars
             _overlay.style.justifyContent = Justify.Center;
             _overlay.style.flexDirection = FlexDirection.Column;
             _overlay.pickingMode = PickingMode.Position;
+            _overlay.focusable = true;
 
             // Click outside circle = cancel
             _overlay.RegisterCallback<ClickEvent>(evt =>
@@ -104,12 +106,14 @@ namespace NeonCompanion.Runtime.UI.Avatars
             _clipMask.style.borderTopRightRadius = CircleSize / 2f;
             _clipMask.style.borderBottomLeftRadius = CircleSize / 2f;
             _clipMask.style.borderBottomRightRadius = CircleSize / 2f;
+            _clipMask.pickingMode = PickingMode.Position;
             _cropContainer.Add(_clipMask);
 
             // --- Image layer ---
             _imageLayer = new VisualElement();
             _imageLayer.name = "image-layer";
             _imageLayer.style.position = Position.Absolute;
+            _imageLayer.pickingMode = PickingMode.Position;
             // Start centered; size/position updated in UpdateTransform
             _clipMask.Add(_imageLayer);
 
@@ -122,28 +126,43 @@ namespace NeonCompanion.Runtime.UI.Avatars
             toolbar.style.alignItems = Align.Center;
             toolbar.style.justifyContent = Justify.Center;
             toolbar.style.marginTop = 16;
-            toolbar.style.columnGap = 16;
+
+            var zoomOutBtn = new Button(() => ApplyZoom(1f / ZoomStep)) { text = "−" };
+            zoomOutBtn.style.minWidth = 40;
+            var zoomInBtn = new Button(() => ApplyZoom(ZoomStep)) { text = "+" };
+            zoomInBtn.style.minWidth = 40;
+            zoomInBtn.style.marginLeft = 8;
 
             _cancelBtn = new Button(OnCancel) { text = "Отмена" };
             _cancelBtn.style.minWidth = 100;
+            _cancelBtn.style.marginLeft = 16;
 
             _confirmBtn = new Button(OnConfirm) { text = "Установить" };
             _confirmBtn.style.minWidth = 120;
+            _confirmBtn.style.marginLeft = 16;
 
+            toolbar.Add(zoomOutBtn);
+            toolbar.Add(zoomInBtn);
             toolbar.Add(_cancelBtn);
             toolbar.Add(_confirmBtn);
             _overlay.Add(toolbar);
 
-            // --- Events ---
-            _cropContainer.RegisterCallback<PointerDownEvent>(OnPointerDown);
-            _cropContainer.RegisterCallback<PointerMoveEvent>(OnPointerMove);
-            _cropContainer.RegisterCallback<PointerUpEvent>(OnPointerUp);
+            // --- Events (crop circle + overlay: wheel/pan must not scroll the page behind) ---
+            RegisterCropPointerHandlers(_cropContainer);
+            RegisterCropPointerHandlers(_clipMask);
+            RegisterCropPointerHandlers(_imageLayer);
+            _root.RegisterCallback<WheelEvent>(OnWheel, TrickleDown.TrickleDown);
+            _overlay.RegisterCallback<WheelEvent>(OnWheel, TrickleDown.TrickleDown);
             _cropContainer.RegisterCallback<WheelEvent>(OnWheel);
             _overlay.RegisterCallback<KeyDownEvent>(OnKeyDown);
 
-            // Auto-fit: scale image to cover the circle
-            if (Mathf.Approximately(_scale, 1f) && Mathf.Approximately(_offsetX, 0f) && Mathf.Approximately(_offsetY, 0f))
+            _coverScale = ComputeCoverScale();
+
+            // existingScale is relative zoom (0.5–3.0) stored in AvatarProfile
+            if (Mathf.Approximately(existingScale, 1f) && Mathf.Approximately(existingOffsetX, 0f) && Mathf.Approximately(existingOffsetY, 0f))
                 AutoFitImage();
+            else
+                _scale = Mathf.Clamp(existingScale, MinScale, MaxScale) * _coverScale;
 
             UpdateTransform();
         }
@@ -151,26 +170,51 @@ namespace NeonCompanion.Runtime.UI.Avatars
         public void Show()
         {
             _root.Add(_overlay);
-            _overlay.Focus();
+            _overlay.BringToFront();
+            _overlay.schedule.Execute(() => _overlay?.Focus()).StartingIn(50);
+        }
+
+        private void RegisterCropPointerHandlers(VisualElement element)
+        {
+            element.RegisterCallback<PointerDownEvent>(OnPointerDown);
+            element.RegisterCallback<PointerMoveEvent>(OnPointerMove);
+            element.RegisterCallback<PointerUpEvent>(OnPointerUp);
+            element.RegisterCallback<PointerCancelEvent>(OnPointerCancel);
         }
 
         public void Hide()
         {
-            _overlay.RemoveFromHierarchy();
+            if (_overlay.parent != null)
+                _overlay.RemoveFromHierarchy();
+
+            // Full-screen host must leave the tree or it blocks all UI input.
+            if (_root != null && _root.name == "avatar-crop-root" && _root.parent != null)
+                _root.RemoveFromHierarchy();
         }
 
-        // --- Auto-fit: scale to cover circle ---
-        private void AutoFitImage()
+        private float ComputeCoverScale()
         {
             if (_texture == null || _texture.width == 0 || _texture.height == 0)
-                return;
+                return 1f;
 
-            float imgAspect = (float)_texture.width / _texture.height;
-            // Cover: fill the circle completely
-            _scale = imgAspect >= 1f
-                ? CircleSize / _texture.width   // landscape or square
-                : CircleSize / _texture.height; // portrait
-            _scale = Mathf.Clamp(_scale, MinScale, MaxScale);
+            float scaleX = CircleSize / _texture.width;
+            float scaleY = CircleSize / _texture.height;
+            return Mathf.Max(scaleX, scaleY);
+        }
+
+        private float GetRelativeZoom()
+        {
+            if (_coverScale <= 0f)
+                return 1f;
+
+            return Mathf.Clamp(_scale / _coverScale, MinScale, MaxScale);
+        }
+
+        // --- Auto-fit: scale image to cover the circle ---
+        private void AutoFitImage()
+        {
+            _coverScale = ComputeCoverScale();
+            _scale = _coverScale;
         }
 
         // --- Transform ---
@@ -196,9 +240,12 @@ namespace NeonCompanion.Runtime.UI.Avatars
         // --- Pan ---
         private void OnPointerDown(PointerDownEvent evt)
         {
+            if (evt.button != 0)
+                return;
+
             _cropContainer.CapturePointer(evt.pointerId);
             _dragging = true;
-            _dragStart = evt.position;
+            _dragStart = (Vector2)evt.position;
             _dragStartOffsetX = _offsetX;
             _dragStartOffsetY = _offsetY;
             evt.StopPropagation();
@@ -206,12 +253,23 @@ namespace NeonCompanion.Runtime.UI.Avatars
 
         private void OnPointerMove(PointerMoveEvent evt)
         {
-            if (!_dragging)
+            if (!_dragging || !_cropContainer.HasPointerCapture(evt.pointerId))
                 return;
 
-            Vector2 delta = evt.position - _dragStart;
-            _offsetX = _dragStartOffsetX + delta.x / CircleSize * 100f;
-            _offsetY = _dragStartOffsetY + delta.y / CircleSize * 100f;
+            Vector2 delta = (Vector2)evt.deltaPosition;
+            if (delta.sqrMagnitude < 0.0001f)
+            {
+                Vector2 currentPosition = (Vector2)evt.position;
+                delta = currentPosition - _dragStart;
+                _offsetX = _dragStartOffsetX + delta.x / CircleSize * 100f;
+                _offsetY = _dragStartOffsetY + delta.y / CircleSize * 100f;
+            }
+            else
+            {
+                _offsetX += delta.x / CircleSize * 100f;
+                _offsetY += delta.y / CircleSize * 100f;
+            }
+
             ClampOffsets();
             UpdateTransform();
             evt.StopPropagation();
@@ -219,22 +277,51 @@ namespace NeonCompanion.Runtime.UI.Avatars
 
         private void OnPointerUp(PointerUpEvent evt)
         {
-            if (_dragging)
-            {
-                _cropContainer.ReleasePointer(evt.pointerId);
-                _dragging = false;
-            }
+            EndDrag(evt.pointerId);
             evt.StopPropagation();
+        }
+
+        private void OnPointerCancel(PointerCancelEvent evt)
+        {
+            EndDrag(evt.pointerId);
+            evt.StopPropagation();
+        }
+
+        private void EndDrag(int pointerId)
+        {
+            if (!_dragging)
+                return;
+
+            if (_cropContainer.HasPointerCapture(pointerId))
+                _cropContainer.ReleasePointer(pointerId);
+            _dragging = false;
         }
 
         // --- Zoom ---
         private void OnWheel(WheelEvent evt)
         {
-            float delta = -evt.delta.y * ZoomSpeed;
-            _scale = Mathf.Clamp(_scale + _scale * delta, MinScale, MaxScale);
+            float wheelDelta = evt.delta.y;
+            if (Mathf.Approximately(wheelDelta, 0f))
+                wheelDelta = evt.delta.x;
+
+            if (Mathf.Approximately(wheelDelta, 0f))
+                return;
+
+            evt.StopPropagation();
+
+            float factor = 1f - wheelDelta * WheelZoomFactor;
+            ApplyZoom(factor);
+        }
+
+        private void ApplyZoom(float factor)
+        {
+            if (factor <= 0f || Mathf.Approximately(factor, 1f))
+                return;
+
+            float relativeZoom = Mathf.Clamp(GetRelativeZoom() * factor, MinScale, MaxScale);
+            _scale = relativeZoom * _coverScale;
             ClampOffsets();
             UpdateTransform();
-            evt.StopPropagation();
         }
 
         // --- Keyboard ---
@@ -249,26 +336,139 @@ namespace NeonCompanion.Runtime.UI.Avatars
         // --- Helpers ---
         private void ClampOffsets()
         {
-            float maxOffset = 50f * (_scale - 1f);
-            _offsetX = Mathf.Clamp(_offsetX, -maxOffset, maxOffset);
-            _offsetY = Mathf.Clamp(_offsetY, -maxOffset, maxOffset);
+            if (_texture == null || _texture.width == 0 || _texture.height == 0)
+                return;
+
+            float scaledW = _texture.width * _scale;
+            float scaledH = _texture.height * _scale;
+            float maxX = Mathf.Max(0f, (scaledW - CircleSize) * 0.5f / CircleSize * 100f);
+            float maxY = Mathf.Max(0f, (scaledH - CircleSize) * 0.5f / CircleSize * 100f);
+            _offsetX = Mathf.Clamp(_offsetX, -maxX, maxX);
+            _offsetY = Mathf.Clamp(_offsetY, -maxY, maxY);
         }
 
         private void OnConfirm()
         {
-            Confirmed?.Invoke(new AvatarCropResult
+            var result = new AvatarCropResult
             {
-                scale = _scale,
+                scale = GetRelativeZoom(),
                 offsetX = _offsetX,
                 offsetY = _offsetY
-            });
-            Hide();
+            };
+
+            // Finish on next frame so UITK is not re-entered from the button click.
+            _overlay.schedule.Execute(() =>
+            {
+                Hide();
+                Confirmed?.Invoke(result);
+            }).StartingIn(0);
         }
 
         private void OnCancel()
         {
-            Cancelled?.Invoke();
-            Hide();
+            _overlay.schedule.Execute(() =>
+            {
+                Hide();
+                Cancelled?.Invoke();
+            }).StartingIn(0);
+        }
+    }
+
+    public static class AvatarCropBaker
+    {
+        public static Texture2D Bake(Texture2D source, AvatarCropResult crop, int outputSize = 512)
+        {
+            if (source == null || source.width == 0 || source.height == 0 || outputSize <= 0)
+                return null;
+
+            float relativeZoom = Mathf.Clamp(crop.scale > 0f ? crop.scale : 1f, 0.5f, 3f);
+            float coverScale = Mathf.Max(outputSize / (float)source.width, outputSize / (float)source.height);
+            float pixelScale = relativeZoom * coverScale;
+            float scaledW = source.width * pixelScale;
+            float scaledH = source.height * pixelScale;
+            float posX = (outputSize - scaledW) * 0.5f + crop.offsetX * outputSize / 100f;
+            float posY = (outputSize - scaledH) * 0.5f + crop.offsetY * outputSize / 100f;
+
+            var output = new Texture2D(outputSize, outputSize, TextureFormat.RGBA32, false);
+            var pixels = new Color32[outputSize * outputSize];
+            float radiusSq = (outputSize * 0.5f) * (outputSize * 0.5f);
+            float center = outputSize * 0.5f;
+
+            for (int y = 0; y < outputSize; y++)
+            {
+                for (int x = 0; x < outputSize; x++)
+                {
+                    int index = y * outputSize + x;
+                    float dx = x - center + 0.5f;
+                    float dy = y - center + 0.5f;
+                    if ((dx * dx + dy * dy) > radiusSq)
+                    {
+                        pixels[index] = new Color32(0, 0, 0, 0);
+                        continue;
+                    }
+
+                    // UITK/editor Y is from top; Texture2D rows are from bottom.
+                    float yFromTop = (outputSize - 1 - y) + 0.5f;
+                    float xFromLeft = x + 0.5f;
+                    float imgX = xFromLeft - posX;
+                    float imgY = yFromTop - posY;
+                    float u = imgX / scaledW;
+                    float v = 1f - (imgY / scaledH);
+
+                    if (u < 0f || u > 1f || v < 0f || v > 1f)
+                    {
+                        pixels[index] = new Color32(0, 0, 0, 0);
+                        continue;
+                    }
+
+                    pixels[index] = source.GetPixelBilinear(u, v);
+                }
+            }
+
+            output.SetPixels32(pixels);
+            output.Apply();
+            return output;
+        }
+
+        public static bool TryWriteBakedAvatar(string sourceImagePath, AvatarCropResult crop, int outputSize, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(sourceImagePath) || !System.IO.File.Exists(sourceImagePath))
+            {
+                error = "Source image not found.";
+                return false;
+            }
+
+            var bytes = System.IO.File.ReadAllBytes(sourceImagePath);
+            var source = new Texture2D(2, 2);
+            if (!source.LoadImage(bytes))
+            {
+                UnityEngine.Object.Destroy(source);
+                error = "Failed to load source image.";
+                return false;
+            }
+
+            var baked = Bake(source, crop, outputSize);
+            UnityEngine.Object.Destroy(source);
+            if (baked == null)
+            {
+                error = "Failed to bake avatar crop.";
+                return false;
+            }
+
+            try
+            {
+                System.IO.File.WriteAllBytes(sourceImagePath, baked.EncodeToPNG());
+            }
+            catch (System.Exception ex)
+            {
+                error = ex.Message;
+                UnityEngine.Object.Destroy(baked);
+                return false;
+            }
+
+            UnityEngine.Object.Destroy(baked);
+            return true;
         }
     }
 }

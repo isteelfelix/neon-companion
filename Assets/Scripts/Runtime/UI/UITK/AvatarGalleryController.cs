@@ -1512,6 +1512,51 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string destPath = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(path));
                 System.IO.File.Copy(path, destPath, overwrite: true);
 
+                float cropScale = 1f;
+                float cropOffsetX = 0f;
+                float cropOffsetY = 0f;
+
+                if (!is3D)
+                {
+                    var existingProfile = app.Avatars.GetAll()
+                        ?.FirstOrDefault(a =>
+                            a != null &&
+                            !a.isBuiltIn &&
+                            string.Equals(a.imagePath, destPath, StringComparison.OrdinalIgnoreCase));
+
+                    float existScale = existingProfile != null && existingProfile.avatarScale > 0f
+                        ? existingProfile.avatarScale
+                        : 1f;
+                    float existOffsetX = existingProfile != null ? existingProfile.avatarOffsetX : 0f;
+                    float existOffsetY = existingProfile != null ? existingProfile.avatarOffsetY : 0f;
+
+                    try
+                    {
+                        var cropResult = await ShowCropEditorAsync(
+                            destPath, existScale, existOffsetX, existOffsetY);
+
+                        ReleaseCustomTexture(destPath);
+                        if (!AvatarCropBaker.TryWriteBakedAvatar(destPath, cropResult, 512, out string bakeError))
+                        {
+                            NeonLogger.LogWarning("Avatar crop bake failed: " + bakeError);
+                        }
+                        else
+                        {
+                            ReleaseCustomTexture(destPath);
+                        }
+
+                        // Baked PNG already contains framing; USS scale-and-crop displays it correctly.
+                        cropScale = 1f;
+                        cropOffsetX = 0f;
+                        cropOffsetY = 0f;
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        try { System.IO.File.Delete(destPath); } catch { }
+                        return;
+                    }
+                }
+
                 var all = app.Avatars.GetAll();
                 string profileId = ResolveCustomAvatarId(fileName, destPath, all);
                 var modelAnimations = new List<string>();
@@ -1534,7 +1579,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                     modelPath = is3D ? destPath : string.Empty,
                     isBuiltIn = false,
                     is3D = is3D,
-                    modelAnimationClips = modelAnimations
+                    modelAnimationClips = modelAnimations,
+                    avatarScale = cropScale,
+                    avatarOffsetX = cropOffsetX,
+                    avatarOffsetY = cropOffsetY
                 };
 
                 int existing = all.FindIndex(a => a != null && a.id == profile.id);
@@ -1637,6 +1685,72 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             System.IO.File.Delete(path);
+        }
+
+        private Task<AvatarCropResult> ShowCropEditorAsync(
+            string imagePath,
+            float existingScale,
+            float existingOffsetX,
+            float existingOffsetY)
+        {
+            var tcs = new TaskCompletionSource<AvatarCropResult>();
+
+            var bytes = System.IO.File.ReadAllBytes(imagePath);
+            var tex = new Texture2D(2, 2);
+            if (!tex.LoadImage(bytes))
+            {
+                UnityEngine.Object.Destroy(tex);
+                tcs.TrySetResult(new AvatarCropResult { scale = 1f });
+                return tcs.Task;
+            }
+
+            VisualElement host = _d.Root != null && _d.Root.panel != null
+                ? _d.Root.panel.visualTree
+                : _d.Root;
+
+            var root = host != null ? host.Q<VisualElement>("avatar-crop-root") : null;
+            if (root == null && host != null)
+            {
+                root = new VisualElement();
+                root.name = "avatar-crop-root";
+                root.style.position = Position.Absolute;
+                root.style.left = 0;
+                root.style.top = 0;
+                root.style.right = 0;
+                root.style.bottom = 0;
+                root.pickingMode = PickingMode.Position;
+                host.Add(root);
+            }
+            else if (root != null)
+            {
+                root.Clear();
+            }
+
+            if (root == null)
+            {
+                UnityEngine.Object.Destroy(tex);
+                tcs.TrySetResult(new AvatarCropResult { scale = existingScale > 0f ? existingScale : 1f });
+                return tcs.Task;
+            }
+
+            root.BringToFront();
+
+            var editor = new AvatarCropEditor(root, tex, existingScale, existingOffsetX, existingOffsetY);
+
+            editor.Confirmed += result =>
+            {
+                UnityEngine.Object.Destroy(tex);
+                tcs.TrySetResult(result);
+            };
+
+            editor.Cancelled += () =>
+            {
+                UnityEngine.Object.Destroy(tex);
+                tcs.TrySetCanceled();
+            };
+
+            editor.Show();
+            return tcs.Task;
         }
 
         private void OnAvatarOpenFolderClicked()
@@ -1782,9 +1896,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (element == null)
                 return;
 
-            float scale = (profile != null && profile.avatarScale > 0f) ? profile.avatarScale : 1f;
-            float offX  = profile != null ? profile.avatarOffsetX : 0f;
-            float offY  = profile != null ? profile.avatarOffsetY : 0f;
+            float scale = profile != null && profile.avatarScale > 0f ? profile.avatarScale : 1f;
+            float offX = profile != null ? profile.avatarOffsetX : 0f;
+            float offY = profile != null ? profile.avatarOffsetY : 0f;
+            bool hasLegacyTransform = Mathf.Abs(scale - 1f) > 0.001f
+                || Mathf.Abs(offX) > 0.001f
+                || Mathf.Abs(offY) > 0.001f;
+
+            if (!hasLegacyTransform)
+            {
+                ResetCustomAvatarTransform(element);
+                return;
+            }
 
             element.style.backgroundSize = new BackgroundSize(
                 new Length(scale * 100f, LengthUnit.Percent),
