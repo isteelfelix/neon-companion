@@ -30,6 +30,7 @@ namespace NeonCompanion.Runtime.Chat
         private ChatMessage _hermesStreamingMessage;
         private System.Text.StringBuilder _hermesStreamBuffer;
         private bool _hermesStreamActive;
+        private TaskCompletionSource<bool> _hermesGenerationComplete;
 
         public event Action<string> OnAssistantResponse;
 
@@ -612,6 +613,12 @@ namespace NeonCompanion.Runtime.Chat
             _hermesStreamBuffer = new System.Text.StringBuilder();
             _hermesStreamActive = false;
 
+            // Create a TCS so we can wait for message.complete before returning.
+            // Without this, SendViaTransport returns after the RPC ack (prompt.submit)
+            // while WS streaming events arrive later — causing the streaming bubble
+            // to be destroyed before any tokens are received.
+            _hermesGenerationComplete = new TaskCompletionSource<bool>();
+
             await EnsureHermesSessionReadyAsync();
 
             // Add user message to local history
@@ -626,8 +633,21 @@ namespace NeonCompanion.Runtime.Chat
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             });
 
-            // Send via WebSocket
+            // Send via WebSocket — this returns after RPC ack
             await _chatTransport.SendMessage(message);
+
+            // Wait for generation to complete (message.complete or error/disconnect).
+            // Use a generous timeout so long-running generations don't hang forever.
+            var completedTask = await Task.WhenAny(
+                _hermesGenerationComplete.Task,
+                Task.Delay(300000)); // 5 min safety timeout
+
+            if (completedTask != _hermesGenerationComplete.Task)
+            {
+                NeonLogger.LogWarning("[Hermes] Generation timed out after 5 minutes");
+            }
+
+            _hermesGenerationComplete = null;
             SaveCurrentSession();
         }
 
@@ -707,6 +727,9 @@ namespace NeonCompanion.Runtime.Chat
             _hermesStreamTokenCallback = null;
             _hermesToolProgressCallback = null;
 
+            // Signal SendViaTransport that generation is done
+            _hermesGenerationComplete?.TrySetResult(true);
+
             EmitLatestAssistantResponse();
             SaveCurrentSession();
         }
@@ -742,6 +765,11 @@ namespace NeonCompanion.Runtime.Chat
             _hermesStreamActive = false;
             _hermesStreamingMessage = null;
             _hermesStreamBuffer = null;
+            _hermesStreamTokenCallback = null;
+            _hermesToolProgressCallback = null;
+
+            // Unblock SendViaTransport so it doesn't hang on error
+            _hermesGenerationComplete?.TrySetResult(false);
         }
 
         public async Task<ModelSwitchResult> SetCurrentSessionModelAsync(string modelId)
