@@ -1028,6 +1028,29 @@
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
+.tool-entry__diff {
+    flex-direction: column;
+}
+
+.tool-entry__diff-line {
+    font-size: 11px;
+    white-space: pre;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    color: var(--text-3);
+}
+
+.tool-entry__diff-line--add {
+    color: #4ade80;
+}
+
+.tool-entry__diff-line--del {
+    color: #f87171;
+}
+
+.tool-entry__diff-line--hunk {
+    color: #60a5fa;
+}
+
 /* ---- Markdown rendering (assistant messages) ---- */
 
 .markdown-root {

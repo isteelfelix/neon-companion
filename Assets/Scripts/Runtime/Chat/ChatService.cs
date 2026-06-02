@@ -827,7 +827,8 @@ namespace NeonCompanion.Runtime.Chat
                 tool = update.name ?? "",
                 label = !string.IsNullOrEmpty(update.preview) ? update.preview : (update.name ?? ""),
                 emoji = emoji,
-                status = status
+                status = status,
+                inlineDiff = update.inlineDiff
             });
 
             _hermesToolProgressCallback?.Invoke(update.name, update.preview ?? "", emoji, status);

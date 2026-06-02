@@ -449,7 +449,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 name = payload.name,
                 toolId = payload.tool_id,
                 status = status,
-                preview = payload.context ?? payload.preview
+                preview = payload.context ?? payload.preview,
+                inlineDiff = payload.inline_diff
             });
         }
 

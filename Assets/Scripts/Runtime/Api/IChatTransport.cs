@@ -80,6 +80,7 @@ namespace NeonCompanion.Runtime.Api
         public string toolId;
         public ToolCallStatus status;
         public string preview;
+        public string inlineDiff;
     }
 
     [Serializable]

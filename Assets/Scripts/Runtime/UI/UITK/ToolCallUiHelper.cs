@@ -22,7 +22,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _entries.Clear();
         }
 
-        internal static VisualElement CreateEntryElement(string tool, string label, string emoji, string status)
+        internal static VisualElement CreateEntryElement(string tool, string label, string emoji, string status, string inlineDiff = null)
         {
             string truncated = label != null && label.Length > 60
                 ? label.Substring(0, 60) + "..."
@@ -65,9 +65,32 @@ namespace NeonCompanion.Runtime.UI.UITK
             details.AddToClassList("tool-entry__details");
             details.style.display = DisplayStyle.None;
 
-            var argsLabel = new Label(truncated);
-            argsLabel.AddToClassList("tool-entry__args");
-            details.Add(argsLabel);
+            if (!string.IsNullOrEmpty(inlineDiff))
+            {
+                // Render diff with color coding
+                var diffContainer = new VisualElement();
+                diffContainer.AddToClassList("tool-entry__diff");
+                string[] lines = inlineDiff.Split('\n');
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    var line = new Label(lines[i]);
+                    line.AddToClassList("tool-entry__diff-line");
+                    if (lines[i].StartsWith("+") && !lines[i].StartsWith("+++"))
+                        line.AddToClassList("tool-entry__diff-line--add");
+                    else if (lines[i].StartsWith("-") && !lines[i].StartsWith("---"))
+                        line.AddToClassList("tool-entry__diff-line--del");
+                    else if (lines[i].StartsWith("@@"))
+                        line.AddToClassList("tool-entry__diff-line--hunk");
+                    diffContainer.Add(line);
+                }
+                details.Add(diffContainer);
+            }
+            else
+            {
+                var argsLabel = new Label(truncated);
+                argsLabel.AddToClassList("tool-entry__args");
+                details.Add(argsLabel);
+            }
 
             // Root container
             var root = new VisualElement();

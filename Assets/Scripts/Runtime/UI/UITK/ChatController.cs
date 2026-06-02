@@ -3160,7 +3160,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
                 {
                     FlushPendingText();
-                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status));
+                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff));
                     continue;
                 }
 
