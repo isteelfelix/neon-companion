@@ -2692,24 +2692,40 @@ namespace NeonCompanion.Runtime.UI.UITK
             var chat = _d.GetChatServiceAsync().Result;
             var provider = chat?.CurrentProvider;
 
-            // Prefer real context_length from discovery API (U-36), then saved value, then heuristic guess.
+            // Prefer real context_length from gateway runtime info, then discovery API, then saved value, then heuristic guess.
             int contextWindow = 0;
+
+            // 1. Gateway runtime info (most accurate — model's actual context window)
+            try
+            {
+                var rt = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
+                if (rt != null && rt.context_max > 0)
+                    contextWindow = rt.context_max;
+            }
+            catch { /* non-critical */ }
+
             if (provider != null)
             {
                 string modelId = chat.CurrentSessionModel ?? provider.defaultModel;
-                try
+                // 2. Discovery API (/v1/models)
+                if (contextWindow <= 0)
                 {
-                    var app = _d.GetAppAsync().Result;
-                    NeonCompanion.Runtime.Core.ModelDiscoveryService disc = null;
-                    if (app?.Services != null)
-                        app.Services.TryGet<NeonCompanion.Runtime.Core.ModelDiscoveryService>(out disc);
-                    if (disc != null && !string.IsNullOrEmpty(modelId))
-                        contextWindow = disc.GetContextWindowForModel(provider, modelId);
+                    try
+                    {
+                        var app = _d.GetAppAsync().Result;
+                        NeonCompanion.Runtime.Core.ModelDiscoveryService disc = null;
+                        if (app?.Services != null)
+                            app.Services.TryGet<NeonCompanion.Runtime.Core.ModelDiscoveryService>(out disc);
+                        if (disc != null && !string.IsNullOrEmpty(modelId))
+                            contextWindow = disc.GetContextWindowForModel(provider, modelId);
+                    }
+                    catch { /* non-critical */ }
                 }
-                catch { /* non-critical */ }
 
+                // 3. Provider config
                 if (contextWindow <= 0 && provider.contextWindow > 0)
                     contextWindow = provider.contextWindow;
+                // 4. Heuristic guess
                 if (contextWindow <= 0)
                     contextWindow = GuessContextWindow(provider, chat.CurrentSessionModel);
             }
@@ -2720,7 +2736,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            int used = EstimateSessionTokens();
+            // Prefer gateway's context_used, fall back to local estimate
+            int used = 0;
+            try
+            {
+                var rt = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
+                if (rt != null && rt.context_used > 0)
+                    used = rt.context_used;
+            }
+            catch { }
+            if (used <= 0)
+                used = EstimateSessionTokens();
             float ratio = (float)used / contextWindow;
             ratio = Mathf.Clamp01(ratio);
 

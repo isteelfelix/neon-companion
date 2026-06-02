@@ -77,6 +77,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public int total;
         public int calls;
         public double? cost_usd;
+        public int context_max;
+        public int context_used;
+        public int context_percent;
     }
 
     [Serializable]
