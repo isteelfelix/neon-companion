@@ -1400,6 +1400,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (chat?.CurrentChatViewModel != null)
                     chat.CurrentChatViewModel.SelectedModel = modelId;
 
+                // Update topbar dropdown
+                SetProviderHeader(chat?.CurrentProvider, modelId);
+
                 // Close picker immediately
                 CloseModelPicker();
 
