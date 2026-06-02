@@ -31,6 +31,7 @@ namespace NeonCompanion.Runtime.Chat
         private System.Text.StringBuilder _hermesStreamBuffer;
         private bool _hermesStreamActive;
         private TaskCompletionSource<bool> _hermesGenerationComplete;
+        private DateTime _hermesStreamStartTime;
 
         public event Action<string> OnAssistantResponse;
 
@@ -713,6 +714,7 @@ namespace NeonCompanion.Runtime.Chat
 
             _hermesStreamActive = true;
             _hermesStreamBuffer = new System.Text.StringBuilder();
+            _hermesStreamStartTime = DateTime.UtcNow;
 
             // Create streaming assistant message
             _hermesStreamingMessage = new ChatMessage
@@ -733,6 +735,25 @@ namespace NeonCompanion.Runtime.Chat
             _hermesStreamBuffer.Append(text);
             _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
 
+            // Also add as text segment for interleaved rendering with tool segments
+            if (_hermesStreamingMessage.segments == null)
+                _hermesStreamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
+            ChatMessageSegment last = _hermesStreamingMessage.segments.Count > 0
+                ? _hermesStreamingMessage.segments[_hermesStreamingMessage.segments.Count - 1]
+                : null;
+            if (last != null && string.Equals(last.kind, ChatMessageSegment.TextKind, System.StringComparison.OrdinalIgnoreCase))
+            {
+                last.text = (last.text ?? "") + text;
+            }
+            else
+            {
+                _hermesStreamingMessage.segments.Add(new ChatMessageSegment
+                {
+                    kind = ChatMessageSegment.TextKind,
+                    text = text
+                });
+            }
+
             // Notify UI
             _hermesStreamTokenCallback?.Invoke(text);
         }
@@ -750,6 +771,18 @@ namespace NeonCompanion.Runtime.Chat
                 {
                     _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
                 }
+
+                // Persist usage from gateway so stats footer survives re-render
+                try
+                {
+                    var usage = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
+                    if (usage != null && usage.total > 0)
+                    {
+                        _hermesStreamingMessage.tokenCount = usage.total;
+                        _hermesStreamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - _hermesStreamStartTime).TotalSeconds;
+                    }
+                }
+                catch { }
             }
 
             _hermesStreamActive = false;
@@ -787,7 +820,7 @@ namespace NeonCompanion.Runtime.Chat
                 status = status
             });
 
-            _hermesToolProgressCallback?.Invoke(update.name, update.toolId, emoji, status);
+            _hermesToolProgressCallback?.Invoke(update.name, "", emoji, status);
         }
 
         private void HandleHermesError(string error)

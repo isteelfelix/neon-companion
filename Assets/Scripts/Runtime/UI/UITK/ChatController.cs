@@ -2940,8 +2940,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             meta.Add(timeLabel);
             bubble.Add(meta);
 
-            bool hasSegmentContent = AddMessageSegments(bubble, message);
-            if (!hasSegmentContent && !string.IsNullOrWhiteSpace(message.content))
+            AddMessageSegments(bubble, message);
+            if (!string.IsNullOrWhiteSpace(message.content))
             {
                 bool isAssistant = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase);
                 bubble.Add(CreateTranscriptBody(message.content, isAssistant));
