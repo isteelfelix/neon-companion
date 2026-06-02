@@ -103,6 +103,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string tool_id;
         public string status;
         public string preview;
+        public string context;
         public string inline_diff;
         public object args;
     }
@@ -448,7 +449,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 name = payload.name,
                 toolId = payload.tool_id,
                 status = status,
-                preview = payload.preview
+                preview = payload.context ?? payload.preview
             });
         }
 

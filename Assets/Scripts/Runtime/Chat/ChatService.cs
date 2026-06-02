@@ -815,12 +815,12 @@ namespace NeonCompanion.Runtime.Chat
                 kind = ChatMessageSegment.ToolKind,
                 key = (update.name ?? "") + "\x01" + (update.toolId ?? ""),
                 tool = update.name ?? "",
-                label = update.toolId ?? "",
+                label = !string.IsNullOrEmpty(update.preview) ? update.preview : (update.name ?? ""),
                 emoji = emoji,
                 status = status
             });
 
-            _hermesToolProgressCallback?.Invoke(update.name, "", emoji, status);
+            _hermesToolProgressCallback?.Invoke(update.name, update.preview ?? "", emoji, status);
         }
 
         private void HandleHermesError(string error)
