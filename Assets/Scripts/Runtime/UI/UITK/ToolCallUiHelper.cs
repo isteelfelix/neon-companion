@@ -67,11 +67,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (!string.IsNullOrEmpty(inlineDiff))
             {
-                var diffView = new SelectableMarkdownElement();
+                var diffView = new DiffTextField();
                 diffView.SetDiff(inlineDiff);
                 diffView.AddToClassList("tool-entry__diff");
                 diffView.style.flexGrow = 1;
-                diffView.style.minHeight = 20;
+                diffView.style.height = 200;
                 details.Add(diffView);
             }
             else
