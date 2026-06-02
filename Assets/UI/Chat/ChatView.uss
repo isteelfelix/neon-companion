@@ -106,7 +106,6 @@
     margin-bottom: 2px;
     background-color: var(--bg-2);
     border-radius: 6px;
-    cursor: link;
 }
 
 .session-folder-header:hover {
@@ -416,13 +415,6 @@
     color: var(--text-0);
     font-size: 13px;
     white-space: normal;
-}
-
-/* Text cursor when hovering over selectable message text.
-   Isolated block — if 'cursor: text' is unsupported, only this block is dropped. */
-.transcript__body > .unity-text-field__input,
-.transcript__body > .unity-base-text-field__input {
-    cursor: text;
 }
 
 .transcript__body--user > .unity-text-field__input,
@@ -1000,10 +992,6 @@
 
 .tool-entry-root {
     margin-bottom: 4px;
-}
-
-.tool-entry--header {
-    cursor: link; /* hand cursor on hover */
 }
 
 .tool-entry__toggle {
