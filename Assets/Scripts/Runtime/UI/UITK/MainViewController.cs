@@ -2814,6 +2814,32 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string destPath = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(path));
                 System.IO.File.Copy(path, destPath, overwrite: true);
 
+                float cropScale = 1f;
+                float cropOffsetX = 0f;
+                float cropOffsetY = 0f;
+
+                // Show crop editor for 2D images (not 3D models)
+                if (!is3D)
+                {
+                    cropScale = 1f;
+                    cropOffsetX = 0f;
+                    cropOffsetY = 0f;
+                    bool cropCancelled = false;
+
+                    var cropResult = await ShowCropEditorAsync(destPath,
+                        () => { cropCancelled = true; });
+
+                    if (cropCancelled)
+                    {
+                        try { System.IO.File.Delete(destPath); } catch { }
+                        return;
+                    }
+
+                    cropScale = cropResult.scale;
+                    cropOffsetX = cropResult.offsetX;
+                    cropOffsetY = cropResult.offsetY;
+                }
+
                 var all = app.Avatars.GetAll();
                 string profileId = ResolveCustomAvatarId(fileName, destPath, all);
                 var modelAnimations = new List<string>();
@@ -2836,7 +2862,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                     modelPath = is3D ? destPath : string.Empty,
                     isBuiltIn = false,
                     is3D = is3D,
-                    modelAnimationClips = modelAnimations
+                    modelAnimationClips = modelAnimations,
+                    avatarScale = cropScale,
+                    avatarOffsetX = cropOffsetX,
+                    avatarOffsetY = cropOffsetY
                 };
 
                 int existing = all.FindIndex(a => a != null && a.id == profile.id);
@@ -2859,6 +2888,64 @@ namespace NeonCompanion.Runtime.UI.UITK
                 AddSystemMessage(LocalizationExtensions.Get("avatar.upload.failed", "Не удалось загрузить аватар."));
                 NeonLogger.LogError(ex.ToString());
             }
+        }
+
+        private System.Threading.Tasks.Task<NeonCompanion.Runtime.UI.Avatars.AvatarCropResult> ShowCropEditorAsync(
+            string imagePath, Action onCancelled)
+        {
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<NeonCompanion.Runtime.UI.Avatars.AvatarCropResult>();
+
+            var bytes = System.IO.File.ReadAllBytes(imagePath);
+            var tex = new Texture2D(2, 2);
+            if (!tex.LoadImage(bytes))
+            {
+                Destroy(tex);
+                tcs.TrySetResult(new NeonCompanion.Runtime.UI.Avatars.AvatarCropResult { scale = 1f });
+                return tcs.Task;
+            }
+
+            // Find existing crop settings for this image
+            float existScale = 1f;
+            float existOffsetX = 0f;
+            float existOffsetY = 0f;
+
+            var root = _root.Q<VisualElement>("avatar-crop-root");
+            if (root == null)
+            {
+                // Create a dedicated root for the crop overlay
+                root = new VisualElement();
+                root.name = "avatar-crop-root";
+                root.style.position = Position.Absolute;
+                root.style.left = 0;
+                root.style.top = 0;
+                root.style.right = 0;
+                root.style.bottom = 0;
+                root.style.zIndex = 9999;
+                _root.Add(root);
+            }
+            else
+            {
+                root.Clear();
+            }
+
+            var editor = new NeonCompanion.Runtime.UI.Avatars.AvatarCropEditor(
+                root, tex, existScale, existOffsetX, existOffsetY);
+
+            editor.Confirmed += result =>
+            {
+                Destroy(tex);
+                tcs.TrySetResult(result);
+            };
+
+            editor.Cancelled += () =>
+            {
+                Destroy(tex);
+                onCancelled?.Invoke();
+                tcs.TrySetResult(new NeonCompanion.Runtime.UI.Avatars.AvatarCropResult { scale = 1f });
+            };
+
+            editor.Show();
+            return tcs.Task;
         }
 
         private string ResolveCustomAvatarId(string fileName, string imagePath, List<AvatarProfile> allProfiles)

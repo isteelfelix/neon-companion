@@ -141,8 +141,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _avatarUploadTile;
         private Label _avatarEmojiOverlay;
         private Label _previewEmojiOverlay;
-        private Slider _scaleSlider;
-        private VisualElement _scaleSliderRow;
 
         // ---- Public properties ----
 
@@ -245,8 +243,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _typingDot2 = dots.Count > 1 ? dots[1] : null;
                 _typingDot3 = dots.Count > 2 ? dots[2] : null;
             }
-
-            EnsureScaleSliderRow();
         }
 
         public void RegisterCallbacks()
@@ -453,14 +449,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _previewHero.style.backgroundColor = StyleKeyword.Null;
                     ResetCustomAvatarTransform(_previewHero);
                 }
-            }
-
-            bool showScaleControls = !isBuiltIn && !is3D;
-            SetDisplay(_scaleSliderRow, showScaleControls ? DisplayStyle.Flex : DisplayStyle.None);
-            if (showScaleControls && _scaleSlider != null)
-            {
-                var cp = GetCustomProfile(avatarId);
-                _scaleSlider.SetValueWithoutNotify(cp != null && cp.avatarScale > 0f ? cp.avatarScale : 1f);
             }
 
             string name = AvatarDisplayName(avatarId);
@@ -1787,75 +1775,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return defaultColors && defaultScalars && defaultOverlay;
         }
 
-        private void EnsureScaleSliderRow()
-        {
-            if (_scaleSliderRow != null || _previewHero == null)
-                return;
-
-            var parent = _previewHero.parent;
-            if (parent == null)
-                return;
-
-            _scaleSliderRow = new VisualElement();
-            _scaleSliderRow.name = "avatar-scale-row";
-            _scaleSliderRow.AddToClassList("avatar-scale-row");
-            _scaleSliderRow.style.flexDirection = FlexDirection.Row;
-            _scaleSliderRow.style.alignItems = Align.Center;
-            _scaleSliderRow.style.marginTop = 8;
-            _scaleSliderRow.style.marginLeft = 12;
-            _scaleSliderRow.style.marginRight = 12;
-            _scaleSliderRow.style.display = DisplayStyle.None;
-
-            var scaleLabel = new Label("Масштаб");
-            scaleLabel.style.marginRight = 8;
-            scaleLabel.style.fontSize = 12;
-            _scaleSliderRow.Add(scaleLabel);
-
-            _scaleSlider = new Slider(0.5f, 3.0f);
-            _scaleSlider.name = "avatar-scale-slider";
-            _scaleSlider.value = 1.0f;
-            _scaleSlider.style.flexGrow = 1;
-            _scaleSlider.RegisterValueChangedCallback(OnScaleSliderChanged);
-            _scaleSliderRow.Add(_scaleSlider);
-
-            int heroIdx = parent.IndexOf(_previewHero);
-            parent.Insert(heroIdx + 1, _scaleSliderRow);
-        }
-
-        private void OnScaleSliderChanged(ChangeEvent<float> evt)
-        {
-            var profile = GetCustomProfile(_activeAvatarId);
-            if (profile == null)
-                return;
-
-            profile.avatarScale = evt.newValue;
-            ApplyCustomAvatarTransform(_avatarArt, profile);
-            ApplyCustomAvatarTransform(_previewHero, profile);
-            _ = SaveAvatarScaleAsync(_activeAvatarId, evt.newValue);
-        }
-
-        private async Task SaveAvatarScaleAsync(string avatarId, float scale)
-        {
-            try
-            {
-                var app = await _d.GetAppAsync();
-                if (app == null)
-                    return;
-
-                var all = app.Avatars.GetAll();
-                var target = all.Find(a => a != null && a.id == avatarId);
-                if (target == null)
-                    return;
-
-                target.avatarScale = scale;
-                app.Avatars.SaveAll(all);
-                UpdateAvatarProfileCaches(all);
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
+        // ---- Crop / transform helpers ----
 
         private static void ApplyCustomAvatarTransform(VisualElement element, AvatarProfile profile)
         {
@@ -1863,18 +1783,20 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             float scale = (profile != null && profile.avatarScale > 0f) ? profile.avatarScale : 1f;
+            float offX  = profile != null ? profile.avatarOffsetX : 0f;
+            float offY  = profile != null ? profile.avatarOffsetY : 0f;
 
             element.style.backgroundSize = new BackgroundSize(
                 new Length(scale * 100f, LengthUnit.Percent),
                 new Length(scale * 100f, LengthUnit.Percent)
             );
-            // BackgroundPosition needs a keyword; use Center (50%) as base.
-            // Offsets are stored for future drag-to-reposition UI.
             element.style.backgroundPositionX = new BackgroundPosition(
-                BackgroundPositionKeyword.Center
+                BackgroundPositionKeyword.Center,
+                new Length(offX, LengthUnit.Percent)
             );
             element.style.backgroundPositionY = new BackgroundPosition(
-                BackgroundPositionKeyword.Center
+                BackgroundPositionKeyword.Center,
+                new Length(offY, LengthUnit.Percent)
             );
         }
 
