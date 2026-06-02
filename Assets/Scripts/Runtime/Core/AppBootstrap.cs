@@ -100,11 +100,12 @@ namespace NeonCompanion.Runtime.Core
             else
                 chatService.SetTransport(null);
 
-            // Auto-connect Hermes if saved mode was Hermes
-            if (backendSelector.CurrentMode == BackendMode.Hermes)
-            {
-                _ = ConnectHermesFromActiveProviderAsync(backendSelector, providerManager);
-            }
+            // The active provider is the single source of truth for the backend mode: a Hermes
+            // provider implies Hermes (WebSocket) mode, anything else implies OpenAI (HTTP REST).
+            // Reconcile the loaded mode to the active provider so a stale saved mode can't desync
+            // the transport — that desync previously made Hermes messages fall through to the HTTP
+            // path and fail with 405.
+            _ = ReconcileBackendModeToActiveProviderAsync(backendSelector, providerManager);
 
             // Apply avatar system prompt
             var settingsData = settings.Load();
@@ -168,31 +169,28 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
-        /// Resolve the active Hermes provider, point the backend selector at its URL/key,
-        /// then connect. Keeps the WS transport in sync with the configured provider.
+        /// Make the backend mode follow the active provider. The active provider's backendType is
+        /// authoritative: Hermes providers drive Hermes (WebSocket) mode, everything else drives
+        /// OpenAI (HTTP REST). SetMode wires/unwires the WS transport (via OnModeChanged) and
+        /// persists the corrected mode, so the rest of the app routes consistently from launch.
         /// </summary>
-        private static async System.Threading.Tasks.Task ConnectHermesFromActiveProviderAsync(
+        private static async System.Threading.Tasks.Task ReconcileBackendModeToActiveProviderAsync(
             GlobalBackendSelector backendSelector,
             ProviderManager providerManager)
         {
-            var all = await providerManager.GetAllProvidersAsync();
-            ProviderConfig hermesProvider = null;
-            if (all != null)
+            ProviderConfig activeProvider = await providerManager.GetActiveProviderAsync();
+            BackendMode desiredMode = ChatService.IsHermesProvider(activeProvider)
+                ? BackendMode.Hermes
+                : BackendMode.OpenAI;
+
+            if (backendSelector.CurrentMode != desiredMode)
+                await backendSelector.SetMode(desiredMode);
+
+            if (desiredMode == BackendMode.Hermes && activeProvider != null)
             {
-                foreach (var p in all)
-                {
-                    if (ChatService.IsHermesProvider(p))
-                    {
-                        hermesProvider = p;
-                        break;
-                    }
-                }
+                backendSelector.ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
+                await backendSelector.ConnectHermes();
             }
-
-            if (hermesProvider != null)
-                backendSelector.ConfigureHermesEndpoint(hermesProvider.baseUrl, hermesProvider.apiKey);
-
-            await backendSelector.ConnectHermes();
         }
     }
 }

@@ -333,6 +333,31 @@ namespace NeonCompanion.Runtime.Chat
             NeonLogger.Log("New chat session started.");
         }
 
+        /// <summary>
+        /// Ensure the Hermes WebSocket transport is wired into this service. Switching the global
+        /// backend mode to Hermes fires OnModeChanged, which calls SetTransport on this service
+        /// (see AppBootstrap). Used to recover when a Hermes provider is active but the transport
+        /// was never set up, so messages don't fall through to the OpenAI HTTP path (HTTP 405).
+        /// </summary>
+        private async Task EnsureHermesTransportAsync()
+        {
+            if (_chatTransport != null)
+                return;
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector == null)
+                return;
+
+            if (IsHermesProvider(_currentProvider))
+                selector.ConfigureHermesEndpoint(_currentProvider.baseUrl, _currentProvider.apiKey);
+
+            if (selector.CurrentMode != BackendMode.Hermes)
+                await selector.SetMode(BackendMode.Hermes);
+
+            if (_chatTransport != null && !_chatTransport.IsConnected)
+                await selector.ConnectHermes();
+        }
+
         /// <summary>True if the provider is configured to use the Hermes backend.</summary>
         internal static bool IsHermesProvider(ProviderConfig provider)
         {
@@ -509,6 +534,28 @@ namespace NeonCompanion.Runtime.Chat
             {
                 await SendViaTransport(message, onStreamToken, onToolProgress);
                 return;
+            }
+
+            // A Hermes provider must never use the OpenAI HTTP path: that POSTs to
+            // {baseUrl}/chat/completions, which the WebSocket-only Hermes server rejects with
+            // HTTP 405. If the transport is missing (e.g. backend mode was never switched to
+            // Hermes), bring it up on demand and route through it instead of POSTing.
+            if (_currentProvider == null)
+                _currentProvider = await ResolveProviderAsync();
+            if (IsHermesProvider(_currentProvider))
+            {
+                await EnsureHermesTransportAsync();
+                if (_chatTransport != null)
+                {
+                    if (_currentSession == null)
+                        await StartNewSessionAsync();
+                    await SendViaTransport(message, onStreamToken, onToolProgress);
+                    return;
+                }
+
+                throw new InvalidOperationException(
+                    "Hermes provider selected but the WebSocket transport is unavailable. " +
+                    "Switch the backend to Hermes and verify the provider URL/key.");
             }
 
             // OpenAI backend: existing HTTP path
