@@ -3138,18 +3138,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (bubble == null || message == null || message.segments == null || message.segments.Count == 0)
                 return false;
 
+            // Collect all segments, merging ALL text into one block for proper markdown rendering.
+            // Tool entries stay in their original positions relative to text.
+            var allText = new System.Text.StringBuilder();
             bool hasText = false;
-            var pendingText = new System.Text.StringBuilder();
-
-            void FlushPendingText()
-            {
-                if (pendingText.Length > 0)
-                {
-                    bubble.Add(CreateTranscriptBody(pendingText.ToString(), true));
-                    pendingText.Clear();
-                    hasText = true;
-                }
-            }
 
             for (int i = 0; i < message.segments.Count; i++)
             {
@@ -3157,21 +3149,31 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (segment == null)
                     continue;
 
-                if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
-                {
-                    FlushPendingText();
-                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff));
-                    continue;
-                }
-
                 if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(segment.text))
                 {
-                    pendingText.Append(segment.text);
+                    allText.Append(segment.text);
+                    hasText = true;
                 }
             }
 
-            FlushPendingText();
+            // Render combined text as one block (tables, code blocks, etc. stay intact)
+            if (hasText)
+            {
+                bubble.Add(CreateTranscriptBody(allText.ToString(), true));
+            }
+
+            // Render tool entries separately (after text, in order)
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                var segment = message.segments[i];
+                if (segment == null) continue;
+                if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff));
+                }
+            }
+
             return hasText;
         }
 
