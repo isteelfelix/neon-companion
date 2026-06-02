@@ -3179,32 +3179,16 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
         {
-            VisualElement bodyElement;
-
-            // Use SelectableMarkdownElement for formatted + selectable text
-            if (!string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
-            {
-                var smb = new SelectableMarkdownElement();
-                smb.SetMarkdown(text);
-                smb.AddToClassList("transcript__body");
-                smb.style.flexGrow = 1;
-                smb.style.minHeight = 20;
-                if (!isAssistant)
-                    smb.AddToClassList("transcript__body--user");
-                bodyElement = smb;
-            }
-            else
-            {
-                var tf = new TextField();
-                tf.isReadOnly = true;
-                tf.multiline = true;
-                tf.value = text;
-                tf.AddToClassList("transcript__body");
-                if (!isAssistant)
-                    tf.AddToClassList("transcript__body--user");
-                ApplyTextCursor(tf);
-                bodyElement = tf;
-            }
+            var bodyElement = new SelectableMarkdownElement();
+            bodyElement.SetMarkdown(text ?? string.Empty);
+            bodyElement.AddToClassList("transcript__body");
+            bodyElement.style.flexGrow = 1;
+            bodyElement.style.minWidth = 0;
+            bodyElement.style.width = Length.Percent(100);
+            bodyElement.style.minHeight = 20;
+            if (!isAssistant)
+                bodyElement.AddToClassList("transcript__body--user");
+            ApplyTextCursor(bodyElement);
             return bodyElement;
         }
 
@@ -4599,6 +4583,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             while (el != null)
             {
+                if (el is SelectableMarkdownElement)
+                    return true;
                 if (el is TextField && el.ClassListContains("transcript__body"))
                     return true;
                 el = el.parent;
@@ -4793,8 +4779,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editingMessageIndex = index;
             _editingBubble = bubble;
 
-            // Hide existing body labels (user messages use plain Labels)
-            var bodies = bubble.Query<Label>(className: "transcript__body").ToList();
+            // Hide existing body elements while the edit field is active.
+            var bodies = bubble.Query<VisualElement>(className: "transcript__body").ToList();
             for (int i = 0; i < bodies.Count; i++)
             {
                 bodies[i].style.display = DisplayStyle.None;
@@ -4935,7 +4921,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_editingBubble != null)
             {
-                var bodies = _editingBubble.Query<Label>(className: "transcript__body").ToList();
+                var bodies = _editingBubble.Query<VisualElement>(className: "transcript__body").ToList();
                 for (int i = 0; i < bodies.Count; i++)
                 {
                     bodies[i].style.display = DisplayStyle.Flex;
