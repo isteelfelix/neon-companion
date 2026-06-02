@@ -34,8 +34,8 @@ namespace NeonCompanion.Runtime.Core
         // === Config ===
 
         [Header("Hermes Backend")]
-        public string HermesWsUrl = "wss://neon-dev.top/api/ws";
-        public string HermesRestUrl = "https://neon-dev.top";
+        public string HermesWsUrl = "";
+        public string HermesRestUrl = "";
         public string HermesToken;
 
         // === State ===
@@ -277,13 +277,13 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
-        /// Convert a provider base URL (e.g. https://neon-dev.top) into a Hermes
-        /// WebSocket URL (wss://neon-dev.top/api/ws).
+        /// Convert a provider base URL (e.g. https://example.com) into a Hermes
+        /// WebSocket URL (wss://example.com/api/ws).
         /// </summary>
         public static string BuildHermesWsUrl(string baseUrl)
         {
             if (string.IsNullOrWhiteSpace(baseUrl))
-                return "wss://neon-dev.top/api/ws";
+                return "";
 
             string url = baseUrl.Trim();
             if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
@@ -304,7 +304,7 @@ namespace NeonCompanion.Runtime.Core
         private static string NormalizeRestUrl(string baseUrl)
         {
             if (string.IsNullOrWhiteSpace(baseUrl))
-                return "https://neon-dev.top";
+                return "";
             return baseUrl.Trim().TrimEnd('/');
         }
 

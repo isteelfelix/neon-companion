@@ -51,6 +51,7 @@ ExportedObj/
 *.csproj
 *.unityproj
 *.sln
+*.slnx
 *.suo
 *.tmp
 *.user
@@ -110,7 +111,7 @@ InitTestScene*.unity*
 *.key
 *.env
 .env*
-secrets/
+/secrets/
 secrets.*
 api_key*
 API_KEY*

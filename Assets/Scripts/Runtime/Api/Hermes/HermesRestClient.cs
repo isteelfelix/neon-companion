@@ -1,6 +1,6 @@
 // HermesRestClient.cs - REST management client for Hermes backend
 // Handles sessions, config, models, skills, cron, logs via HTTP.
-// Base URL: https://neon-dev.top (or http://localhost:8642 for local dev)
+// Base URL: configured at runtime from provider settings
 
 using System;
 using System.Collections.Generic;

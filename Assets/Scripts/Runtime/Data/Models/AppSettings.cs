@@ -27,7 +27,7 @@ namespace NeonCompanion.Runtime.Data.Models
 
         // Hermes backend
         public string backendMode = "openai"; // "openai" | "hermes"
-        public string hermesWsUrl = "wss://neon-dev.top/api/ws";
-        public string hermesRestUrl = "https://neon-dev.top";
+        public string hermesWsUrl = "";
+        public string hermesRestUrl = "";
     }
 }

@@ -65,8 +65,8 @@ namespace NeonCompanion.Runtime.Core
             // Backend selector — global mode switch (Hermes vs OpenAI)
             var backendSelector = gameObject.AddComponent<GlobalBackendSelector>();
             backendSelector.Initialize(
-                hermesWsUrl: "wss://neon-dev.top/api/ws",
-                hermesRestUrl: "https://neon-dev.top",
+                hermesWsUrl: "",
+                hermesRestUrl: "",
                 settingsRepo: settings,
                 secretStore: secrets
             );

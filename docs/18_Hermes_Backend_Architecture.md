@@ -109,7 +109,7 @@ WebSocket JSON-RPC 2.0 клиент. Основа Hermes-режима.
 ← {"jsonrpc":"2.0","method":"event","params":{"type":"message.complete","payload":{"text":"Привет!"}}}
 ```
 
-**Подключение:** `wss://neon-dev.top/api/ws?token=<session_token>`
+**Подключение:** `wss://example.com/api/ws?token=<session_token>`
 
 **Таймауты:**
 - Request timeout: 30s
@@ -173,7 +173,7 @@ WebSocket JSON-RPC 2.0 клиент. Основа Hermes-режима.
 
 REST management через HTTP. Использует `UnityWebRequest`.
 
-**Эндпоинты (через `wss://neon-dev.top` → nginx → `:8642`):**
+**Эндпоинты (через `wss://example.com` → nginx → `:8642`):**
 
 Сессии:
 - `GET /api/sessions` — список сессий
@@ -311,14 +311,14 @@ Phase 4: Фичи
 
 **Hermes Backend:**
 ```
-WebSocket: wss://neon-dev.top/api/ws?token=<api_server_key>
-REST:      https://neon-dev.top/api/*
+WebSocket: wss://example.com/api/ws?token=<api_server_key>
+REST:      https://example.com/api/*
 ```
 
 **Nginx маршрутизация:**
 ```
-wss://neon-dev.top/api/ws  → ws://127.0.0.1:8642/api/ws
-https://neon-dev.top/api/* → http://127.0.0.1:8642/api/*
+wss://example.com/api/ws  → ws://127.0.0.1:8642/api/ws
+https://example.com/api/* → http://127.0.0.1:8642/api/*
 ```
 
 **Локальная разработка:**
@@ -364,4 +364,4 @@ REST:      http://localhost:8642/api/*
 
 5. **Session mismatch** — events приходят с `session_id`. Если сессия уже закрыта/сменена — игнорировать stale events.
 
-6. **REST через тот же URL** — HermesRestClient использует `https://neon-dev.top/api/*`. Это тот же домен что и WebSocket, nginx проксирует оба протокола.
+6. **REST через тот же URL** — HermesRestClient использует `https://example.com/api/*`. Это тот же домен что и WebSocket, nginx проксирует оба протокола.
