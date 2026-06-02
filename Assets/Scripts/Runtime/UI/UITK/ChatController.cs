@@ -2966,8 +2966,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             meta.Add(timeLabel);
             bubble.Add(meta);
 
-            AddMessageSegments(bubble, message);
-            if (!string.IsNullOrWhiteSpace(message.content))
+            bool hasTextSegment = AddMessageSegments(bubble, message);
+            if (!hasTextSegment && !string.IsNullOrWhiteSpace(message.content))
             {
                 bool isAssistant = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase);
                 bubble.Add(CreateTranscriptBody(message.content, isAssistant));
@@ -3089,7 +3089,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (bubble == null || message == null || message.segments == null || message.segments.Count == 0)
                 return false;
 
-            bool added = false;
+            bool hasText = false;
             for (int i = 0; i < message.segments.Count; i++)
             {
                 var segment = message.segments[i];
@@ -3099,7 +3099,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
                 {
                     bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status));
-                    added = true;
                     continue;
                 }
 
@@ -3107,11 +3106,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                     !string.IsNullOrWhiteSpace(segment.text))
                 {
                     bubble.Add(CreateTranscriptBody(segment.text, true));
-                    added = true;
+                    hasText = true;
                 }
             }
 
-            return added;
+            return hasText;
         }
 
         private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
