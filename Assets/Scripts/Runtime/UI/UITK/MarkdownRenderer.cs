@@ -49,8 +49,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 return true;
             }
-            // Table separator row
-            if (text.IndexOf("|---|", StringComparison.Ordinal) >= 0 || text.IndexOf("|:--", StringComparison.Ordinal) >= 0)
+            // Table: any line starting with |
+            if (text.IndexOf("\n|", StringComparison.Ordinal) >= 0 || text.StartsWith("|", StringComparison.Ordinal))
             {
                 return true;
             }
