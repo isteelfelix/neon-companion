@@ -32,6 +32,7 @@ namespace NeonCompanion.Runtime.Chat
         private bool _hermesStreamActive;
         private TaskCompletionSource<bool> _hermesGenerationComplete;
         private DateTime _hermesStreamStartTime;
+        private System.Text.StringBuilder _hermesReasoningBuffer;
 
         public event Action<string> OnAssistantResponse;
 
@@ -48,6 +49,7 @@ namespace NeonCompanion.Runtime.Chat
                 _chatTransport.OnDelta -= HandleHermesDelta;
                 _chatTransport.OnComplete -= HandleHermesComplete;
                 _chatTransport.OnToolUpdate -= HandleHermesToolUpdate;
+                _chatTransport.OnReasoningDelta -= HandleHermesReasoningDelta;
                 _chatTransport.OnError -= HandleHermesError;
             }
 
@@ -60,6 +62,7 @@ namespace NeonCompanion.Runtime.Chat
                 _chatTransport.OnDelta += HandleHermesDelta;
                 _chatTransport.OnComplete += HandleHermesComplete;
                 _chatTransport.OnToolUpdate += HandleHermesToolUpdate;
+                _chatTransport.OnReasoningDelta += HandleHermesReasoningDelta;
                 _chatTransport.OnError += HandleHermesError;
             }
         }
@@ -714,6 +717,7 @@ namespace NeonCompanion.Runtime.Chat
 
             _hermesStreamActive = true;
             _hermesStreamBuffer = new System.Text.StringBuilder();
+            _hermesReasoningBuffer = new System.Text.StringBuilder();
             _hermesStreamStartTime = DateTime.UtcNow;
 
             // Create streaming assistant message
@@ -772,6 +776,12 @@ namespace NeonCompanion.Runtime.Chat
                     _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
                 }
 
+                // Store reasoning text for expandable display
+                if (_hermesReasoningBuffer != null && _hermesReasoningBuffer.Length > 0)
+                {
+                    _hermesStreamingMessage.reasoning = _hermesReasoningBuffer.ToString();
+                }
+
                 // Persist usage from gateway so stats footer survives re-render
                 try
                 {
@@ -821,6 +831,13 @@ namespace NeonCompanion.Runtime.Chat
             });
 
             _hermesToolProgressCallback?.Invoke(update.name, update.preview ?? "", emoji, status);
+        }
+
+        private void HandleHermesReasoningDelta(string text)
+        {
+            if (!_hermesStreamActive || _hermesStreamingMessage == null)
+                return;
+            _hermesReasoningBuffer?.Append(text);
         }
 
         private void HandleHermesError(string error)

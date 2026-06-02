@@ -2966,6 +2966,55 @@ namespace NeonCompanion.Runtime.UI.UITK
             meta.Add(timeLabel);
             bubble.Add(meta);
 
+            // Expandable reasoning/thinking section
+            if (!string.IsNullOrWhiteSpace(message.reasoning))
+            {
+                var reasoningRoot = new VisualElement();
+                reasoningRoot.AddToClassList("tool-entry-root");
+
+                var reasoningHeader = new VisualElement();
+                reasoningHeader.AddToClassList("tool-entry");
+                reasoningHeader.AddToClassList("tool-entry--header");
+
+                var toggleLabel = new Label("▶");
+                toggleLabel.AddToClassList("tool-entry__toggle");
+
+                var iconLabel = new Label("💭");
+                iconLabel.AddToClassList("tool-entry__icon");
+
+                var nameLabel = new Label("Thinking");
+                nameLabel.AddToClassList("tool-entry__name");
+
+                reasoningHeader.Add(toggleLabel);
+                reasoningHeader.Add(iconLabel);
+                reasoningHeader.Add(nameLabel);
+
+                var reasoningDetails = new VisualElement();
+                reasoningDetails.AddToClassList("tool-entry__details");
+                reasoningDetails.style.display = DisplayStyle.None;
+
+                var reasoningText = new TextField();
+                reasoningText.isReadOnly = true;
+                reasoningText.multiline = true;
+                reasoningText.value = message.reasoning;
+                reasoningText.AddToClassList("tool-entry__args");
+                reasoningDetails.Add(reasoningText);
+
+                reasoningRoot.Add(reasoningHeader);
+                reasoningRoot.Add(reasoningDetails);
+
+                bool reasoningExpanded = false;
+                reasoningHeader.RegisterCallback<ClickEvent>(evt =>
+                {
+                    reasoningExpanded = !reasoningExpanded;
+                    toggleLabel.text = reasoningExpanded ? "▼" : "▶";
+                    reasoningDetails.style.display = reasoningExpanded ? DisplayStyle.Flex : DisplayStyle.None;
+                    evt.StopPropagation();
+                });
+
+                bubble.Add(reasoningRoot);
+            }
+
             bool hasTextSegment = AddMessageSegments(bubble, message);
             if (!hasTextSegment && !string.IsNullOrWhiteSpace(message.content))
             {
@@ -3090,6 +3139,18 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return false;
 
             bool hasText = false;
+            var pendingText = new System.Text.StringBuilder();
+
+            void FlushPendingText()
+            {
+                if (pendingText.Length > 0)
+                {
+                    bubble.Add(CreateTranscriptBody(pendingText.ToString(), true));
+                    pendingText.Clear();
+                    hasText = true;
+                }
+            }
+
             for (int i = 0; i < message.segments.Count; i++)
             {
                 var segment = message.segments[i];
@@ -3098,6 +3159,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
                 {
+                    FlushPendingText();
                     bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status));
                     continue;
                 }
@@ -3105,35 +3167,27 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(segment.text))
                 {
-                    bubble.Add(CreateTranscriptBody(segment.text, true));
-                    hasText = true;
+                    pendingText.Append(segment.text);
                 }
             }
 
+            FlushPendingText();
             return hasText;
         }
 
         private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
         {
             VisualElement bodyElement;
-            if (!string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
-            {
-                bodyElement = MarkdownRenderer.Render(text);
-                if (!isAssistant)
-                    bodyElement.AddToClassList("transcript__body--user");
-            }
-            else
-            {
-                var tf = new TextField();
-                tf.isReadOnly = true;
-                tf.multiline = true;
-                tf.value = text;
-                tf.AddToClassList("transcript__body");
-                if (!isAssistant)
-                    tf.AddToClassList("transcript__body--user");
-                ApplyTextCursor(tf);
-                bodyElement = tf;
-            }
+            // Always use TextField for selectability (U-34). Markdown symbols stay as plain text.
+            var tf = new TextField();
+            tf.isReadOnly = true;
+            tf.multiline = true;
+            tf.value = text;
+            tf.AddToClassList("transcript__body");
+            if (!isAssistant)
+                tf.AddToClassList("transcript__body--user");
+            ApplyTextCursor(tf);
+            bodyElement = tf;
             MakeTranscriptLabelsFocusable(bodyElement);
             return bodyElement;
         }

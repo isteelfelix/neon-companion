@@ -998,6 +998,36 @@
     color: var(--ok);
 }
 
+.tool-entry-root {
+    margin-bottom: 4px;
+}
+
+.tool-entry--header {
+    cursor: link; /* hand cursor on hover */
+}
+
+.tool-entry__toggle {
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-right: 4px;
+    width: 12px;
+    -unity-text-align: middle-center;
+    color: var(--text-4);
+}
+
+.tool-entry__details {
+    flex-direction: column;
+    padding: 4px 8px 4px 32px;
+    margin-bottom: 4px;
+}
+
+.tool-entry__args {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: pre-wrap;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
 /* ---- Markdown rendering (assistant messages) ---- */
 
 .markdown-root {

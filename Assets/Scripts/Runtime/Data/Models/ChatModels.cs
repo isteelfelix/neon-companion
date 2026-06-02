@@ -42,6 +42,8 @@ namespace NeonCompanion.Runtime.Data.Models
         // Precise usage for U-28 (persisted for history; 0 = unknown)
         public int tokenCount;
         public float responseTimeSeconds;
+        // Model reasoning/thinking text (expandable in UI)
+        public string reasoning;
     }
 
     [Serializable]
