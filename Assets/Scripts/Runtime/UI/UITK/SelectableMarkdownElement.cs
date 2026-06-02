@@ -197,7 +197,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (run.strikethrough)
             {
-                // textDecoration not available in Unity 6.2 UITK — skip
+                label.style.textDecoration = TextDecoration.LineThrough;
             }
 
             return label;
