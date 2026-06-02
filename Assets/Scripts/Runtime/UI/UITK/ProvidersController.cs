@@ -1395,39 +1395,24 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_modelPickerStatus != null)
                     _modelPickerStatus.text = $"Применяем модель: {modelId}";
 
-                // For Hermes WS backend, use slash.exec via gateway
+                // Update local state immediately (like Desktop)
+                var chat = await _d.GetChatServiceAsync();
+                if (chat?.CurrentChatViewModel != null)
+                    chat.CurrentChatViewModel.SelectedModel = modelId;
+
+                // Close picker immediately
+                CloseModelPicker();
+
+                // Fire gateway command async (don't block UI)
                 var selector = GlobalBackendSelector.Instance;
                 var sessionManager = selector?.SessionManager;
                 if (sessionManager != null && sessionManager.IsConnected)
                 {
-                    bool ok = await sessionManager.SwitchModelAsync(modelId, providerSlug);
-                    if (!ok)
-                    {
-                        if (_modelPickerStatus != null)
-                            _modelPickerStatus.text = "Не удалось переключить модель.";
-                        return;
-                    }
-                }
-                else
-                {
-                    // Fallback for non-WS backends
-                    var chat = await _d.GetChatServiceAsync();
-                    if (chat == null) return;
-                    var result = await chat.SetCurrentSessionModelAsync(modelId);
-                    if (!result.Success)
-                    {
-                        string failure = string.IsNullOrWhiteSpace(result.Message)
-                            ? "Не удалось применить модель."
-                            : result.Message;
-                        if (_modelPickerStatus != null)
-                            _modelPickerStatus.text = failure;
-                        return;
-                    }
+                    _ = sessionManager.SwitchModelAsync(modelId, providerSlug);
                 }
 
                 if (_d.LoadSessionsAsync != null)
                     await _d.LoadSessionsAsync();
-                CloseModelPicker();
             }
             catch (Exception ex)
             {
