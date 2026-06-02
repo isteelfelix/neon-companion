@@ -32,5 +32,8 @@ namespace NeonCompanion.Runtime.Data.Models
         // Mouth sprite sheet for lipsync: frames ordered Silence(0), A(1), E(2), I(3), O(4), U(5)
         public SpriteSheetAnimation lipsyncClip;
         public AvatarCustomizationData customization;
+        public float avatarScale = 1f;
+        public float avatarOffsetX = 0f;
+        public float avatarOffsetY = 0f;
     }
 }

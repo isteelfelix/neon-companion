@@ -37,7 +37,7 @@
 | A-01 | Статичные 2D аватары | ✅ | M0 | Verified: avatars display and selectable |
 | A-02 | Кастомные аватары (загрузка) | ✅ | M1 | Verified by Felix: загрузка аватара в настройках работает |
 | A-03 | Persona/инструкции аватара | ✅ | M1 | Verified: persona edit and save work |
-| A-04 | Scale-and-crop фон | ❌ | M1 | Cannot test: depends on A-02 (custom avatar upload broken) @@
+| A-04 | Scale-and-crop фон | 📋 | M1 | Not implemented: image auto-crops, no manual resize/crop |
 | A-05 | Анимация спрайтшитами | ✅ | M1 | Verified: sprite animation works in chat @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Verified: idle and talking animations work @@
 | A-07 | 2D motion-pack MVP contract | ✅ | M1 | Verified: motion pack triggers correctly @@
