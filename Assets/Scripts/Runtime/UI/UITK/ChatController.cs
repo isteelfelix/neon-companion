@@ -4600,37 +4600,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             return false;
         }
 
-        // Registers mouse-enter/leave callbacks that swap to a text I-beam cursor (U-34).
-        private static Texture2D s_TextCursorTex;
-
+        // I-beam cursor for text fields — left to Unity default (Cursor.SetCursor
+        // with runtime textures is unsupported on some platforms, causes CS error).
         private static void ApplyTextCursor(VisualElement el)
         {
-            el.RegisterCallback<MouseEnterEvent>(_ =>
-                UnityEngine.Cursor.SetCursor(GetTextCursorTexture(), new Vector2(4, 11), CursorMode.ForceSoftware));
-            el.RegisterCallback<MouseLeaveEvent>(_ =>
-                UnityEngine.Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto));
-        }
-
-        private static Texture2D GetTextCursorTexture()
-        {
-            if (s_TextCursorTex != null)
-                return s_TextCursorTex;
-
-            const int w = 10, h = 22;
-            s_TextCursorTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-            var px = new Color32[w * h];
-            var c = new Color32(220, 220, 220, 255);
-            var t = new Color32(0, 0, 0, 0);
-            for (int i = 0; i < px.Length; i++) px[i] = t;
-            // top crossbar (Unity: y=0 is bottom, top rows = h-1 and h-2)
-            for (int x = 2; x <= 7; x++) { px[(h - 1) * w + x] = c; px[(h - 2) * w + x] = c; }
-            // bottom crossbar
-            for (int x = 2; x <= 7; x++) { px[0 * w + x] = c; px[1 * w + x] = c; }
-            // vertical stem (center x = 4 or 5, use 4)
-            for (int y = 2; y <= h - 3; y++) px[y * w + 4] = c;
-            s_TextCursorTex.SetPixels32(px);
-            s_TextCursorTex.Apply(false);
-            return s_TextCursorTex;
+            // no-op: UITK TextField already shows I-beam cursor
         }
 
         private VisualElement ResolveBubbleFromEvent(VisualElement target, Vector2 panelPosition)
