@@ -3178,16 +3178,24 @@ namespace NeonCompanion.Runtime.UI.UITK
         private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
         {
             VisualElement bodyElement;
-            // Always use TextField for selectability (U-34). Markdown symbols stay as plain text.
-            var tf = new TextField();
-            tf.isReadOnly = true;
-            tf.multiline = true;
-            tf.value = text;
-            tf.AddToClassList("transcript__body");
-            if (!isAssistant)
-                tf.AddToClassList("transcript__body--user");
-            ApplyTextCursor(tf);
-            bodyElement = tf;
+            if (!string.IsNullOrWhiteSpace(text) && MarkdownRenderer.ContainsMarkdown(text))
+            {
+                bodyElement = MarkdownRenderer.Render(text);
+                if (!isAssistant)
+                    bodyElement.AddToClassList("transcript__body--user");
+            }
+            else
+            {
+                var tf = new TextField();
+                tf.isReadOnly = true;
+                tf.multiline = true;
+                tf.value = text;
+                tf.AddToClassList("transcript__body");
+                if (!isAssistant)
+                    tf.AddToClassList("transcript__body--user");
+                ApplyTextCursor(tf);
+                bodyElement = tf;
+            }
             MakeTranscriptLabelsFocusable(bodyElement);
             return bodyElement;
         }

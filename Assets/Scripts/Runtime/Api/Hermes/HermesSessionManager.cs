@@ -286,6 +286,18 @@ namespace NeonCompanion.Runtime.Api.Hermes
             }
         }
 
+        /// <summary>
+        /// Fetch model options grouped by provider from the gateway.
+        /// </summary>
+        public async Task<ModelOptionsResponse> GetModelOptionsAsync()
+        {
+            var result = await _gateway.Request<ModelOptionsResponse>(
+                "model.options",
+                new { session_id = ActiveSessionId }
+            );
+            return result;
+        }
+
         // === Clarify / Approval ===
 
         public async Task RespondToClarify(string requestId, string answer)

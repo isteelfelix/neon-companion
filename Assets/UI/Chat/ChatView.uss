@@ -1025,7 +1025,6 @@
     font-size: 11px;
     color: var(--text-3);
     white-space: pre-wrap;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
 .tool-entry__diff {
@@ -1035,7 +1034,6 @@
 .tool-entry__diff-line {
     font-size: 11px;
     white-space: pre;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     color: var(--text-3);
 }
 

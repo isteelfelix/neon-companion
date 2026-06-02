@@ -1029,6 +1029,28 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_modelPickerOverlay.parent == null && _d.Root != null)
                     _d.Root.Add(_modelPickerOverlay);
 
+                // Try model.options RPC for Hermes WS backend (grouped by provider)
+                var selector = GlobalBackendSelector.Instance;
+                var sessionManager = selector?.SessionManager;
+                if (sessionManager != null && sessionManager.IsConnected)
+                {
+                    try
+                    {
+                        var options = await sessionManager.GetModelOptionsAsync();
+                        if (options?.providers != null && options.providers.Count > 0)
+                        {
+                            PopulateModelPickerFromOptions(options, options.model ?? chat.CurrentSessionModel);
+                            _modelPickerStatus.text = LocalizationExtensions.Get("providers.models.pick_hint", "Выбери модель.");
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("[ModelPicker] model.options failed, falling back: " + ex.Message);
+                    }
+                }
+
+                // Fallback: flat list from TestConnectionAsync
                 var result = await app.AiClient.TestConnectionAsync(provider);
                 var models = new List<string>();
                 if (result?.DiscoveredModels != null)
@@ -1254,6 +1276,158 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 _modelPickerScroll.Add(groupBtn);
                 _modelPickerScroll.Add(itemsWrap);
+            }
+        }
+
+        /// <summary>
+        /// Populate model picker from model.options RPC response (grouped by provider).
+        /// </summary>
+        private void PopulateModelPickerFromOptions(ModelOptionsResponse options, string currentModel)
+        {
+            if (_modelPickerScroll == null || options?.providers == null)
+                return;
+
+            _modelPickerScroll.Clear();
+
+            foreach (var provider in options.providers)
+            {
+                var models = provider.models;
+                if (models == null || models.Count == 0)
+                    continue;
+
+                bool isCurrentProvider = provider.isCurrent ||
+                    string.Equals(provider.slug, options.provider, StringComparison.OrdinalIgnoreCase);
+                bool hasActive = models.Exists(m => string.Equals(m, currentModel, StringComparison.Ordinal));
+                bool expanded = isCurrentProvider || hasActive;
+
+                // Provider group header
+                var groupBtn = new Button();
+                groupBtn.AddToClassList("model-picker__group");
+                if (isCurrentProvider)
+                    groupBtn.AddToClassList("model-picker__group--active");
+
+                var arrow = new Label(expanded ? "▼" : "▶");
+                arrow.AddToClassList("model-picker__group-arrow");
+
+                string providerDisplayName = !string.IsNullOrEmpty(provider.name) ? provider.name : provider.slug;
+                var groupLabel = new Label($"{providerDisplayName.ToUpperInvariant()}  ({models.Count})");
+                groupLabel.AddToClassList("model-picker__group-label");
+
+                groupBtn.Add(arrow);
+                groupBtn.Add(groupLabel);
+
+                // Items container
+                var itemsWrap = new VisualElement();
+                itemsWrap.AddToClassList("model-picker__items");
+                if (!expanded)
+                    itemsWrap.AddToClassList("is-hidden");
+
+                groupBtn.RegisterCallback<ClickEvent>(_ =>
+                {
+                    bool isExpanded = !itemsWrap.ClassListContains("is-hidden");
+                    if (isExpanded)
+                    {
+                        itemsWrap.AddToClassList("is-hidden");
+                        arrow.text = "▶";
+                    }
+                    else
+                    {
+                        itemsWrap.RemoveFromClassList("is-hidden");
+                        arrow.text = "▼";
+                    }
+                });
+
+                // Warning banner
+                if (!string.IsNullOrEmpty(provider.warning))
+                {
+                    var warningLabel = new Label(provider.warning);
+                    warningLabel.AddToClassList("model-picker__warning");
+                    itemsWrap.Add(warningLabel);
+                }
+
+                // Model items
+                var unavailable = new HashSet<string>(provider.unavailableModels ?? new List<string>());
+                foreach (var model in models)
+                {
+                    bool isSelected = string.Equals(model, currentModel, StringComparison.Ordinal);
+                    bool locked = unavailable.Contains(model);
+                    var captured = model;
+                    var capturedProvider = provider.slug;
+
+                    var modelBtn = new Button(() =>
+                    {
+                        if (!locked)
+                            _ = ApplyModelFromOptionsAsync(capturedProvider, captured);
+                    })
+                    {
+                        text = model
+                    };
+                    modelBtn.AddToClassList("model-picker__item");
+                    if (isSelected)
+                        modelBtn.AddToClassList("model-picker__item--selected");
+                    if (locked)
+                    {
+                        modelBtn.AddToClassList("model-picker__item--locked");
+                        modelBtn.SetEnabled(false);
+                    }
+                    itemsWrap.Add(modelBtn);
+                }
+
+                _modelPickerScroll.Add(groupBtn);
+                _modelPickerScroll.Add(itemsWrap);
+            }
+        }
+
+        /// <summary>
+        /// Apply model selection from model.options picker (includes provider switch).
+        /// </summary>
+        private async Task ApplyModelFromOptionsAsync(string providerSlug, string modelId)
+        {
+            if (_isApplyingModelSwitch || string.IsNullOrWhiteSpace(modelId))
+                return;
+
+            _isApplyingModelSwitch = true;
+            if (_modelPickerDialog != null)
+                _modelPickerDialog.SetEnabled(false);
+
+            try
+            {
+                var chat = await _d.GetChatServiceAsync();
+                if (chat == null)
+                    return;
+
+                if (_modelPickerStatus != null)
+                    _modelPickerStatus.text = $"Применяем модель: {modelId}";
+
+                var result = await chat.SetCurrentSessionModelAsync(modelId);
+                if (!result.Success)
+                {
+                    string failure = string.IsNullOrWhiteSpace(result.Message)
+                        ? LocalizationExtensions.Get("providers.model_switch_failed", "Не удалось применить модель.")
+                        : result.Message;
+                    if (_modelPickerStatus != null)
+                        _modelPickerStatus.text = failure;
+                    if (_d.AddSystemMessage != null)
+                        _d.AddSystemMessage(failure);
+                    return;
+                }
+
+                SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
+                if (_d.LoadSessionsAsync != null)
+                    await _d.LoadSessionsAsync();
+                CloseModelPicker();
+            }
+            catch (Exception ex)
+            {
+                if (_modelPickerStatus != null)
+                    _modelPickerStatus.text = ex.Message;
+                NeonLogger.LogError(ex.ToString());
+            }
+            finally
+            {
+                _isApplyingModelSwitch = false;
+                if (_modelPickerDialog != null)
+                    _modelPickerDialog.SetEnabled(true);
             }
         }
 

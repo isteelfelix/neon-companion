@@ -479,6 +479,21 @@
     color: var(--accent-text);
 }
 
+.model-picker__item--locked {
+    opacity: 0.4;
+}
+
+.model-picker__group--active {
+    border-left: 2px solid var(--accent-glow);
+}
+
+.model-picker__warning {
+    font-size: 11px;
+    color: var(--warn);
+    padding: 4px 8px;
+    margin-bottom: 4px;
+}
+
 /* ---- resize handle ---- */
 .resize-handle {
     width: 5px;
