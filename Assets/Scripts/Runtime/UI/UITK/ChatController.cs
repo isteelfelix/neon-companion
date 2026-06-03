@@ -103,6 +103,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly ToolCallUiHelper _toolCallUiHelper = new ToolCallUiHelper();
         private ApprovalPrompt _currentApprovalPrompt;
         private VisualElement _currentApprovalElement;
+        private TaskCompletionSource<bool> _pendingApprovalTcs;
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private string _chatSubtitle = string.Empty;
         private string _sessionSearchQuery = string.Empty;
@@ -4013,6 +4014,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _currentApprovalElement = null;
             }
             _currentApprovalPrompt = null;
+
+            // Unblock RequestToolApproval if an approval was pending when dismiss was called
+            // externally (e.g. by streaming re-render). Denied because the UI is gone.
+            if (_pendingApprovalTcs != null)
+            {
+                _pendingApprovalTcs.TrySetResult(false);
+                _pendingApprovalTcs = null;
+            }
         }
 
         private void DismissSessionPicker()
@@ -4271,9 +4280,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool approved = await RequestToolApproval(toolReq);
 
-            var selector = GlobalBackendSelector.Instance;
-            if (selector?.SessionManager != null)
-                await selector.SessionManager.RespondToApproval(request.requestId, approved);
+            // Send approval response back to Hermes gateway. Wrap in try-catch so a
+            // dropped WS or RPC failure doesn't silently lose the user's decision.
+            try
+            {
+                var selector = GlobalBackendSelector.Instance;
+                if (selector?.SessionManager != null)
+                    await selector.SessionManager.RespondToApproval(request.requestId, approved);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError("[Hermes] Failed to send approval response: " + ex.Message);
+            }
 
             if (!approved)
             {
@@ -4370,11 +4388,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             bool approved = false;
             bool always = false;
             var completionSource = new TaskCompletionSource<bool>();
+            _pendingApprovalTcs = completionSource;
 
             prompt.OnDecision += (a, alwaysApprove) =>
             {
                 approved = a;
                 always = alwaysApprove;
+                _pendingApprovalTcs = null;
                 completionSource.TrySetResult(true);
             };
 
@@ -4385,6 +4405,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _currentApprovalPrompt = null;
             _currentApprovalElement = null;
+            _pendingApprovalTcs = null;
 
             if (always && approved)
             {
