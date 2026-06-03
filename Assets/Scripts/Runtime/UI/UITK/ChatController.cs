@@ -86,8 +86,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _hasUnreadNotification;
         private ChatService _currentChatService;
         private VisualElement _streamingBubble;
-        private TextField _streamingLabel;
+        private SelectableMarkdownElement _streamingLabel;
         private VisualElement _streamingTypingDots;
+        private readonly StringBuilder _streamingTextBuffer = new StringBuilder();
         private IVisualElementScheduledItem _inlineTypingSchedule;
         private int _inlineTypingFrame;
         private DateTime _streamingStartTime;
@@ -126,6 +127,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Vector2 _longPressPos;
         private IVisualElementScheduledItem _longPressSchedule;
         private VisualElement _transcriptContextRoot;
+        private readonly Dictionary<string, VisualElement> _messageRowCache = new Dictionary<string, VisualElement>();
 
         // Inline edit state
         private int? _editingMessageIndex;
@@ -1081,6 +1083,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _streamingBubble = bubble;
             _streamingLabel = null;
+            _streamingTextBuffer.Length = 0;
 
             _streamingTypingDots = new VisualElement();
             _streamingTypingDots.AddToClassList("typing--inline");
@@ -1116,11 +1119,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_streamingLabel != null || _streamingBubble == null)
                 return;
 
-            _streamingLabel = new TextField();
-            _streamingLabel.isReadOnly = true;
-            _streamingLabel.multiline = true;
-            _streamingLabel.value = string.Empty;
+            _streamingLabel = new SelectableMarkdownElement();
+            _streamingLabel.SetMarkdown(string.Empty);
             _streamingLabel.AddToClassList("transcript__body");
+            _streamingLabel.style.minWidth = 0;
+            _streamingLabel.style.width = Length.Percent(100);
+            _streamingLabel.style.minHeight = 20;
             ApplyTextCursor(_streamingLabel);
 
             // Insert body before stats footer (if present) so stats appears after content in layout.
@@ -1151,7 +1155,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             EnsureStreamingLabel();
             if (_streamingLabel != null)
-                _streamingLabel.value += token;
+            {
+                _streamingTextBuffer.Append(token);
+                _streamingLabel.SetMarkdown(_streamingTextBuffer.ToString());
+            }
 
             if (!string.IsNullOrEmpty(token))
             {
@@ -1731,7 +1738,20 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (string.IsNullOrEmpty(text) || text.Length > 512)
                 return false;
-            string ext = System.IO.Path.GetExtension(text)?.ToLowerInvariant();
+            // A real file path is a single line with no illegal path characters. Guard before
+            // Path.GetExtension, which throws ArgumentException ("Illegal characters in path")
+            // on control chars such as the newlines/tabs present in pasted multi-line markdown.
+            if (text.IndexOfAny(System.IO.Path.GetInvalidPathChars()) >= 0)
+                return false;
+            string ext;
+            try
+            {
+                ext = System.IO.Path.GetExtension(text)?.ToLowerInvariant();
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
             return ext == ".png" || ext == ".jpg" || ext == ".jpeg"
                 || ext == ".gif" || ext == ".webp" || ext == ".bmp";
         }
@@ -2831,22 +2851,31 @@ namespace NeonCompanion.Runtime.UI.UITK
             CancelInlineEdit();
             if (IsSearchBarVisible())
                 CloseSearch();
+            if (_isSelectionMode)
+                _messageRowCache.Clear();
             _d.MessagesList.Clear();
 
             if (messages == null || messages.Count == 0)
             {
+                _messageRowCache.Clear();
                 _d.MessagesList.Add(CreateEmptyTranscript(hasSession));
                 return;
             }
 
             bool hasVisibleMessages = false;
+            var nextCache = new Dictionary<string, VisualElement>();
             for (int i = 0; i < messages.Count; i++)
             {
                 var message = messages[i];
                 if (!HasRenderableMessageContent(message))
                     continue;
 
-                var row = CreateMessageElement(message, ShowImageLightbox, ScrollTranscriptToBottom);
+                string renderKey = BuildMessageRenderKey(i, message);
+                VisualElement row = null;
+                if (!_isSelectionMode)
+                    _messageRowCache.TryGetValue(renderKey, out row);
+                if (row == null)
+                    row = CreateMessageElement(message, ShowImageLightbox, ScrollTranscriptToBottom);
                 // Tag with model index so context menu / edit can identify which message it represents
                 row.userData = i;
                 var bubbleForTag = row.Q<VisualElement>(className: "transcript__bubble");
@@ -2872,16 +2901,94 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 _d.MessagesList.Add(row);
+                if (!_isSelectionMode)
+                    nextCache[renderKey] = row;
                 hasVisibleMessages = true;
             }
 
+            _messageRowCache.Clear();
+            foreach (var pair in nextCache)
+                _messageRowCache[pair.Key] = pair.Value;
+
             if (!hasVisibleMessages)
             {
+                _messageRowCache.Clear();
                 _d.MessagesList.Add(CreateEmptyTranscript(true));
                 return;
             }
 
             ScrollTranscriptToBottom();
+        }
+
+        private static string BuildMessageRenderKey(int index, ChatMessage message)
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = AppendHash(hash, index);
+                if (message != null)
+                {
+                    hash = AppendHash(hash, message.role);
+                    hash = AppendHash(hash, message.content);
+                    hash = AppendHash(hash, message.model);
+                    hash = AppendHash(hash, message.reasoning);
+                    hash = AppendHash(hash, message.unixTimeSeconds.GetHashCode());
+                    hash = AppendHash(hash, message.tool_call_id);
+                    hash = AppendHash(hash, message.tokenCount);
+                    hash = AppendHash(hash, message.responseTimeSeconds.GetHashCode());
+
+                    int attachmentCount = message.attachments != null ? message.attachments.Count : 0;
+                    hash = AppendHash(hash, attachmentCount);
+                    for (int i = 0; i < attachmentCount; i++)
+                    {
+                        ChatAttachment attachment = message.attachments[i];
+                        if (attachment == null)
+                            continue;
+                        hash = AppendHash(hash, attachment.kind);
+                        hash = AppendHash(hash, attachment.name);
+                        hash = AppendHash(hash, attachment.path);
+                        hash = AppendHash(hash, attachment.mediaType);
+                    }
+
+                    int segmentCount = message.segments != null ? message.segments.Count : 0;
+                    hash = AppendHash(hash, segmentCount);
+                    for (int i = 0; i < segmentCount; i++)
+                    {
+                        ChatMessageSegment segment = message.segments[i];
+                        if (segment == null)
+                            continue;
+                        hash = AppendHash(hash, segment.kind);
+                        hash = AppendHash(hash, segment.key);
+                        hash = AppendHash(hash, segment.text);
+                        hash = AppendHash(hash, segment.tool);
+                        hash = AppendHash(hash, segment.label);
+                        hash = AppendHash(hash, segment.emoji);
+                        hash = AppendHash(hash, segment.status);
+                        hash = AppendHash(hash, segment.inlineDiff);
+                    }
+                }
+                return index.ToString() + ":" + hash.ToString();
+            }
+        }
+
+        private static int AppendHash(int hash, string value)
+        {
+            unchecked
+            {
+                if (value == null)
+                    return hash * 31;
+                for (int i = 0; i < value.Length; i++)
+                    hash = hash * 31 + value[i];
+                return hash;
+            }
+        }
+
+        private static int AppendHash(int hash, int value)
+        {
+            unchecked
+            {
+                return hash * 31 + value;
+            }
         }
 
         private VisualElement CreateEmptyTranscript(bool hasSession)
@@ -2930,6 +3037,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             var bubble = new VisualElement();
             bubble.AddToClassList("transcript__bubble");
             bubble.AddToClassList($"transcript__bubble--{role}");
+            if (IsMarkdownHeavyMessage(message))
+                bubble.AddToClassList("transcript__bubble--markdown");
 
             VisualElement actions = null;
 
@@ -3182,7 +3291,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             var bodyElement = new SelectableMarkdownElement();
             bodyElement.SetMarkdown(text ?? string.Empty);
             bodyElement.AddToClassList("transcript__body");
-            bodyElement.style.flexGrow = 1;
             bodyElement.style.minWidth = 0;
             bodyElement.style.width = Length.Percent(100);
             bodyElement.style.minHeight = 20;
@@ -3190,6 +3298,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 bodyElement.AddToClassList("transcript__body--user");
             ApplyTextCursor(bodyElement);
             return bodyElement;
+        }
+
+        private static bool IsMarkdownHeavyMessage(ChatMessage message)
+        {
+            if (message == null)
+                return false;
+            string text = message.content ?? string.Empty;
+            return MarkdownRenderer.ContainsMarkdown(text);
         }
 
         private static void MakeTranscriptLabelsFocusable(VisualElement root)

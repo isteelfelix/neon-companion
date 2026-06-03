@@ -7,28 +7,31 @@ using UnityEngine.UIElements;
 namespace NeonCompanion.Runtime.UI.UITK
 {
     /// <summary>
-    /// Native UITK chat text engine slice: markdown/diff blocks, manual wrapping,
-    /// and custom selection/copy without relying on TextField text geometry.
+    /// Native chat text engine. Owns a markdown/diff document model and a real line-box
+    /// layout (one normal-flow VisualElement per block; inline text tokenized into words so
+    /// Unity wraps and measures glyphs). Heights come from layout, never a multiplier.
+    /// Selection geometry is read back from the resolved layout, so it stays correct across
+    /// fonts/DPI/wrap. Streaming reuses unchanged leading blocks (block-level reconcile) so
+    /// appending tokens does not reflow or jitter the content above.
+    ///
+    /// Public API is intentionally frozen: SetMarkdown, SetDiff, PlainText.
     /// </summary>
     internal class SelectableMarkdownElement : VisualElement
     {
-        private enum SourceMode
+        private enum BlockKind
         {
-            Markdown,
-            Diff
-        }
-
-        private enum LineKind
-        {
-            Text,
+            Paragraph,
             Heading,
             Quote,
-            Code,
-            Diff,
-            Rule
+            Bullet,
+            Numbered,
+            CodeBlock,
+            Rule,
+            Table,
+            DiffLine
         }
 
-        private class TextRun
+        private class InlineRun
         {
             public string Text;
             public bool Bold;
@@ -36,86 +39,81 @@ namespace NeonCompanion.Runtime.UI.UITK
             public bool Code;
             public bool Strike;
             public string LinkUrl;
-
-            public TextRun CloneWithText(string value)
-            {
-                return new TextRun
-                {
-                    Text = value,
-                    Bold = Bold,
-                    Italic = Italic,
-                    Code = Code,
-                    Strike = Strike,
-                    LinkUrl = LinkUrl
-                };
-            }
         }
 
-        private class LineSpec
+        private class TableRow
         {
-            public readonly List<TextRun> Runs = new List<TextRun>();
-            public LineKind Kind;
+            public readonly List<List<InlineRun>> Cells = new List<List<InlineRun>>();
+            public bool IsHeader;
+            public bool Alt;
+            public bool IsLast;
+        }
+
+        private class Block
+        {
+            public BlockKind Kind;
             public int HeadingLevel;
-            public float Indent;
-            public float MarginTop;
-            public float MarginBottom;
-            public Color Background;
-            public Color TextColor;
-            public bool HasTextColor;
-            public bool CodeBlockLine;
-            public bool PlainInline;
-            public bool IncludeTrailingNewline = true;
+            public string Marker;
+            public string CodeText;
+            public string CodeLanguage;
+            public int Indent;
+            public readonly List<InlineRun> Inlines = new List<InlineRun>();
+            public List<TableRow> TableRows;
+
+            public bool DiffHasColor;
+            public Color DiffColor;
+            public bool DiffHasBackground;
+            public Color DiffBackground;
+
+            // Computed by FinalizeBlock.
+            public string PlainText = string.Empty;
+            public string Signature = string.Empty;
+
+            // Filled when the block element is built; references live Labels.
+            public readonly List<PlacedToken> Tokens = new List<PlacedToken>();
+            public int GlobalStart;
         }
 
-        private class RunBox
+        private class PlacedToken
         {
-            public int PlainStart;
-            public int PlainEnd;
-            public float X;
-            public float Width;
-            public TextRun Run;
+            public Label Label;
+            public InlineRun Run;
+            public int LocalStart;
+            public int LocalEnd;
+            public int GlobalStart;
+            public int GlobalEnd;
+            public Rect Rect;
+            public bool HasRect;
             public float[] CharOffsets;
         }
 
-        private class VisualLine
+        private class VisualTextLine
         {
-            public readonly List<RunBox> Runs = new List<RunBox>();
+            public readonly List<PlacedToken> Tokens = new List<PlacedToken>();
+            public float Y;
+            public float Height;
             public int PlainStart;
             public int PlainEnd;
-            public float Y;
-            public float Height;
-            public float Indent;
         }
 
-        private class BackgroundBox
-        {
-            public float X;
-            public float Y;
-            public float Width;
-            public float Height;
-            public Color Color;
-            public float Radius;
-        }
-
-        private readonly VisualElement _backgroundLayer;
         private readonly VisualElement _selectionLayer;
-        private readonly VisualElement _contentLayer;
-        private readonly Label _measureLabel;
-        private readonly List<LineSpec> _lineSpecs = new List<LineSpec>();
-        private readonly List<VisualLine> _visualLines = new List<VisualLine>();
-        private readonly List<BackgroundBox> _backgrounds = new List<BackgroundBox>();
+        private readonly VisualElement _content;
+
+        private readonly List<Block> _blocks = new List<Block>();
+        private readonly List<VisualElement> _blockElements = new List<VisualElement>();
+        private readonly List<PlacedToken> _tokens = new List<PlacedToken>();
+        private readonly List<VisualTextLine> _lines = new List<VisualTextLine>();
 
         private string _sourceText = string.Empty;
         private string _plainText = string.Empty;
-        private SourceMode _mode = SourceMode.Markdown;
+
         private int _selectionAnchor = -1;
         private int _selectionFocus = -1;
         private bool _isDragging;
         private int _capturedPointerId = -1;
-        private int _lastPointerIndex = -1;
-        private string _lastPointerLink;
-        private float _lastLayoutWidth = -1f;
-        private bool _layoutRebuildScheduled;
+        private int _downIndex = -1;
+        private string _downLink;
+        private bool _captureScheduled;
 
         public string PlainText
         {
@@ -133,26 +131,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             style.minWidth = 0;
             style.width = Length.Percent(100);
 
-            _backgroundLayer = CreateAbsoluteLayer();
-            _selectionLayer = CreateAbsoluteLayer();
+            _selectionLayer = new VisualElement();
+            _selectionLayer.pickingMode = PickingMode.Ignore;
+            _selectionLayer.style.position = Position.Absolute;
+            _selectionLayer.style.left = 0;
+            _selectionLayer.style.top = 0;
+            _selectionLayer.style.right = 0;
+            _selectionLayer.style.bottom = 0;
 
-            _contentLayer = new VisualElement();
-            _contentLayer.pickingMode = PickingMode.Ignore;
-            _contentLayer.style.flexDirection = FlexDirection.Column;
-            _contentLayer.style.minWidth = 0;
+            _content = new VisualElement();
+            _content.pickingMode = PickingMode.Ignore;
+            _content.style.flexDirection = FlexDirection.Column;
+            _content.style.minWidth = 0;
+            _content.style.width = Length.Percent(100);
 
-            _measureLabel = new Label();
-            _measureLabel.pickingMode = PickingMode.Ignore;
-            _measureLabel.style.position = Position.Absolute;
-            _measureLabel.style.left = -10000;
-            _measureLabel.style.top = -10000;
-            _measureLabel.style.opacity = 0;
-            _measureLabel.style.whiteSpace = WhiteSpace.NoWrap;
-
-            Add(_backgroundLayer);
             Add(_selectionLayer);
-            Add(_contentLayer);
-            Add(_measureLabel);
+            Add(_content);
 
             RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
             RegisterCallback<PointerDownEvent>(OnPointerDown);
@@ -161,706 +155,555 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterCallback<KeyDownEvent>(OnKeyDown);
         }
 
+        // ===================== Public API =====================
+
         public void SetMarkdown(string text)
         {
-            _mode = SourceMode.Markdown;
             _sourceText = text ?? string.Empty;
-            ClearSelection();
-            ParseSource();
-            ScheduleLayoutRebuild(true);
+            var newBlocks = new List<Block>();
+            ParseMarkdown(_sourceText, newBlocks);
+            ApplyBlocks(newBlocks);
         }
 
         public void SetDiff(string text)
         {
-            _mode = SourceMode.Diff;
             _sourceText = text ?? string.Empty;
-            ClearSelection();
-            ParseSource();
-            ScheduleLayoutRebuild(true);
+            var newBlocks = new List<Block>();
+            ParseDiff(_sourceText, newBlocks);
+            ApplyBlocks(newBlocks);
         }
 
-        private static VisualElement CreateAbsoluteLayer()
+        private void ApplyBlocks(List<Block> newBlocks)
         {
-            var layer = new VisualElement();
-            layer.pickingMode = PickingMode.Ignore;
-            layer.style.position = Position.Absolute;
-            layer.style.left = 0;
-            layer.style.right = 0;
-            layer.style.top = 0;
-            layer.style.bottom = 0;
-            return layer;
+            ReconcileBlocks(newBlocks);
+            AssembleTokensAndPlainText();
+            ClampSelection();
+            ScheduleCapture();
         }
 
-        private void OnGeometryChanged(GeometryChangedEvent evt)
-        {
-            float width = contentRect.width;
-            if (width <= 1f)
-                return;
-            if (Mathf.Abs(width - _lastLayoutWidth) < 0.5f)
-                return;
-            ScheduleLayoutRebuild(false);
-        }
+        // ===================== Streaming reconcile =====================
 
-        private void ScheduleLayoutRebuild(bool force)
+        private void ReconcileBlocks(List<Block> newBlocks)
         {
-            if (force)
-                _lastLayoutWidth = -1f;
-            if (_layoutRebuildScheduled)
-                return;
-            _layoutRebuildScheduled = true;
-            schedule.Execute(() =>
+            int common = 0;
+            while (common < _blocks.Count && common < newBlocks.Count &&
+                   string.Equals(_blocks[common].Signature, newBlocks[common].Signature, StringComparison.Ordinal))
             {
-                _layoutRebuildScheduled = false;
-                if (panel == null)
-                    return;
-                RebuildLayout();
-            }).StartingIn(0);
-        }
-
-        private void ParseSource()
-        {
-            _lineSpecs.Clear();
-            if (_mode == SourceMode.Diff)
-                ParseDiff(_sourceText);
-            else
-                ParseMarkdown(_sourceText);
-            BuildPlainText();
-        }
-
-        private void ParseMarkdown(string markdown)
-        {
-            if (string.IsNullOrEmpty(markdown))
-                return;
-
-            string normalized = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
-            string[] lines = normalized.Split('\n');
-            List<string> paragraph = new List<string>();
-
-            int i = 0;
-            while (i < lines.Length)
-            {
-                string raw = lines[i];
-                string trimmedStart = raw.TrimStart(' ', '\t');
-
-                if (trimmedStart.StartsWith("```", StringComparison.Ordinal))
-                {
-                    FlushParagraph(paragraph);
-                    i++;
-                    while (i < lines.Length && !lines[i].TrimStart(' ', '\t').StartsWith("```", StringComparison.Ordinal))
-                    {
-                        AddCodeLine(lines[i]);
-                        i++;
-                    }
-                    if (i < lines.Length)
-                        i++;
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(raw))
-                {
-                    FlushParagraph(paragraph);
-                    i++;
-                    continue;
-                }
-
-                if (IsHorizontalRule(trimmedStart))
-                {
-                    FlushParagraph(paragraph);
-                    AddRuleLine();
-                    i++;
-                    continue;
-                }
-
-                int headingLevel = GetHeadingLevel(trimmedStart);
-                if (headingLevel > 0)
-                {
-                    FlushParagraph(paragraph);
-                    string headingText = trimmedStart.Substring(headingLevel + 1);
-                    AddInlineLine(headingText, LineKind.Heading, headingLevel, 0, 6, 3);
-                    i++;
-                    continue;
-                }
-
-                if (trimmedStart.StartsWith("> ", StringComparison.Ordinal) || string.Equals(trimmedStart, ">", StringComparison.Ordinal))
-                {
-                    FlushParagraph(paragraph);
-                    string quoteText = trimmedStart.Length > 2 ? trimmedStart.Substring(2) : string.Empty;
-                    AddInlineLine(quoteText, LineKind.Quote, 0, 14, 3, 3);
-                    i++;
-                    continue;
-                }
-
-                string bulletMarker;
-                string bulletText;
-                if (TryParseListItem(trimmedStart, out bulletMarker, out bulletText))
-                {
-                    FlushParagraph(paragraph);
-                    AddInlineLine(bulletMarker + " " + bulletText, LineKind.Text, 0, 12, 2, 2);
-                    i++;
-                    continue;
-                }
-
-                if (IsPotentialTableStart(trimmedStart) && i + 1 < lines.Length && IsTableSeparatorRow(lines[i + 1]))
-                {
-                    FlushParagraph(paragraph);
-                    i = ParseTable(lines, i);
-                    continue;
-                }
-
-                paragraph.Add(trimmedStart);
-                i++;
+                common++;
             }
 
-            FlushParagraph(paragraph);
-        }
-
-        private void FlushParagraph(List<string> paragraph)
-        {
-            if (paragraph.Count == 0)
-                return;
-            string joined = string.Join(" ", paragraph.ToArray());
-            AddInlineLine(joined, LineKind.Text, 0, 0, 0, 4);
-            paragraph.Clear();
-        }
-
-        private void AddInlineLine(string text, LineKind kind, int headingLevel, float indent, float marginTop, float marginBottom)
-        {
-            var spec = new LineSpec();
-            spec.Kind = kind;
-            spec.HeadingLevel = headingLevel;
-            spec.Indent = indent;
-            spec.MarginTop = marginTop;
-            spec.MarginBottom = marginBottom;
-            spec.Runs.AddRange(ParseInline(text));
-            _lineSpecs.Add(spec);
-        }
-
-        private void AddPlainLine(string text, LineKind kind, float indent, float marginTop, float marginBottom)
-        {
-            var spec = new LineSpec();
-            spec.Kind = kind;
-            spec.Indent = indent;
-            spec.MarginTop = marginTop;
-            spec.MarginBottom = marginBottom;
-            spec.PlainInline = true;
-            spec.Runs.Add(new TextRun { Text = text ?? string.Empty });
-            _lineSpecs.Add(spec);
-        }
-
-        private void AddCodeLine(string text)
-        {
-            var spec = new LineSpec();
-            spec.Kind = LineKind.Code;
-            spec.CodeBlockLine = true;
-            spec.Indent = 12;
-            spec.MarginTop = 0;
-            spec.MarginBottom = 0;
-            spec.Background = new Color(0f, 0f, 0f, 0.28f);
-            spec.Runs.Add(new TextRun { Text = text ?? string.Empty, Code = true });
-            _lineSpecs.Add(spec);
-        }
-
-        private void AddRuleLine()
-        {
-            var spec = new LineSpec();
-            spec.Kind = LineKind.Rule;
-            spec.MarginTop = 8;
-            spec.MarginBottom = 8;
-            spec.IncludeTrailingNewline = true;
-            _lineSpecs.Add(spec);
-        }
-
-        private int ParseTable(string[] lines, int startIndex)
-        {
-            int i = startIndex;
-            while (i < lines.Length)
+            for (int i = _blockElements.Count - 1; i >= common; i--)
             {
-                string trimmed = lines[i].TrimStart(' ', '\t');
-                if (!IsPotentialTableStart(trimmed))
-                    break;
-                string normalized = NormalizeTableLine(trimmed);
-                if (i == startIndex + 1 && IsTableSeparatorRow(trimmed))
-                {
-                    i++;
-                    continue;
-                }
-
-                string[] cells = ParseTableCells(normalized);
-                AddTableLine(cells, i == startIndex, i == startIndex ? 4 : 0, 2);
-                LineSpec last = _lineSpecs[_lineSpecs.Count - 1];
-                last.Background = new Color(1f, 1f, 1f, i == startIndex ? 0.07f : 0.025f);
-                i++;
+                _content.Remove(_blockElements[i]);
+                _blockElements.RemoveAt(i);
             }
-            return i;
-        }
+            if (_blocks.Count > common)
+                _blocks.RemoveRange(common, _blocks.Count - common);
 
-        private void AddTableLine(string[] cells, bool isHeader, float marginTop, float marginBottom)
-        {
-            var spec = new LineSpec();
-            spec.Kind = LineKind.Text;
-            spec.Indent = 8;
-            spec.MarginTop = marginTop;
-            spec.MarginBottom = marginBottom;
-            for (int i = 0; i < cells.Length; i++)
+            for (int i = common; i < newBlocks.Count; i++)
             {
-                if (i > 0)
-                    spec.Runs.Add(new TextRun { Text = "    " });
-
-                string cell = cells[i] ?? string.Empty;
-                if (isHeader)
-                {
-                    spec.Runs.Add(new TextRun { Text = cell, Bold = true });
-                }
-                else if (i == 0)
-                {
-                    spec.Runs.Add(new TextRun { Text = UnescapeMarkdownSyntax(cell), Code = LooksLikeMarkdownSyntax(cell) });
-                }
-                else
-                {
-                    List<TextRun> parsed = ParseInline(UnescapeMarkdownSyntax(cell));
-                    for (int r = 0; r < parsed.Count; r++)
-                        spec.Runs.Add(parsed[r]);
-                }
-            }
-            _lineSpecs.Add(spec);
-        }
-
-        private void ParseDiff(string text)
-        {
-            string normalized = (text ?? string.Empty).Replace("\r\n", "\n").Replace("\r", "\n");
-            string[] lines = normalized.Split('\n');
-            for (int i = 0; i < lines.Length; i++)
-            {
-                string raw = lines[i];
-                var spec = new LineSpec();
-                spec.Kind = LineKind.Diff;
-                spec.Indent = 10;
-                spec.MarginTop = i == 0 ? 4 : 0;
-                spec.MarginBottom = i == lines.Length - 1 ? 4 : 0;
-                spec.Runs.Add(new TextRun { Text = raw, Code = true });
-
-                if (raw.StartsWith("+", StringComparison.Ordinal) && !raw.StartsWith("+++", StringComparison.Ordinal))
-                {
-                    spec.Background = new Color(0.1f, 0.45f, 0.22f, 0.25f);
-                    spec.TextColor = new Color(0.45f, 0.95f, 0.6f, 1f);
-                    spec.HasTextColor = true;
-                }
-                else if (raw.StartsWith("-", StringComparison.Ordinal) && !raw.StartsWith("---", StringComparison.Ordinal))
-                {
-                    spec.Background = new Color(0.55f, 0.12f, 0.14f, 0.25f);
-                    spec.TextColor = new Color(1f, 0.45f, 0.45f, 1f);
-                    spec.HasTextColor = true;
-                }
-                else if (raw.StartsWith("@@", StringComparison.Ordinal))
-                {
-                    spec.Background = new Color(0.12f, 0.28f, 0.6f, 0.22f);
-                    spec.TextColor = new Color(0.45f, 0.7f, 1f, 1f);
-                    spec.HasTextColor = true;
-                }
-                else
-                {
-                    spec.TextColor = new Color(0.7f, 0.72f, 0.78f, 1f);
-                    spec.HasTextColor = true;
-                }
-
-                _lineSpecs.Add(spec);
+                Block block = newBlocks[i];
+                VisualElement element = BuildBlockElement(block);
+                _content.Add(element);
+                _blockElements.Add(element);
+                _blocks.Add(block);
             }
         }
 
-        private void BuildPlainText()
+        private void AssembleTokensAndPlainText()
         {
+            _tokens.Clear();
             var sb = new StringBuilder();
-            for (int i = 0; i < _lineSpecs.Count; i++)
+            int offset = 0;
+            for (int i = 0; i < _blocks.Count; i++)
             {
-                LineSpec spec = _lineSpecs[i];
-                for (int r = 0; r < spec.Runs.Count; r++)
-                    sb.Append(spec.Runs[r].Text);
-                if (spec.IncludeTrailingNewline && i < _lineSpecs.Count - 1)
+                Block block = _blocks[i];
+                block.GlobalStart = offset;
+                sb.Append(block.PlainText);
+                for (int t = 0; t < block.Tokens.Count; t++)
+                {
+                    PlacedToken token = block.Tokens[t];
+                    token.GlobalStart = offset + token.LocalStart;
+                    token.GlobalEnd = offset + token.LocalEnd;
+                    _tokens.Add(token);
+                }
+                offset += block.PlainText.Length;
+                if (i < _blocks.Count - 1)
+                {
                     sb.Append('\n');
+                    offset += 1;
+                }
             }
             _plainText = sb.ToString();
-            if (_selectionAnchor > _plainText.Length)
-                _selectionAnchor = _plainText.Length;
-            if (_selectionFocus > _plainText.Length)
-                _selectionFocus = _plainText.Length;
         }
 
-        private void RebuildLayout()
+        // ===================== Block element construction =====================
+
+        private VisualElement BuildBlockElement(Block block)
         {
-            if (panel == null)
-                return;
-
-            _lastLayoutWidth = contentRect.width;
-            if (_lastLayoutWidth <= 1f)
-                _lastLayoutWidth = resolvedStyle.width;
-            if (_lastLayoutWidth <= 1f)
-                _lastLayoutWidth = 480f;
-
-            _backgroundLayer.Clear();
-            _selectionLayer.Clear();
-            _contentLayer.Clear();
-            _visualLines.Clear();
-            _backgrounds.Clear();
-
-            float y = 0;
-            int plainIndex = 0;
-            for (int i = 0; i < _lineSpecs.Count; i++)
+            switch (block.Kind)
             {
-                LineSpec spec = _lineSpecs[i];
-                AddSpacer(spec.MarginTop);
-                y += spec.MarginTop;
-
-                if (spec.Kind == LineKind.Rule)
-                {
-                    AddRuleVisual(y);
-                    y += 1f + spec.MarginBottom;
-                    AddSpacer(spec.MarginBottom);
-                    if (spec.IncludeTrailingNewline && i < _lineSpecs.Count - 1)
-                        plainIndex++;
-                    continue;
-                }
-
-                int linePlainStart = plainIndex;
-                List<VisualLine> created = AddWrappedLineVisuals(spec, ref y, ref plainIndex);
-                if (spec.Background.a > 0 && created.Count > 0)
-                {
-                    VisualLine first = created[0];
-                    VisualLine last = created[created.Count - 1];
-                    _backgrounds.Add(new BackgroundBox
-                    {
-                        X = spec.CodeBlockLine || spec.Kind == LineKind.Diff ? 0 : spec.Indent,
-                        Y = first.Y - 2,
-                        Width = Mathf.Max(40f, _lastLayoutWidth - (spec.CodeBlockLine || spec.Kind == LineKind.Diff ? 0 : spec.Indent) - 16f),
-                        Height = (last.Y + last.Height) - first.Y + 4,
-                        Color = spec.Background,
-                        Radius = spec.CodeBlockLine ? 5 : 0
-                    });
-                }
-
-                y += spec.MarginBottom;
-                AddSpacer(spec.MarginBottom);
-                if (spec.IncludeTrailingNewline && i < _lineSpecs.Count - 1)
-                {
-                    plainIndex++;
-                    if (created.Count > 0)
-                        created[created.Count - 1].PlainEnd = plainIndex;
-                }
-
-                if (linePlainStart == plainIndex && spec.Runs.Count == 0)
-                    plainIndex++;
+                case BlockKind.Heading:
+                    return BuildInlineContainer(block, "markdown-h" + block.HeadingLevel.ToString(), true);
+                case BlockKind.Quote:
+                    return BuildInlineContainer(block, "markdown-blockquote", false);
+                case BlockKind.Bullet:
+                    return BuildListItem(block, "markdown-bullet", "markdown-bullet-marker");
+                case BlockKind.Numbered:
+                    return BuildListItem(block, "markdown-numbered", "markdown-numbered-marker");
+                case BlockKind.CodeBlock:
+                    return BuildCodeBlock(block);
+                case BlockKind.Rule:
+                    return BuildRule();
+                case BlockKind.Table:
+                    return BuildTable(block);
+                case BlockKind.DiffLine:
+                    return BuildDiffLine(block);
+                default:
+                    return BuildInlineContainer(block, "markdown-paragraph", true);
             }
-
-            DrawBackgrounds();
-            RebuildSelectionVisuals();
-            MarkDirtyRepaint();
         }
 
-        private void AddSpacer(float height)
+        private VisualElement BuildInlineContainer(Block block, string className, bool forceRowWrap)
         {
-            if (height <= 0)
-                return;
-            var spacer = new VisualElement();
-            spacer.pickingMode = PickingMode.Ignore;
-            spacer.style.height = height;
-            spacer.style.flexShrink = 0;
-            _contentLayer.Add(spacer);
-        }
-
-        private List<VisualLine> AddWrappedLineVisuals(LineSpec spec, ref float y, ref int plainIndex)
-        {
-            var created = new List<VisualLine>();
-            float fontSize = GetFontSize(spec);
-            float lineHeight = Mathf.Ceil(fontSize * 1.45f);
-            float availableWidth = Mathf.Max(40f, _lastLayoutWidth - spec.Indent - 16f);
-
-            VisualElement row = CreateRow(y, lineHeight, spec.Indent);
-            VisualLine visualLine = CreateVisualLine(y, lineHeight, spec.Indent, plainIndex);
-            float x = spec.Indent;
-
-            for (int r = 0; r < spec.Runs.Count; r++)
+            var container = new VisualElement();
+            container.AddToClassList(className);
+            container.pickingMode = PickingMode.Ignore;
+            if (forceRowWrap)
             {
-                TextRun run = spec.Runs[r];
-                string text = run.Text ?? string.Empty;
-                int pos = 0;
-                while (pos < text.Length || (text.Length == 0 && pos == 0))
-                {
-                    string remaining = text.Length == 0 ? string.Empty : text.Substring(pos);
-                    if (remaining.Length > 0 && remaining[0] == '\n')
-                    {
-                        FinishRow(row, visualLine, created);
-                        y += lineHeight;
-                        row = CreateRow(y, lineHeight, spec.Indent);
-                        visualLine = CreateVisualLine(y, lineHeight, spec.Indent, plainIndex);
-                        x = spec.Indent;
-                        pos++;
-                        plainIndex++;
-                        continue;
-                    }
-
-                    string segment = TakeFittingSegment(remaining, fontSize, availableWidth - (x - spec.Indent));
-                    if (segment.Length == 0 && x > spec.Indent + 0.1f)
-                    {
-                        FinishRow(row, visualLine, created);
-                        y += lineHeight;
-                        row = CreateRow(y, lineHeight, spec.Indent);
-                        visualLine = CreateVisualLine(y, lineHeight, spec.Indent, plainIndex);
-                        x = spec.Indent;
-                        continue;
-                    }
-                    if (segment.Length == 0)
-                        segment = remaining.Length > 0 ? remaining.Substring(0, 1) : string.Empty;
-
-                    TextRun segmentRun = run.CloneWithText(segment);
-                    Label label = CreateRunLabel(segmentRun, spec);
-                    row.Add(label);
-
-                    float width = MeasureRun(segmentRun, fontSize);
-                    var box = new RunBox();
-                    box.PlainStart = plainIndex;
-                    box.PlainEnd = plainIndex + segment.Length;
-                    box.X = x;
-                    box.Width = width;
-                    box.Run = segmentRun;
-                    box.CharOffsets = BuildCharOffsets(segmentRun, fontSize);
-                    visualLine.Runs.Add(box);
-
-                    x += width;
-                    plainIndex += segment.Length;
-                    visualLine.PlainEnd = plainIndex;
-                    pos += segment.Length;
-
-                    if (text.Length == 0)
-                        break;
-                }
+                container.style.flexDirection = FlexDirection.Row;
+                container.style.flexWrap = Wrap.Wrap;
             }
-
-            FinishRow(row, visualLine, created);
-            y += lineHeight;
-            return created;
+            container.style.minWidth = 0;
+            int local = 0;
+            AddInlineTokens(container, block, block.Inlines, ref local);
+            return container;
         }
 
-        private VisualElement CreateRow(float y, float lineHeight, float indent)
+        private VisualElement BuildListItem(Block block, string rowClass, string markerClass)
+        {
+            var row = new VisualElement();
+            row.AddToClassList(rowClass);
+            row.pickingMode = PickingMode.Ignore;
+            if (block.Indent > 0)
+                row.style.marginLeft = 16 + block.Indent * 8;
+
+            int local = 0;
+            string marker = block.Marker ?? string.Empty;
+            var markerLabel = new Label(marker);
+            markerLabel.AddToClassList(markerClass);
+            markerLabel.pickingMode = PickingMode.Ignore;
+            markerLabel.style.whiteSpace = WhiteSpace.NoWrap;
+            AddToken(block, markerLabel, null, local, local + marker.Length);
+            row.Add(markerLabel);
+            // PlainText for the item is "<marker> <content>"; the single space between marker
+            // and content lives in PlainText but in no token (an unselectable gap, like newlines).
+            local += marker.Length + 1;
+
+            var content = new VisualElement();
+            content.pickingMode = PickingMode.Ignore;
+            content.style.flexDirection = FlexDirection.Row;
+            content.style.flexWrap = Wrap.Wrap;
+            content.style.flexGrow = 1;
+            content.style.minWidth = 0;
+            AddInlineTokens(content, block, block.Inlines, ref local);
+            row.Add(content);
+            return row;
+        }
+
+        private VisualElement BuildCodeBlock(Block block)
+        {
+            var container = new VisualElement();
+            container.AddToClassList("markdown-codeblock");
+            container.pickingMode = PickingMode.Ignore;
+
+            string code = block.CodeText ?? string.Empty;
+
+            // Header chrome: language label (left) + Copy button (right). Not selectable text.
+            var header = new VisualElement();
+            header.pickingMode = PickingMode.Ignore;
+            header.style.flexDirection = FlexDirection.Row;
+            header.style.justifyContent = Justify.SpaceBetween;
+            header.style.alignItems = Align.Center;
+            header.style.marginBottom = 4;
+
+            var langLabel = new Label(string.IsNullOrEmpty(block.CodeLanguage) ? "code" : block.CodeLanguage);
+            langLabel.pickingMode = PickingMode.Ignore;
+            langLabel.style.fontSize = 9;
+            langLabel.style.color = new Color(1f, 1f, 1f, 0.4f);
+            header.Add(langLabel);
+
+            var copyButton = new Label("Copy");
+            copyButton.pickingMode = PickingMode.Position;
+            copyButton.style.fontSize = 9;
+            copyButton.style.color = new Color(1f, 1f, 1f, 0.55f);
+            copyButton.style.paddingLeft = 6;
+            copyButton.style.paddingRight = 6;
+            copyButton.style.paddingTop = 2;
+            copyButton.style.paddingBottom = 2;
+            AttachCopyHandler(copyButton, code);
+            header.Add(copyButton);
+
+            container.Add(header);
+
+            string[] lines = code.Split('\n');
+            int local = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var lineLabel = new Label(lines[i]);
+                lineLabel.AddToClassList("markdown-codeblock-text");
+                lineLabel.pickingMode = PickingMode.Ignore;
+                AddToken(block, lineLabel, null, local, local + lines[i].Length);
+                container.Add(lineLabel);
+                local += lines[i].Length;
+                if (i < lines.Length - 1)
+                    local += 1; // newline character in PlainText
+            }
+            return container;
+        }
+
+        private VisualElement BuildRule()
+        {
+            var rule = new VisualElement();
+            rule.AddToClassList("markdown-hr");
+            rule.pickingMode = PickingMode.Ignore;
+            return rule;
+        }
+
+        private VisualElement BuildDiffLine(Block block)
         {
             var row = new VisualElement();
             row.pickingMode = PickingMode.Ignore;
             row.style.flexDirection = FlexDirection.Row;
-            row.style.flexWrap = Wrap.NoWrap;
-            row.style.height = lineHeight;
-            row.style.marginLeft = indent;
-            row.style.minWidth = 0;
-            row.style.width = Length.Percent(100);
-            _contentLayer.Add(row);
+            row.style.paddingLeft = 10;
+            row.style.paddingRight = 6;
+            if (block.DiffHasBackground)
+                row.style.backgroundColor = block.DiffBackground;
+
+            string text = block.Inlines.Count > 0 ? (block.Inlines[0].Text ?? string.Empty) : string.Empty;
+            var label = new Label(text);
+            label.AddToClassList("markdown-codeblock-text");
+            label.pickingMode = PickingMode.Ignore;
+            if (block.DiffHasColor)
+                label.style.color = block.DiffColor;
+            AddToken(block, label, null, 0, text.Length);
+            row.Add(label);
             return row;
         }
 
-        private static VisualLine CreateVisualLine(float y, float lineHeight, float indent, int plainStart)
+        private VisualElement BuildTable(Block block)
         {
-            var visualLine = new VisualLine();
-            visualLine.Y = y;
-            visualLine.Height = lineHeight;
-            visualLine.Indent = indent;
-            visualLine.PlainStart = plainStart;
-            visualLine.PlainEnd = plainStart;
-            return visualLine;
-        }
+            var table = new VisualElement();
+            table.AddToClassList("markdown-table");
+            table.pickingMode = PickingMode.Ignore;
+            if (block.TableRows == null)
+                return table;
 
-        private void FinishRow(VisualElement row, VisualLine visualLine, List<VisualLine> created)
-        {
-            if (row.childCount == 0)
+            int local = 0;
+            for (int r = 0; r < block.TableRows.Count; r++)
             {
-                var spacer = new Label(" ");
-                spacer.pickingMode = PickingMode.Ignore;
-                spacer.style.opacity = 0;
-                row.Add(spacer);
-            }
-            _visualLines.Add(visualLine);
-            created.Add(visualLine);
-        }
+                TableRow tableRow = block.TableRows[r];
+                var rowEl = new VisualElement();
+                rowEl.AddToClassList("markdown-table-row");
+                rowEl.pickingMode = PickingMode.Ignore;
+                if (tableRow.IsHeader)
+                    rowEl.AddToClassList("markdown-table-row--header");
+                else if (tableRow.Alt)
+                    rowEl.AddToClassList("markdown-table-row--alt");
+                if (tableRow.IsLast)
+                    rowEl.AddToClassList("markdown-table-row--last");
 
-        private Label CreateRunLabel(TextRun run, LineSpec spec)
-        {
-            var label = new Label(run.Text);
-            label.pickingMode = PickingMode.Ignore;
-            label.focusable = false;
-            label.style.whiteSpace = WhiteSpace.NoWrap;
-            label.style.fontSize = GetFontSize(spec);
-            label.style.marginRight = 0;
-            label.style.marginLeft = 0;
-            label.style.paddingLeft = run.Code && spec.Kind != LineKind.Code && spec.Kind != LineKind.Diff ? 3 : 0;
-            label.style.paddingRight = run.Code && spec.Kind != LineKind.Code && spec.Kind != LineKind.Diff ? 3 : 0;
-
-            if (run.Bold && run.Italic)
-                label.style.unityFontStyleAndWeight = FontStyle.BoldAndItalic;
-            else if (run.Bold || spec.Kind == LineKind.Heading)
-                label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            else if (run.Italic)
-                label.style.unityFontStyleAndWeight = FontStyle.Italic;
-
-            if (spec.HasTextColor)
-                label.style.color = spec.TextColor;
-            else if (run.LinkUrl != null)
-                label.style.color = new Color(0.43f, 0.66f, 1f, 1f);
-            else if (run.Strike)
-                label.style.color = new Color(0.62f, 0.64f, 0.7f, 1f);
-            else if (spec.Kind == LineKind.Quote)
-                label.style.color = new Color(0.72f, 0.74f, 0.82f, 1f);
-
-            if (run.Code)
-            {
-                if (spec.Kind != LineKind.Code && spec.Kind != LineKind.Diff)
+                for (int c = 0; c < tableRow.Cells.Count; c++)
                 {
-                    label.style.backgroundColor = new Color(1f, 1f, 1f, 0.08f);
-                    label.style.borderTopLeftRadius = 3;
-                    label.style.borderTopRightRadius = 3;
-                    label.style.borderBottomLeftRadius = 3;
-                    label.style.borderBottomRightRadius = 3;
-                    label.style.color = new Color(1f, 0.68f, 0.36f, 1f);
+                    var cellEl = new VisualElement();
+                    cellEl.AddToClassList("markdown-table-cell");
+                    cellEl.pickingMode = PickingMode.Ignore;
+                    if (c == tableRow.Cells.Count - 1)
+                        cellEl.AddToClassList("markdown-table-cell--last");
+                    if (tableRow.IsHeader)
+                        cellEl.AddToClassList("markdown-table-cell--header");
+
+                    AddInlineTokens(cellEl, block, tableRow.Cells[c], ref local);
+                    if (c < tableRow.Cells.Count - 1)
+                        local += 1; // tab separator in PlainText
+                    rowEl.Add(cellEl);
                 }
+                if (r < block.TableRows.Count - 1)
+                    local += 1; // newline between rows in PlainText
+                table.Add(rowEl);
             }
-
-            if (run.LinkUrl != null)
-                label.tooltip = run.LinkUrl;
-
-            return label;
+            return table;
         }
 
-        private void AddRuleVisual(float y)
+        private void AddInlineTokens(VisualElement container, Block block, List<InlineRun> runs, ref int local)
         {
-            var row = new VisualElement();
-            row.pickingMode = PickingMode.Ignore;
-            row.style.height = 1;
-            row.style.marginTop = 0;
-            row.style.marginBottom = 0;
-            row.style.backgroundColor = new Color(1f, 1f, 1f, 0.12f);
-            _contentLayer.Add(row);
-            _backgrounds.Add(new BackgroundBox
+            for (int i = 0; i < runs.Count; i++)
             {
-                X = 0,
-                Y = y,
-                Width = _lastLayoutWidth,
-                Height = 1,
-                Color = new Color(1f, 1f, 1f, 0.12f),
-                Radius = 0
-            });
-        }
-
-        private void DrawBackgrounds()
-        {
-            _backgroundLayer.Clear();
-            for (int i = 0; i < _backgrounds.Count; i++)
-            {
-                BackgroundBox bg = _backgrounds[i];
-                var rect = new VisualElement();
-                rect.pickingMode = PickingMode.Ignore;
-                rect.style.position = Position.Absolute;
-                rect.style.left = bg.X;
-                rect.style.top = bg.Y;
-                rect.style.width = bg.Width;
-                rect.style.height = bg.Height;
-                rect.style.backgroundColor = bg.Color;
-                if (bg.Radius > 0)
+                InlineRun run = runs[i];
+                bool keepWhole = run.Code || run.LinkUrl != null;
+                if (keepWhole)
                 {
-                    rect.style.borderTopLeftRadius = bg.Radius;
-                    rect.style.borderTopRightRadius = bg.Radius;
-                    rect.style.borderBottomLeftRadius = bg.Radius;
-                    rect.style.borderBottomRightRadius = bg.Radius;
-                }
-                _backgroundLayer.Add(rect);
-            }
-        }
-
-        private string TakeFittingSegment(string text, float fontSize, float widthLeft)
-        {
-            if (string.IsNullOrEmpty(text))
-                return string.Empty;
-
-            if (text.Length == 0)
-                return string.Empty;
-
-            int newline = text.IndexOf('\n');
-            if (newline == 0)
-                return string.Empty;
-            if (newline > 0)
-                text = text.Substring(0, newline);
-
-            if (MeasureText(text, fontSize) <= widthLeft)
-                return text;
-
-            int low = 1;
-            int high = text.Length;
-            int best = 1;
-            while (low <= high)
-            {
-                int mid = (low + high) / 2;
-                string candidate = text.Substring(0, mid);
-                if (MeasureText(candidate, fontSize) <= widthLeft)
-                {
-                    best = mid;
-                    low = mid + 1;
+                    string text = run.Text ?? string.Empty;
+                    Label label = MakeInlineLabel(text, run);
+                    container.Add(label);
+                    AddToken(block, label, run, local, local + text.Length);
+                    local += text.Length;
                 }
                 else
                 {
-                    high = mid - 1;
+                    AddWordTokens(container, block, run, ref local);
                 }
             }
-
-            int breakAt = -1;
-            for (int i = best - 1; i > 0; i--)
-            {
-                if (char.IsWhiteSpace(text[i]))
-                {
-                    breakAt = i + 1;
-                    break;
-                }
-            }
-            if (breakAt > 0)
-                best = breakAt;
-
-            return text.Substring(0, Mathf.Clamp(best, 1, text.Length));
         }
 
-        private float[] BuildCharOffsets(TextRun run, float fontSize)
+        private void AddWordTokens(VisualElement container, Block block, InlineRun run, ref int local)
         {
             string text = run.Text ?? string.Empty;
+            int i = 0;
+            while (i < text.Length)
+            {
+                int start = i;
+                while (i < text.Length && !char.IsWhiteSpace(text[i]))
+                    i++;
+                while (i < text.Length && char.IsWhiteSpace(text[i]))
+                    i++;
+                EmitWord(container, block, run, text.Substring(start, i - start), ref local);
+            }
+        }
+
+        // Emits one word as a token, splitting over-long unbreakable words into chunks so the
+        // flex-wrap row can break them (CSS word-break: break-all). Without this a single long
+        // word (URL / hash / a no-space string) overflows the bubble because NoWrap labels never break.
+        private void EmitWord(VisualElement container, Block block, InlineRun run, string word, ref int local)
+        {
+            if (word.Length == 0)
+                return;
+            if (word.Length <= InlineChunkMax)
+            {
+                Label label = MakeInlineLabel(word, run);
+                container.Add(label);
+                AddToken(block, label, run, local, local + word.Length);
+                local += word.Length;
+                return;
+            }
+            int p = 0;
+            while (p < word.Length)
+            {
+                int len = Mathf.Min(InlineChunkMax, word.Length - p);
+                string chunk = word.Substring(p, len);
+                Label label = MakeInlineLabel(chunk, run);
+                container.Add(label);
+                AddToken(block, label, run, local, local + len);
+                local += len;
+                p += len;
+            }
+        }
+
+        private static VisualElement NewWrapRow()
+        {
+            var row = new VisualElement();
+            row.pickingMode = PickingMode.Ignore;
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.flexWrap = Wrap.Wrap;
+            row.style.minWidth = 0;
+            return row;
+        }
+
+        // Paragraph renders as a column of flex-wrap rows so hard line breaks ('\n', e.g. the user's
+        // Shift+Enter newlines) are preserved instead of being collapsed into a single wrapped line.
+        private VisualElement BuildParagraph(Block block)
+        {
+            var container = new VisualElement();
+            container.AddToClassList("markdown-paragraph");
+            container.pickingMode = PickingMode.Ignore;
+            container.style.flexDirection = FlexDirection.Column; // override the class's row direction
+            container.style.minWidth = 0;
+
+            VisualElement row = NewWrapRow();
+            container.Add(row);
+            int local = 0;
+
+            for (int r = 0; r < block.Inlines.Count; r++)
+            {
+                InlineRun run = block.Inlines[r];
+                string text = run.Text ?? string.Empty;
+                bool keepWhole = run.Code || run.LinkUrl != null;
+                if (keepWhole)
+                {
+                    Label label = MakeInlineLabel(text, run);
+                    row.Add(label);
+                    AddToken(block, label, run, local, local + text.Length);
+                    local += text.Length;
+                    continue;
+                }
+
+                int i = 0;
+                while (i < text.Length)
+                {
+                    if (text[i] == '\n')
+                    {
+                        local += 1; // newline lives in PlainText but in no token (a gap)
+                        i++;
+                        row = NewWrapRow();
+                        container.Add(row);
+                        continue;
+                    }
+                    int start = i;
+                    while (i < text.Length && !char.IsWhiteSpace(text[i]))
+                        i++;
+                    while (i < text.Length && text[i] != '\n' && char.IsWhiteSpace(text[i]))
+                        i++;
+                    EmitWord(row, block, run, text.Substring(start, i - start), ref local);
+                }
+            }
+            return container;
+        }
+
+        private Label MakeInlineLabel(string text, InlineRun run)
+        {
+            var label = new Label(text);
+            label.AddToClassList("transcript__body");
+            label.pickingMode = PickingMode.Ignore;
+            label.style.whiteSpace = WhiteSpace.NoWrap;
+            if (run != null)
+            {
+                if (run.Bold)
+                    label.AddToClassList("markdown-bold");
+                if (run.Italic)
+                    label.AddToClassList("markdown-italic");
+                if (run.Code)
+                    label.AddToClassList("markdown-code");
+                if (run.Strike)
+                    label.AddToClassList("markdown-strike");
+                if (run.LinkUrl != null)
+                {
+                    label.AddToClassList("markdown-link");
+                    label.tooltip = run.LinkUrl;
+                }
+            }
+            return label;
+        }
+
+        private void AttachCopyHandler(Label button, string textToCopy)
+        {
+            string payload = textToCopy ?? string.Empty;
+            button.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                GUIUtility.systemCopyBuffer = payload;
+                button.text = "Copied ✓";
+                button.schedule.Execute(() => { button.text = "Copy"; }).StartingIn(1200);
+                evt.StopImmediatePropagation();
+            });
+        }
+
+        private void AddToken(Block block, Label label, InlineRun run, int localStart, int localEnd)
+        {
+            var token = new PlacedToken();
+            token.Label = label;
+            token.Run = run;
+            token.LocalStart = localStart;
+            token.LocalEnd = localEnd;
+            block.Tokens.Add(token);
+        }
+
+        // ===================== Geometry capture =====================
+
+        private void OnGeometryChanged(GeometryChangedEvent evt)
+        {
+            CaptureGeometry();
+            RebuildSelectionVisuals();
+        }
+
+        private void ScheduleCapture()
+        {
+            if (_captureScheduled)
+                return;
+            _captureScheduled = true;
+            schedule.Execute(() =>
+            {
+                _captureScheduled = false;
+                if (panel == null)
+                    return;
+                CaptureGeometry();
+                RebuildSelectionVisuals();
+            }).StartingIn(0);
+        }
+
+        private void CaptureGeometry()
+        {
+            for (int i = 0; i < _tokens.Count; i++)
+            {
+                PlacedToken token = _tokens[i];
+                token.HasRect = false;
+                token.CharOffsets = null;
+                Label label = token.Label;
+                if (label == null || label.panel == null || label.parent == null)
+                    continue;
+                Rect r = label.layout;
+                if (float.IsNaN(r.x) || float.IsNaN(r.y) || float.IsNaN(r.width) || float.IsNaN(r.height))
+                    continue;
+                Vector2 tl = label.parent.ChangeCoordinatesTo(this, new Vector2(r.xMin, r.yMin));
+                Vector2 br = label.parent.ChangeCoordinatesTo(this, new Vector2(r.xMax, r.yMax));
+                token.Rect = new Rect(tl.x, tl.y, Mathf.Max(0f, br.x - tl.x), Mathf.Max(0f, br.y - tl.y));
+                token.HasRect = true;
+            }
+            BuildVisualLines();
+        }
+
+        private void BuildVisualLines()
+        {
+            _lines.Clear();
+            VisualTextLine current = null;
+            for (int i = 0; i < _tokens.Count; i++)
+            {
+                PlacedToken token = _tokens[i];
+                if (!token.HasRect)
+                    continue;
+                bool newLine = current == null ||
+                               Mathf.Abs(token.Rect.y - current.Y) > Mathf.Max(2f, current.Height * 0.5f);
+                if (newLine)
+                {
+                    current = new VisualTextLine();
+                    current.Y = token.Rect.y;
+                    current.Height = token.Rect.height;
+                    current.PlainStart = token.GlobalStart;
+                    current.PlainEnd = token.GlobalEnd;
+                    _lines.Add(current);
+                }
+                current.Tokens.Add(token);
+                current.Height = Mathf.Max(current.Height, token.Rect.height);
+                current.PlainStart = Mathf.Min(current.PlainStart, token.GlobalStart);
+                current.PlainEnd = Mathf.Max(current.PlainEnd, token.GlobalEnd);
+            }
+        }
+
+        private float[] EnsureOffsets(PlacedToken token)
+        {
+            if (token.CharOffsets != null)
+                return token.CharOffsets;
+            Label label = token.Label;
+            string text = label != null ? (label.text ?? string.Empty) : string.Empty;
             var offsets = new float[text.Length + 1];
-            offsets[0] = 0;
+            offsets[0] = 0f;
             for (int i = 1; i <= text.Length; i++)
-                offsets[i] = MeasureText(text.Substring(0, i), fontSize);
+            {
+                float w;
+                if (label != null)
+                {
+                    Vector2 size = label.MeasureTextSize(text.Substring(0, i), 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
+                    w = float.IsNaN(size.x) ? token.Rect.width * ((float)i / Mathf.Max(1, text.Length)) : size.x;
+                }
+                else
+                {
+                    w = 0f;
+                }
+                offsets[i] = w;
+            }
+            token.CharOffsets = offsets;
             return offsets;
         }
 
-        private float MeasureRun(TextRun run, float fontSize)
-        {
-            return MeasureText(run.Text ?? string.Empty, fontSize);
-        }
-
-        private float MeasureText(string text, float fontSize)
-        {
-            if (string.IsNullOrEmpty(text))
-                return 0;
-            _measureLabel.style.fontSize = fontSize;
-            Vector2 size = _measureLabel.MeasureTextSize(text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined);
-            if (float.IsNaN(size.x) || size.x <= 0)
-                return text.Length * fontSize * 0.55f;
-            return size.x;
-        }
-
-        private static float GetFontSize(LineSpec spec)
-        {
-            if (spec.Kind == LineKind.Code || spec.Kind == LineKind.Diff)
-                return 12f;
-            if (spec.Kind == LineKind.Heading)
-            {
-                if (spec.HeadingLevel <= 1)
-                    return 18f;
-                if (spec.HeadingLevel == 2)
-                    return 16f;
-                if (spec.HeadingLevel == 3)
-                    return 14f;
-                return 13f;
-            }
-            return 13f;
-        }
+        // ===================== Selection rendering =====================
 
         private void RebuildSelectionVisuals()
         {
@@ -870,36 +713,55 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!GetSelectionRange(out start, out end))
                 return;
 
-            for (int i = 0; i < _visualLines.Count; i++)
+            for (int i = 0; i < _lines.Count; i++)
             {
-                VisualLine line = _visualLines[i];
-                int lineStart = line.PlainStart;
-                int lineEnd = line.PlainEnd;
-                if (lineEnd < lineStart)
-                    lineEnd = lineStart;
-                if (end < lineStart || start > lineEnd)
+                VisualTextLine line = _lines[i];
+                if (end <= line.PlainStart || start >= line.PlainEnd)
+                    continue;
+                int from = Mathf.Max(start, line.PlainStart);
+                int to = Mathf.Min(end, line.PlainEnd);
+                if (to <= from)
                     continue;
 
-                int from = Mathf.Max(start, lineStart);
-                int to = Mathf.Min(end, lineEnd);
-                if (to < from)
-                    continue;
-
-                float x1 = GetXForPlainIndex(line, from);
-                float x2 = GetXForPlainIndex(line, to);
-                if (Mathf.Abs(x2 - x1) < 1f)
+                float x1 = XForIndex(line, from);
+                float x2 = XForIndex(line, to);
+                if (x2 < x1)
+                {
+                    float tmp = x1;
+                    x1 = x2;
+                    x2 = tmp;
+                }
+                if (x2 - x1 < 1.5f)
                     x2 = x1 + 2f;
 
                 var rect = new VisualElement();
                 rect.pickingMode = PickingMode.Ignore;
                 rect.style.position = Position.Absolute;
                 rect.style.left = x1;
-                rect.style.top = line.Y + 1;
-                rect.style.width = Mathf.Max(2f, x2 - x1);
-                rect.style.height = Mathf.Max(2f, line.Height - 2);
+                rect.style.top = line.Y;
+                rect.style.width = x2 - x1;
+                rect.style.height = line.Height;
                 rect.style.backgroundColor = new Color(0.43f, 0.42f, 0.95f, 0.35f);
                 _selectionLayer.Add(rect);
             }
+        }
+
+        private float XForIndex(VisualTextLine line, int index)
+        {
+            if (line.Tokens.Count == 0)
+                return 0f;
+            for (int i = 0; i < line.Tokens.Count; i++)
+            {
+                PlacedToken token = line.Tokens[i];
+                if (index <= token.GlobalEnd)
+                {
+                    float[] offsets = EnsureOffsets(token);
+                    int local = Mathf.Clamp(index - token.GlobalStart, 0, offsets.Length - 1);
+                    return token.Rect.x + offsets[local];
+                }
+            }
+            PlacedToken last = line.Tokens[line.Tokens.Count - 1];
+            return last.Rect.xMax;
         }
 
         private bool GetSelectionRange(out int start, out int end)
@@ -913,33 +775,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             return end > start;
         }
 
-        private float GetXForPlainIndex(VisualLine line, int index)
-        {
-            if (line.Runs.Count == 0)
-                return line.Indent;
-            for (int i = 0; i < line.Runs.Count; i++)
-            {
-                RunBox run = line.Runs[i];
-                if (index <= run.PlainEnd)
-                {
-                    int local = Mathf.Clamp(index - run.PlainStart, 0, run.CharOffsets.Length - 1);
-                    return run.X + run.CharOffsets[local];
-                }
-            }
-            RunBox last = line.Runs[line.Runs.Count - 1];
-            return last.X + last.Width;
-        }
+        // ===================== Hit testing =====================
 
         private int HitTestPlainIndex(Vector2 localPosition, out string linkUrl)
         {
             linkUrl = null;
-            if (_visualLines.Count == 0)
+            if (_lines.Count == 0)
                 return 0;
 
-            VisualLine line = _visualLines[0];
-            for (int i = 0; i < _visualLines.Count; i++)
+            VisualTextLine line = _lines[0];
+            for (int i = 0; i < _lines.Count; i++)
             {
-                VisualLine candidate = _visualLines[i];
+                VisualTextLine candidate = _lines[i];
                 if (localPosition.y >= candidate.Y && localPosition.y <= candidate.Y + candidate.Height)
                 {
                     line = candidate;
@@ -949,29 +796,37 @@ namespace NeonCompanion.Runtime.UI.UITK
                     line = candidate;
             }
 
-            if (line.Runs.Count == 0)
+            if (line.Tokens.Count == 0)
                 return line.PlainStart;
 
-            for (int r = 0; r < line.Runs.Count; r++)
+            for (int i = 0; i < line.Tokens.Count; i++)
             {
-                RunBox run = line.Runs[r];
-                if (localPosition.x <= run.X + run.Width)
+                PlacedToken token = line.Tokens[i];
+                if (localPosition.x <= token.Rect.xMax)
                 {
-                    linkUrl = run.Run.LinkUrl;
-                    for (int i = 0; i < run.CharOffsets.Length - 1; i++)
-                    {
-                        float mid = run.X + (run.CharOffsets[i] + run.CharOffsets[i + 1]) * 0.5f;
-                        if (localPosition.x <= mid)
-                            return run.PlainStart + i;
-                    }
-                    return run.PlainEnd;
+                    linkUrl = token.Run != null ? token.Run.LinkUrl : null;
+                    return IndexInToken(token, localPosition.x);
                 }
             }
 
-            RunBox last = line.Runs[line.Runs.Count - 1];
-            linkUrl = last.Run.LinkUrl;
-            return last.PlainEnd;
+            PlacedToken lastToken = line.Tokens[line.Tokens.Count - 1];
+            linkUrl = lastToken.Run != null ? lastToken.Run.LinkUrl : null;
+            return lastToken.GlobalEnd;
         }
+
+        private int IndexInToken(PlacedToken token, float x)
+        {
+            float[] offsets = EnsureOffsets(token);
+            for (int i = 0; i < offsets.Length - 1; i++)
+            {
+                float mid = token.Rect.x + (offsets[i] + offsets[i + 1]) * 0.5f;
+                if (x <= mid)
+                    return token.GlobalStart + i;
+            }
+            return token.GlobalEnd;
+        }
+
+        // ===================== Pointer / keyboard =====================
 
         private void OnPointerDown(PointerDownEvent evt)
         {
@@ -979,9 +834,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             Focus();
-            _lastPointerIndex = HitTestPlainIndex(evt.localPosition, out _lastPointerLink);
-            _selectionAnchor = _lastPointerIndex;
-            _selectionFocus = _lastPointerIndex;
+            _downIndex = HitTestPlainIndex(evt.localPosition, out _downLink);
+            _selectionAnchor = _downIndex;
+            _selectionFocus = _downIndex;
             _isDragging = true;
             _capturedPointerId = evt.pointerId;
             this.CapturePointer(evt.pointerId);
@@ -1016,7 +871,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!GetSelectionRange(out start, out end))
             {
                 ClearSelection();
-                if (!string.IsNullOrEmpty(linkUrl) && upIndex == _lastPointerIndex && string.Equals(linkUrl, _lastPointerLink, StringComparison.Ordinal))
+                if (!string.IsNullOrEmpty(linkUrl) && upIndex == _downIndex &&
+                    string.Equals(linkUrl, _downLink, StringComparison.Ordinal))
                     Application.OpenURL(linkUrl);
             }
             else
@@ -1079,12 +935,404 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _selectionLayer.Clear();
         }
 
-        private static List<TextRun> ParseInline(string text)
+        private void ClampSelection()
         {
-            var runs = new List<TextRun>();
+            if (_selectionAnchor > _plainText.Length)
+                _selectionAnchor = _plainText.Length;
+            if (_selectionFocus > _plainText.Length)
+                _selectionFocus = _plainText.Length;
+        }
+
+        // ===================== Markdown parsing =====================
+
+        private void ParseMarkdown(string markdown, List<Block> blocks)
+        {
+            if (string.IsNullOrEmpty(markdown))
+                return;
+
+            string normalized = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
+            string[] lines = normalized.Split('\n');
+            var paragraph = new List<string>();
+
+            int i = 0;
+            while (i < lines.Length)
+            {
+                string raw = lines[i];
+                string trimmedStart = raw.TrimStart(' ', '\t');
+
+                if (trimmedStart.StartsWith("```", StringComparison.Ordinal))
+                {
+                    FlushParagraph(paragraph, blocks);
+                    string fenceInfo = trimmedStart.Length > 3 ? trimmedStart.Substring(3).Trim() : string.Empty;
+                    var code = new StringBuilder();
+                    i++;
+                    while (i < lines.Length)
+                    {
+                        string codeTrimmed = lines[i].TrimStart(' ', '\t');
+                        bool isClosingFence = string.Equals(codeTrimmed, "```", StringComparison.Ordinal);
+                        if (isClosingFence)
+                            break;
+                        if (!string.Equals(fenceInfo, "markdown", StringComparison.OrdinalIgnoreCase) &&
+                            codeTrimmed.StartsWith("```", StringComparison.Ordinal))
+                            break;
+                        if (code.Length > 0)
+                            code.Append('\n');
+                        code.Append(lines[i]);
+                        i++;
+                    }
+                    AddCodeBlock(blocks, code.ToString(), fenceInfo);
+                    if (i < lines.Length)
+                        i++;
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    FlushParagraph(paragraph, blocks);
+                    i++;
+                    continue;
+                }
+
+                if (IsHorizontalRule(trimmedStart))
+                {
+                    FlushParagraph(paragraph, blocks);
+                    AddRule(blocks);
+                    i++;
+                    continue;
+                }
+
+                int headingLevel = GetHeadingLevel(trimmedStart);
+                if (headingLevel > 0)
+                {
+                    FlushParagraph(paragraph, blocks);
+                    string headingText = trimmedStart.Substring(headingLevel + 1);
+                    AddHeading(blocks, headingText, headingLevel);
+                    i++;
+                    continue;
+                }
+
+                if (trimmedStart.StartsWith("> ", StringComparison.Ordinal) || string.Equals(trimmedStart, ">", StringComparison.Ordinal))
+                {
+                    FlushParagraph(paragraph, blocks);
+                    string quoteText = trimmedStart.Length > 2 ? trimmedStart.Substring(2) : string.Empty;
+                    AddQuote(blocks, quoteText);
+                    i++;
+                    continue;
+                }
+
+                string bulletMarker;
+                string bulletText;
+                if (TryParseListItem(trimmedStart, out bulletMarker, out bulletText))
+                {
+                    FlushParagraph(paragraph, blocks);
+                    int listIndent = CountLeadingColumns(raw);
+                    if (string.Equals(bulletMarker, "•", StringComparison.Ordinal))
+                        AddBullet(blocks, bulletText, listIndent);
+                    else
+                        AddNumbered(blocks, bulletMarker, bulletText, listIndent);
+                    i++;
+                    continue;
+                }
+
+                if (IsPotentialTableBlock(lines, i))
+                {
+                    FlushParagraph(paragraph, blocks);
+                    i = ParseTable(lines, i, blocks);
+                    continue;
+                }
+
+                paragraph.Add(trimmedStart);
+                i++;
+            }
+
+            FlushParagraph(paragraph, blocks);
+        }
+
+        private void FlushParagraph(List<string> paragraph, List<Block> blocks)
+        {
+            if (paragraph.Count == 0)
+                return;
+            string joined = string.Join(" ", paragraph.ToArray());
+            AddParagraph(blocks, joined);
+            paragraph.Clear();
+        }
+
+        private void AddParagraph(List<Block> blocks, string text)
+        {
+            var block = new Block();
+            block.Kind = BlockKind.Paragraph;
+            block.Inlines.AddRange(ParseInline(text));
+            FinalizeBlock(block);
+            blocks.Add(block);
+        }
+
+        private void AddHeading(List<Block> blocks, string text, int level)
+        {
+            var block = new Block();
+            block.Kind = BlockKind.Heading;
+            block.HeadingLevel = Mathf.Clamp(level, 1, 6);
+            block.Inlines.AddRange(ParseInline(text));
+            FinalizeBlock(block);
+            blocks.Add(block);
+        }
+
+        private void AddQuote(List<Block> blocks, string text)
+        {
+            var block = new Block();
+            block.Kind = BlockKind.Quote;
+            block.Inlines.AddRange(ParseInline(text));
+            FinalizeBlock(block);
+            blocks.Add(block);
+        }
+
+        private void AddBullet(List<Block> blocks, string text, int indent)
+        {
+            var block = new Block();
+            block.Kind = BlockKind.Bullet;
+            block.Marker = "•";
+            block.Indent = indent;
+            block.Inlines.AddRange(ParseInline(text));
+            FinalizeBlock(block);
+            blocks.Add(block);
+        }
+
+        private void AddNumbered(List<Block> blocks, string marker, string text, int indent)
+        {
+            var block = new Block();
+            block.Kind = BlockKind.Numbered;
+            block.Marker = marker;
+            block.Indent = indent;
+            block.Inlines.AddRange(ParseInline(text));
+            FinalizeBlock(block);
+            blocks.Add(block);
+        }
+
+        private void AddCodeBlock(List<Block> blocks, string code, string language)
+        {
+            var block = new Block();
+            block.Kind = BlockKind.CodeBlock;
+            block.CodeText = code ?? string.Empty;
+            block.CodeLanguage = language ?? string.Empty;
+            FinalizeBlock(block);
+            blocks.Add(block);
+        }
+
+        private static int CountLeadingColumns(string raw)
+        {
+            if (string.IsNullOrEmpty(raw))
+                return 0;
+            int columns = 0;
+            for (int i = 0; i < raw.Length; i++)
+            {
+                if (raw[i] == ' ')
+                    columns += 1;
+                else if (raw[i] == '\t')
+                    columns += 4;
+                else
+                    break;
+            }
+            return columns;
+        }
+
+        private void AddRule(List<Block> blocks)
+        {
+            var block = new Block();
+            block.Kind = BlockKind.Rule;
+            FinalizeBlock(block);
+            blocks.Add(block);
+        }
+
+        private int ParseTable(string[] lines, int startIndex, List<Block> blocks)
+        {
+            var rows = new List<TableRow>();
+            int i = startIndex;
+            while (i < lines.Length)
+            {
+                string trimmed = lines[i].TrimStart(' ', '\t');
+                if (!IsPotentialTableStart(trimmed))
+                    break;
+                if (i == startIndex + 1 && IsTableSeparatorRow(trimmed))
+                {
+                    i++;
+                    continue;
+                }
+
+                string normalized = NormalizeTableLine(trimmed);
+                string[] cells = ParseTableCells(normalized);
+                var row = new TableRow();
+                row.IsHeader = i == startIndex;
+                for (int c = 0; c < cells.Length; c++)
+                    row.Cells.Add(ParseInline(UnescapeMarkdownSyntax(cells[c])));
+                rows.Add(row);
+                i++;
+            }
+
+            int dataIndex = 0;
+            for (int r = 0; r < rows.Count; r++)
+            {
+                if (!rows[r].IsHeader)
+                {
+                    rows[r].Alt = dataIndex % 2 == 1;
+                    dataIndex++;
+                }
+                rows[r].IsLast = r == rows.Count - 1;
+            }
+
+            var block = new Block();
+            block.Kind = BlockKind.Table;
+            block.TableRows = rows;
+            FinalizeBlock(block);
+            blocks.Add(block);
+            return i;
+        }
+
+        // ===================== Diff parsing =====================
+
+        private void ParseDiff(string text, List<Block> blocks)
+        {
+            string normalized = (text ?? string.Empty).Replace("\r\n", "\n").Replace("\r", "\n");
+            string[] lines = normalized.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string raw = lines[i];
+                var block = new Block();
+                block.Kind = BlockKind.DiffLine;
+                block.Inlines.Add(new InlineRun { Text = raw, Code = true });
+
+                if (raw.StartsWith("+", StringComparison.Ordinal) && !raw.StartsWith("+++", StringComparison.Ordinal))
+                {
+                    block.DiffHasBackground = true;
+                    block.DiffBackground = new Color(0.1f, 0.45f, 0.22f, 0.25f);
+                    block.DiffHasColor = true;
+                    block.DiffColor = new Color(0.45f, 0.95f, 0.6f, 1f);
+                }
+                else if (raw.StartsWith("-", StringComparison.Ordinal) && !raw.StartsWith("---", StringComparison.Ordinal))
+                {
+                    block.DiffHasBackground = true;
+                    block.DiffBackground = new Color(0.55f, 0.12f, 0.14f, 0.25f);
+                    block.DiffHasColor = true;
+                    block.DiffColor = new Color(1f, 0.45f, 0.45f, 1f);
+                }
+                else if (raw.StartsWith("@@", StringComparison.Ordinal))
+                {
+                    block.DiffHasBackground = true;
+                    block.DiffBackground = new Color(0.12f, 0.28f, 0.6f, 0.22f);
+                    block.DiffHasColor = true;
+                    block.DiffColor = new Color(0.45f, 0.7f, 1f, 1f);
+                }
+                else
+                {
+                    block.DiffHasColor = true;
+                    block.DiffColor = new Color(0.7f, 0.72f, 0.78f, 1f);
+                }
+
+                FinalizeBlock(block);
+                blocks.Add(block);
+            }
+        }
+
+        // ===================== Finalize (PlainText + Signature) =====================
+
+        private void FinalizeBlock(Block block)
+        {
+            var plain = new StringBuilder();
+            var sig = new StringBuilder();
+            sig.Append((int)block.Kind);
+            sig.Append('|');
+            sig.Append(block.HeadingLevel);
+            sig.Append('|');
+            sig.Append(block.Marker ?? string.Empty);
+            sig.Append('|');
+            sig.Append(block.Indent);
+            sig.Append('|');
+            sig.Append(block.CodeLanguage ?? string.Empty);
+            sig.Append('|');
+
+            switch (block.Kind)
+            {
+                case BlockKind.CodeBlock:
+                    plain.Append(block.CodeText ?? string.Empty);
+                    sig.Append(block.CodeText ?? string.Empty);
+                    break;
+                case BlockKind.Rule:
+                    sig.Append("hr");
+                    break;
+                case BlockKind.Bullet:
+                case BlockKind.Numbered:
+                    plain.Append(block.Marker ?? string.Empty);
+                    plain.Append(' ');
+                    AppendInline(plain, sig, block.Inlines);
+                    break;
+                case BlockKind.Table:
+                    AppendTable(plain, sig, block.TableRows);
+                    break;
+                case BlockKind.DiffLine:
+                    if (block.Inlines.Count > 0)
+                        plain.Append(block.Inlines[0].Text ?? string.Empty);
+                    sig.Append('d');
+                    AppendInline(new StringBuilder(), sig, block.Inlines);
+                    break;
+                default:
+                    AppendInline(plain, sig, block.Inlines);
+                    break;
+            }
+
+            block.PlainText = plain.ToString();
+            block.Signature = sig.ToString();
+        }
+
+        private static void AppendInline(StringBuilder plain, StringBuilder sig, List<InlineRun> runs)
+        {
+            for (int i = 0; i < runs.Count; i++)
+            {
+                InlineRun run = runs[i];
+                string t = run.Text ?? string.Empty;
+                plain.Append(t);
+                sig.Append(t);
+                sig.Append('\x02');
+                if (run.Bold) sig.Append('b');
+                if (run.Italic) sig.Append('i');
+                if (run.Code) sig.Append('c');
+                if (run.Strike) sig.Append('s');
+                if (run.LinkUrl != null)
+                {
+                    sig.Append('l');
+                    sig.Append(run.LinkUrl);
+                }
+                sig.Append('\x03');
+            }
+        }
+
+        private static void AppendTable(StringBuilder plain, StringBuilder sig, List<TableRow> rows)
+        {
+            if (rows == null)
+                return;
+            for (int r = 0; r < rows.Count; r++)
+            {
+                TableRow row = rows[r];
+                sig.Append(row.IsHeader ? 'H' : 'R');
+                for (int c = 0; c < row.Cells.Count; c++)
+                {
+                    if (c > 0)
+                        plain.Append('\t');
+                    AppendInline(plain, sig, row.Cells[c]);
+                    sig.Append('\x04');
+                }
+                if (r < rows.Count - 1)
+                    plain.Append('\n');
+                sig.Append('\x05');
+            }
+        }
+
+        // ===================== Inline parsing =====================
+
+        private static List<InlineRun> ParseInline(string text)
+        {
+            var runs = new List<InlineRun>();
             if (string.IsNullOrEmpty(text))
                 return runs;
 
+            text = UnescapeMarkdownSyntax(text);
             int pos = 0;
             while (pos < text.Length)
             {
@@ -1211,16 +1459,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             return string.CompareOrdinal(text, pos, marker, 0, marker.Length) == 0;
         }
 
-        private static void AddPlainRun(List<TextRun> runs, string text)
+        private static void AddPlainRun(List<InlineRun> runs, string text)
         {
             AddStyledRun(runs, text, false, false, false, false, null);
         }
 
-        private static void AddStyledRun(List<TextRun> runs, string text, bool bold, bool italic, bool code, bool strike, string linkUrl)
+        private static void AddStyledRun(List<InlineRun> runs, string text, bool bold, bool italic, bool code, bool strike, string linkUrl)
         {
             if (string.IsNullOrEmpty(text))
                 return;
-            runs.Add(new TextRun
+            runs.Add(new InlineRun
             {
                 Text = text,
                 Bold = bold,
@@ -1231,15 +1479,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             });
         }
 
-        private static bool LooksLikeMarkdownSyntax(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return false;
-            return text.IndexOf("*", StringComparison.Ordinal) >= 0 ||
-                   text.IndexOf("~", StringComparison.Ordinal) >= 0 ||
-                   text.IndexOf("`", StringComparison.Ordinal) >= 0 ||
-                   text.IndexOf("[", StringComparison.Ordinal) >= 0;
-        }
+        // ===================== Markdown helpers =====================
 
         private static string UnescapeMarkdownSyntax(string text)
         {
@@ -1276,7 +1516,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             text = null;
             if (trimmed.Length >= 2 && (trimmed.StartsWith("- ", StringComparison.Ordinal) || trimmed.StartsWith("* ", StringComparison.Ordinal) || trimmed.StartsWith("+ ", StringComparison.Ordinal)))
             {
-                marker = "·";
+                marker = "•";
                 text = trimmed.Substring(2);
                 return true;
             }
@@ -1317,7 +1557,30 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private static bool IsPotentialTableStart(string trimmed)
         {
-            return !string.IsNullOrEmpty(trimmed) && (trimmed[0] == '|' || trimmed.StartsWith("\\|", StringComparison.Ordinal));
+            if (string.IsNullOrEmpty(trimmed))
+                return false;
+            string normalized = NormalizeTableLine(trimmed);
+            int first = normalized.IndexOf('|');
+            if (first < 0)
+                return false;
+            int second = normalized.IndexOf('|', first + 1);
+            return second >= 0;
+        }
+
+        private static bool IsPotentialTableBlock(string[] lines, int index)
+        {
+            if (lines == null || index < 0 || index >= lines.Length)
+                return false;
+            string current = lines[index].TrimStart(' ', '\t');
+            if (!IsPotentialTableStart(current))
+                return false;
+            if (index + 1 >= lines.Length)
+                return false;
+
+            string next = lines[index + 1].TrimStart(' ', '\t');
+            if (IsTableSeparatorRow(next))
+                return true;
+            return IsPotentialTableStart(next);
         }
 
         private static bool IsTableSeparatorRow(string line)
