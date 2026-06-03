@@ -53,7 +53,7 @@
         </ui:VisualElement>
 
         <ui:VisualElement class="avatar-split">
-            <ui:VisualElement name="gallery-container" class="gallery-container">
+            <ui:ScrollView name="gallery-container" class="gallery-container" mode="Vertical">
 
             <ui:VisualElement name="gallery-static" class="gallery">
 
@@ -149,7 +149,7 @@
                 <ui:Label text="3D-аватары появятся в следующих обновлениях" class="gallery-empty-hint" />
             </ui:VisualElement>
 
-            </ui:VisualElement> <!-- end gallery-container -->
+            </ui:ScrollView> <!-- end gallery-container -->
 
             <ui:VisualElement class="previewcard">
                 <ui:ScrollView name="avatar-preview-scroll" class="preview-scroll" mode="Vertical">

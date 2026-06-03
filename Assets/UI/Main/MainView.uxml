@@ -63,7 +63,7 @@
             </ui:VisualElement>
             <ui:ScrollView name="sessions-list" class="rail__sessions-list" />
 
-            <ui:Button name="nav-close" class="nav__item nav__item--close">
+            <ui:Button name="nav-close" class="nav__item nav__item--close is-hidden">
                 <ui:VisualElement class="nav__icon icon icon--power" />
                 <ui:Label name="nav-close-label" text="Закрыть" class="nav__label" />
             </ui:Button>
