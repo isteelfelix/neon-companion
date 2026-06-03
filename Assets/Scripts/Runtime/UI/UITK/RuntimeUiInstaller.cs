@@ -25,6 +25,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (GetComponent<MainViewController>() == null)
                 gameObject.AddComponent<MainViewController>();
+
+            // Безрамочное окно: перетаскивание/maximize за топбар (Windows; на
+            // остальных платформах сервис — заглушка, биндер просто простаивает).
+            if (GetComponent<WindowChromeBinder>() == null)
+                gameObject.AddComponent<WindowChromeBinder>();
         }
     }
 }

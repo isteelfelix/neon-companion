@@ -44,6 +44,7 @@ namespace NeonCompanion.Runtime.Core
             var filePicker = PlatformServiceFactory.CreateFilePickerService();
             var platformInfo = PlatformServiceFactory.CreatePlatformInfoService();
             var fileDrop = PlatformServiceFactory.CreateFileDropService(gameObject);
+            var windowChrome = PlatformServiceFactory.CreateWindowChromeService(gameObject);
             var voiceService = PlatformServiceFactory.CreateVoiceService(gameObject);
 #if UNITY_ANDROID && !UNITY_EDITOR
             AndroidPermissionHelper.RequestPermission(AndroidPermissionHelper.RECORD_AUDIO);
@@ -142,6 +143,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IFilePickerService>(filePicker);
             services.Register<IPlatformInfoService>(platformInfo);
             services.Register<IFileDropService>(fileDrop);
+            services.Register<IWindowChromeService>(windowChrome);
             services.Register<IVoiceService>(voiceService);
             services.Register<IProviderConfigRepository>(providers);
             services.Register<IChatSessionRepository>(sessions);

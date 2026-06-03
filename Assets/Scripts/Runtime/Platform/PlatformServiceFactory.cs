@@ -53,6 +53,23 @@ namespace NeonCompanion.Runtime.Platform
 #endif
         }
 
+        public static IWindowChromeService CreateWindowChromeService(GameObject host = null)
+        {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            if (host == null)
+                host = GameObject.Find("WindowChromeBridge") ?? new GameObject("WindowChromeBridge");
+
+            var bridge = host.GetComponent<WindowsWindowChromeService>();
+            if (bridge == null)
+                bridge = host.AddComponent<WindowsWindowChromeService>();
+
+            UnityEngine.Object.DontDestroyOnLoad(host);
+            return bridge;
+#else
+            return new StubWindowChromeService();
+#endif
+        }
+
         public static IVoiceService CreateVoiceService(GameObject host = null)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -115,6 +132,21 @@ namespace NeonCompanion.Runtime.Platform
 
         public void Start() { }
         public void Stop() { }
+    }
+
+    /// <summary>
+    /// Заглушка для оконного "хрома" на неподдерживаемых платформах.
+    /// </summary>
+    public sealed class StubWindowChromeService : IWindowChromeService
+    {
+        public bool IsAvailable => false;
+        public bool IsMaximized => false;
+
+        public void ApplyBorderless() { }
+        public void RestoreDefault() { }
+        public void BeginDrag() { }
+        public void ToggleMaximize() { }
+        public void Minimize() { }
     }
 
     /// <summary>
