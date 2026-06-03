@@ -80,7 +80,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isSending;
         private bool _isStreamingResponse;
         private bool _isVoiceRecording;
+#if UNITY_EDITOR
+        // Editor-only drag-overlay state; the only read lives in the #if UNITY_EDITOR drag handlers.
         private bool _isDragOver;
+#endif
         private bool _callbacksRegistered;
         private IFileDropService _fileDropService;
         private bool _hasUnreadNotification;
@@ -2318,7 +2321,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnRuntimeFilesDropped(IReadOnlyList<string> paths)
         {
+#if UNITY_EDITOR
             _isDragOver = false;
+#endif
             _d.Composer?.parent?.RemoveFromClassList("chat-main--drag-over");
 
             int added = AddPendingAttachmentsFromPaths(paths);

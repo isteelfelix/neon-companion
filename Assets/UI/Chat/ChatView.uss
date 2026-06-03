@@ -1343,11 +1343,13 @@
 
 .approval-prompt {
     flex-direction: column;
-    background-color: rgba(30, 35, 50, 0.95);
+    background-color: var(--bg-2);
     border-width: 1px;
-    border-color: rgba(100, 120, 200, 0.3);
-    border-radius: 8px;
-    padding: 10px 14px;
+    border-color: var(--line-2);
+    border-left-width: 2px;
+    border-left-color: var(--warn);
+    border-radius: 10px;
+    padding: 12px 14px;
     margin-top: 6px;
     margin-bottom: 6px;
 }
@@ -1359,19 +1361,21 @@
 }
 
 .approval-prompt__icon {
-    font-size: 16px;
-    margin-right: 6px;
+    font-size: 15px;
+    margin-right: 8px;
+    color: var(--warn);
 }
 
 .approval-prompt__tool-name {
     -unity-font-style: bold;
     font-size: 13px;
-    color: #e0e0e0;
+    color: var(--text-0);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
 }
 
 .approval-prompt__description {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-2);
     margin-bottom: 8px;
     white-space: pre-wrap;
 }
@@ -1379,11 +1383,13 @@
 .approval-prompt__params {
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.5);
-    background-color: rgba(0, 0, 0, 0.2);
+    color: var(--text-3);
+    background-color: var(--bg-0);
+    border-width: 1px;
+    border-color: var(--line-1);
     padding: 6px 8px;
-    border-radius: 4px;
-    margin-bottom: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
     white-space: pre-wrap;
 }
 
@@ -1392,29 +1398,51 @@
 }
 
 .approval-prompt__btn {
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 5px;
-    padding-bottom: 5px;
-    margin-right: 6px;
-    border-radius: 4px;
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    margin-right: 8px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
     font-size: 12px;
     -unity-font-style: bold;
+    transition-property: background-color, border-color;
+    transition-duration: 0.12s;
 }
 
 .approval-prompt__btn--approve {
-    background-color: rgba(40, 167, 69, 0.8);
-    color: white;
+    background-color: var(--ok-soft);
+    border-color: var(--ok);
+    color: var(--ok);
+}
+
+.approval-prompt__btn--approve:hover {
+    background-color: var(--ok);
+    color: var(--bg-0);
 }
 
 .approval-prompt__btn--reject {
-    background-color: rgba(220, 53, 69, 0.8);
-    color: white;
+    background-color: rgba(226, 112, 71, 0.14);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.approval-prompt__btn--reject:hover {
+    background-color: var(--danger);
+    color: var(--bg-0);
 }
 
 .approval-prompt__btn--always {
-    background-color: rgba(0, 123, 255, 0.8);
-    color: white;
+    background-color: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+
+.approval-prompt__btn--always:hover {
+    background-color: var(--accent);
+    color: #ffffff;
 }
 
 /* ---- Message context menu (U-29/U-30) ---- */
@@ -1878,19 +1906,25 @@
 }
 
 .clarify-choices__btn {
-    padding: 6px 14px;
+    padding: 8px 14px;
     margin: 3px 4px;
     border-width: 1px;
     border-color: var(--accent);
     border-radius: 10px;
-    background-color: rgba(124, 122, 237, 0.08);
-    color: var(--accent);
+    background-color: var(--accent-soft);
+    color: var(--accent-text);
     font-size: 12px;
     -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    white-space: normal;
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.12s;
 }
 
 .clarify-choices__btn:hover {
-    background-color: rgba(124, 122, 237, 0.18);
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
 }
 
 .clarify-choices__btn:disabled {

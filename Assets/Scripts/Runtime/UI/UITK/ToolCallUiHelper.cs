@@ -170,13 +170,31 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return "⚡";
 
             string lower = tool.ToLowerInvariant();
+            if (lower.Contains("skill"))
+                return "🧩";
+            if (lower.Contains("execute_code") || lower.Contains("python") || lower.Contains("eval"))
+                return "🐍";
+            if (lower.Contains("delegate") || lower.Contains("subagent"))
+                return "🤝";
+            if (lower.Contains("process"))
+                return "⚙️";
+            if (lower.Contains("todo"))
+                return "✅";
+            if (lower.Contains("clarify"))
+                return "❓";
+            if (lower.Contains("session_search"))
+                return "🗂️";
+            if (lower.Contains("memory"))
+                return "🧠";
+            if (lower.Contains("fact"))
+                return "📌";
             if (lower.Contains("terminal") || lower.Contains("bash") || lower.Contains("shell"))
                 return "💻";
             if (lower.Contains("search") || lower.Contains("grep"))
                 return "🔍";
             if (lower.Contains("read"))
                 return "📄";
-            if (lower.Contains("write") || lower.Contains("edit"))
+            if (lower.Contains("write") || lower.Contains("edit") || lower.Contains("patch"))
                 return "✏️";
             return "⚡";
         }
