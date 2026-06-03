@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -159,7 +160,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void SetMarkdown(string text)
         {
-            _sourceText = text ?? string.Empty;
+            _sourceText = StripAnsi(text);
             var newBlocks = new List<Block>();
             ParseMarkdown(_sourceText, newBlocks);
             ApplyBlocks(newBlocks);
@@ -167,7 +168,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void SetDiff(string text)
         {
-            _sourceText = text ?? string.Empty;
+            _sourceText = StripAnsi(text);
             var newBlocks = new List<Block>();
             ParseDiff(_sourceText, newBlocks);
             ApplyBlocks(newBlocks);
@@ -351,6 +352,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             container.Add(header);
 
+            string lang = (block.CodeLanguage ?? string.Empty).Trim().ToLowerInvariant();
+            bool isDiff = IsDiffLanguage(lang);
+            bool highlight = !isDiff && IsHighlightLanguage(lang);
+
             string[] lines = code.Split('\n');
             int local = 0;
             for (int i = 0; i < lines.Length; i++)
@@ -369,27 +374,56 @@ namespace NeonCompanion.Runtime.UI.UITK
                     AddToken(block, spacer, null, local, local); // zero-length: gives the empty line height
                     lineRow.Add(spacer);
                 }
+                else if (isDiff)
+                {
+                    bool hasBg = false;
+                    Color bg = default(Color);
+                    bool hasCol = false;
+                    Color col = default(Color);
+                    GetDiffLineStyle(line, out hasBg, out bg, out hasCol, out col);
+                    if (hasBg)
+                        lineRow.style.backgroundColor = bg;
+                    EmitCodeChunks(block, lineRow, line, ref local, hasCol, col);
+                }
+                else if (highlight)
+                {
+                    List<CodeSeg> segs = HighlightLine(line);
+                    for (int s = 0; s < segs.Count; s++)
+                    {
+                        CodeSeg seg = segs[s];
+                        EmitCodeChunks(block, lineRow, seg.Text, ref local, seg.HasColor, seg.Color);
+                    }
+                }
                 else
                 {
-                    int p = 0;
-                    while (p < line.Length)
-                    {
-                        int len = Mathf.Min(CodeChunkMax, line.Length - p);
-                        var chunkLabel = new Label(line.Substring(p, len));
-                        chunkLabel.AddToClassList("markdown-codeblock-text");
-                        chunkLabel.pickingMode = PickingMode.Ignore;
-                        ResetTokenSpacing(chunkLabel, false);
-                        AddToken(block, chunkLabel, null, local, local + len);
-                        lineRow.Add(chunkLabel);
-                        local += len;
-                        p += len;
-                    }
+                    EmitCodeChunks(block, lineRow, line, ref local, false, default(Color));
                 }
                 container.Add(lineRow);
                 if (i < lines.Length - 1)
                     local += 1; // newline character in PlainText
             }
             return container;
+        }
+
+        // Splits text into fixed-size chunks (so a long, space-less code line still wraps to the
+        // container width) and adds each as a selection token with continuous local indices.
+        private void EmitCodeChunks(Block block, VisualElement lineRow, string text, ref int local, bool hasColor, Color color)
+        {
+            int p = 0;
+            while (p < text.Length)
+            {
+                int len = Mathf.Min(CodeChunkMax, text.Length - p);
+                var chunkLabel = new Label(text.Substring(p, len));
+                chunkLabel.AddToClassList("markdown-codeblock-text");
+                chunkLabel.pickingMode = PickingMode.Ignore;
+                ResetTokenSpacing(chunkLabel, false);
+                if (hasColor)
+                    chunkLabel.style.color = color;
+                AddToken(block, chunkLabel, null, local, local + len);
+                lineRow.Add(chunkLabel);
+                local += len;
+                p += len;
+            }
         }
 
         private VisualElement BuildRule()
@@ -1259,36 +1293,240 @@ namespace NeonCompanion.Runtime.UI.UITK
                 block.Kind = BlockKind.DiffLine;
                 block.Inlines.Add(new InlineRun { Text = raw, Code = true });
 
-                if (raw.StartsWith("+", StringComparison.Ordinal) && !raw.StartsWith("+++", StringComparison.Ordinal))
-                {
-                    block.DiffHasBackground = true;
-                    block.DiffBackground = new Color(0.1f, 0.45f, 0.22f, 0.25f);
-                    block.DiffHasColor = true;
-                    block.DiffColor = new Color(0.45f, 0.95f, 0.6f, 1f);
-                }
-                else if (raw.StartsWith("-", StringComparison.Ordinal) && !raw.StartsWith("---", StringComparison.Ordinal))
-                {
-                    block.DiffHasBackground = true;
-                    block.DiffBackground = new Color(0.55f, 0.12f, 0.14f, 0.25f);
-                    block.DiffHasColor = true;
-                    block.DiffColor = new Color(1f, 0.45f, 0.45f, 1f);
-                }
-                else if (raw.StartsWith("@@", StringComparison.Ordinal))
-                {
-                    block.DiffHasBackground = true;
-                    block.DiffBackground = new Color(0.12f, 0.28f, 0.6f, 0.22f);
-                    block.DiffHasColor = true;
-                    block.DiffColor = new Color(0.45f, 0.7f, 1f, 1f);
-                }
-                else
-                {
-                    block.DiffHasColor = true;
-                    block.DiffColor = new Color(0.7f, 0.72f, 0.78f, 1f);
-                }
+                bool hasBg;
+                Color bg;
+                bool hasCol;
+                Color col;
+                GetDiffLineStyle(raw, out hasBg, out bg, out hasCol, out col);
+                block.DiffHasBackground = hasBg;
+                block.DiffBackground = bg;
+                block.DiffHasColor = hasCol;
+                block.DiffColor = col;
 
                 FinalizeBlock(block);
                 blocks.Add(block);
             }
+        }
+
+        // Shared diff-line styling — used both by SetDiff (per-block) and by diff-fenced code blocks.
+        private static void GetDiffLineStyle(string raw, out bool hasBackground, out Color background, out bool hasColor, out Color color)
+        {
+            raw = raw ?? string.Empty;
+            if (raw.StartsWith("+", StringComparison.Ordinal) && !raw.StartsWith("+++", StringComparison.Ordinal))
+            {
+                hasBackground = true;
+                background = DiffAddBg;
+                hasColor = true;
+                color = DiffAddColor;
+            }
+            else if (raw.StartsWith("-", StringComparison.Ordinal) && !raw.StartsWith("---", StringComparison.Ordinal))
+            {
+                hasBackground = true;
+                background = DiffDelBg;
+                hasColor = true;
+                color = DiffDelColor;
+            }
+            else if (raw.StartsWith("@@", StringComparison.Ordinal))
+            {
+                hasBackground = true;
+                background = DiffHunkBg;
+                hasColor = true;
+                color = DiffHunkColor;
+            }
+            else
+            {
+                hasBackground = false;
+                background = default(Color);
+                hasColor = true;
+                color = DiffContextColor;
+            }
+        }
+
+        // ===================== Code highlighting =====================
+
+        // Theme-aligned syntax colors (see Tokens.uss: accent-2, ok, warn, text-3).
+        private static readonly Color CodeKeyword = new Color(0.64f, 0.52f, 0.94f, 1f); // accent-2 violet
+        private static readonly Color CodeString = new Color(0.42f, 0.80f, 0.55f, 1f);  // green
+        private static readonly Color CodeNumber = new Color(0.90f, 0.70f, 0.36f, 1f);  // warn amber
+        private static readonly Color CodeComment = new Color(0.42f, 0.45f, 0.53f, 1f); // muted gray
+
+        // Diff palette (shared by SetDiff and diff code blocks).
+        private static readonly Color DiffAddColor = new Color(0.45f, 0.95f, 0.6f, 1f);
+        private static readonly Color DiffAddBg = new Color(0.1f, 0.45f, 0.22f, 0.25f);
+        private static readonly Color DiffDelColor = new Color(1f, 0.45f, 0.45f, 1f);
+        private static readonly Color DiffDelBg = new Color(0.55f, 0.12f, 0.14f, 0.25f);
+        private static readonly Color DiffHunkColor = new Color(0.45f, 0.7f, 1f, 1f);
+        private static readonly Color DiffHunkBg = new Color(0.12f, 0.28f, 0.6f, 0.22f);
+        private static readonly Color DiffContextColor = new Color(0.7f, 0.72f, 0.78f, 1f);
+
+        private struct CodeSeg
+        {
+            public string Text;
+            public bool HasColor;
+            public Color Color;
+        }
+
+        private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "abstract","and","as","async","await","base","bool","break","byte","case","catch","char",
+            "class","const","continue","def","default","defer","do","double","elif","else","end","enum",
+            "export","extends","false","final","finally","float","fn","for","foreach","from","func",
+            "function","get","go","if","implements","import","in","int","interface","internal","is","lambda",
+            "let","long","namespace","new","nil","none","not","null","object","or","out","override","package",
+            "params","private","protected","public","readonly","ref","return","sealed","self","set","short",
+            "static","string","struct","switch","then","this","throw","throws","true","try","type","typeof",
+            "using","val","var","virtual","void","when","while","with","yield"
+        };
+
+        private static readonly HashSet<string> HighlightLanguages = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "c","c#","cs","csharp","cpp","c++","go","golang","java","javascript","js","jsx","json","kotlin",
+            "kt","php","python","py","ruby","rb","rust","rs","scala","shell","sh","bash","swift","ts","tsx",
+            "typescript","yaml","yml"
+        };
+
+        private static bool IsDiffLanguage(string lang)
+        {
+            return string.Equals(lang, "diff", StringComparison.Ordinal) ||
+                   string.Equals(lang, "patch", StringComparison.Ordinal);
+        }
+
+        private static bool IsHighlightLanguage(string lang)
+        {
+            return !string.IsNullOrEmpty(lang) && HighlightLanguages.Contains(lang);
+        }
+
+        // Lightweight, language-agnostic tokenizer. Returns segments covering every char of the line
+        // exactly once, in order, so the selection model's local-index accounting stays exact.
+        private static List<CodeSeg> HighlightLine(string line)
+        {
+            var segs = new List<CodeSeg>();
+            var pending = new StringBuilder();
+            int i = 0;
+            int n = line.Length;
+            while (i < n)
+            {
+                char c = line[i];
+
+                // Line comment: // (C-family) or # (python/shell/yaml).
+                bool slashComment = c == '/' && i + 1 < n && line[i + 1] == '/';
+                if (slashComment || c == '#')
+                {
+                    FlushPending(segs, pending);
+                    AddSeg(segs, line.Substring(i), CodeComment);
+                    i = n;
+                    break;
+                }
+
+                // String literal.
+                if (c == '"' || c == '\'' || c == '`')
+                {
+                    FlushPending(segs, pending);
+                    int j = i + 1;
+                    while (j < n)
+                    {
+                        if (line[j] == '\\')
+                        {
+                            j += 2;
+                            continue;
+                        }
+                        if (line[j] == c)
+                        {
+                            j++;
+                            break;
+                        }
+                        j++;
+                    }
+                    if (j > n)
+                        j = n;
+                    AddSeg(segs, line.Substring(i, j - i), CodeString);
+                    i = j;
+                    continue;
+                }
+
+                // Number literal.
+                if (c >= '0' && c <= '9')
+                {
+                    FlushPending(segs, pending);
+                    int j = i;
+                    while (j < n && (IsHexChar(line[j]) || line[j] == '.' || line[j] == 'x' || line[j] == 'X' || line[j] == '_'))
+                        j++;
+                    AddSeg(segs, line.Substring(i, j - i), CodeNumber);
+                    i = j;
+                    continue;
+                }
+
+                // Identifier / keyword.
+                if (char.IsLetter(c) || c == '_')
+                {
+                    int j = i;
+                    while (j < n && (char.IsLetterOrDigit(line[j]) || line[j] == '_'))
+                        j++;
+                    string word = line.Substring(i, j - i);
+                    if (Keywords.Contains(word))
+                    {
+                        FlushPending(segs, pending);
+                        AddSeg(segs, word, CodeKeyword);
+                    }
+                    else
+                    {
+                        pending.Append(word);
+                    }
+                    i = j;
+                    continue;
+                }
+
+                pending.Append(c);
+                i++;
+            }
+            FlushPending(segs, pending);
+            return segs;
+        }
+
+        private static void FlushPending(List<CodeSeg> segs, StringBuilder pending)
+        {
+            if (pending.Length == 0)
+                return;
+            segs.Add(new CodeSeg { Text = pending.ToString(), HasColor = false });
+            pending.Length = 0;
+        }
+
+        private static void AddSeg(List<CodeSeg> segs, string text, Color color)
+        {
+            if (string.IsNullOrEmpty(text))
+                return;
+            segs.Add(new CodeSeg { Text = text, HasColor = true, Color = color });
+        }
+
+        private static bool IsHexChar(char c)
+        {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        }
+
+        // ===================== ANSI =====================
+
+        // Strips ANSI escape sequences (CSI, incl. truecolor SGR) so terminal/`git diff --color`
+        // output renders clean instead of leaking raw codes like [38;2;218;165;32m.
+        private static readonly Regex AnsiRegex = BuildAnsiRegex();
+
+        private static Regex BuildAnsiRegex()
+        {
+            // Built from char codes (ESC=27, BEL=7) so no control bytes live in source.
+            string esc = ((char)27).ToString();
+            string bel = ((char)7).ToString();
+            // CSI sequences (incl. truecolor SGR like ESC[38;2;r;g;bm) and OSC sequences.
+            string pattern = esc + "\\[[0-9;?]*[ -/]*[@-~]" +
+                             "|" + esc + "\\][^" + bel + "]*(?:" + bel + "|" + esc + "\\\\)";
+            return new Regex(pattern, RegexOptions.Compiled);
+        }
+
+        public static string StripAnsi(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+            if (text.IndexOf((char)27) < 0)
+                return text;
+            return AnsiRegex.Replace(text, string.Empty);
         }
 
         // ===================== Finalize (PlainText + Signature) =====================

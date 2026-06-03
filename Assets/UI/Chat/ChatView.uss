@@ -337,8 +337,9 @@
 }
 
 .transcript__bubble--user {
-    width: 72%;
-    max-width: 86%;
+    width: auto;
+    max-width: 78%;
+    min-width: 0;
     background-color: var(--accent-soft);
     border-color: rgba(124, 122, 237, 0.38);
 }
@@ -410,7 +411,7 @@
 }
 
 .transcript__time {
-    color: var(--text-4);
+    color: var(--text-3);
     font-size: 10px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
@@ -456,7 +457,7 @@
 
 .transcript__stats-label {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-3);
     margin-right: 2px;
 }
 
@@ -972,13 +973,34 @@
 .tool-entry {
     flex-direction: row;
     align-items: center;
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: var(--bg-3);
     border-width: 1px;
     border-color: var(--line-2);
+    border-left-width: 2px;
+    border-left-color: var(--line-3);
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 5px 9px;
     margin-bottom: 4px;
-    min-height: 24px;
+    min-height: 26px;
+    transition-property: background-color, border-left-color;
+    transition-duration: 0.15s;
+}
+
+.tool-entry:hover {
+    background-color: var(--bg-4);
+}
+
+/* Status accent stripe on the left edge */
+.tool-entry--running {
+    border-left-color: var(--accent);
+}
+
+.tool-entry--done {
+    border-left-color: var(--ok);
+}
+
+.tool-entry--reasoning {
+    border-left-color: var(--accent);
 }
 
 .tool-entry__icon {
@@ -992,14 +1014,15 @@
 .tool-entry__name {
     font-size: 11px;
     -unity-font-style: bold;
-    color: var(--text-2);
-    margin-right: 6px;
+    color: var(--text-1);
+    margin-right: 8px;
     flex-shrink: 0;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
 }
 
 .tool-entry__label {
     font-size: 11px;
-    color: var(--text-4);
+    color: var(--text-2);
     flex-grow: 1;
     flex-shrink: 1;
     min-width: 0;
@@ -1018,7 +1041,7 @@
 }
 
 .tool-entry__status--running {
-    color: var(--ok);
+    color: var(--accent);
     transition-property: opacity;
     transition-duration: 0.6s;
 }
@@ -1050,6 +1073,42 @@
     font-size: 11px;
     color: var(--text-3);
     white-space: pre-wrap;
+}
+
+/* ---- Reasoning / thinking (variant B: dark surface, accent stripe, muted) ---- */
+
+.reasoning-entry__details {
+    flex-direction: column;
+    background-color: var(--bg-1);
+    border-left-width: 2px;
+    border-left-color: var(--accent);
+    border-radius: 6px;
+    margin-left: 24px;
+    margin-bottom: 4px;
+    padding: 8px 12px 8px 12px;
+}
+
+.reasoning-entry__text {
+    font-size: 12px;
+    color: var(--text-2);
+    -unity-font-style: italic;
+    white-space: normal;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    padding: 0;
+}
+
+/* Strip the default TextField chrome so the readonly reasoning text reads as a note,
+   not an input box (this was rendering as a jarring light panel on the dark theme). */
+.reasoning-entry__text > .unity-text-field__input,
+.reasoning-entry__text > .unity-base-text-field__input {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    padding: 0;
+    color: var(--text-2);
+    font-size: 12px;
+    -unity-font-style: italic;
+    white-space: normal;
 }
 
 .tool-entry__diff {
@@ -1097,11 +1156,12 @@
 .markdown-code {
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     font-size: 11px;
-    background-color: rgba(255, 255, 255, 0.08);
-    padding-left: 4px;
-    padding-right: 4px;
-    padding-top: 1px;
-    padding-bottom: 1px;
+    color: var(--accent-text);
+    background-color: var(--accent-soft);
+    padding-left: 3px;
+    padding-right: 3px;
+    padding-top: 0;
+    padding-bottom: 0;
     border-top-left-radius: 3px;
     border-top-right-radius: 3px;
     border-bottom-left-radius: 3px;
@@ -1110,7 +1170,9 @@
 
 .markdown-codeblock {
     flex-direction: column;
-    background-color: rgba(0, 0, 0, 0.3);
+    background-color: var(--bg-0);
+    border-width: 1px;
+    border-color: var(--line-1);
     padding: 8px 12px;
     margin-top: 4px;
     margin-bottom: 4px;
@@ -1125,7 +1187,7 @@
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     font-size: 10px;
     white-space: pre;
-    color: #e0e0e0;
+    color: var(--text-1);
     --unity-text-selection-color: rgba(124, 122, 237, 0.35);
 }
 
@@ -1137,7 +1199,7 @@
 
 .markdown-bullet-marker {
     margin-right: 6px;
-    color: #888;
+    color: var(--accent-2);
 }
 
 .markdown-numbered {
@@ -1148,27 +1210,27 @@
 
 .markdown-numbered-marker {
     margin-right: 6px;
-    color: #888;
+    color: var(--accent-2);
     min-width: 20px;
 }
 
 .markdown-link {
-    color: #6ea8fe;
+    color: var(--accent-text);
 }
 
 .markdown-strike {
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-3);
 }
 
 .markdown-blockquote {
     flex-direction: row;
     flex-wrap: wrap;
     border-left-width: 3px;
-    border-left-color: rgba(255, 255, 255, 0.2);
+    border-left-color: var(--accent);
     padding-left: 10px;
     margin-top: 2px;
     margin-bottom: 2px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-2);
 }
 
 .markdown-hr {
@@ -1273,7 +1335,7 @@
 .markdown-h6 {
     font-size: 11px;
     -unity-font-style: bold;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-2);
     white-space: normal;
 }
 

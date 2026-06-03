@@ -3129,6 +3129,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var reasoningHeader = new VisualElement();
                 reasoningHeader.AddToClassList("tool-entry");
                 reasoningHeader.AddToClassList("tool-entry--header");
+                reasoningHeader.AddToClassList("tool-entry--reasoning");
 
                 var toggleLabel = new Label("▶");
                 toggleLabel.AddToClassList("tool-entry__toggle");
@@ -3144,14 +3145,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 reasoningHeader.Add(nameLabel);
 
                 var reasoningDetails = new VisualElement();
-                reasoningDetails.AddToClassList("tool-entry__details");
+                reasoningDetails.AddToClassList("reasoning-entry__details");
                 reasoningDetails.style.display = DisplayStyle.None;
 
                 var reasoningText = new TextField();
                 reasoningText.isReadOnly = true;
                 reasoningText.multiline = true;
                 reasoningText.value = message.reasoning;
-                reasoningText.AddToClassList("tool-entry__args");
+                reasoningText.AddToClassList("reasoning-entry__text");
                 reasoningDetails.Add(reasoningText);
 
                 reasoningRoot.Add(reasoningHeader);

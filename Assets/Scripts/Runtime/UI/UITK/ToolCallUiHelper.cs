@@ -24,9 +24,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         internal static VisualElement CreateEntryElement(string tool, string label, string emoji, string status, string inlineDiff = null)
         {
-            string truncated = label != null && label.Length > 60
-                ? label.Substring(0, 60) + "..."
-                : label ?? string.Empty;
+            string cleanLabel = SelectableMarkdownElement.StripAnsi(label);
+            string truncated = cleanLabel != null && cleanLabel.Length > 60
+                ? cleanLabel.Substring(0, 60) + "..."
+                : cleanLabel ?? string.Empty;
 
             bool isDone = string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(status, "done", StringComparison.OrdinalIgnoreCase) ||
@@ -37,6 +38,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var header = new VisualElement();
             header.AddToClassList("tool-entry");
             header.AddToClassList("tool-entry--header");
+            header.AddToClassList(isDone ? "tool-entry--done" : "tool-entry--running");
 
             var toggleLabel = new Label(isDone ? "▼" : "▶");
             toggleLabel.AddToClassList("tool-entry__toggle");
@@ -141,6 +143,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Update root entry (may be wrapped in tool-entry-root)
             var root = entry.ClassListContains("tool-entry-root") ? entry : entry.parent;
             if (root == null) return;
+
+            var headerEl = root.Q(className: "tool-entry--header");
+            if (headerEl != null)
+            {
+                headerEl.RemoveFromClassList("tool-entry--running");
+                headerEl.AddToClassList("tool-entry--done");
+            }
 
             var statusLabel = root.Q<Label>(className: "tool-entry__status");
             if (statusLabel != null)
