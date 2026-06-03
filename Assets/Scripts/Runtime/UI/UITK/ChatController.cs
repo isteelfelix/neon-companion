@@ -4285,8 +4285,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             try
             {
                 var selector = GlobalBackendSelector.Instance;
-                if (selector?.SessionManager != null && !string.IsNullOrEmpty(request.runId))
-                    await selector.SessionManager.RespondToApproval(request.runId, approved);
+                if (selector?.SessionManager != null)
+                    await selector.SessionManager.RespondToApproval(approved);
             }
             catch (Exception ex)
             {

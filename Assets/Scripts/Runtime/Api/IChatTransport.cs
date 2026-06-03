@@ -98,6 +98,5 @@ namespace NeonCompanion.Runtime.Api
         public string requestId;
         public string description;
         public string type; // "approval" | "sudo" | "secret"
-        public string runId;
     }
 }
