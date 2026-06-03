@@ -11,15 +11,19 @@
 - **OpenAiCompatibleClient** — HTTP-транспорт + SSE парсинг. Делегирует провайдер-специфику адаптеру
 - **Avatar System** — управление 2D аватарами, sprite-sheet motion packs для low-end/mobile, state mapper (`idle` / `thinking` / `talking` / `listening`) и one-shot reactions (`smile` / `confused`), подготовка к desktop-first 3D realtime аватарам
 - **UI Layer** — интерфейс чата и настроек
+  - **SelectableMarkdownElement** — кастомный markdown rendering engine для UITK. Блочная модель (paragraph/heading/quote/list/code/table/rule), inline tokenizer, word-wrap, glyph-level text selection, streaming block-level reconciliation. Syntax highlighting для 15+ языков. Diff-fenced code blocks. Заменяет TextField для всего рендеринга текста в чате.
+  - **ChatController** — основной контроллер чата (~5400 строк). Управляет стримингом, tool calls, approval, очередью сообщений, кешем рендеринга.
+  - **ToolCallUiHelper** — рендеринг tool entries с expand/collapse, inline diffs, статусами.
 - **NeonDropdown** — кастомный UITK компонент (`INotifyValueChanged<string>`), заменяет `DropdownField` во всём интерфейсе (пикер моделей, пресет в редакторе провайдера, язык в настройках). Поддерживает `choicesCsv` атрибут, popup overlay, программный API
 - **Data Layer** — локальное хранение истории, конфигов, аватаров и motion-pack metadata
 - **Platform Layer** — специфичный код для Desktop / Mobile / VR
 
 ## Технологии
-- Unity 6 (6000.4+)
-- Newtonsoft.Json
-- UniTask (для асинхронности)
-- Возможно: Zenject или VContainer (DI)
+- Unity 6.4 (6000.4+)
+- C# 9 (Unity default)
+- System.Threading.Tasks для асинхронности (не UniTask)
+- Newtonsoft.Json (только там где JsonUtility не хватает)
+- UI Toolkit (UXML + USS, без legacy uGUI)
 
 ## Диаграмма компонентов (упрощённая)
 
