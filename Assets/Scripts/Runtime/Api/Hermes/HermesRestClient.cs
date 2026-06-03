@@ -244,6 +244,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
             return await Get<StatusResponse>("/api/status");
         }
 
+        // === Approval ===
+
+        public async Task PostApproval(string runId, string choice)
+        {
+            // POST /v1/runs/{run_id}/approval — resolves a pending tool approval
+            // on the gateway. Choice: "once", "session", "always", or "deny".
+            await Post($"/v1/runs/{Uri.EscapeDataString(runId)}/approval",
+                new { choice });
+        }
+
         // === HTTP Helpers ===
 
         private async Task<T> Get<T>(string path)
