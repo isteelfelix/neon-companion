@@ -818,7 +818,11 @@ namespace NeonCompanion.Runtime.Chat
                 _hermesStreamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
 
             string status = update.status == ToolCallStatus.Running ? "running" : "complete";
-            string emoji = update.status == ToolCallStatus.Running ? "⏳" : "✅";
+            // The TUI/stdio gateway doesn't include an emoji in the payload, so leave it empty there
+            // and let the UI derive a per-tool emoji client-side (ToolCallUiHelper.GetToolEmoji).
+            // The API SSE gateway does send one — pass it through. Status is shown separately
+            // (left stripe + ● / ✓), so we no longer overwrite the icon with a status glyph.
+            string emoji = update.emoji ?? string.Empty;
 
             _hermesStreamingMessage.segments.Add(new ChatMessageSegment
             {

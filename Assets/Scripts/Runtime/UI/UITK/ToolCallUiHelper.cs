@@ -9,6 +9,56 @@ namespace NeonCompanion.Runtime.UI.UITK
     {
         private VisualElement _bubble;
         private readonly Dictionary<string, VisualElement> _entries = new Dictionary<string, VisualElement>();
+        private static readonly Dictionary<string, string> ToolEmojiByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "read_file", "📖" },
+            { "write_file", "✍️" },
+            { "patch", "🔧" },
+            { "search_files", "🔎" },
+            { "web_search", "🌐" },
+            { "web_extract", "📄" },
+            { "terminal", "⚡" },
+            { "process", "⚡" },
+            { "vision_analyze", "👁" },
+            { "image_generate", "🎨" },
+            { "skills_list", "📋" },
+            { "skill_view", "📋" },
+            { "skill_manage", "📋" },
+            { "todo", "✅" },
+            { "memory", "🧠" },
+            { "session_search", "🔍" },
+            { "clarify", "❓" },
+            { "execute_code", "🐍" },
+            { "delegate_task", "🤖" },
+            { "cronjob", "⏰" },
+            { "send_message", "💬" },
+            { "browser_navigate", "🌍" },
+            { "browser_click", "🖱" },
+            { "browser_type", "⌨️" },
+            { "browser_scroll", "🖱" },
+            { "browser_back", "↩️" },
+            { "browser_press", "⌨️" },
+            { "browser_get_images", "🖼" },
+            { "browser_vision", "👁" },
+            { "browser_console", "🖥" },
+            { "browser_cdp", "🖥" },
+            { "browser_dialog", "💬" },
+            { "text_to_speech", "🔊" },
+            { "computer_use", "🖥" },
+            { "kanban_show", "📋" },
+            { "kanban_list", "📋" },
+            { "kanban_complete", "✅" },
+            { "kanban_block", "🚫" },
+            { "kanban_heartbeat", "💓" },
+            { "kanban_comment", "💬" },
+            { "kanban_create", "➕" },
+            { "kanban_link", "🔗" },
+            { "kanban_unblock", "🔓" },
+            { "ha_list_entities", "🏠" },
+            { "ha_get_state", "🏠" },
+            { "ha_list_services", "🏠" },
+            { "ha_call_service", "🏠" }
+        };
 
         public void SetBubble(VisualElement bubble)
         {
@@ -167,36 +217,43 @@ namespace NeonCompanion.Runtime.UI.UITK
         private static string GetToolEmoji(string tool)
         {
             if (string.IsNullOrWhiteSpace(tool))
-                return "⚡";
+                return "⚙️";
 
-            string lower = tool.ToLowerInvariant();
+            string normalized = tool.Trim();
+            string mapped;
+            if (ToolEmojiByName.TryGetValue(normalized, out mapped))
+                return mapped;
+
+            string lower = normalized.ToLowerInvariant();
             if (lower.Contains("skill"))
-                return "🧩";
+                return "📋";
             if (lower.Contains("execute_code") || lower.Contains("python") || lower.Contains("eval"))
                 return "🐍";
             if (lower.Contains("delegate") || lower.Contains("subagent"))
-                return "🤝";
+                return "🤖";
             if (lower.Contains("process"))
-                return "⚙️";
+                return "⚡";
             if (lower.Contains("todo"))
                 return "✅";
             if (lower.Contains("clarify"))
                 return "❓";
             if (lower.Contains("session_search"))
-                return "🗂️";
+                return "🔍";
             if (lower.Contains("memory"))
                 return "🧠";
             if (lower.Contains("fact"))
                 return "📌";
             if (lower.Contains("terminal") || lower.Contains("bash") || lower.Contains("shell"))
-                return "💻";
+                return "⚡";
+            if (lower.Contains("patch"))
+                return "🔧";
             if (lower.Contains("search") || lower.Contains("grep"))
-                return "🔍";
+                return "🔎";
             if (lower.Contains("read"))
-                return "📄";
-            if (lower.Contains("write") || lower.Contains("edit") || lower.Contains("patch"))
-                return "✏️";
-            return "⚡";
+                return "📖";
+            if (lower.Contains("write") || lower.Contains("edit"))
+                return "✍️";
+            return "⚙️";
         }
     }
 }

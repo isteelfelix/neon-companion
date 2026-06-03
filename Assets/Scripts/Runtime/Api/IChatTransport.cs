@@ -81,6 +81,7 @@ namespace NeonCompanion.Runtime.Api
         public ToolCallStatus status;
         public string preview;
         public string inlineDiff;
+        public string emoji;
     }
 
     [Serializable]
