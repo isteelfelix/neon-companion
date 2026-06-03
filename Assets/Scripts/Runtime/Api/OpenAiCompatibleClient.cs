@@ -1796,8 +1796,11 @@ namespace NeonCompanion.Runtime.Api
                         continue;
                     }
 
-                    // Minimal detection of tool_calls in SSE chunks (generic OpenAI-compatible providers)
-                    TryDetectAndEmitToolCallRequest(payload, onToolProgress);
+                    // Minimal fallback detection of tool_calls in SSE chunks. When an
+                    // accumulator is present it emits the request once, so avoid
+                    // surfacing the same tool call twice.
+                    if (toolCallAccumulator == null)
+                        TryDetectAndEmitToolCallRequest(payload, onToolProgress);
                 }
 
                 if (toolCallAccumulator != null)

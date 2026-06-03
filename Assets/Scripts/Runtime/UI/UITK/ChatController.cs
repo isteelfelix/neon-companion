@@ -92,6 +92,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private SelectableMarkdownElement _streamingLabel;
         private VisualElement _streamingTypingDots;
         private readonly StringBuilder _streamingTextBuffer = new StringBuilder();
+        private readonly StringBuilder _streamingSegmentBuffer = new StringBuilder();
         private IVisualElementScheduledItem _inlineTypingSchedule;
         private int _inlineTypingFrame;
         private DateTime _streamingStartTime;
@@ -1132,6 +1133,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _streamingBubble = bubble;
             _streamingLabel = null;
             _streamingTextBuffer.Length = 0;
+            _streamingSegmentBuffer.Length = 0;
 
             _streamingTypingDots = new VisualElement();
             _streamingTypingDots.AddToClassList("typing--inline");
@@ -1205,7 +1207,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_streamingLabel != null)
             {
                 _streamingTextBuffer.Append(token);
-                _streamingLabel.SetMarkdown(_streamingTextBuffer.ToString());
+                _streamingSegmentBuffer.Append(token);
+                _streamingLabel.SetMarkdown(_streamingSegmentBuffer.ToString());
             }
 
             if (!string.IsNullOrEmpty(token))
@@ -1230,7 +1233,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool insertedNewEntry = _toolCallUiHelper.OnToolProgress(tool, label, emoji, status);
             if (insertedNewEntry)
+            {
                 _streamingLabel = null;
+                _streamingSegmentBuffer.Length = 0;
+            }
             ScrollTranscriptToBottom();
 
             // Hermes executes tools server-side, so its approval request must be
@@ -4056,10 +4062,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!IsApprovalRequestStatus(status))
                 return false;
 
-            if (!string.Equals(status, "requesting", StringComparison.OrdinalIgnoreCase))
-                return true;
+            if (string.Equals(status, "requesting", StringComparison.OrdinalIgnoreCase))
+                return false;
 
-            return IsCurrentProviderHermes();
+            // Hermes approval requests have request ids and are handled by
+            // OnHermesApprovalRequest. Prompting from tool progress would create
+            // a local-only approval that cannot be sent back to the server.
+            if (IsCurrentProviderHermes())
+                return false;
+
+            return true;
         }
 
         private bool IsCurrentProviderHermes()

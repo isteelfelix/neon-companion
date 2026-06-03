@@ -18,6 +18,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public bool maskLogs = true;
         public bool voiceIOEnabled = true;
         public string avatarShape = "round";
+        public string avatarViewMode = "static";
         public bool showHalo = true;
         public bool breathingAnimation = true;
         public string language = "ru";

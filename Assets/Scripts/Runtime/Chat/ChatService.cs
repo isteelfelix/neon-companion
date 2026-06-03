@@ -111,7 +111,6 @@ namespace NeonCompanion.Runtime.Chat
             _currentChatViewModel.SelectedModel = _currentSession?.selectedModel ?? _currentProvider?.defaultModel;
             ApplyGenerationSettings();
 
-            await LoadLatestSessionAsync(preferredProviderId);
             NeonLogger.Log("Chat session ready.");
             return _currentChatViewModel;
         }
@@ -766,15 +765,21 @@ namespace NeonCompanion.Runtime.Chat
         {
             if (_hermesStreamingMessage != null)
             {
+                string normalizedFinalText = null;
+
                 // Apply final text if we got one
                 if (!string.IsNullOrEmpty(finalText))
                 {
                     _hermesStreamingMessage.content = finalText;
+                    normalizedFinalText = finalText;
                 }
-                else if (_hermesStreamBuffer.Length > 0)
+                else if (_hermesStreamBuffer != null && _hermesStreamBuffer.Length > 0)
                 {
                     _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
+                    normalizedFinalText = _hermesStreamingMessage.content;
                 }
+
+                NormalizeHermesFinalTextSegments(_hermesStreamingMessage, normalizedFinalText);
 
                 // Store reasoning text for expandable display
                 if (_hermesReasoningBuffer != null && _hermesReasoningBuffer.Length > 0)
@@ -823,19 +828,80 @@ namespace NeonCompanion.Runtime.Chat
             // The API SSE gateway does send one — pass it through. Status is shown separately
             // (left stripe + ● / ✓), so we no longer overwrite the icon with a status glyph.
             string emoji = update.emoji ?? string.Empty;
+            string key = (update.name ?? "") + "\x01" + (update.toolId ?? "");
+            string label = !string.IsNullOrEmpty(update.preview) ? update.preview : (update.name ?? "");
+
+            for (int i = 0; i < _hermesStreamingMessage.segments.Count; i++)
+            {
+                ChatMessageSegment existing = _hermesStreamingMessage.segments[i];
+                if (existing == null ||
+                    !string.Equals(existing.kind, ChatMessageSegment.ToolKind, System.StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(existing.key, key, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                existing.tool = update.name ?? "";
+                if (!string.IsNullOrEmpty(label))
+                    existing.label = label;
+                if (!string.IsNullOrEmpty(emoji))
+                    existing.emoji = emoji;
+                existing.status = status;
+                if (!string.IsNullOrEmpty(update.inlineDiff))
+                    existing.inlineDiff = update.inlineDiff;
+
+                _hermesToolProgressCallback?.Invoke(update.name, existing.label ?? "", existing.emoji ?? "", status);
+                return;
+            }
 
             _hermesStreamingMessage.segments.Add(new ChatMessageSegment
             {
                 kind = ChatMessageSegment.ToolKind,
-                key = (update.name ?? "") + "\x01" + (update.toolId ?? ""),
+                key = key,
                 tool = update.name ?? "",
-                label = !string.IsNullOrEmpty(update.preview) ? update.preview : (update.name ?? ""),
+                label = label,
                 emoji = emoji,
                 status = status,
                 inlineDiff = update.inlineDiff
             });
 
-            _hermesToolProgressCallback?.Invoke(update.name, update.preview ?? "", emoji, status);
+            _hermesToolProgressCallback?.Invoke(update.name, label, emoji, status);
+        }
+
+        private static void NormalizeHermesFinalTextSegments(ChatMessage message, string finalText)
+        {
+            if (message == null || string.IsNullOrEmpty(finalText) || message.segments == null)
+                return;
+
+            bool appliedText = false;
+            for (int i = message.segments.Count - 1; i >= 0; i--)
+            {
+                ChatMessageSegment segment = message.segments[i];
+                if (segment == null ||
+                    !string.Equals(segment.kind, ChatMessageSegment.TextKind, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!appliedText)
+                {
+                    segment.text = finalText;
+                    appliedText = true;
+                }
+                else
+                {
+                    message.segments.RemoveAt(i);
+                }
+            }
+
+            if (!appliedText)
+            {
+                message.segments.Insert(0, new ChatMessageSegment
+                {
+                    kind = ChatMessageSegment.TextKind,
+                    text = finalText
+                });
+            }
         }
 
         private void HandleHermesReasoningDelta(string text)
@@ -865,6 +931,8 @@ namespace NeonCompanion.Runtime.Chat
 
             if (_currentChatViewModel == null)
                 await GetOrCreateChatAsync();
+            if (_currentSession == null)
+                await StartNewSessionAsync();
 
             if (_currentProvider == null || _currentChatViewModel == null || _currentSession == null)
                 throw new InvalidOperationException("Chat session is not ready.");

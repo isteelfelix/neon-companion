@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using NeonCompanion.Runtime.Localization;
 
 namespace NeonCompanion.Runtime.Api.Tools
@@ -222,48 +223,7 @@ namespace NeonCompanion.Runtime.Api.Tools
                 scriptPath = Path.Combine(tempDir, "neon_exec_" + Guid.NewGuid().ToString("N") + ".py");
                 File.WriteAllText(scriptPath, code);
 
-                var psi = new ProcessStartInfo();
-                psi.FileName = "python3";
-                psi.Arguments = "\"" + scriptPath + "\"";
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.UseShellExecute = false;
-                psi.CreateNoWindow = true;
-
-                using (var process = Process.Start(psi))
-                {
-                    if (process == null)
-                        return LocalizationExtensions.Get("tool.error.code_start", "Error: failed to start Python process");
-
-                    bool exited = process.WaitForExit(CodeTimeoutMs);
-                    if (!exited)
-                    {
-                        try { process.Kill(); } catch { }
-                        return LocalizationExtensions.Get("tool.error.code_timeout", "Error: code execution timed out after 10 seconds");
-                    }
-
-                    string stdout = process.StandardOutput.ReadToEnd();
-                    string stderr = process.StandardError.ReadToEnd();
-
-                    var output = new StringBuilder();
-                    if (!string.IsNullOrEmpty(stdout))
-                        output.Append(stdout);
-                    if (!string.IsNullOrEmpty(stderr))
-                    {
-                        if (output.Length > 0)
-                            output.Append('\n');
-                        output.Append("STDERR:\n").Append(stderr);
-                    }
-
-                    string result = output.ToString();
-                    if (string.IsNullOrWhiteSpace(result))
-                        result = "(no output)";
-
-                    if (result.Length > MaxResultLength)
-                        result = result.Substring(0, MaxResultLength) + "\n... [output truncated]";
-
-                    return result;
-                }
+                return ExecutePythonScript(scriptPath);
             }
             catch (Exception ex)
             {
@@ -276,6 +236,135 @@ namespace NeonCompanion.Runtime.Api.Tools
                     try { File.Delete(scriptPath); } catch { }
                 }
             }
+        }
+
+        private static string ExecutePythonScript(string scriptPath)
+        {
+            string[] fileNames = new string[] { "python3", "python", "py" };
+            string lastError = null;
+
+            for (int i = 0; i < fileNames.Length; i++)
+            {
+                string fileName = fileNames[i];
+                string arguments = string.Equals(fileName, "py", StringComparison.OrdinalIgnoreCase)
+                    ? "-3 \"" + scriptPath + "\""
+                    : "\"" + scriptPath + "\"";
+
+                try
+                {
+                    return ExecuteProcess(fileName, arguments);
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex.Message;
+                }
+            }
+
+            string prefix = LocalizationExtensions.Get("tool.error.code_start", "Error: failed to start Python process");
+            return string.IsNullOrEmpty(lastError) ? prefix : prefix + ": " + lastError;
+        }
+
+        private static string ExecuteProcess(string fileName, string arguments)
+        {
+            var stdout = new StringBuilder();
+            var stderr = new StringBuilder();
+            object stdoutLock = new object();
+            object stderrLock = new object();
+            var stdoutClosed = new ManualResetEvent(false);
+            var stderrClosed = new ManualResetEvent(false);
+
+            var psi = new ProcessStartInfo();
+            psi.FileName = fileName;
+            psi.Arguments = arguments;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+
+            using (var process = new Process())
+            {
+                process.StartInfo = psi;
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    if (e.Data == null)
+                    {
+                        stdoutClosed.Set();
+                        return;
+                    }
+
+                    lock (stdoutLock)
+                    {
+                        AppendLimitedLine(stdout, e.Data);
+                    }
+                };
+                process.ErrorDataReceived += (sender, e) =>
+                {
+                    if (e.Data == null)
+                    {
+                        stderrClosed.Set();
+                        return;
+                    }
+
+                    lock (stderrLock)
+                    {
+                        AppendLimitedLine(stderr, e.Data);
+                    }
+                };
+
+                if (!process.Start())
+                    return LocalizationExtensions.Get("tool.error.code_start", "Error: failed to start Python process");
+
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                bool exited = process.WaitForExit(CodeTimeoutMs);
+                if (!exited)
+                {
+                    try { process.Kill(); } catch { }
+                    try { process.WaitForExit(1000); } catch { }
+                    return LocalizationExtensions.Get("tool.error.code_timeout", "Error: code execution timed out after 10 seconds");
+                }
+
+                stdoutClosed.WaitOne(1000);
+                stderrClosed.WaitOne(1000);
+            }
+
+            var output = new StringBuilder();
+            string stdoutText;
+            string stderrText;
+            lock (stdoutLock) { stdoutText = stdout.ToString(); }
+            lock (stderrLock) { stderrText = stderr.ToString(); }
+
+            if (!string.IsNullOrEmpty(stdoutText))
+                output.Append(stdoutText);
+            if (!string.IsNullOrEmpty(stderrText))
+            {
+                if (output.Length > 0)
+                    output.Append('\n');
+                output.Append("STDERR:\n").Append(stderrText);
+            }
+
+            string result = output.ToString();
+            if (string.IsNullOrWhiteSpace(result))
+                result = "(no output)";
+
+            if (result.Length > MaxResultLength)
+                result = result.Substring(0, MaxResultLength) + "\n... [output truncated]";
+
+            return result;
+        }
+
+        private static void AppendLimitedLine(StringBuilder sb, string line)
+        {
+            if (sb == null || line == null)
+                return;
+
+            if (sb.Length > MaxResultLength + 1024)
+                return;
+
+            if (sb.Length > 0)
+                sb.Append('\n');
+            sb.Append(line);
         }
     }
 }

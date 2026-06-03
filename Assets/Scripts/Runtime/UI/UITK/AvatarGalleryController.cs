@@ -154,6 +154,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public SpriteSheetAnimator GetAvatarAnimatorInstance() { return _avatarAnimator; }
 
+        public string AvatarViewModeSetting
+        {
+            get { return AvatarViewModeToSetting(_avatarViewMode); }
+        }
+
+        public void SetAvatarViewModeFromSetting(string value)
+        {
+            AvatarViewMode mode = ParseAvatarViewMode(value);
+            _avatarViewMode = mode;
+            ApplyAvatarViewMode();
+        }
+
         public int GetAvatarTotalCount() { return BuiltInAvatarIds.Length + (_cachedCustomProfiles != null ? _cachedCustomProfiles.Count : 0); }
 
         // ---- Lifecycle ----
@@ -677,6 +689,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarViewMode = mode;
             ApplyAvatarViewMode();
             ApplyAvatarArt(_activeAvatarId);
+            _d.SaveSettings?.Invoke();
         }
 
         private void ApplyAvatarViewMode()
@@ -695,6 +708,25 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_gallery3D,       is3D ? DisplayStyle.Flex : DisplayStyle.None);
 
             _avtileNeonAnimated?.EnableInClassList("avtile--selected", isAnimated && _activeAvatarId == "neon");
+        }
+
+        private static AvatarViewMode ParseAvatarViewMode(string value)
+        {
+            if (string.Equals(value, "animated", StringComparison.OrdinalIgnoreCase))
+                return AvatarViewMode.Animated;
+            if (string.Equals(value, "3d", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "volume3d", StringComparison.OrdinalIgnoreCase))
+                return AvatarViewMode.Volume3D;
+            return AvatarViewMode.Static;
+        }
+
+        private static string AvatarViewModeToSetting(AvatarViewMode mode)
+        {
+            if (mode == AvatarViewMode.Animated)
+                return "animated";
+            if (mode == AvatarViewMode.Volume3D)
+                return "3d";
+            return "static";
         }
 
         private void SelectAvatar(string avatarId)

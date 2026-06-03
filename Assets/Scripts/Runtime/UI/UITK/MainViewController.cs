@@ -591,6 +591,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _avatarGalleryController.ActiveAvatarId = id;
                     _activeAvatarId = id;
                 },
+                GetAvatarViewMode = () => _avatarGalleryController.AvatarViewModeSetting,
+                SetAvatarViewMode = mode => _avatarGalleryController.SetAvatarViewModeFromSetting(mode),
                 RefreshVoiceControls  = RefreshVoiceControls,
                 RequestRefreshLocalizedUi = RefreshLocalizedUiAsync,
                 RefreshCustomAvatarGallery   = _avatarGalleryController.RefreshCustomAvatarGallery,

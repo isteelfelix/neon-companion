@@ -1,6 +1,9 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using NeonCompanion.Runtime.Avatar;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -171,26 +174,24 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             for (int i = 0; i < staticCount; i++)
             {
-                var (status, text, ok) = LogEntries[i];
-                AddLogRow(status, text, ok);
+                var entry = LogEntries[i];
+                AddLogRow(entry.status, entry.text, entry.ok);
 
                 progress += progressPerStatic;
                 SetProgress(progress);
 
-                float delay = ok
+                float delay = entry.ok
                     ? UnityEngine.Random.Range(0.16f, 0.32f)
                     : UnityEngine.Random.Range(0.38f, 0.65f);
                 yield return new WaitForSeconds(delay);
             }
 
-            // Phase 2: quick note (eager preload removed — U-20 lazy spritesheets)
-            AddLogRow("OK", "Avatar animations: lazy-load enabled", true);
-            SetProgress(72f);
-            yield return new WaitForSeconds(0.12f);
+            // Phase 2: preload avatar spritesheets before the main UI scene opens.
+            yield return PreloadAvatarSpriteSheets(65f, 82f);
 
             // Phase 3: Final entry
-            var (finalStatus, finalText, finalOk) = LogEntries[staticCount];
-            AddLogRow(finalStatus, finalText, finalOk);
+            var finalEntry = LogEntries[staticCount];
+            AddLogRow(finalEntry.status, finalEntry.text, finalEntry.ok);
             SetProgress(88f);
             yield return new WaitForSeconds(0.28f);
 
@@ -199,6 +200,85 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             IsComplete = true;
             SceneManager.LoadScene(mainSceneName, LoadSceneMode.Single);
+        }
+
+        private IEnumerator PreloadAvatarSpriteSheets(float startProgress, float endProgress)
+        {
+            var manifests = DiscoverAvatarMotionPackManifests();
+            if (manifests.Count == 0)
+            {
+                AddLogRow("..", "Avatar animations: no motion packs found", false);
+                SetProgress(endProgress);
+                yield return new WaitForSeconds(0.08f);
+                yield break;
+            }
+
+            float range = Mathf.Max(0f, endProgress - startProgress);
+            for (int i = 0; i < manifests.Count; i++)
+            {
+                string manifestPath = manifests[i];
+                string avatarId = GetAvatarIdFromManifestPath(manifestPath);
+                AddLogRow("..", "Loading avatar sprites: " + avatarId, false);
+
+                int manifestIndex = i;
+                yield return SpriteSheetAnimationLoader.PreloadManifestCoroutine(
+                    manifestPath,
+                    (action, clipIndex, clipCount) =>
+                    {
+                        int safeClipCount = Mathf.Max(1, clipCount);
+                        float clipProgress = Mathf.Clamp01((float)clipIndex / safeClipCount);
+                        float totalProgress = (manifestIndex + clipProgress) / manifests.Count;
+                        SetProgress(startProgress + range * totalProgress);
+                    });
+
+                SetProgress(startProgress + range * ((float)(i + 1) / manifests.Count));
+                AddLogRow("OK", "Avatar sprites loaded: " + avatarId, true);
+                yield return null;
+            }
+        }
+
+        private static List<string> DiscoverAvatarMotionPackManifests()
+        {
+            var manifests = new List<string>();
+            string avatarsDir = Path.Combine(Application.streamingAssetsPath, "Avatars");
+            if (string.IsNullOrWhiteSpace(avatarsDir) || !Directory.Exists(avatarsDir))
+                return manifests;
+
+            try
+            {
+                string[] dirs = Directory.GetDirectories(avatarsDir);
+                Array.Sort(dirs, StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < dirs.Length; i++)
+                {
+                    string manifestPath = Path.Combine(dirs[i], "motion_pack.json");
+                    if (File.Exists(manifestPath))
+                        manifests.Add(manifestPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[Splash] Failed to discover avatar motion packs: " + ex.Message);
+            }
+
+            return manifests;
+        }
+
+        private static string GetAvatarIdFromManifestPath(string manifestPath)
+        {
+            if (string.IsNullOrWhiteSpace(manifestPath))
+                return "unknown";
+
+            try
+            {
+                string dir = Path.GetDirectoryName(manifestPath);
+                if (!string.IsNullOrWhiteSpace(dir))
+                    return Path.GetFileName(dir);
+            }
+            catch
+            {
+            }
+
+            return "unknown";
         }
 
         /// <summary>

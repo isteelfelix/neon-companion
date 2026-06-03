@@ -21,6 +21,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         public Func<bool> IsBound;
         public Func<string> GetActiveAvatarId;
         public Action<string> SetActiveAvatarId;
+        public Func<string> GetAvatarViewMode;
+        public Action<string> SetAvatarViewMode;
         public Action RefreshVoiceControls;
         public Func<Task> RequestRefreshLocalizedUi;
         public Action<CompanionApp> RefreshCustomAvatarGallery;
@@ -64,6 +66,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _settingsPluginsConfig;
         private VisualElement _settingsPluginsList;
         private Label _brandVersion;
+        private bool _settingsLoaded;
+        private bool _settingsLoading;
         private Button _shapeRound;
         private Button _shapeSquare;
         private Button _shapeHex;
@@ -198,6 +202,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         internal void SaveSettings()
         {
+            if (!_settingsLoaded || _settingsLoading)
+                return;
+
             _ = SaveSettingsAsync();
         }
 
@@ -497,6 +504,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         internal async Task LoadSettingsAsync()
         {
+            _settingsLoading = true;
+            bool loaded = false;
             try
             {
                 var app = await _deps.GetApp();
@@ -510,6 +519,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (!knownAvatar) resolvedAvatarId = "neon";
 
                 _deps.SetActiveAvatarId?.Invoke(resolvedAvatarId);
+                _deps.SetAvatarViewMode?.Invoke(string.IsNullOrWhiteSpace(s.avatarViewMode) ? "static" : s.avatarViewMode);
 
                 _settingsHistory?.SetValueWithoutNotify(s.saveChatHistory);
                 _settingsStreaming?.SetValueWithoutNotify(s.streaming);
@@ -571,15 +581,25 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _settingsHotkeyCaptureBtn.text = _closeHotkey;
 
                 _deps.RefreshVoiceControls?.Invoke();
+                loaded = true;
             }
             catch (Exception ex)
             {
                 NeonLogger.LogError(ex.ToString());
             }
+            finally
+            {
+                if (loaded)
+                    _settingsLoaded = true;
+                _settingsLoading = false;
+            }
         }
 
         private async Task SaveSettingsAsync()
         {
+            if (!_settingsLoaded || _settingsLoading)
+                return;
+
             try
             {
                 var app = await _deps.GetApp();
@@ -601,6 +621,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 s.avatarShape      = _avatarShape;
                 s.activeAvatarId   = _deps.GetActiveAvatarId?.Invoke() ?? "neon";
+                s.avatarViewMode   = _deps.GetAvatarViewMode?.Invoke() ?? "static";
                 s.closeHotkey      = _closeHotkey;
 
                 var chatService = _deps.GetChatServiceSync?.Invoke();

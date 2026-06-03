@@ -261,8 +261,24 @@ namespace NeonCompanion.Runtime.UI.Chat
             if (message.segments == null)
                 message.segments = new List<ChatMessageSegment>();
 
-            // Use timestamp-based key so each tool call is a separate segment (enables interleaving with text)
-            string key = tool + "\x01" + DateTimeOffset.UtcNow.Ticks;
+            string key = BuildToolSegmentKey(tool, label);
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                var existing = message.segments[i];
+                if (existing == null ||
+                    !string.Equals(existing.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(existing.key, key, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                existing.tool = tool ?? string.Empty;
+                existing.label = label ?? string.Empty;
+                existing.emoji = emoji ?? string.Empty;
+                existing.status = status ?? string.Empty;
+                return;
+            }
+
             message.segments.Add(new ChatMessageSegment
             {
                 kind = ChatMessageSegment.ToolKind,
