@@ -702,9 +702,24 @@ namespace NeonCompanion.Runtime.Chat
                 return;
 
             if (_currentSession != null && !string.IsNullOrWhiteSpace(_currentSession.providerSessionId))
-                await ResumeHermesSessionAsync(_currentSession.providerSessionId);
-            else
-                await StartHermesSessionAsync();
+            {
+                // Session resume can fail if the server-side session was cleaned up
+                // (e.g. WebSocket dropped on previous app kill). Fall back to a fresh session.
+                try
+                {
+                    await ResumeHermesSessionAsync(_currentSession.providerSessionId);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    NeonLogger.LogWarning("[Hermes] Session resume failed (" + ex.Message + "), creating new session.");
+                    _currentSession.providerSessionId = null;
+                    if (_currentChatViewModel != null)
+                        _currentChatViewModel.ProviderSessionId = null;
+                }
+            }
+
+            await StartHermesSessionAsync();
         }
 
         // === Hermes Transport Event Handlers ===
