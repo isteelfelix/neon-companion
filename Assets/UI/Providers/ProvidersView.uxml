@@ -25,8 +25,12 @@
 
         <ui:VisualElement class="split">
             <ui:ScrollView name="providers-list" class="providers-list" />
+        </ui:VisualElement>
 
-            <ui:ScrollView name="provider-edit-panel" class="editor">
+        <!-- Редактор провайдера — модалка по центру (попап со скроллом).
+             provider-edit-panel = оверлей; ShowProviderEditPanel тогглит его display. -->
+        <ui:VisualElement name="provider-edit-panel" class="provider-edit-overlay" style="display: none;">
+            <ui:ScrollView class="editor">
                 <ui:VisualElement class="editor__header">
                     <ui:VisualElement class="provider__logo provider__logo--editor">
                         <ui:Label name="editor-provider-short" text="OAI" />

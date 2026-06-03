@@ -7,6 +7,7 @@
     flex-direction: column;
     padding: 28px 36px 36px;
     overflow: hidden;
+    position: relative;   /* якорь для оверлея-редактора */
 }
 
 .page__head {
@@ -53,7 +54,7 @@
 
 .providers-list {
     flex-grow: 1;
-    margin-right: 22px;
+    margin-right: 0;
 }
 
 /* ============== Provider row ============== */
@@ -176,9 +177,26 @@
 
 /* ============== Editor (right column) ============== */
 
+/* Оверлей-подложка редактора провайдера (модалка по центру). */
+.provider-edit-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+}
+
+/* Карточка редактора — центрированный попап со своим вертикальным скроллом
+   (.editor теперь ScrollView). Влезает при любом размере окна. */
 .editor {
-    width: 380px;
-    flex-shrink: 0;
+    width: 480px;
+    max-width: 92%;
+    max-height: 86%;
+    flex-grow: 0;
+    flex-shrink: 1;
     background-color: var(--bg-1);
     border-width: 1px;
     border-color: var(--line-1);
@@ -394,28 +412,18 @@
 }
 
 /* ============================================================
-   Узкое окно: список и редактор в столбец, у каждого свой скролл
-   (provider-edit-panel — ScrollView). Иначе при сужении редактор 380px
-   наезжал на список и строки провайдеров перекрывались.
+   Узкое окно: компактнее паддинги и плотнее строки провайдеров.
+   meta «Источник» прячем — освобождаем место под имя/URL/действия,
+   чтобы содержимое строки не налезало.
    ============================================================ */
 .app--compact .providers-page {
-    padding: 22px 20px 20px;
+    padding: 22px 18px 18px;
 }
 
-.app--compact .split {
-    flex-direction: column;
+.app--compact .provider {
+    padding: 12px 14px;
 }
 
-.app--compact .providers-list {
-    margin-right: 0;
-    margin-bottom: 16px;
-    max-height: 240px;
-    flex-grow: 0;
-    flex-shrink: 0;
-}
-
-.app--compact .editor {
-    width: auto;
-    flex-grow: 1;
-    min-height: 0;
+.app--compact .provider__meta {
+    display: none;
 }
