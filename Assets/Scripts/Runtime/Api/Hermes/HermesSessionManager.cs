@@ -564,6 +564,15 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     break;
             }
             OnStateChanged?.Invoke(ts);
+
+            // When the WebSocket drops mid-generation, ChatService is blocked on
+            // _hermesGenerationComplete (a TaskCompletionSource). Without firing OnError
+            // here the TCS never resolves and the UI hangs on "Выполнение..." until the
+            // 5-minute safety timeout. TrySetResult is safe even when no generation is active.
+            if (ts == TransportState.Disconnected || ts == TransportState.Error)
+            {
+                OnError?.Invoke("Hermes connection lost (" + state + ")");
+            }
         }
 
         // === Dispose ===

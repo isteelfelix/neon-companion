@@ -83,7 +83,7 @@
 | U-32 | Удаление выделенных | ✅ | M2 | Felix fixed in 743d0a7: selected-message delete flow restored |
 | U-33 | Пересылка выделенных в другой чат | ✅ | M2 | Felix fixed in 743d0a7: selected-message forward flow restored |
 | U-34 | Выделение текста в сообщениях | ✅ | M2 | Verified by Felix: Label→TextField, I-beam cursor, long-press guard |
-| U-35 | Markdown разметка в сообщениях | ✅ | M2 | Verified by Felix: tables, blockquotes, HR, strikethrough, bold+italic, ATX headers H1-H6, improved inline parsing + USS styles |
+| U-35 | Markdown разметка в сообщениях | ✅ | M2 | **Upgraded to SelectableMarkdownElement** — full native rendering engine: block model (paragraph/heading/quote/list/code/table/rule), inline tokenizer (bold/italic/strike/code/links), word-wrap, glyph-level selection, streaming block-level reconciliation. Syntax highlighting for 15+ languages. Diff-fenced code blocks with +/-/@@ coloring. Design tokens throughout. Previously: TextField-based with basic markdown parsing. |
 | U-36 | Индикатор контекстного окна | ✅ | M2 | Verified by Felix: real context_length from discovery API, fallback chain to heuristics |
 | U-37 | Экспорт чата | ✅ | M2 | Verified by Felix: save-file dialog via IFilePickerService + Windows SaveFileDialog + iOS fallback |
 | U-38 | Поиск по текущему чату | ✅ | M2 | Работает |
@@ -101,6 +101,7 @@
 | U-50 | Баг: анимированный аватар в вкладке Статика | ✅ | M2 | Verified by Felix: mode check before null guard + HideAllAvatarImageOverlays |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 | U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
+| U-53 | IsImageFilePath crash on control characters | ✅ | M2 | Path.GetExtension throws ArgumentException on newlines/tabs in pasted multi-line markdown. Fixed: GetInvalidPathChars guard + try/catch. |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |

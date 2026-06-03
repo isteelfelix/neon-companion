@@ -2,30 +2,44 @@
 
 ## [Unreleased]
 
-### Fixed / Improved
-- Composer input is UITK `TextField` (U-12/U-22), with stable Enter routing for both send modes (Enter/Ctrl+Enter/Shift+Enter), frame-level dedup to prevent double submit, and guarded newline insertion that avoids `TextEditingUtilities.Insert` out-of-range errors.
-- User message line breaks are preserved end-to-end: preprocessing keeps `\n`, and transcript rendering uses `white-space: pre-wrap` for user bubble text.
-
-### Changed
-- Removed temporary TMP composer experiment and kept chat input wiring UITK-only in ChatController/MainViewController.
-
 ### Added
-- U-33: Forward selected messages to another chat session (selection bar now has Forward between Delete/Cancel; opens centered overlay picker with session titles + timestamps from ChatService.GetAllSessionsAsync; messages deep-copied via JsonUtility snapshot in new AppendMessagesToSessionAsync; persists to target; shows confirmation; excludes current session; outside-click or Cancel aborts). All in ChatController + ChatView.uss + loc (no new .cs files).
-- U-38: Chat search with highlight and navigation (topbar search button now toggles in-chat transcript search bar; live filtering, match count X/Y, ↑↓ nav, Esc/Enter keys, yellow highlight rows; closes on session change or re-render). Implemented entirely in ChatController with dynamic UI.
-- U-41: Inline image rendering for attachments (replaces `[image] filename` text with actual <Image> elements loaded via UnityWebRequestTexture from local file:// paths; supports png/jpg/jpeg/gif/webp by kind or extension; non-images keep file label; max-size + rounded styles).
-- U-44: Runtime drag-and-drop into the chat window on Windows standalone builds via `IFileDropService` + `WindowsFileDropService` (`WM_DROPFILES` bridge). Verified by Felix: dropped supported files are routed through the same pending composer attachment/previews path as manual attach and Editor drag.
-- U-48: Agent approval now covers both local OpenAI tools and Hermes SSE request/progress events. Local tools send OpenAI `tools`, preserve `tool_calls`/`tool_call_id`, accumulate streaming `delta.tool_calls`, and block before `ToolExecutor`; Hermes approval-like stream statuses surface an in-chat approval prompt.
-- U-16: API key show/hide toggle button in provider editor (next to password field)
-- U-37: Export current chat as Markdown file (topbar "Export" button wires to ChatController.ExportChatAsync; writes .md to Application.persistentDataPath following SettingsController.ExportChatsAsync pattern; localized messages)
-- U-29 + U-30: Right-click (desktop) and long-press (mobile) context menu on message bubbles with Edit (user messages only), Delete, Copy. Inline editing with Save/Cancel (+ Save & Regenerate if assistant follows). Delete and edit persist via SaveCurrentSessionAsync + re-render. All strings localized.
-- Agent approval system Part B: settings and prompt foundation (alwaysApprovedTools in AppSettings, RequestToolApproval in ChatController, auto/manual modes + Always persist, prompt added/removed from transcript)
+- **SelectableMarkdownElement** — custom native markdown rendering engine for UITK. Full document model (Block → InlineRun), block-level reconciliation for streaming (unchanged blocks not re-rendered), word-wrap via flex-wrap rows, glyph-level text selection with pointer drag + Ctrl+A/Ctrl+C, link click-through, ANSI escape code stripping. Replaces all TextField-based transcript bodies.
+- Syntax highlighting for code blocks: language-agnostic keyword/string/comment/number tokenizer. Supported languages: C#, Python, JS/TS, Go, Rust, Java, Ruby, Shell, Kotlin, Scala, Swift, PHP, YAML, JSON. Diff-fenced blocks (`language: diff`/`patch`) render with +/-/@@ coloring.
+- Shared diff palette (`DiffAddColor/Bg`, `DiffDelColor/Bg`, `DiffHunkColor/Bg`, `DiffContextColor`) used by both `SetDiff` and diff code blocks.
+- Design token migration: all hardcoded `rgba()` colors in ChatView.uss replaced with `var(--bg-0)`, `var(--text-1)`, `var(--accent)`, `var(--ok)`, `var(--warn)`, `var(--danger)`, etc.
+- Tool entry styling: left accent stripe (`border-left-color`) for running/done/reasoning states, hover background transition, semi-bold GeistMono font for tool names.
+- Reasoning/thinking block: dedicated `.reasoning-entry__details` + `.reasoning-entry__text` styles (italic, accent stripe, dark surface).
+- Approval prompt: pill buttons with border + hover transitions (approve=green, reject=red, always=accent), warning accent stripe, icon color.
+- Clarify choices: pill buttons with accent border + hover fill, white-space normal for wrapping.
+- Composer input wrapped in `ScrollView` (`.composer__scroll`) — TextField grows to content height, ScrollView caps at 140px with vertical scrollbar. Caret-follow on overflow.
+- Message row cache (`_messageRowCache` + `BuildMessageRenderKey`) — reuses VisualElement instances across transcript re-renders instead of recreating.
+- `EmitCodeChunks()` extracted for reuse between plain, highlighted, and diff code block rendering.
+- `GetDiffLineStyle()` shared between `ParseDiff` (per-block) and diff-fenced code blocks.
+- `StripAnsi()` removes ANSI escape sequences from incoming text before parsing.
+- U-53: `IsImageFilePath` protected from `ArgumentException` on control characters (try/catch around `Path.GetExtension` + `GetInvalidPathChars` guard).
 
 ### Fixed
-- A-10: Avatar animation — all 6 clips now trigger correctly. Talking plays during AI streaming, listening on composer input, confused on provider/model errors
-- U-08: Exit button added to settings panel (triggers quit confirmation dialog)
-- CS0618: removed obsolete `EventBase.PreventDefault()` in ChatController.OnInputKeyDown. Replaced with `StopPropagation()`.
-- Composer Enter/Shift+Enter handling (U-12/U-22): Rewritten following official Unity 6.4 TextField documentation and current forum consensus. KeyDownEvent (TrickleDown) + StopImmediatePropagation. When we want natural newline (Shift+Enter in "Enter sends" mode) the event is allowed to fall through so the TextField inserts it itself. Only when taking full control (send or forced newline) we consume the event + use PreventDefault (pragma) as the most reliable way on 6000.4 to prevent TextEditingUtilities interference. This matches the documented pattern for chat-style composers. (U-12/U-22)
-- Brief fix batch (U-12/U-22 key handling, U-29..U-33 context menu + selection + edit/delete/forward, NEW chat switch transcript reload): direct KeyDownEvent send with Stop+PreventDefault only on intended send (Shift+Enter now inserts \n); pending flag eliminated; context menu positioned at pointer near bubble (small overlay, not bottom bar); selection bar inserted before composer (sane above-input placement); session switch now renders actual CurrentChatViewModel.Messages instead of null (non-empty sessions load transcript). All moved to ⏳ awaiting Felix verification. No UXML changes, C# 9 compliant.
+- **Hermes WS disconnect mid-generation**: `HermesSessionManager.HandleGatewayStateChange` now fires `OnError` when state transitions to `Disconnected` or `Error`. Previously, a WebSocket drop during streaming left `_hermesGenerationComplete` TCS unresolved, hanging the UI on "Выполнение..." until the 5-minute safety timeout.
+- Composer Shift+Enter newline: caret index captured before text mutation (was racing with next keystroke), deferred apply via `schedule.Execute`. Prevents newline appending at end then getting stripped by `Trim()`.
+- `_isDragOver` guarded with `#if UNITY_EDITOR` — only read in editor drag handlers, no runtime cost.
+- Horizontal scrollbar hidden in transcript view (`.transcript > .unity-scroller--horizontal { display: none }`).
+- Bubble sizing: markdown-heavy messages get wider bubbles (86%/92% vs 72%/86%).
+- Paragraph flex-wrap: `Wrap.NoWrap` forced on column containers to prevent rows wrapping into side-by-side columns.
+- `FlushParagraph` joins with `'\n'` (not `' '`) to preserve Shift+Enter hard breaks.
+- `ResetTokenSpacing` zeros implicit Label margins/padding to eliminate phantom gaps between word-wrapped chunks.
+- `MakeInlineLabel` uses `WhiteSpace.Pre` (not `NoWrap`) to preserve trailing spaces between words.
+
+### Changed
+- `CreateTranscriptBody` always uses `SelectableMarkdownElement` — removed TextField fallback branch.
+- Streaming label (`_streamingLabel`) changed from `TextField` to `SelectableMarkdownElement` with `StringBuilder` buffer for incremental markdown re-rendering.
+- `Query<Label>` → `Query<VisualElement>` in inline edit hide/show for compatibility with `SelectableMarkdownElement`.
+- Inline code style: `var(--accent-text)` color + `var(--accent-soft)` background (was hardcoded gray).
+- Bullet/numbered markers: `var(--accent-2)` color (was hardcoded `#888`).
+- Blockquote: `var(--accent)` left border + `var(--text-2)` color (was hardcoded rgba).
+- Link color: `var(--accent-text)` (was hardcoded `#6ea8fe`).
+- Strikethrough color: `var(--text-3)` (was hardcoded `rgba(255,255,255,0.35)`).
+- Code block: `var(--bg-0)` background + `var(--line-1)` border + `var(--text-1)` text color.
+- Stats footer / timestamp: `var(--text-3)` (was hardcoded rgba).
 
 ## [0.2.0] - 2026-05-27
 
