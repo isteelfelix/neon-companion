@@ -260,13 +260,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var provider = providers[i];
                 bool isActive = !string.IsNullOrEmpty(activeProviderId) && provider.id == activeProviderId;
                 _d.ProvidersList.Add(CreateProviderListItem(provider, isActive));
-
-                if (_editingProvider == null && isActive)
-                    StartEditingProvider(provider);
             }
 
-            if (_editingProvider == null)
-                StartEditingProvider(providers[0]);
+            // The editor is a modal overlay (.provider-edit-overlay) that covers the list.
+            // Do NOT auto-open it on refresh — that hid the list behind the modal on entry.
+            // It opens only on explicit user action (card click / "Изменить" / "Добавить").
         }
 
         private VisualElement CreateProviderListItem(ProviderConfig provider, bool isActive)

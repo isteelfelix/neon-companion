@@ -248,7 +248,7 @@
 
 .scroll-bottom-btn {
     position: absolute;
-    bottom: 80px;
+    bottom: 100px;
     right: 24px;
     width: 36px;
     height: 36px;
@@ -688,7 +688,7 @@
 /* ============== RIGHT: Avatar panel ============== */
 
 .avatar-panel {
-    width: 320px;
+    width: 260px;
     flex-shrink: 0;
     flex-direction: column;
     border-left-width: 1px;

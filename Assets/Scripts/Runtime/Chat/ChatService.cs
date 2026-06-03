@@ -470,17 +470,50 @@ namespace NeonCompanion.Runtime.Chat
                 }
             }
 
-            _currentSession = new ChatSession
+            // If we already have the local session for this provider session (e.g. the user opened
+            // it from history and we're only reconnecting the server side), update it in place.
+            // Minting a new sessionId here spawned a duplicate "new chat" every time an old chat
+            // was resumed after restart — which is exactly the reported bug.
+            bool reuseExisting = _currentSession != null &&
+                string.Equals(_currentSession.providerSessionId, hermesSessionId, StringComparison.Ordinal);
+
+            if (reuseExisting)
             {
-                sessionId = Guid.NewGuid().ToString(),
-                providerId = _currentProvider?.id,
-                providerSessionId = hermesSessionId,
-                selectedModel = response.info?.model ?? _currentProvider?.defaultModel,
-                title = response.info?.title ?? "Hermes session",
-                updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                messages = new List<ChatMessage>(_currentChatViewModel.Messages),
-                folder = string.Empty
-            };
+                _currentSession.providerId = _currentProvider?.id;
+                _currentSession.providerSessionId = hermesSessionId;
+                _currentSession.selectedModel = response.info?.model ?? _currentSession.selectedModel ?? _currentProvider?.defaultModel;
+                if (string.IsNullOrWhiteSpace(_currentSession.title) || _currentSession.title == "New chat")
+                    _currentSession.title = response.info?.title ?? _currentSession.title;
+
+                // Trust server history only when it returned messages; otherwise keep the local copy
+                // so reopening a chat never wipes its contents.
+                if (_currentChatViewModel.Messages.Count > 0)
+                {
+                    _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
+                }
+                else if (_currentSession.messages != null)
+                {
+                    _currentChatViewModel.Messages.Clear();
+                    for (int i = 0; i < _currentSession.messages.Count; i++)
+                        _currentChatViewModel.Messages.Add(_currentSession.messages[i]);
+                }
+
+                _currentSession.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            }
+            else
+            {
+                _currentSession = new ChatSession
+                {
+                    sessionId = Guid.NewGuid().ToString(),
+                    providerId = _currentProvider?.id,
+                    providerSessionId = hermesSessionId,
+                    selectedModel = response.info?.model ?? _currentProvider?.defaultModel,
+                    title = response.info?.title ?? "Hermes session",
+                    updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    messages = new List<ChatMessage>(_currentChatViewModel.Messages),
+                    folder = string.Empty
+                };
+            }
 
             SaveCurrentSession();
             NeonLogger.Log("Hermes session resumed: " + hermesSessionId);
@@ -698,16 +731,25 @@ namespace NeonCompanion.Runtime.Chat
             if (!sessionManager.IsConnected)
                 await selector.ConnectHermes();
 
-            if (!string.IsNullOrEmpty(sessionManager.ActiveSessionId))
-                return;
+            string desired = _currentSession != null ? _currentSession.providerSessionId : null;
 
-            if (_currentSession != null && !string.IsNullOrWhiteSpace(_currentSession.providerSessionId))
+            // The selected chat's server session takes priority over whatever the transport
+            // currently has active. After a restart (or after switching chats) the manager may
+            // hold a different/fresh ActiveSessionId; sending without re-pointing it would leak
+            // the old chat's message into a brand-new session (the reported bug).
+            if (!string.IsNullOrWhiteSpace(desired))
             {
-                // Session resume can fail if the server-side session was cleaned up
-                // (e.g. WebSocket dropped on previous app kill). Fall back to a fresh session.
+                bool alreadyOnSelected =
+                    string.Equals(sessionManager.ActiveSessionId, desired, StringComparison.Ordinal) ||
+                    string.Equals(sessionManager.StoredSessionId, desired, StringComparison.Ordinal);
+                if (alreadyOnSelected)
+                    return;
+
+                // Resume can fail if the server-side session was cleaned up (e.g. WebSocket
+                // dropped on a previous app kill). Fall back to a fresh session in that case.
                 try
                 {
-                    await ResumeHermesSessionAsync(_currentSession.providerSessionId);
+                    await ResumeHermesSessionAsync(desired);
                     return;
                 }
                 catch (Exception ex)
@@ -717,6 +759,20 @@ namespace NeonCompanion.Runtime.Chat
                     if (_currentChatViewModel != null)
                         _currentChatViewModel.ProviderSessionId = null;
                 }
+
+                await StartHermesSessionAsync();
+                return;
+            }
+
+            // The selected chat has no server session yet. Adopt an already-active one if present
+            // (and bind it so the chat can resume later); otherwise create a new server session.
+            if (!string.IsNullOrEmpty(sessionManager.ActiveSessionId))
+            {
+                if (_currentSession != null)
+                    _currentSession.providerSessionId = sessionManager.ActiveSessionId;
+                if (_currentChatViewModel != null)
+                    _currentChatViewModel.ProviderSessionId = sessionManager.ActiveSessionId;
+                return;
             }
 
             await StartHermesSessionAsync();

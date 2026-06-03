@@ -146,8 +146,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             _content.style.minWidth = 0;
             _content.style.width = Length.Percent(100);
 
-            Add(_selectionLayer);
+            // Selection layer must render ABOVE the content: code/diff blocks have an opaque
+            // background (.markdown-codeblock => var(--bg-0)) that would otherwise occlude a
+            // highlight drawn beneath them, making selection look broken inside code/diff.
+            // The highlight color is translucent (alpha ~0.35), so text stays readable on top.
+            // The layer is pickingMode = Ignore, so it never intercepts pointer events.
             Add(_content);
+            Add(_selectionLayer);
 
             RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
             RegisterCallback<PointerDownEvent>(OnPointerDown);
@@ -353,7 +358,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             container.Add(header);
 
             string lang = (block.CodeLanguage ?? string.Empty).Trim().ToLowerInvariant();
-            bool isDiff = IsDiffLanguage(lang);
+            // Color as a diff when the fence says so, or when a generic/unlabeled fence
+            // (```code / ```text / ```) actually contains a unified diff — models often
+            // emit ```code instead of ```diff, which left the diff uncolored.
+            bool isDiff = IsDiffLanguage(lang) || (IsGenericCodeLanguage(lang) && LooksLikeUnifiedDiff(code));
             bool highlight = !isDiff && IsHighlightLanguage(lang);
 
             string[] lines = code.Split('\n');
@@ -1389,6 +1397,59 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             return string.Equals(lang, "diff", StringComparison.Ordinal) ||
                    string.Equals(lang, "patch", StringComparison.Ordinal);
+        }
+
+        // Generic/unlabeled fences where we still try to sniff diff content.
+        private static bool IsGenericCodeLanguage(string lang)
+        {
+            return string.IsNullOrEmpty(lang) ||
+                   string.Equals(lang, "code", StringComparison.Ordinal) ||
+                   string.Equals(lang, "text", StringComparison.Ordinal) ||
+                   string.Equals(lang, "plain", StringComparison.Ordinal) ||
+                   string.Equals(lang, "plaintext", StringComparison.Ordinal);
+        }
+
+        // True only for a real unified diff: needs a structural marker (@@ hunk, "diff --git",
+        // or a ---/+++ file-header pair) AND at least one +/- change line. The double condition
+        // avoids mis-coloring ordinary text (e.g. a bullet list using "-").
+        private static bool LooksLikeUnifiedDiff(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+                return false;
+
+            string[] lines = code.Split('\n');
+            bool hasMarker = false;
+            bool hasFileMinus = false;
+            bool hasFilePlus = false;
+            bool hasChangeLine = false;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string l = lines[i];
+                if (l.StartsWith("@@", StringComparison.Ordinal) ||
+                    l.StartsWith("diff --git", StringComparison.Ordinal))
+                {
+                    hasMarker = true;
+                }
+                else if (l.StartsWith("---", StringComparison.Ordinal))
+                {
+                    hasFileMinus = true;
+                }
+                else if (l.StartsWith("+++", StringComparison.Ordinal))
+                {
+                    hasFilePlus = true;
+                }
+                else if (l.StartsWith("+", StringComparison.Ordinal) ||
+                         l.StartsWith("-", StringComparison.Ordinal))
+                {
+                    hasChangeLine = true;
+                }
+            }
+
+            if (hasFileMinus && hasFilePlus)
+                hasMarker = true;
+
+            return hasMarker && hasChangeLine;
         }
 
         private static bool IsHighlightLanguage(string lang)
