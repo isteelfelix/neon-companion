@@ -103,6 +103,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _chatSubtitle = string.Empty;
         private string _sessionSearchQuery = string.Empty;
         private TextElement _composerTextElement;
+        private ScrollView _composerScroll;
         private float _composerInputHeight = -1f;
         private int _lastComposerEnterEventFrame = -1;
         private VisualElement _composerPreviews;
@@ -234,6 +235,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessageInput != null)
             {
                 _d.MessageInput.multiline = true;
+                WrapComposerInScrollView();
                 _d.MessageInput.RegisterCallback<KeyDownEvent>(OnComposerKeyDown, TrickleDown.TrickleDown);
                 _d.MessageInput.RegisterValueChangedCallback(OnComposerTextChanged);
                 _d.MessageInput.RegisterCallback<FocusInEvent>(OnComposerFocusIn);
@@ -492,7 +494,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!isEnterKey && !isEnterChar)
                 return;
 
-            // Always consume Enter here so UITK does not apply its own newline/selection behavior.
+            // Consume Enter: UITK's native multiline handling ignores Shift+Enter and doesn't reliably
+            // commit its newline to value, so we own both send and newline. The per-frame guard collapses
+            // the paired keyCode+character KeyDownEvents Unity dispatches for a single press.
             evt.StopImmediatePropagation();
             evt.StopPropagation();
 #pragma warning disable CS0618
@@ -526,10 +530,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (field == null)
                 return;
 
+            // Capture the caret NOW — before the user types the next character. Apply the mutation
+            // deferred so UITK's editing engine has settled. Reading the caret at execution time
+            // instead races with the next keystroke and appends the newline at the very end, which
+            // OnSendClicked's Trim() then strips — collapsing a single Shift+Enter ("1\n2" → "12").
             int start = Math.Min(field.cursorIndex, field.selectIndex);
             int end = Math.Max(field.cursorIndex, field.selectIndex);
 
-            // Apply text mutation after current input event pipeline finishes.
             field.schedule.Execute(() => InsertComposerNewLine(field, start, end));
         }
 
@@ -539,14 +546,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             string current = field.value ?? string.Empty;
-            int start = Mathf.Clamp(selectionStart, 0, current.Length);
-            int end = Mathf.Clamp(selectionEnd, 0, current.Length);
-            if (end < start)
-            {
-                int tmp = start;
-                start = end;
-                end = tmp;
-            }
+            int start = Mathf.Clamp(Math.Min(selectionStart, selectionEnd), 0, current.Length);
+            int end = Mathf.Clamp(Math.Max(selectionStart, selectionEnd), 0, current.Length);
 
             string updated = current.Substring(0, start) + "\n" + current.Substring(end);
             field.value = updated;
@@ -574,9 +575,37 @@ namespace NeonCompanion.Runtime.UI.UITK
             QueueComposerHeightUpdate();
         }
 
-        // Auto-grow the multiline composer to fit its content, clamped to the
-        // CSS min/max-height. UITK does not auto-size a multiline TextField on its
-        // own, so we measure the text and drive the field height explicitly.
+        // UITK TextField has no built-in scrollbar, so wrap the input in a ScrollView. The ScrollView
+        // owns the row layout + 140px cap (via .composer__scroll) and shows a vertical scrollbar when
+        // the draft overflows; the TextField inside grows to its full content height.
+        private void WrapComposerInScrollView()
+        {
+            var field = _d.MessageInput;
+            if (field == null)
+                return;
+            if (field.parent is ScrollView)
+            {
+                _composerScroll = (ScrollView)field.parent;
+                return;
+            }
+            var parent = field.parent;
+            if (parent == null)
+                return;
+
+            int index = parent.IndexOf(field);
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.name = "composer-scroll";
+            scroll.AddToClassList("composer__scroll");
+            scroll.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+
+            parent.Insert(index, scroll);
+            scroll.Add(field);
+            _composerScroll = scroll;
+        }
+
+        // Auto-grow the multiline composer to fit its content. The field grows to full content height;
+        // the wrapping ScrollView (.composer__scroll) caps the visible height at 140px and scrolls.
         private void QueueComposerHeightUpdate()
         {
             var field = _d.MessageInput;
@@ -610,13 +639,29 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (float.IsNaN(size.y) || size.y <= 0f)
                 size.y = textEl.resolvedStyle.fontSize * 1.35f;
 
-            float target = Mathf.Clamp(size.y + ComposerInputVerticalPadding, ComposerInputMinHeight, ComposerInputMaxHeight);
+            // Grow to full content height (no upper clamp here); the wrapping ScrollView caps the
+            // visible height at 140px and provides the scrollbar. Floor at the min height only.
+            float target = Mathf.Max(size.y + ComposerInputVerticalPadding, ComposerInputMinHeight);
             if (_composerInputHeight > 0f && Mathf.Abs(_composerInputHeight - target) < 0.5f)
                 return;
 
             _composerInputHeight = target;
             field.style.height = target;
             textEl.style.minHeight = target;
+
+            // When the draft grows past the cap, keep the newest line visible (caret-follow), since a
+            // ScrollView does not auto-track a TextField caret. Height only changes when lines are
+            // added/removed, so this won't fight the user scrolling up to review same-height text.
+            if (_composerScroll != null)
+            {
+                var scroll = _composerScroll;
+                float bottom = target;
+                scroll.schedule.Execute(() =>
+                {
+                    if (scroll.panel != null)
+                        scroll.scrollOffset = new Vector2(0f, bottom);
+                }).StartingIn(0);
+            }
         }
 
         private TextElement GetComposerTextElement(TextField field)

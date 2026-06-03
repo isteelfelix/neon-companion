@@ -560,7 +560,9 @@
     border-color: var(--accent);
 }
 
-.composer__input {
+/* ScrollView wrapper around the composer input: owns the row layout + 140px cap and shows a
+   vertical scrollbar when the draft overflows. The TextField itself sizes to its content inside. */
+.composer__scroll {
     flex-grow: 1;
     flex-shrink: 1;
     min-width: 0;
@@ -569,19 +571,34 @@
     margin-left: 8px;
     margin-right: 10px;
     margin-bottom: 0;
-    overflow: hidden;
+}
+
+.composer__input {
+    flex-grow: 0;
+    flex-shrink: 0;
+    min-width: 0;
+    min-height: 36px;
+    width: 100%;
 }
 
 .composer__input > .unity-text-field__input,
 .composer__input > .unity-base-text-field__input {
     min-height: 36px;
-    max-height: 140px;
     background-color: rgba(0, 0, 0, 0);
     border-width: 0;
     color: var(--text-0);
     font-size: 14px;
     padding: 4px 4px;
     white-space: normal;
+}
+
+/* Slim the ScrollView's vertical scrollbar to fit the neon composer. */
+.composer__scroll .unity-scroller--vertical {
+    width: 8px;
+}
+
+.composer__scroll #unity-content-and-vertical-scroll-container {
+    flex-grow: 1;
 }
 
 .composer__hint {

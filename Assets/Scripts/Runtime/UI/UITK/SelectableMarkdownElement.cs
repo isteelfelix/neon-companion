@@ -239,6 +239,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===================== Block element construction =====================
 
+        // Max chars per token before an unbreakable word is split so it can wrap. Sized so a chunk
+        // fits comfortably inside a normal bubble width; smaller = finer wrap granularity.
+        private const int InlineChunkMax = 24;
+        private const int CodeChunkMax = 16;
+
         private VisualElement BuildBlockElement(Block block)
         {
             switch (block.Kind)
@@ -260,7 +265,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 case BlockKind.DiffLine:
                     return BuildDiffLine(block);
                 default:
-                    return BuildInlineContainer(block, "markdown-paragraph", true);
+                    return BuildParagraph(block);
             }
         }
 
@@ -350,12 +355,37 @@ namespace NeonCompanion.Runtime.UI.UITK
             int local = 0;
             for (int i = 0; i < lines.Length; i++)
             {
-                var lineLabel = new Label(lines[i]);
-                lineLabel.AddToClassList("markdown-codeblock-text");
-                lineLabel.pickingMode = PickingMode.Ignore;
-                AddToken(block, lineLabel, null, local, local + lines[i].Length);
-                container.Add(lineLabel);
-                local += lines[i].Length;
+                string line = lines[i];
+                // One logical line = a flex-wrap row of fixed-size chunks. Long lines therefore wrap
+                // to the container width instead of overflowing, while PlainText stays one line
+                // (chunks carry continuous indices; only the real '\n' below advances the offset).
+                var lineRow = NewWrapRow();
+                if (line.Length == 0)
+                {
+                    var spacer = new Label(" ");
+                    spacer.AddToClassList("markdown-codeblock-text");
+                    spacer.pickingMode = PickingMode.Ignore;
+                    ResetTokenSpacing(spacer, false);
+                    AddToken(block, spacer, null, local, local); // zero-length: gives the empty line height
+                    lineRow.Add(spacer);
+                }
+                else
+                {
+                    int p = 0;
+                    while (p < line.Length)
+                    {
+                        int len = Mathf.Min(CodeChunkMax, line.Length - p);
+                        var chunkLabel = new Label(line.Substring(p, len));
+                        chunkLabel.AddToClassList("markdown-codeblock-text");
+                        chunkLabel.pickingMode = PickingMode.Ignore;
+                        ResetTokenSpacing(chunkLabel, false);
+                        AddToken(block, chunkLabel, null, local, local + len);
+                        lineRow.Add(chunkLabel);
+                        local += len;
+                        p += len;
+                    }
+                }
+                container.Add(lineRow);
                 if (i < lines.Length - 1)
                     local += 1; // newline character in PlainText
             }
@@ -517,6 +547,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             container.AddToClassList("markdown-paragraph");
             container.pickingMode = PickingMode.Ignore;
             container.style.flexDirection = FlexDirection.Column; // override the class's row direction
+            // The class sets flex-wrap: wrap (for the old single-row layout). On a column of line-rows
+            // that makes a 2-line paragraph wrap its rows into side-by-side columns ("что"+"тут?" →
+            // "чтотут?"). Force NoWrap so hard-break rows stack vertically.
+            container.style.flexWrap = Wrap.NoWrap;
             container.style.minWidth = 0;
 
             VisualElement row = NewWrapRow();
@@ -559,12 +593,36 @@ namespace NeonCompanion.Runtime.UI.UITK
             return container;
         }
 
+        // Tokens sit edge-to-edge inside flex-wrap rows. Unity's default Label carries a small
+        // implicit margin which is hidden between normal words (their trailing space masks it) but
+        // shows up as phantom gaps between the space-less chunks of one long word. Zero it out so a
+        // split string renders continuously. Padding is preserved for code so the inline pill keeps shape.
+        private static void ResetTokenSpacing(Label label, bool keepPadding)
+        {
+            label.style.marginTop = 0;
+            label.style.marginBottom = 0;
+            label.style.marginLeft = 0;
+            label.style.marginRight = 0;
+            label.style.letterSpacing = 0;
+            if (!keepPadding)
+            {
+                label.style.paddingTop = 0;
+                label.style.paddingBottom = 0;
+                label.style.paddingLeft = 0;
+                label.style.paddingRight = 0;
+            }
+        }
+
         private Label MakeInlineLabel(string text, InlineRun run)
         {
             var label = new Label(text);
             label.AddToClassList("transcript__body");
             label.pickingMode = PickingMode.Ignore;
-            label.style.whiteSpace = WhiteSpace.NoWrap;
+            // Pre (not NoWrap): preserves the word's trailing space so words stay separated by a real
+            // space, while space-less chunks of a long word still butt together (margin is zeroed below).
+            // NoWrap would trim the trailing space, making words collide once the default margin is gone.
+            label.style.whiteSpace = WhiteSpace.Pre;
+            ResetTokenSpacing(label, run != null && run.Code);
             if (run != null)
             {
                 if (run.Bold)
@@ -1052,7 +1110,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (paragraph.Count == 0)
                 return;
-            string joined = string.Join(" ", paragraph.ToArray());
+            // Join with '\n' (not ' ') so intra-paragraph line breaks — e.g. the user's Shift+Enter
+            // newlines — are preserved as hard breaks instead of being collapsed onto one line.
+            string joined = string.Join("\n", paragraph.ToArray());
             AddParagraph(blocks, joined);
             paragraph.Clear();
         }
