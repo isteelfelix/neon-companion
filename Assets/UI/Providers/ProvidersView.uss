@@ -392,3 +392,30 @@
     margin-left: 12px;
     white-space: normal;
 }
+
+/* ============================================================
+   Узкое окно: список и редактор в столбец, у каждого свой скролл
+   (provider-edit-panel — ScrollView). Иначе при сужении редактор 380px
+   наезжал на список и строки провайдеров перекрывались.
+   ============================================================ */
+.app--compact .providers-page {
+    padding: 22px 20px 20px;
+}
+
+.app--compact .split {
+    flex-direction: column;
+}
+
+.app--compact .providers-list {
+    margin-right: 0;
+    margin-bottom: 16px;
+    max-height: 240px;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
+.app--compact .editor {
+    width: auto;
+    flex-grow: 1;
+    min-height: 0;
+}

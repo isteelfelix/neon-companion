@@ -10,6 +10,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const float MinRailWidth = 160f;
         private const float MaxRailWidth = 400f;
 
+        // Доли от ширины окна — потолок, чтобы панель не «съедала» весь экран
+        // на узком окне. Эффективный максимум = min(px-предел, доля·ширина окна).
+        private const float MaxRailPct = 0.33f;
+        private const float MaxAvatarPct = 0.5f;
+
         private VisualElement _resizeHandle;
         private VisualElement _avatarPanel;
         private VisualElement _railResizeHandle;
@@ -84,7 +89,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (!_isResizing) return;
             float delta = _resizeStartX - evt.position.x;
-            float newWidth = Mathf.Clamp(_resizeStartWidth + delta, MinAvatarWidth, MaxAvatarWidth);
+            float newWidth = Mathf.Clamp(_resizeStartWidth + delta, MinAvatarWidth, AvatarMaxWidth(GetWindowWidth()));
             if (_avatarPanel != null)
                 _avatarPanel.style.width = newWidth;
             evt.StopPropagation();
@@ -115,7 +120,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (!_isRailResizing) return;
             float delta = evt.position.x - _railResizeStartX;
-            float newWidth = Mathf.Clamp(_railResizeStartWidth + delta, MinRailWidth, MaxRailWidth);
+            float newWidth = Mathf.Clamp(_railResizeStartWidth + delta, MinRailWidth, RailMaxWidth(GetWindowWidth()));
             if (_railElement != null)
                 _railElement.style.width = newWidth;
             evt.StopPropagation();
@@ -129,6 +134,55 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_railResizeHandle != null && _railResizeHandle.HasPointerCapture(evt.pointerId))
                 _railResizeHandle.ReleasePointer(evt.pointerId);
             evt.StopPropagation();
+        }
+
+        /// <summary>
+        /// Поджимает рейл/аватар-панель под текущее окно: если пользователь растянул
+        /// панель на большом окне, а потом окно сузили — панель не должна «съедать»
+        /// весь экран. Вызывается из LayoutController при ресайзе окна.
+        /// </summary>
+        internal void ClampToWindow(float windowWidth)
+        {
+            if (windowWidth <= 0f)
+                return;
+
+            if (_railElement != null)
+            {
+                float max = RailMaxWidth(windowWidth);
+                if (_railElement.resolvedStyle.width > max)
+                    _railElement.style.width = max;
+            }
+
+            if (_avatarPanel != null)
+            {
+                float max = AvatarMaxWidth(windowWidth);
+                if (_avatarPanel.resolvedStyle.width > max)
+                    _avatarPanel.style.width = max;
+            }
+        }
+
+        private float GetWindowWidth()
+        {
+            VisualElement probe = _railElement ?? _avatarPanel;
+            if (probe == null || probe.panel == null)
+                return 0f;
+
+            VisualElement root = probe.panel.visualTree;
+            return root != null ? root.resolvedStyle.width : 0f;
+        }
+
+        private static float RailMaxWidth(float windowWidth)
+        {
+            if (windowWidth <= 0f)
+                return MaxRailWidth;
+            return Mathf.Min(MaxRailWidth, windowWidth * MaxRailPct);
+        }
+
+        private static float AvatarMaxWidth(float windowWidth)
+        {
+            if (windowWidth <= 0f)
+                return MaxAvatarWidth;
+            return Mathf.Min(MaxAvatarWidth, windowWidth * MaxAvatarPct);
         }
     }
 }

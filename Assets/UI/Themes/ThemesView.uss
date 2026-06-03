@@ -243,3 +243,31 @@
 
 .icon--palette { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
 .icon--sparkle { background-image: url("project://database/Assets/UI/Icons/sparkle.svg"); }
+
+/* ============================================================
+   Узкое окно: hero и строки в столбец, чтобы превью/контролы и текст
+   не сжимались и не наезжали (сегмент «Круг/Квадрат/…», превью-кружок).
+   ============================================================ */
+.app--compact .themes-page {
+    padding: 22px 20px 0 20px;
+}
+
+.app--compact .themes-hero {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.app--compact .themes-hero__copy {
+    margin-right: 0;
+    margin-bottom: 16px;
+}
+
+.app--compact .themes-row {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.app--compact .themes-row__copy {
+    margin-right: 0;
+    margin-bottom: 10px;
+}

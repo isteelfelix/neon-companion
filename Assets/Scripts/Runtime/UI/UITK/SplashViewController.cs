@@ -102,6 +102,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _scanLine     = root.Q("scan-line");
             _root         = root;
 
+            // Адаптив загрузочного экрана: на низком окне (мин. 760×560) сжимаем
+            // центральную колонку, чтобы лог не налезал на нижний прогресс-бар.
+            root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+
             // Tricolor gradient progress fill — generated at runtime, no PNG asset.
             if (_progressFill != null)
             {
@@ -159,6 +163,16 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             StartCoroutine(RunBootSequence());
             StartCoroutine(FlickerTagline());
+        }
+
+        // Высота, ниже которой центральная колонка масштабируется, чтобы не
+        // пересекаться с нижним баром (overlap начинается около ~614px).
+        private const float ShortHeightThreshold = 640f;
+
+        private void OnRootGeometryChanged(GeometryChangedEvent evt)
+        {
+            if (_root == null) return;
+            _root.EnableInClassList("splash--short", evt.newRect.height < ShortHeightThreshold);
         }
 
         // ── Boot sequence ─────────────────────────────────────────────────────

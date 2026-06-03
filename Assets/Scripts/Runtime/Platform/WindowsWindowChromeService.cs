@@ -34,6 +34,8 @@ namespace NeonCompanion.Runtime.Platform
         [SerializeField] private int resizeBorderThickness = 8;
         [SerializeField] private bool roundedCorners = true;
         [SerializeField] private bool dropShadow = true;
+        [SerializeField] private int minWindowWidth = 760;
+        [SerializeField] private int minWindowHeight = 560;
 #pragma warning restore 0414
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -49,6 +51,7 @@ namespace NeonCompanion.Runtime.Platform
         private const uint WsMaximizeBox = 0x00010000;
 
         // ===== Messages =====
+        private const uint WmGetMinMaxInfo = 0x0024;
         private const uint WmNcCalcSize = 0x0083;
         private const uint WmNcHitTest = 0x0084;
         private const uint WmNcLButtonDown = 0x00A1;
@@ -119,6 +122,23 @@ namespace NeonCompanion.Runtime.Platform
             public int CyBottomHeight;
         }
 
+        [Serializable]
+        private struct Point32
+        {
+            public int X;
+            public int Y;
+        }
+
+        [Serializable]
+        private struct MinMaxInfo
+        {
+            public Point32 Reserved;
+            public Point32 MaxSize;
+            public Point32 MaxPosition;
+            public Point32 MinTrackSize;
+            public Point32 MaxTrackSize;
+        }
+
         [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
         private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
 
@@ -163,6 +183,31 @@ namespace NeonCompanion.Runtime.Platform
 
         [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
         private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref Margins margins);
+
+        internal static WindowsWindowChromeService Instance { get; private set; }
+
+        /// <summary>
+        /// Поднимаем сервис как можно раньше (до Boot/Loading сцен), чтобы окно
+        /// было безрамочным и с ограничением минимального размера с первого кадра,
+        /// включая загрузочный экран. AppBootstrap затем переиспользует этот же
+        /// экземпляр через фабрику (не создавая дубль).
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void AutoBootstrap()
+        {
+            if (Instance != null)
+                return;
+
+            var go = new GameObject("WindowChromeBridge");
+            go.AddComponent<WindowsWindowChromeService>();
+            DontDestroyOnLoad(go);
+        }
+
+        private void Awake()
+        {
+            if (Instance == null)
+                Instance = this;
+        }
 
         private void Start()
         {
@@ -315,6 +360,12 @@ namespace NeonCompanion.Runtime.Platform
 
         private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
+            if (msg == WmGetMinMaxInfo)
+            {
+                ClampMinTrackSize(hWnd, lParam);
+                return IntPtr.Zero;
+            }
+
             if (msg == WmNcCalcSize && wParam != IntPtr.Zero)
             {
                 // Клиентская область = всё окно (рамка визуально исчезает).
@@ -336,6 +387,23 @@ namespace NeonCompanion.Runtime.Platform
             }
 
             return CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam);
+        }
+
+        private void ClampMinTrackSize(IntPtr hWnd, IntPtr lParam)
+        {
+            if (minWindowWidth <= 0 && minWindowHeight <= 0)
+                return;
+
+            MinMaxInfo info = (MinMaxInfo)System.Runtime.InteropServices.Marshal.PtrToStructure(lParam, typeof(MinMaxInfo));
+
+            // В физических пикселях — ровно как заданная сборочная резолюция, чтобы
+            // окно можно было вернуть к минимуму. НЕ домножаем на DPI: иначе на
+            // масштабе >100% минимум станет больше стартового размера и обратно
+            // к нему не ужать.
+            info.MinTrackSize.X = minWindowWidth;
+            info.MinTrackSize.Y = minWindowHeight;
+
+            System.Runtime.InteropServices.Marshal.StructureToPtr(info, lParam, false);
         }
 
         private void InsetMaximizedClientArea(IntPtr lParam)

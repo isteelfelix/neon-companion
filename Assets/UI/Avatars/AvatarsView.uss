@@ -227,6 +227,31 @@
     -unity-background-image-tint-color: white;
 }
 
+/* ============================================================
+   Узкое окно: кнопки шапки переносятся под текст, фильтры — в несколько
+   рядов (иначе «Открыть папку/Загрузить» и чипы фильтров уезжали за край).
+   ============================================================ */
+.app--compact .avatars-page {
+    padding: 22px 20px 20px;
+}
+
+.app--compact .page__head {
+    flex-wrap: wrap;
+}
+
+.app--compact .page__actions {
+    margin-top: 10px;
+}
+
+.app--compact .filterrow {
+    flex-wrap: wrap;
+    height: auto;
+}
+
+.app--compact .filterchip {
+    margin-bottom: 6px;
+}
+
 /* ---- Upload tile ---- */
 
 .avtile--upload {

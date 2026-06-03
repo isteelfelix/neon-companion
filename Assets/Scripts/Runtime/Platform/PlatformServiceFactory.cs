@@ -56,6 +56,11 @@ namespace NeonCompanion.Runtime.Platform
         public static IWindowChromeService CreateWindowChromeService(GameObject host = null)
         {
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            // Сервис уже поднят на старте (RuntimeInitializeOnLoadMethod), чтобы
+            // окно было безрамочным ещё на загрузочном экране — переиспользуем его.
+            if (WindowsWindowChromeService.Instance != null)
+                return WindowsWindowChromeService.Instance;
+
             if (host == null)
                 host = GameObject.Find("WindowChromeBridge") ?? new GameObject("WindowChromeBridge");
 

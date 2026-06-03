@@ -30,11 +30,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             public IPlatformInfoService PlatformInfo;
         }
 
+        // Брейкпоинты адаптива десктоп-окна (физические px ширины root).
+        private const float CompactWidth = 1000f;
+        private const float NarrowWidth = 820f;
+        private const float AvatarHideWidth = 900f;
+
         private Deps _d;
         private Button _toggleLeftPanelBtn;
         private Button _toggleRightPanelBtn;
         private bool _leftPanelVisible = true;
         private bool _rightPanelVisible = true;
+        private bool _avatarAutoHidden;
 
         public bool LeftPanelVisible => _leftPanelVisible;
         public bool RightPanelVisible => _rightPanelVisible;
@@ -65,6 +71,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
             RegisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
 
+            if (_d.Root != null)
+                _d.Root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+
             if (_d.PanelResizeHandler != null)
                 _d.PanelResizeHandler.RegisterCallbacks();
         }
@@ -74,8 +83,54 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
             UnregisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
 
+            if (_d.Root != null)
+                _d.Root.UnregisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+
             if (_d.PanelResizeHandler != null)
                 _d.PanelResizeHandler.UnregisterCallbacks();
+        }
+
+        /// <summary>
+        /// Адаптив десктоп-окна: при сужении переключаем CSS-классы брейкпоинтов
+        /// и авто-скрываем аватар-панель, освобождая место под чат. Ширину рейла/
+        /// панели не трогаем (её пишет PanelResizeHandler inline-стилем) — работаем
+        /// через display и классы, чтобы не конфликтовать.
+        /// </summary>
+        private void OnRootGeometryChanged(GeometryChangedEvent evt)
+        {
+            if (_d.Root == null)
+                return;
+
+            float width = evt.newRect.width;
+            _d.Root.EnableInClassList("app--compact", width < CompactWidth);
+            _d.Root.EnableInClassList("app--narrow", width < NarrowWidth);
+
+            UpdateAvatarAutoHide(width);
+
+            // Поджать рейл/аватар под новую ширину окна (если их растянули раньше).
+            if (_d.PanelResizeHandler != null)
+                _d.PanelResizeHandler.ClampToWindow(width);
+        }
+
+        private void UpdateAvatarAutoHide(float width)
+        {
+            bool shouldAutoHide = width < AvatarHideWidth;
+
+            if (shouldAutoHide && !_avatarAutoHidden)
+            {
+                _avatarAutoHidden = true;
+                if (_rightPanelVisible)
+                {
+                    SetDisplay(_d.AvatarPanel, DisplayStyle.None);
+                    SetDisplay(_d.ResizeHandle, DisplayStyle.None);
+                }
+            }
+            else if (!shouldAutoHide && _avatarAutoHidden)
+            {
+                _avatarAutoHidden = false;
+                SetDisplay(_d.AvatarPanel, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+                SetDisplay(_d.ResizeHandle, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+            }
         }
 
         public void OnDisable()
@@ -93,6 +148,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void OnToggleRightPanel()
         {
             _rightPanelVisible = !_rightPanelVisible;
+            // Ручное переключение перехватывает контроль у авто-скрытия.
+            _avatarAutoHidden = false;
             SetDisplay(_d.AvatarPanel, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_d.ResizeHandle, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
             UpdatePanelToggleTooltips();

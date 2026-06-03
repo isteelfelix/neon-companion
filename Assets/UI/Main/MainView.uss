@@ -231,18 +231,29 @@
     flex-direction: row;
     align-items: center;
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .topbar__title {
     font-size: 14px;
     -unity-font-style: bold;
     color: var(--text-0);
+    flex-shrink: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .topbar__subtitle {
     font-size: 11px;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    flex-shrink: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .topbar__model-picker {
@@ -261,6 +272,7 @@
 .topbar__right {
     flex-direction: row;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .topbar__right > Button {
@@ -773,4 +785,85 @@
 .app.platform-ios .nav__item {
     /* slightly different touch feel on iOS */
     height: 46px;
+}
+
+/* ============================================================
+   Desktop responsive — borderless resizable window (min 760×560).
+   Breakpoint classes app--compact / app--narrow are toggled from C#
+   (LayoutController) on root width. The avatar (right) panel auto-hide
+   is handled in C# (display), not here, to avoid clashing with the
+   inline width set by PanelResizeHandler.
+   ============================================================ */
+
+/* Let shell areas shrink below their content width instead of overflowing. */
+.main,
+.content-host,
+.composer {
+    min-width: 0;
+}
+
+/* --- Compact (<1000px): declutter the topbar, free horizontal space --- */
+.app--compact .topbar {
+    padding-left: 14px;
+    padding-right: 14px;
+}
+
+.app--compact .topbar__right > Button {
+    margin-left: 6px;
+}
+
+.app--compact .topbar__model-picker {
+    max-width: 150px;
+    margin-left: 8px;
+}
+
+/* Ghost text buttons (Резюме / Export) drop out first — they overlap at
+   narrow widths and stay reachable when the window is widened. */
+.app--compact .topbar__right > .btn--ghost {
+    display: none;
+}
+
+/* --- Narrow (<820px): strip the topbar subtitle + separator --- */
+.app--narrow .topbar__subtitle,
+.app--narrow .topbar__sep {
+    display: none;
+}
+
+.app--narrow .topbar {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+/* ============================================================
+   Rail density — компактнее nav, кнопки сессий и плитки сессий.
+   ============================================================ */
+.nav__item {
+    height: 32px;
+}
+
+.rail__sessions-head .iconbtn,
+.history__searchbar-clear {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 6px;
+}
+
+.rail__sessions-list .history__item {
+    padding: 5px 8px;
+    margin-bottom: 3px;
+}
+
+.rail__sessions-list .history__title {
+    font-size: 12px;
+}
+
+.rail__sessions-list .history__provider {
+    font-size: 9px;
+    padding: 1px 6px;
+}
+
+.rail__sessions-list .history__meta {
+    font-size: 11px;
 }

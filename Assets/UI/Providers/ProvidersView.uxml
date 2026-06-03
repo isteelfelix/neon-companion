@@ -26,7 +26,7 @@
         <ui:VisualElement class="split">
             <ui:ScrollView name="providers-list" class="providers-list" />
 
-            <ui:VisualElement name="provider-edit-panel" class="editor">
+            <ui:ScrollView name="provider-edit-panel" class="editor">
                 <ui:VisualElement class="editor__header">
                     <ui:VisualElement class="provider__logo provider__logo--editor">
                         <ui:Label name="editor-provider-short" text="OAI" />
@@ -82,7 +82,7 @@
                     <ui:Button name="save-provider-btn" text="Сохранить" class="btn btn--primary" />
                     <ui:Button name="cancel-edit-btn" text="Отмена" class="btn btn--ghost" />
                 </ui:VisualElement>
-            </ui:VisualElement>
+            </ui:ScrollView>
         </ui:VisualElement>
 
     </ui:VisualElement>
