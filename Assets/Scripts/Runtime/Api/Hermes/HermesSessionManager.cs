@@ -115,6 +115,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string request_id;
         public string question;
         public string[] choices;
+        public string run_id;
     }
 
     [Serializable]
@@ -324,11 +325,19 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 new { request_id = requestId, answer });
         }
 
-        public async Task RespondToApproval(string requestId, bool approved)
+        public async Task RespondToApproval(string runId, bool approved)
         {
-            await _gateway.Request<object>(
-                RpcMethods.ApprovalRespond,
-                new { request_id = requestId, approved });
+            // Gateway resolves approvals via REST API, not WebSocket RPC.
+            // POST /v1/runs/{run_id}/approval with {"choice": "once"|"deny"}
+            var selector = GlobalBackendSelector.Instance;
+            var restClient = selector?.RestClient;
+            if (restClient == null)
+            {
+                NeonLogger.LogWarning("[Hermes] REST client unavailable, cannot send approval response.");
+                return;
+            }
+            string choice = approved ? "once" : "deny";
+            await restClient.PostApproval(runId, choice);
         }
 
         // === Event Handlers ===
@@ -512,7 +521,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 requestId = payload.request_id,
                 description = payload.question,
-                type = "approval"
+                type = "approval",
+                runId = payload.run_id
             });
         }
 
