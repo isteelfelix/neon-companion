@@ -12,7 +12,17 @@
 - **Avatar System** — управление 2D аватарами, sprite-sheet motion packs для low-end/mobile, state mapper (`idle` / `thinking` / `talking` / `listening`) и one-shot reactions (`smile` / `confused`), подготовка к desktop-first 3D realtime аватарам
 - **UI Layer** — интерфейс чата и настроек
   - **SelectableMarkdownElement** — кастомный markdown rendering engine для UITK. Блочная модель (paragraph/heading/quote/list/code/table/rule), inline tokenizer, word-wrap, glyph-level text selection, streaming block-level reconciliation. Syntax highlighting для 15+ языков. Diff-fenced code blocks. Заменяет TextField для всего рендеринга текста в чате.
-  - **ChatController** — основной контроллер чата (~5400 строк). Управляет стримингом, tool calls, approval, очередью сообщений, кешем рендеринга.
+  - **ChatController** — основной контроллер чата (1315 строк, рефакторинг v0.3.0). Логика распределена по подконтроллерам:
+    - `ChatStreamingCoordinator` — стриминг и координация генерации
+    - `ChatMessageListRenderer` — рендеринг списка сообщений
+    - `ChatSelectionManager` — выделение и bulk-операции
+    - `ChatMessageEditController` — редактирование сообщений
+    - `ChatAttachmentManager` — вложения
+    - `ChatSearchController` — поиск по чату
+    - `ChatInputManager` — ввод, slash-команды
+    - `ChatNotificationManager` — уведомления и звуки
+    - `ToolCallApprovalController` — approval flow
+    - `QueuedMessage` — DTO для очереди сообщений
   - **ToolCallUiHelper** — рендеринг tool entries с expand/collapse, inline diffs, статусами.
 - **NeonDropdown** — кастомный UITK компонент (`INotifyValueChanged<string>`), заменяет `DropdownField` во всём интерфейсе (пикер моделей, пресет в редакторе провайдера, язык в настройках). Поддерживает `choicesCsv` атрибут, popup overlay, программный API
 - **Data Layer** — локальное хранение истории, конфигов, аватаров и motion-pack metadata
@@ -41,9 +51,9 @@
 - Reaction policy триггерит `smile` и `confused`
 - Формат не решает эмоцию сам по себе; он только описывает доступные клипы
 
-## Будущие расширения
-- Голосовой ввод/вывод + lipsync
-- 3D realtime аватары для desktop
+## Текущий статус и планы
+- Голосовой ввод/вывод — pipeline реализован (VoiceInputManager, VoiceOutputManager, WebGL + Android), UI не завершена
+- 3D аватары — архитектура реализована (Avatar3DLoader, Avatar3DRenderer), модели не добавлены
 - Генерация motion assets через внешний asset-pipeline без обязательной runtime-зависимости клиента
-- VR режим
+- VR режим (M4+)
 - Локальные модели (через llama.cpp / Ollama)
