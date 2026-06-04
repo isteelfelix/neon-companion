@@ -81,7 +81,7 @@
 | U-30 | Удаление отдельных сообщений | ✅ | M2 | Felix fixed in 743d0a7: context-menu delete flow works |
 | U-31 | Выделение сообщений | ✅ | M2 | Felix fixed in 743d0a7: selection mode reachable from message context menu |
 | U-32 | Удаление выделенных | ✅ | M2 | Felix fixed in 743d0a7: selected-message delete flow restored |
-| U-33 | Пересылка выделенных в другой чат | ✅ | M2 | Felix fixed in 743d0a7: selected-message forward flow restored |
+| U-33 | Пересылка выделенных в другой чат | ❌ | M2 | Не работает пересылка сообщений между чатами — broken after 743d0a7 |
 | U-34 | Выделение текста в сообщениях | ✅ | M2 | Verified by Felix: Label→TextField, I-beam cursor, long-press guard |
 | U-35 | Markdown разметка в сообщениях | ✅ | M2 | **Upgraded to SelectableMarkdownElement** — full native rendering engine: block model (paragraph/heading/quote/list/code/table/rule), inline tokenizer (bold/italic/strike/code/links), word-wrap, glyph-level selection, streaming block-level reconciliation. Syntax highlighting for 15+ languages. Diff-fenced code blocks with +/-/@@ coloring. Design tokens throughout. Previously: TextField-based with basic markdown parsing. |
 | U-36 | Индикатор контекстного окна | ✅ | M2 | Verified by Felix: real context_length from discovery API, fallback chain to heuristics |
