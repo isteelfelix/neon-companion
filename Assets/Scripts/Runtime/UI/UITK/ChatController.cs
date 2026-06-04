@@ -126,13 +126,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _transcriptContextRoot;
         private readonly Dictionary<string, VisualElement> _messageRowCache = new Dictionary<string, VisualElement>();
 
-        // Inline edit state
-        private int? _editingMessageIndex;
-        private VisualElement _editingBubble;
-        private VisualElement _editingContainer;
-        private TextField _editingTextField;
-        private Button _editingSaveBtn;
-        private Button _editingCancelBtn;
+        // Inline edit state — delegated to ChatMessageEditController
+        private ChatMessageEditController _editController;
 
         // Chat search (U-38) — delegated to ChatSearchController
         private ChatSearchController _searchController;
@@ -166,6 +161,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _inputManager = new ChatInputManager(_d.MessageInput, _d.Composer, _d.EnterToSend);
             _inputManager.OnSubmit += _ => OnSendClicked();
             _searchController = new ChatSearchController(_d.MessagesList, _d.GetChatServiceAsync);
+            _editController = new ChatMessageEditController(
+                _d.GetChatServiceAsync,
+                _d.RenderMessages,
+                _d.LoadSessionsAsync,
+                () => RegenerateLastAsync());
         }
 
         public void SetVoiceRecording(bool value) { _inputManager?.SetVoiceRecording(value); }
@@ -375,7 +375,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             DismissCurrentApprovalPrompt();
             if (_contextMenu != null)
                 _contextMenu.Hide();
-            CancelInlineEdit();
+            _editController?.CancelEdit();
             _searchController?.Hide();
             DismissSessionPicker();
             HideLightbox();
@@ -478,7 +478,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             DismissSessionPicker();
             if (_contextMenu != null)
                 _contextMenu.Hide();
-            CancelInlineEdit();
+            _editController?.CancelEdit();
             _currentChatService?.CancelCurrentGeneration();
         }
 
@@ -489,7 +489,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             DismissSessionPicker();
             if (_contextMenu != null)
                 _contextMenu.Hide();
-            CancelInlineEdit();
+            _editController?.CancelEdit();
 
             bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
             if (_d.MessageInput == null)
@@ -1958,7 +1958,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 if (_contextMenu != null)
                     _contextMenu.Hide();
-                CancelInlineEdit();
+                _editController?.CancelEdit();
 
                 var chat = await _d.GetChatServiceAsync();
                 if (chat == null)
@@ -2322,7 +2322,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool hasSession = messages != null;
             SetDisplay(_d.Composer, hasSession ? DisplayStyle.Flex : DisplayStyle.None);
-            CancelInlineEdit();
+            _editController?.CancelEdit();
             if (_searchController != null && _searchController.IsVisible)
                 _searchController.Hide();
             if (_isSelectionMode)
@@ -4334,7 +4334,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (bubble == null)
                 return;
 
-            StartInlineEdit(index, bubble, msg.content ?? string.Empty);
+            _editController.BeginEditMessage(index, bubble, msg.content ?? string.Empty);
         }
 
         private void OnDeleteMessageRequested(string messageIndexStr)
@@ -4386,171 +4386,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 GUIUtility.systemCopyBuffer = content;
                 _d.ShowSystemMessage(LocalizationExtensions.Get("msg.copied", "Copied"));
             }
-        }
-
-        private void StartInlineEdit(int index, VisualElement bubble, string currentContent)
-        {
-            if (_editingMessageIndex != null)
-                CancelInlineEdit();
-
-            _editingMessageIndex = index;
-            _editingBubble = bubble;
-
-            // Hide existing body elements while the edit field is active.
-            var bodies = bubble.Query<VisualElement>(className: "transcript__body").ToList();
-            for (int i = 0; i < bodies.Count; i++)
-            {
-                bodies[i].style.display = DisplayStyle.None;
-            }
-
-            // Build edit UI
-            var container = new VisualElement();
-            container.AddToClassList("message-edit-container");
-
-            var tf = new TextField();
-            tf.AddToClassList("message-edit-field");
-            tf.multiline = true;
-            tf.value = currentContent;
-            container.Add(tf);
-
-            var btnRow = new VisualElement();
-            btnRow.AddToClassList("message-edit-buttons");
-            btnRow.style.flexDirection = FlexDirection.Row;
-
-            string saveLabel = LocalizationExtensions.Get("msg.edit.save", "Save");
-            var saveBtn = new Button(() => CommitInlineEdit(true, false));
-            saveBtn.text = saveLabel;
-            saveBtn.AddToClassList("message-edit-btn");
-            saveBtn.AddToClassList("message-edit-btn--save");
-            btnRow.Add(saveBtn);
-
-            string cancelLabel = LocalizationExtensions.Get("msg.edit.cancel", "Cancel");
-            var cancelBtn = new Button(() => CommitInlineEdit(false, false));
-            cancelBtn.text = cancelLabel;
-            cancelBtn.AddToClassList("message-edit-btn");
-            cancelBtn.AddToClassList("message-edit-btn--cancel");
-            btnRow.Add(cancelBtn);
-
-            // Offer regenerate if this user message is followed by an assistant response
-            var chat = _d.GetChatServiceAsync().Result;
-            var msgs = (chat != null && chat.CurrentChatViewModel != null) ? chat.CurrentChatViewModel.Messages : null;
-            bool hasFollowingAssistant = msgs != null &&
-                                         index + 1 < msgs.Count &&
-                                         msgs[index + 1] != null &&
-                                         string.Equals(NormalizeRole(msgs[index + 1].role), "assistant", StringComparison.OrdinalIgnoreCase);
-            if (hasFollowingAssistant)
-            {
-                string regenLabel = LocalizationExtensions.Get("msg.edit.save_regen", "Save & Regenerate");
-                var regenBtn = new Button(() => CommitInlineEdit(true, true));
-                regenBtn.text = regenLabel;
-                regenBtn.AddToClassList("message-edit-btn");
-                regenBtn.AddToClassList("message-edit-btn--regen");
-                btnRow.Add(regenBtn);
-            }
-
-            container.Add(btnRow);
-
-            // Insert after meta if present
-            var meta = bubble.Q<VisualElement>(className: "transcript__meta");
-            if (meta != null)
-            {
-                int metaIdx = bubble.IndexOf(meta);
-                if (metaIdx >= 0)
-                    bubble.Insert(metaIdx + 1, container);
-                else
-                    bubble.Add(container);
-            }
-            else
-            {
-                bubble.Add(container);
-            }
-
-            _editingContainer = container;
-            _editingTextField = tf;
-            _editingSaveBtn = saveBtn;
-            _editingCancelBtn = cancelBtn;
-
-            // Focus for immediate typing
-            tf.Focus();
-        }
-
-        private void CommitInlineEdit(bool doSave, bool regenerateAfter)
-        {
-            if (_editingMessageIndex == null || _editingTextField == null || _editingBubble == null)
-            {
-                CancelInlineEdit();
-                return;
-            }
-
-            int index = _editingMessageIndex.Value;
-            var chat = _d.GetChatServiceAsync().Result;
-            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
-            {
-                CancelInlineEdit();
-                return;
-            }
-
-            var messages = chat.CurrentChatViewModel.Messages;
-            if (index < 0 || index >= messages.Count)
-            {
-                CancelInlineEdit();
-                return;
-            }
-
-            if (doSave)
-            {
-                string newContent = (_editingTextField.value ?? string.Empty).Trim();
-                messages[index].content = newContent;
-
-                // Clear segments for user message (they are plain text)
-                if (messages[index].segments != null)
-                    messages[index].segments.Clear();
-
-                if (regenerateAfter)
-                {
-                    // Truncate everything after the edited message
-                    while (messages.Count > index + 1)
-                        messages.RemoveAt(messages.Count - 1);
-
-                    _d.RenderMessages(messages);
-                    _ = chat.SaveCurrentSessionAsync();
-                    _ = _d.LoadSessionsAsync();
-
-                    // Reuse existing regenerate flow (it will remove any trailing assistant if present and re-send)
-                    _ = RegenerateLastAsync();
-                    CancelInlineEdit();
-                    return;
-                }
-
-                // Normal save: re-render to get clean bubble
-                _d.RenderMessages(messages);
-                _ = chat.SaveCurrentSessionAsync();
-                _ = _d.LoadSessionsAsync();
-            }
-
-            CancelInlineEdit();
-        }
-
-        private void CancelInlineEdit()
-        {
-            if (_editingContainer != null && _editingContainer.parent != null)
-                _editingContainer.RemoveFromHierarchy();
-
-            if (_editingBubble != null)
-            {
-                var bodies = _editingBubble.Query<VisualElement>(className: "transcript__body").ToList();
-                for (int i = 0; i < bodies.Count; i++)
-                {
-                    bodies[i].style.display = DisplayStyle.Flex;
-                }
-            }
-
-            _editingMessageIndex = null;
-            _editingBubble = null;
-            _editingContainer = null;
-            _editingTextField = null;
-            _editingSaveBtn = null;
-            _editingCancelBtn = null;
         }
 
         // ===== Message selection (U-31/U-32) =====
