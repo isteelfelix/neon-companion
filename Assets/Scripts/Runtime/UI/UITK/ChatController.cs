@@ -10,6 +10,7 @@ using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Models.Chat;
+using NeonCompanion.Runtime.UI.UITK.Chat;
 using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
@@ -65,8 +66,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<Task> OpenModelPickerAsync;
             // Avatar name for subtitle
             public Func<string> GetAvatarDisplayName;
-            public Action ShowNotificationBadge;
-            public Action HideNotificationBadge;
             // Sounds (U-40)
             public Action PlayNotificationSound;
         }
@@ -83,7 +82,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 #endif
         private bool _callbacksRegistered;
         private IFileDropService _fileDropService;
-        private bool _hasUnreadNotification;
+        private ChatNotificationManager _notifications;
         private ChatService _currentChatService;
         private VisualElement _streamingBubble;
         private SelectableMarkdownElement _streamingLabel;
@@ -180,8 +179,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_contextMenu == null)
                 _contextMenu = new MessageContextMenu();
 
-            _d.ShowNotificationBadge = ShowNotificationBadge;
-            _d.HideNotificationBadge = HideNotificationBadge;
+            _notifications = new ChatNotificationManager(_d.NavChatCount);
         }
 
         public void SetVoiceRecording(bool value) { _isVoiceRecording = value; }
@@ -331,7 +329,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 #endif
             _ = BindRuntimeFileDropAsync();
 
-            Application.focusChanged += OnApplicationFocusChanged;
+            // Application.focusChanged is managed by ChatNotificationManager
         }
 
         public void UnregisterCallbacks()
@@ -452,7 +450,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 #endif
             UnbindRuntimeFileDrop();
 
-            Application.focusChanged -= OnApplicationFocusChanged;
+            // Application.focusChanged managed by ChatNotificationManager (Dispose in future)
         }
 
         public void InitState()
@@ -710,7 +708,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public async Task SendCurrentMessageAsync()
         {
-            HideNotificationBadge();
+            _notifications.MarkRead();
             DismissCurrentApprovalPrompt();
             DismissSessionPicker();
             if (_contextMenu != null)
@@ -910,8 +908,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // Show notification badge if window not focused
                 if (!Application.isFocused)
                 {
-                    _hasUnreadNotification = true;
-                    _d.ShowNotificationBadge?.Invoke();
+                    _notifications.NotifyNewMessage();
                 }
 
                 // Process queued messages
@@ -1303,30 +1300,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.RefreshAvatarMotionState();
         }
 
-        private void ShowNotificationBadge()
-        {
-            if (_d.NavChatCount != null)
-            {
-                _d.NavChatCount.AddToClassList("nav__count--notify");
-            }
-        }
-
-        private void HideNotificationBadge()
-        {
-            if (_d.NavChatCount != null)
-            {
-                _d.NavChatCount.RemoveFromClassList("nav__count--notify");
-            }
-        }
-
-        private void OnApplicationFocusChanged(bool hasFocus)
-        {
-            if (hasFocus && _hasUnreadNotification)
-            {
-                _hasUnreadNotification = false;
-                HideNotificationBadge();
-            }
-        }
+        // Notification badge extracted to Chat/ChatNotificationManager.cs
 
         // ===== Summarize =====
 
