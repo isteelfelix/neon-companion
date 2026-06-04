@@ -115,7 +115,7 @@
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
 | R-01 | NavigationController | ✅ | M2 | 317 строк — extracted and integrated |
-| R-02 | ChatController | ✅ | M2 | 1044 строки — extracted and integrated |
+| R-02 | ChatController | ✅ | M2 | 1315 строк — 11 sub-classes extracted (5477→1315, −76%) |
 | R-03 | SessionHistoryController | ✅ | M2 | 366 строк — extracted and integrated |
 | R-04 | ProvidersController | ✅ | M2 | 1381 строка — extracted and integrated |
 | R-05 | AvatarGalleryController | ✅ | M2 | 1794 строки — extracted and integrated |
