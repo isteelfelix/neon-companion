@@ -75,7 +75,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Deps _d;
         private bool _isSending;
         private bool _isStreamingResponse;
-        private bool _isVoiceRecording;
 #if UNITY_EDITOR
         // Editor-only drag-overlay state; the only read lives in the #if UNITY_EDITOR drag handlers.
         private bool _isDragOver;
@@ -83,6 +82,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _callbacksRegistered;
         private IFileDropService _fileDropService;
         private ChatNotificationManager _notifications;
+        private ChatInputManager _inputManager;
         private ChatService _currentChatService;
         private VisualElement _streamingBubble;
         private SelectableMarkdownElement _streamingLabel;
@@ -103,10 +103,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private string _chatSubtitle = string.Empty;
         private string _sessionSearchQuery = string.Empty;
-        private TextElement _composerTextElement;
-        private ScrollView _composerScroll;
-        private float _composerInputHeight = -1f;
-        private int _lastComposerEnterEventFrame = -1;
         private VisualElement _composerPreviews;
         private VisualElement _lightbox;
 
@@ -162,10 +158,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _pickerRoot;
         private EventCallback<PointerDownEvent> _pickerOutsideHandler;
 
-        private const float ComposerInputMinHeight = 36f;
-        private const float ComposerInputMaxHeight = 140f;
-        private const float ComposerInputVerticalPadding = 12f;
-
         private const int MaxToolIterations = 10;
 
         public bool IsSending => _isSending;
@@ -180,9 +172,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _contextMenu = new MessageContextMenu();
 
             _notifications = new ChatNotificationManager(_d.NavChatCount);
+            _inputManager = new ChatInputManager(_d.MessageInput, _d.Composer, _d.EnterToSend);
+            _inputManager.OnSubmit += _ => OnSendClicked();
         }
 
-        public void SetVoiceRecording(bool value) { _isVoiceRecording = value; }
+        public void SetVoiceRecording(bool value) { _inputManager?.SetVoiceRecording(value); }
         public void SetChatSubtitle(string value) { _chatSubtitle = value ?? string.Empty; }
         public void SetSessionSearchQuery(string value) { _sessionSearchQuery = value ?? string.Empty; }
         public void ShowSystemMessage(string text) { _d.ShowSystemMessage?.Invoke(text); }
@@ -234,15 +228,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
-                _d.MessageInput.multiline = true;
-                WrapComposerInScrollView();
-                _d.MessageInput.RegisterCallback<KeyDownEvent>(OnComposerKeyDown, TrickleDown.TrickleDown);
-                _d.MessageInput.RegisterValueChangedCallback(OnComposerTextChanged);
-                _d.MessageInput.RegisterCallback<FocusInEvent>(OnComposerFocusIn);
-                _d.MessageInput.RegisterCallback<FocusOutEvent>(OnComposerFocusOut);
-                _d.MessageInput.RegisterCallback<GeometryChangedEvent>(OnComposerGeometryChanged);
-
-                QueueComposerHeightUpdate();
+                _inputManager.RegisterCallbacks();
+                _d.MessageInput.RegisterCallback<KeyDownEvent>(OnComposerKeyDownForPaste, TrickleDown.TrickleDown);
+                _d.MessageInput.RegisterValueChangedCallback(OnComposerTextChangedForAvatar);
             }
 
             if (_d.Composer != null)
@@ -377,14 +365,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
-                _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnComposerKeyDown, TrickleDown.TrickleDown);
-                _d.MessageInput.UnregisterValueChangedCallback(OnComposerTextChanged);
-                _d.MessageInput.UnregisterCallback<FocusInEvent>(OnComposerFocusIn);
-                _d.MessageInput.UnregisterCallback<FocusOutEvent>(OnComposerFocusOut);
-                _d.MessageInput.UnregisterCallback<GeometryChangedEvent>(OnComposerGeometryChanged);
+                _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnComposerKeyDownForPaste, TrickleDown.TrickleDown);
+                _d.MessageInput.UnregisterValueChangedCallback(OnComposerTextChangedForAvatar);
             }
 
-            _lastComposerEnterEventFrame = -1;
+            _inputManager?.UnregisterCallbacks();
 
             if (_pinBottomQueued)
             {
@@ -394,8 +379,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _isSending = false;
             _isStreamingResponse = false;
-            _composerTextElement = null;
-            _composerInputHeight = -1f;
             _toolCallUiHelper.Clear();
             DismissCurrentApprovalPrompt();
             if (_contextMenu != null)
@@ -458,9 +441,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetSending(false);
         }
 
-        // ===== Input =====
+        // ===== Input (Ctrl+V paste — enter handling delegated to ChatInputManager) =====
 
-        private void OnComposerKeyDown(KeyDownEvent evt)
+        private void OnComposerKeyDownForPaste(KeyDownEvent evt)
         {
             if (evt == null)
                 return;
@@ -488,202 +471,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 // Text content: do not intercept — UITK handles paste natively.
             }
-
-            bool isEnterKey = evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
-            bool isEnterChar = evt.character == '\n' || evt.character == '\r';
-            if (!isEnterKey && !isEnterChar)
-                return;
-
-            // Consume Enter: UITK's native multiline handling ignores Shift+Enter and doesn't reliably
-            // commit its newline to value, so we own both send and newline. The per-frame guard collapses
-            // the paired keyCode+character KeyDownEvents Unity dispatches for a single press.
-            evt.StopImmediatePropagation();
-            evt.StopPropagation();
-#pragma warning disable CS0618
-            evt.PreventDefault();
-#pragma warning restore CS0618
-
-            int frame = Time.frameCount;
-            if (_lastComposerEnterEventFrame == frame)
-                return;
-            _lastComposerEnterEventFrame = frame;
-
-            bool hasShift = evt.shiftKey;
-            bool enterToSend = _d.EnterToSend != null && _d.EnterToSend();
-
-            // EnterToSend = true  → Enter sends, Shift+Enter = newline
-            // EnterToSend = false → Ctrl+Enter sends, normal Enter = newline
-            bool shouldSend = enterToSend ? (!hasShift && !hasCtrl) : hasCtrl;
-
-            if (shouldSend)
-            {
-                OnSendClicked();
-                return;
-            }
-
-            QueueComposerNewLineInsert();
         }
 
-        private void QueueComposerNewLineInsert()
+        private void OnComposerTextChangedForAvatar(ChangeEvent<string> evt)
         {
-            var field = _d.MessageInput;
-            if (field == null)
-                return;
-
-            // Capture the caret NOW — before the user types the next character. Apply the mutation
-            // deferred so UITK's editing engine has settled. Reading the caret at execution time
-            // instead races with the next keystroke and appends the newline at the very end, which
-            // OnSendClicked's Trim() then strips — collapsing a single Shift+Enter ("1\n2" → "12").
-            int start = Math.Min(field.cursorIndex, field.selectIndex);
-            int end = Math.Max(field.cursorIndex, field.selectIndex);
-
-            field.schedule.Execute(() => InsertComposerNewLine(field, start, end));
-        }
-
-        private void InsertComposerNewLine(TextField field, int selectionStart, int selectionEnd)
-        {
-            if (field == null || field.panel == null)
-                return;
-
-            string current = field.value ?? string.Empty;
-            int start = Mathf.Clamp(Math.Min(selectionStart, selectionEnd), 0, current.Length);
-            int end = Mathf.Clamp(Math.Max(selectionStart, selectionEnd), 0, current.Length);
-
-            string updated = current.Substring(0, start) + "\n" + current.Substring(end);
-            field.value = updated;
-
-            int caret = Mathf.Clamp(start + 1, 0, updated.Length);
-            field.cursorIndex = caret;
-            field.selectIndex = caret;
-            field.Focus();
-
-            QueueComposerHeightUpdate();
-        }
-
-        private void OnComposerFocusIn(FocusInEvent evt)
-        {
-            _d.Composer?.AddToClassList("composer--focused");
-        }
-
-        private void OnComposerFocusOut(FocusOutEvent evt)
-        {
-            _d.Composer?.RemoveFromClassList("composer--focused");
-        }
-
-        private void OnComposerGeometryChanged(GeometryChangedEvent evt)
-        {
-            QueueComposerHeightUpdate();
-        }
-
-        // UITK TextField has no built-in scrollbar, so wrap the input in a ScrollView. The ScrollView
-        // owns the row layout + 140px cap (via .composer__scroll) and shows a vertical scrollbar when
-        // the draft overflows; the TextField inside grows to its full content height.
-        private void WrapComposerInScrollView()
-        {
-            var field = _d.MessageInput;
-            if (field == null)
-                return;
-            if (field.parent is ScrollView)
-            {
-                _composerScroll = (ScrollView)field.parent;
-                return;
-            }
-            var parent = field.parent;
-            if (parent == null)
-                return;
-
-            int index = parent.IndexOf(field);
-            var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.name = "composer-scroll";
-            scroll.AddToClassList("composer__scroll");
-            scroll.verticalScrollerVisibility = ScrollerVisibility.Auto;
-            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-
-            parent.Insert(index, scroll);
-            scroll.Add(field);
-            _composerScroll = scroll;
-        }
-
-        // Auto-grow the multiline composer to fit its content. The field grows to full content height;
-        // the wrapping ScrollView (.composer__scroll) caps the visible height at 140px and scrolls.
-        private void QueueComposerHeightUpdate()
-        {
-            var field = _d.MessageInput;
-            if (field == null)
-                return;
-
-            field.schedule.Execute(UpdateComposerHeight);
-        }
-
-        private void UpdateComposerHeight()
-        {
-            var field = _d.MessageInput;
-            if (field == null || field.panel == null)
-                return;
-
-            TextElement textEl = GetComposerTextElement(field);
-            if (textEl == null)
-                return;
-
-            float width = textEl.contentRect.width;
-            if (width <= 1f)
-                width = field.contentRect.width;
-            if (width <= 1f)
-                return;
-
-            string text = string.IsNullOrEmpty(field.value) ? " " : field.value;
-            if (text.EndsWith("\n", StringComparison.Ordinal) || text.EndsWith("\r", StringComparison.Ordinal))
-                text += " ";
-
-            Vector2 size = textEl.MeasureTextSize(text, width, VisualElement.MeasureMode.Exactly, 0f, VisualElement.MeasureMode.Undefined);
-            if (float.IsNaN(size.y) || size.y <= 0f)
-                size.y = textEl.resolvedStyle.fontSize * 1.35f;
-
-            // Grow to full content height (no upper clamp here); the wrapping ScrollView caps the
-            // visible height at 140px and provides the scrollbar. Floor at the min height only.
-            float target = Mathf.Max(size.y + ComposerInputVerticalPadding, ComposerInputMinHeight);
-            if (_composerInputHeight > 0f && Mathf.Abs(_composerInputHeight - target) < 0.5f)
-                return;
-
-            _composerInputHeight = target;
-            field.style.height = target;
-            textEl.style.minHeight = target;
-
-            // When the draft grows past the cap, keep the newest line visible (caret-follow), since a
-            // ScrollView does not auto-track a TextField caret. Height only changes when lines are
-            // added/removed, so this won't fight the user scrolling up to review same-height text.
-            if (_composerScroll != null)
-            {
-                var scroll = _composerScroll;
-                float bottom = target;
-                scroll.schedule.Execute(() =>
-                {
-                    if (scroll.panel != null)
-                        scroll.scrollOffset = new Vector2(0f, bottom);
-                }).StartingIn(0);
-            }
-        }
-
-        private TextElement GetComposerTextElement(TextField field)
-        {
-            if (_composerTextElement != null && _composerTextElement.panel != null)
-                return _composerTextElement;
-
-            TextElement textEl = field.Q<TextElement>(className: "unity-text-field__input");
-            if (textEl == null)
-                textEl = field.Q<TextElement>(className: "unity-base-text-field__input");
-            if (textEl == null)
-                textEl = field.Q<TextElement>();
-
-            _composerTextElement = textEl;
-            return _composerTextElement;
-        }
-
-        private void OnComposerTextChanged(ChangeEvent<string> evt)
-        {
-            QueueComposerHeightUpdate();
-
-            if (_isSending || _isVoiceRecording)
+            if (_isSending || _inputManager == null)
                 return;
 
             _d.RefreshAvatarMotionState?.Invoke();
@@ -719,14 +511,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessageInput == null)
                 return;
 
-            string composerText = (_d.MessageInput.value ?? string.Empty).Trim();
+            string composerText = (_inputManager.CurrentText ?? string.Empty).Trim();
             if (string.IsNullOrEmpty(composerText) && !hasPendingAttachments)
                 return;
 
             if (await TryHandleCommandAsync(composerText))
             {
                 _d.MessageInput.value = string.Empty;
-                QueueComposerHeightUpdate();
+                _inputManager.QueueComposerHeightUpdate();
                 return;
             }
 
@@ -737,7 +529,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string qMsg = StripAttachmentTokens(composerText, qAttach);
                 _messageQueue.Enqueue(new QueuedMessage { Message = qMsg, Attachments = qAttach });
                 _d.MessageInput.value = string.Empty;
-                QueueComposerHeightUpdate();
+                _inputManager.QueueComposerHeightUpdate();
                 ClearPendingComposerAttachments();
                 RenderQueueIndicator();
                 return;
@@ -747,7 +539,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             string message = StripAttachmentTokens(composerText, pendingAttachments);
             _d.MessageInput.value = string.Empty;
             ClearPendingComposerAttachments();
-            QueueComposerHeightUpdate();
+            _inputManager.QueueComposerHeightUpdate();
             SetSending(true);
             _d.GetAvatarAnimationController?.Invoke()?.TriggerSend();
 
@@ -890,7 +682,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 DismissCurrentApprovalPrompt();
                 DismissSessionPicker();
                 _d.MessageInput.value = composerText;
-                QueueComposerHeightUpdate();
+                _inputManager.QueueComposerHeightUpdate();
                 RestorePendingComposerAttachments(pendingAttachments);
                 if (chat == null || chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled)
                     _d.RenderMessages(null);
@@ -923,7 +715,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         for (int i = 0; i < nextQueuedMessage.Attachments.Count; i++)
                             _pendingComposerAttachments.Add(nextQueuedMessage.Attachments[i]);
                     }
-                    QueueComposerHeightUpdate();
+                    _inputManager.QueueComposerHeightUpdate();
                 }
             }
 
@@ -2151,7 +1943,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessageInput != null)
                 _d.MessageInput.value = message ?? string.Empty;
             RestorePendingComposerAttachments(attachments);
-            QueueComposerHeightUpdate();
+            _inputManager.QueueComposerHeightUpdate();
         }
 
         private void RenderComposerPreviews()
@@ -2537,7 +2329,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_d.MessageInput != null)
                 {
                     _d.MessageInput.value = string.Empty;
-                    QueueComposerHeightUpdate();
+                    _inputManager.QueueComposerHeightUpdate();
                 }
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
                 await _d.LoadSessionsAsync();
