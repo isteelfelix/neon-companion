@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Models.Chat;
 using NeonCompanion.Runtime.Platform;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -78,6 +79,31 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _pendingComposerAttachments.Add(restored[i]);
             RenderComposerPreviews();
             OnAttachmentsChanged?.Invoke();
+        }
+
+        public void RestoreDraft(string message, IReadOnlyList<ChatAttachment> attachments, Action queueComposerHeightUpdate)
+        {
+            if (_messageInput != null)
+                _messageInput.value = message ?? string.Empty;
+            Restore(attachments);
+            queueComposerHeightUpdate?.Invoke();
+        }
+
+        public static void RenderQueueIndicator(Queue<QueuedMessage> messageQueue, Label queueIndicator)
+        {
+            if (queueIndicator == null || messageQueue == null)
+                return;
+
+            if (messageQueue.Count > 0)
+            {
+                queueIndicator.style.display = DisplayStyle.Flex;
+                queueIndicator.text = LocalizationExtensions.Get("chat.queue.pending", "Очередь: {0}")
+                    .Replace("{0}", messageQueue.Count.ToString());
+            }
+            else
+            {
+                queueIndicator.style.display = DisplayStyle.None;
+            }
         }
 
         // ===== Callback registration =====

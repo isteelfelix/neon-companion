@@ -11,7 +11,6 @@ using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Models.Chat;
 using NeonCompanion.Runtime.UI.UITK.Chat;
-using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -74,20 +73,13 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Deps _d;
         private bool _isSending;
-#if UNITY_EDITOR
-        // Editor-only drag-overlay state; the only read lives in the #if UNITY_EDITOR drag handlers.
-        private bool _isDragOver;
-#endif
-        private bool _callbacksRegistered;
-        private IFileDropService _fileDropService;
         private ChatNotificationManager _notifications;
         private ChatInputManager _inputManager;
+        private ChatAttachmentManager _attachmentManager;
         private ChatService _currentChatService;
         private ChatStreamingCoordinator _streamingCoordinator;
         private ToolCallApprovalController _approvalController;
-        private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private string _chatSubtitle = string.Empty;
-        private VisualElement _composerPreviews;
         private VisualElement _lightbox;
 
         // Message queue (U-45)
@@ -136,6 +128,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             _notifications = new ChatNotificationManager(_d.NavChatCount);
             _inputManager = new ChatInputManager(_d.MessageInput, _d.Composer, _d.EnterToSend);
             _inputManager.OnSubmit += _ => OnSendClicked();
+            _attachmentManager = new ChatAttachmentManager(
+                _d.Composer,
+                _d.MessageInput,
+                _d.GetAppAsync,
+                _d.ShowSystemMessage,
+                GetOverlayRoot);
             _searchController = new ChatSearchController(_d.MessagesList, _d.GetChatServiceAsync);
             _editController = new ChatMessageEditController(
                 _d.GetChatServiceAsync,
@@ -182,8 +180,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void RegisterCallbacks()
         {
-            _callbacksRegistered = true;
-
             RegisterClick(_d.SendButton, OnSendClicked);
             RegisterClick(_d.StopButton, OnStopClicked);
             RegisterClick(_d.SummarizeButton, OnSummarizeClicked);
@@ -215,21 +211,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.MessageInput != null)
             {
                 _inputManager.RegisterCallbacks();
-                _d.MessageInput.RegisterCallback<KeyDownEvent>(OnComposerKeyDownForPaste, TrickleDown.TrickleDown);
                 _d.MessageInput.RegisterValueChangedCallback(OnComposerTextChangedForAvatar);
-            }
-
-            if (_d.Composer != null)
-            {
-                _composerPreviews = _d.Composer.Q<VisualElement>("composer-previews");
-                if (_composerPreviews == null)
-                {
-                    _composerPreviews = new VisualElement();
-                    _composerPreviews.name = "composer-previews";
-                    _composerPreviews.AddToClassList("composer__previews");
-                    _d.Composer.Insert(0, _composerPreviews);
-                }
-                _composerPreviews.style.display = DisplayStyle.None;
             }
 
             // Context window indicator
@@ -270,25 +252,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _selectionManager.OnBulkDelete += OnSelectionBulkDelete;
             _selectionManager.OnBulkForward += OnSelectionBulkForward;
 
-            // Drag-and-drop file support (U-44)
             var chatMain = _d.Composer?.parent;
-#if UNITY_EDITOR
-            if (chatMain != null)
-            {
-                chatMain.RegisterCallback<DragUpdatedEvent>(OnDragUpdated);
-                chatMain.RegisterCallback<DragPerformEvent>(OnDragPerform);
-                chatMain.RegisterCallback<DragLeaveEvent>(OnDragLeave);
-            }
-#endif
-            _ = BindRuntimeFileDropAsync();
+            _attachmentManager?.RegisterCallbacks(chatMain);
 
             // Application.focusChanged is managed by ChatNotificationManager
         }
 
         public void UnregisterCallbacks()
         {
-            _callbacksRegistered = false;
-
             UnregisterClick(_d.SendButton, OnSendClicked);
             UnregisterClick(_d.StopButton, OnStopClicked);
             UnregisterClick(_d.SummarizeButton, OnSummarizeClicked);
@@ -314,7 +285,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
-                _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnComposerKeyDownForPaste, TrickleDown.TrickleDown);
                 _d.MessageInput.UnregisterValueChangedCallback(OnComposerTextChangedForAvatar);
             }
 
@@ -350,17 +320,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _selectionManager = null;
             }
 
-            // Drag-and-drop file support (U-44)
             var chatMain = _d.Composer?.parent;
-#if UNITY_EDITOR
-            if (chatMain != null)
-            {
-                chatMain.UnregisterCallback<DragUpdatedEvent>(OnDragUpdated);
-                chatMain.UnregisterCallback<DragPerformEvent>(OnDragPerform);
-                chatMain.UnregisterCallback<DragLeaveEvent>(OnDragLeave);
-            }
-#endif
-            UnbindRuntimeFileDrop();
+            _attachmentManager?.UnregisterCallbacks(chatMain);
 
             // Application.focusChanged managed by ChatNotificationManager (Dispose in future)
         }
@@ -368,38 +329,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void InitState()
         {
             SetSending(false);
-        }
-
-        // ===== Input (Ctrl+V paste — enter handling delegated to ChatInputManager) =====
-
-        private void OnComposerKeyDownForPaste(KeyDownEvent evt)
-        {
-            if (evt == null)
-                return;
-
-            bool hasCtrl = evt.ctrlKey || evt.commandKey;
-
-            // Ctrl+V — three cases (U-42):
-            // A) clipboard text is a path to image file → attach as image
-            // B) clipboard has bitmap data (CF_DIB) regardless of text → extract image
-            // C) clipboard has only text → fall through so UITK TextField handles natively
-            if (hasCtrl && evt.keyCode == KeyCode.V)
-            {
-                string clip = GUIUtility.systemCopyBuffer;
-                if (!string.IsNullOrEmpty(clip) && IsImageFilePath(clip) && System.IO.File.Exists(clip))
-                {
-                    evt.StopPropagation();
-                    _ = PasteImageFromClipboardAsync();
-                    return;
-                }
-                if (ClipboardHasBitmapData())
-                {
-                    evt.StopPropagation();
-                    _ = PasteWindowsClipboardImageAsync();
-                    return;
-                }
-                // Text content: do not intercept — UITK handles paste natively.
-            }
         }
 
         private void OnComposerTextChangedForAvatar(ChangeEvent<string> evt)
@@ -436,7 +365,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _contextMenu.Hide();
             _editController?.CancelEdit();
 
-            bool hasPendingAttachments = _pendingComposerAttachments.Count > 0;
+            bool hasPendingAttachments = _attachmentManager != null && _attachmentManager.CurrentAttachments.Count > 0;
             if (_d.MessageInput == null)
                 return;
 
@@ -454,7 +383,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // If currently sending, queue the message instead (commands already handled above and execute immediately)
             if (_isSending)
             {
-                var qAttach = CloneAttachments(_pendingComposerAttachments);
+                var qAttach = _attachmentManager.CloneCurrent();
                 string qMsg = StripAttachmentTokens(composerText, qAttach);
                 _messageQueue.Enqueue(new QueuedMessage { Message = qMsg, Attachments = qAttach });
                 _d.MessageInput.value = string.Empty;
@@ -464,7 +393,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            var pendingAttachments = CloneAttachments(_pendingComposerAttachments);
+            var pendingAttachments = _attachmentManager.CloneCurrent();
             string message = StripAttachmentTokens(composerText, pendingAttachments);
             _d.MessageInput.value = string.Empty;
             ClearPendingComposerAttachments();
@@ -603,11 +532,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     RenderQueueIndicator();
                     // Set composer text and attachments, then send
                     _d.MessageInput.value = nextQueuedMessage.Message;
-                    if (nextQueuedMessage.Attachments != null)
-                    {
-                        for (int i = 0; i < nextQueuedMessage.Attachments.Count; i++)
-                            _pendingComposerAttachments.Add(nextQueuedMessage.Attachments[i]);
-                    }
+                    _attachmentManager.Restore(nextQueuedMessage.Attachments);
                     _inputManager.QueueComposerHeightUpdate();
                 }
             }
@@ -1011,712 +936,23 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Attachments =====
 
-        private static bool IsImageFilePath(string text)
-        {
-            if (string.IsNullOrEmpty(text) || text.Length > 512)
-                return false;
-            // A real file path is a single line with no illegal path characters. Guard before
-            // Path.GetExtension, which throws ArgumentException ("Illegal characters in path")
-            // on control chars such as the newlines/tabs present in pasted multi-line markdown.
-            if (text.IndexOfAny(System.IO.Path.GetInvalidPathChars()) >= 0)
-                return false;
-            string ext;
-            try
-            {
-                ext = System.IO.Path.GetExtension(text)?.ToLowerInvariant();
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg"
-                || ext == ".gif" || ext == ".webp" || ext == ".bmp";
-        }
+        private void OnAttachClicked() { _attachmentManager?.OpenFilePicker(); }
 
-        // ── Windows clipboard bitmap support (PNG/JFIF/CF_DIB via user32 / kernel32 P/Invoke) ──
-#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-        private const uint ClipboardFormatDib = 8;
-        private const uint ClipboardFormatDibV5 = 17;
-
-        private sealed class ClipboardImageData
-        {
-            public byte[] Bytes;
-            public bool IsDib;
-            public string Extension;
-            public string MediaType;
-        }
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool IsClipboardFormatAvailable(uint format);
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern uint RegisterClipboardFormat(string lpszFormat);
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool OpenClipboard(IntPtr hWnd);
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool CloseClipboard();
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern IntPtr GetClipboardData(uint format);
-        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-        private static extern IntPtr GlobalLock(IntPtr hMem);
-        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-        private static extern bool GlobalUnlock(IntPtr hMem);
-        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-        private static extern int GlobalSize(IntPtr hMem);
-
-        private static bool ClipboardHasBitmapData()
-        {
-            try
-            {
-                if (IsClipboardFormatAvailable(ClipboardFormatDib) ||
-                    IsClipboardFormatAvailable(ClipboardFormatDibV5))
-                    return true;
-
-                uint pngFormat = RegisterClipboardFormat("PNG");
-                uint jfifFormat = RegisterClipboardFormat("JFIF");
-                return (pngFormat != 0 && IsClipboardFormatAvailable(pngFormat)) ||
-                       (jfifFormat != 0 && IsClipboardFormatAvailable(jfifFormat));
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        // Reads encoded image bytes first, then raw DIB bytes, on an STA thread.
-        private static Task<ClipboardImageData> GetClipboardImageDataAsync()
-        {
-            var tcs = new TaskCompletionSource<ClipboardImageData>();
-            var t = new System.Threading.Thread(() =>
-            {
-                if (!OpenClipboard(IntPtr.Zero)) { tcs.TrySetResult(null); return; }
-                try
-                {
-                    uint pngFormat = RegisterClipboardFormat("PNG");
-                    byte[] png = GetClipboardBytes(pngFormat);
-                    if (png != null && png.Length > 0)
-                    {
-                        tcs.TrySetResult(new ClipboardImageData
-                        {
-                            Bytes = png,
-                            Extension = ".png",
-                            MediaType = "image/png",
-                            IsDib = false
-                        });
-                        return;
-                    }
-
-                    uint jfifFormat = RegisterClipboardFormat("JFIF");
-                    byte[] jfif = GetClipboardBytes(jfifFormat);
-                    if (jfif != null && jfif.Length > 0)
-                    {
-                        tcs.TrySetResult(new ClipboardImageData
-                        {
-                            Bytes = jfif,
-                            Extension = ".jpg",
-                            MediaType = "image/jpeg",
-                            IsDib = false
-                        });
-                        return;
-                    }
-
-                    byte[] dib = GetClipboardBytes(ClipboardFormatDibV5);
-                    if (dib == null || dib.Length == 0)
-                        dib = GetClipboardBytes(ClipboardFormatDib);
-
-                    if (dib != null && dib.Length > 0)
-                    {
-                        tcs.TrySetResult(new ClipboardImageData
-                        {
-                            Bytes = dib,
-                            Extension = ".png",
-                            MediaType = "image/png",
-                            IsDib = true
-                        });
-                        return;
-                    }
-
-                    tcs.TrySetResult(null);
-                }
-                finally { CloseClipboard(); }
-            });
-            try { t.SetApartmentState(System.Threading.ApartmentState.STA); t.IsBackground = true; t.Start(); }
-            catch { tcs.TrySetResult(null); }
-            return tcs.Task;
-        }
-
-        private static byte[] GetClipboardBytes(uint format)
-        {
-            if (format == 0 || !IsClipboardFormatAvailable(format))
-                return null;
-
-            IntPtr hData = GetClipboardData(format);
-            if (hData == IntPtr.Zero)
-                return null;
-
-            int size = GlobalSize(hData);
-            if (size <= 0)
-                return null;
-
-            IntPtr ptr = GlobalLock(hData);
-            if (ptr == IntPtr.Zero)
-                return null;
-
-            try
-            {
-                byte[] bytes = new byte[size];
-                System.Runtime.InteropServices.Marshal.Copy(ptr, bytes, 0, size);
-                return bytes;
-            }
-            finally
-            {
-                GlobalUnlock(hData);
-            }
-        }
-
-        // Converts raw DIB bytes to a PNG temp file using Unity's Texture2D.
-        // Must be called from the main thread (Texture2D API requirement).
-        private static string DibToPngFile(byte[] dib)
-        {
-            if (dib == null || dib.Length < 40) return null;
-            try
-            {
-                int headerSize  = BitConverter.ToInt32(dib, 0);
-                int width       = BitConverter.ToInt32(dib, 4);
-                int height      = BitConverter.ToInt32(dib, 8);
-                short bpp       = BitConverter.ToInt16(dib, 14);
-                int compression = BitConverter.ToInt32(dib, 16);
-                int clrUsed     = BitConverter.ToInt32(dib, 32);
-
-                if (width <= 0 || height == 0 ||
-                    (compression != 0 && compression != 3) ||
-                    (bpp != 24 && bpp != 32))
-                    return null; // only uncompressed 24/32 bpp supported
-
-                bool bottomUp = height > 0;
-                if (height < 0) height = -height;
-
-                int extraHeaderBytes = 0;
-                if (compression == 3 && headerSize == 40)
-                    extraHeaderBytes = bpp == 32 ? 16 : 12; // BI_BITFIELDS masks after BITMAPINFOHEADER
-
-                int colorTableSize = bpp <= 8 ? (clrUsed > 0 ? clrUsed : (1 << bpp)) * 4 : 0;
-                int pixelOffset = headerSize + extraHeaderBytes + colorTableSize;
-                if (pixelOffset >= dib.Length) return null;
-
-                int bytesPerPixel = bpp / 8;
-                int stride = bpp == 32 ? width * 4 : ((width * 3 + 3) / 4) * 4;
-
-                var colors = new Color32[width * height];
-                for (int y = 0; y < height; y++)
-                {
-                    int srcY = bottomUp ? y : (height - 1 - y);
-                    int rowBase = pixelOffset + srcY * stride;
-                    for (int x = 0; x < width; x++)
-                    {
-                        int off = rowBase + x * bytesPerPixel;
-                        if (off + 2 >= dib.Length) break;
-                        byte b = dib[off];
-                        byte g = dib[off + 1];
-                        byte r = dib[off + 2];
-                        byte a = (bpp == 32 && off + 3 < dib.Length) ? dib[off + 3] : (byte)255;
-                        colors[y * width + x] = new Color32(r, g, b, a);
-                    }
-                }
-
-                var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
-                tex.SetPixels32(colors);
-                tex.Apply();
-                byte[] png = tex.EncodeToPNG();
-                UnityEngine.Object.Destroy(tex);
-
-                if (png == null || png.Length == 0) return null;
-
-                string path = System.IO.Path.Combine(
-                    System.IO.Path.GetTempPath(),
-                    "neon-paste-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".png");
-                System.IO.File.WriteAllBytes(path, png);
-                return path;
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogWarning("DIB→PNG failed: " + ex.Message);
-                return null;
-            }
-        }
-#else
-        private static bool ClipboardHasBitmapData() { return false; }
-#endif
-
-        private Task PasteImageFromClipboardAsync()
-        {
-            try
-            {
-                string clipboard = GUIUtility.systemCopyBuffer;
-                if (string.IsNullOrEmpty(clipboard))
-                    return Task.CompletedTask;
-
-                // Check if clipboard contains a file path to an image
-                string[] imageExts = { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp" };
-                string ext = System.IO.Path.GetExtension(clipboard)?.ToLowerInvariant();
-                if (string.IsNullOrEmpty(ext))
-                    return Task.CompletedTask;
-
-                bool isImage = false;
-                for (int i = 0; i < imageExts.Length; i++)
-                {
-                    if (ext == imageExts[i]) { isImage = true; break; }
-                }
-                if (!isImage)
-                    return Task.CompletedTask;
-
-                // Check file exists
-                if (!System.IO.File.Exists(clipboard))
-                    return Task.CompletedTask;
-
-                string fileName = System.IO.Path.GetFileName(clipboard);
-                _pendingComposerAttachments.Add(new ChatAttachment
-                {
-                    kind = "image",
-                    name = fileName,
-                    path = clipboard,
-                    mediaType = GuessImageMediaType(clipboard)
-                });
-
-                RenderComposerPreviews();
-                _d.MessageInput?.Focus();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError("Paste image failed: " + ex.ToString());
-            }
-            return Task.CompletedTask;
-        }
-
-        // Extracts a bitmap image from the Windows clipboard (screenshots, images copied from browser etc.)
-        // Uses reflection + STA thread so it works without a direct System.Drawing reference.
-        private async Task PasteWindowsClipboardImageAsync()
-        {
-#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-            // Read image data on an STA thread (P/Invoke only), then convert DIB on main thread if needed.
-            ClipboardImageData imageData = await GetClipboardImageDataAsync();
-            if (imageData == null || imageData.Bytes == null || imageData.Bytes.Length == 0)
-            {
-                _d.ShowSystemMessage(LocalizationExtensions.Get("chat.paste.image_failed", "Не удалось извлечь изображение из буфера."));
-                return;
-            }
-
-            string tempPath = imageData.IsDib
-                ? DibToPngFile(imageData.Bytes)
-                : WriteClipboardImageFile(imageData.Bytes, imageData.Extension);
-            if (string.IsNullOrEmpty(tempPath))
-            {
-                _d.ShowSystemMessage(LocalizationExtensions.Get("chat.paste.image_failed", "Не удалось извлечь изображение из буфера."));
-                return;
-            }
-
-            string fileName = "clipboard-" + DateTime.Now.ToString("HHmmss") + ".png";
-            _pendingComposerAttachments.Add(new ChatAttachment
-            {
-                kind = "image",
-                name = fileName,
-                path = tempPath,
-                mediaType = string.IsNullOrEmpty(imageData.MediaType) ? "image/png" : imageData.MediaType
-            });
-            RenderComposerPreviews();
-            _d.MessageInput?.Focus();
-#else
-            await Task.CompletedTask;
-#endif
-        }
-
-#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-        private static string WriteClipboardImageFile(byte[] bytes, string extension)
-        {
-            if (bytes == null || bytes.Length == 0)
-                return null;
-
-            string ext = string.IsNullOrEmpty(extension) ? ".png" : extension;
-            if (!ext.StartsWith(".", StringComparison.Ordinal))
-                ext = "." + ext;
-
-            string path = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(),
-                "neon-paste-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ext);
-            System.IO.File.WriteAllBytes(path, bytes);
-            return path;
-        }
-#endif
-
-        private void OnAttachClicked()
-        {
-            _ = AttachImageTokenAsync();
-        }
-
-        private async Task AttachImageTokenAsync()
-        {
-            try
-            {
-                var app = await _d.GetAppAsync();
-                if (app == null || _d.MessageInput == null) return;
-
-                var filePicker = app.Services.GetRequired<IFilePickerService>();
-                string path = await filePicker.PickImagePathAsync();
-                if (string.IsNullOrEmpty(path)) return;
-
-                string fileName = System.IO.Path.GetFileName(path);
-                _pendingComposerAttachments.Add(new ChatAttachment
-                {
-                    kind = "image",
-                    name = fileName,
-                    path = path,
-                    mediaType = GuessImageMediaType(path)
-                });
-
-                RenderComposerPreviews();
-                _d.MessageInput.Focus();
-            }
-            catch (Exception ex)
-            {
-                _d.ShowSystemMessage(LocalizationExtensions.Get("system.chat.attachment_failed", "Не удалось добавить вложение к сообщению."));
-                NeonLogger.LogError(ex.ToString());
-            }
-        }
-
-        public void ClearPendingComposerAttachments()
-        {
-            _pendingComposerAttachments.Clear();
-            RenderComposerPreviews();
-        }
+        public void ClearPendingComposerAttachments() { _attachmentManager?.Clear(); }
 
         private void RestorePendingComposerAttachments(IReadOnlyList<ChatAttachment> attachments)
         {
-            _pendingComposerAttachments.Clear();
-            var restored = CloneAttachments(attachments);
-            for (int i = 0; i < restored.Count; i++)
-                _pendingComposerAttachments.Add(restored[i]);
-            RenderComposerPreviews();
+            _attachmentManager?.Restore(attachments);
         }
 
         private void RestoreComposerDraft(string message, IReadOnlyList<ChatAttachment> attachments)
         {
-            if (_d.MessageInput != null)
-                _d.MessageInput.value = message ?? string.Empty;
-            RestorePendingComposerAttachments(attachments);
-            _inputManager.QueueComposerHeightUpdate();
-        }
-
-        private void RenderComposerPreviews()
-        {
-            if (_composerPreviews == null) return;
-            _composerPreviews.Clear();
-
-            if (_pendingComposerAttachments.Count == 0)
-            {
-                _composerPreviews.style.display = DisplayStyle.None;
-                return;
-            }
-
-            _composerPreviews.style.display = DisplayStyle.Flex;
-
-            for (int i = 0; i < _pendingComposerAttachments.Count; i++)
-            {
-                var attachment = _pendingComposerAttachments[i];
-                if (attachment == null) continue;
-
-                int index = i; // capture for closure
-                var thumb = new VisualElement();
-                thumb.AddToClassList("composer__preview-thumb");
-
-                if (!string.IsNullOrEmpty(attachment.path) && System.IO.File.Exists(attachment.path))
-                {
-                    if (attachment.kind == "image" || IsImageFile(attachment.path))
-                    {
-                        var img = new Image();
-                        img.AddToClassList("composer__preview-img");
-                        img.scaleMode = ScaleMode.ScaleAndCrop;
-                        img.schedule.Execute(() => LoadImageAsync(img, attachment.path));
-                        string previewPath = attachment.path; // capture for closure
-                        img.RegisterCallback<ClickEvent>(evt =>
-                        {
-                            ShowImageLightbox(previewPath);
-                            evt.StopPropagation();
-                        });
-                        thumb.Add(img);
-                    }
-                    else
-                    {
-                        var fileLabel = new Label(GetAttachmentDisplayName(attachment));
-                        fileLabel.AddToClassList("composer__preview-file");
-                        thumb.Add(fileLabel);
-                    }
-                }
-
-                var removeBtn = new Button(() => RemovePendingAttachment(index));
-                removeBtn.text = "×";
-                removeBtn.AddToClassList("composer__preview-remove");
-                removeBtn.tooltip = LocalizationExtensions.Get("chat.preview.remove", "Убрать");
-                thumb.Add(removeBtn);
-
-                _composerPreviews.Add(thumb);
-            }
+            _attachmentManager?.RestoreDraft(message, attachments, _inputManager.QueueComposerHeightUpdate);
         }
 
         private void RenderQueueIndicator()
         {
-            if (_queueIndicator == null) return;
-            if (_messageQueue.Count > 0)
-            {
-                _queueIndicator.style.display = DisplayStyle.Flex;
-                _queueIndicator.text = LocalizationExtensions.Get("chat.queue.pending", "Очередь: {0}")
-                    .Replace("{0}", _messageQueue.Count.ToString());
-            }
-            else
-            {
-                _queueIndicator.style.display = DisplayStyle.None;
-            }
-        }
-
-        private void RemovePendingAttachment(int index)
-        {
-            if (index < 0 || index >= _pendingComposerAttachments.Count) return;
-            _pendingComposerAttachments.RemoveAt(index);
-
-            // Keep the composer text clean if it still contains legacy attachment tokens.
-            string text = _d.MessageInput?.value ?? string.Empty;
-            string rebuilt = BuildComposerTextWithAttachments(text, _pendingComposerAttachments);
-            if (_d.MessageInput != null)
-                _d.MessageInput.value = rebuilt;
-
-            RenderComposerPreviews();
-        }
-
-        private static string BuildComposerTextWithAttachments(string composerText, IReadOnlyList<ChatAttachment> attachments)
-        {
-            return StripAllAttachmentTokens(composerText ?? string.Empty).Trim();
-        }
-
-        private static string StripAllAttachmentTokens(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return string.Empty;
-
-            int idx;
-            while ((idx = text.IndexOf("[attachment: ", StringComparison.Ordinal)) >= 0)
-            {
-                int end = text.IndexOf(']', idx + 13);
-                if (end < 0)
-                    break;
-                text = text.Remove(idx, end - idx + 1);
-            }
-            return text;
-        }
-
-        // ===== Drag and Drop (U-44) =====
-
-        private async Task BindRuntimeFileDropAsync()
-        {
-            if (_fileDropService != null)
-                return;
-
-            try
-            {
-                var app = await _d.GetAppAsync();
-                if (!_callbacksRegistered || app == null)
-                    return;
-
-                IFileDropService fileDrop = null;
-                if (!app.Services.TryGet<IFileDropService>(out fileDrop) || fileDrop == null || !fileDrop.IsAvailable)
-                    return;
-
-                _fileDropService = fileDrop;
-                _fileDropService.FilesDropped += OnRuntimeFilesDropped;
-                _fileDropService.Start();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogWarning("File drop binding failed: " + ex.Message);
-            }
-        }
-
-        private void UnbindRuntimeFileDrop()
-        {
-            if (_fileDropService == null)
-                return;
-
-            _fileDropService.FilesDropped -= OnRuntimeFilesDropped;
-            _fileDropService.Stop();
-            _fileDropService = null;
-        }
-
-        private void OnRuntimeFilesDropped(IReadOnlyList<string> paths)
-        {
-#if UNITY_EDITOR
-            _isDragOver = false;
-#endif
-            _d.Composer?.parent?.RemoveFromClassList("chat-main--drag-over");
-
-            int added = AddPendingAttachmentsFromPaths(paths);
-            if (added > 0)
-            {
-                RenderComposerPreviews();
-                _d.MessageInput?.Focus();
-                return;
-            }
-
-            _d.ShowSystemMessage?.Invoke(LocalizationExtensions.Get(
-                "chat.drop.no_supported_files",
-                "Не удалось добавить файлы: поддерживаются изображения и текстовые документы."));
-        }
-
-#if UNITY_EDITOR
-        private void OnDragUpdated(DragUpdatedEvent evt)
-        {
-            if (!HasValidDragFiles(evt))
-                return;
-
-            SetDragCopyVisualMode();
-            if (!_isDragOver)
-            {
-                _isDragOver = true;
-                _d.Composer?.parent?.AddToClassList("chat-main--drag-over");
-            }
-            evt.StopPropagation();
-        }
-
-        private void OnDragPerform(DragPerformEvent evt)
-        {
-            _isDragOver = false;
-            _d.Composer?.parent?.RemoveFromClassList("chat-main--drag-over");
-
-            if (!HasValidDragFiles(evt))
-                return;
-
-            string[] paths = GetDraggedPaths();
-            if (paths == null || paths.Length == 0)
-                return;
-
-            int added = AddPendingAttachmentsFromPaths(paths);
-            if (added > 0)
-                RenderComposerPreviews();
-            evt.StopPropagation();
-        }
-
-        private void OnDragLeave(DragLeaveEvent evt)
-        {
-            _isDragOver = false;
-            _d.Composer?.parent?.RemoveFromClassList("chat-main--drag-over");
-            evt.StopPropagation();
-        }
-
-        private static bool HasValidDragFiles(DragUpdatedEvent evt)
-        {
-            string[] paths = GetDraggedPaths();
-            return paths != null && paths.Length > 0;
-        }
-
-        private static bool HasValidDragFiles(DragPerformEvent evt)
-        {
-            string[] paths = GetDraggedPaths();
-            return paths != null && paths.Length > 0;
-        }
-#endif
-
-        private int AddPendingAttachmentsFromPaths(IReadOnlyList<string> paths)
-        {
-            if (paths == null || paths.Count == 0)
-                return 0;
-
-            int added = 0;
-            for (int i = 0; i < paths.Count; i++)
-            {
-                string path = paths[i];
-                if (string.IsNullOrEmpty(path))
-                    continue;
-
-                if (!System.IO.File.Exists(path))
-                    continue;
-
-                string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
-                if (!IsSupportedFile(ext))
-                    continue;
-
-                if (IsImageExtension(ext) && !IsFileSizeOk(path))
-                    continue;
-
-                bool isImage = IsImageExtension(ext);
-                _pendingComposerAttachments.Add(new ChatAttachment
-                {
-                    kind = isImage ? "image" : "file",
-                    name = System.IO.Path.GetFileName(path),
-                    path = path,
-                    mediaType = isImage ? GuessImageMediaType(path) : GuessFileMediaType(path)
-                });
-                added++;
-            }
-
-            return added;
-        }
-
-        private static void SetDragCopyVisualMode()
-        {
-#if UNITY_EDITOR
-            UnityEditor.DragAndDrop.visualMode = UnityEditor.DragAndDropVisualMode.Copy;
-#endif
-        }
-
-        private static string[] GetDraggedPaths()
-        {
-#if UNITY_EDITOR
-            return UnityEditor.DragAndDrop.paths;
-#else
-            return null;
-#endif
-        }
-
-        private static bool IsSupportedFile(string ext)
-        {
-            // Images
-            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
-                return true;
-            // Documents
-            if (ext == ".pdf" || ext == ".txt" || ext == ".md" || ext == ".json" || ext == ".xml" || ext == ".csv")
-                return true;
-            // Code
-            if (ext == ".cs" || ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" || ext == ".cpp" || ext == ".h" || ext == ".csproj")
-                return true;
-            return false;
-        }
-
-        private static string GuessFileMediaType(string path)
-        {
-            string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
-            if (ext == ".pdf") return "application/pdf";
-            if (ext == ".json") return "application/json";
-            if (ext == ".xml") return "application/xml";
-            if (ext == ".csv") return "text/csv";
-            if (ext == ".md") return "text/markdown";
-            if (ext == ".txt") return "text/plain";
-            if (ext == ".cs" || ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" || ext == ".cpp" || ext == ".h" || ext == ".csproj")
-                return "text/plain";
-            return "application/octet-stream";
-        }
-
-        private static bool IsImageExtension(string ext)
-        {
-            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp";
-        }
-
-        private static bool IsFileSizeOk(string path, long maxSizeBytes = 10 * 1024 * 1024)
-        {
-            try
-            {
-                var info = new System.IO.FileInfo(path);
-                return info.Length <= maxSizeBytes;
-            }
-            catch
-            {
-                return false;
-            }
+            ChatAttachmentManager.RenderQueueIndicator(_messageQueue, _queueIndicator);
         }
 
         // ===== Copy =====
