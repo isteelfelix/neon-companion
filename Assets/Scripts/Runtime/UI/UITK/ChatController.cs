@@ -889,46 +889,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Context Window Indicator (U-36) =====
 
-        private int EstimateSessionTokens()
-        {
-            // Prefer real usage data (exact prompt_tokens from stream_options) when available
-            try
-            {
-                var app = _d.GetAppAsync().Result;
-                var client = app?.AiClient as OpenAiCompatibleClient;
-                if (client != null)
-                {
-                    var usage = client.LastStreamUsage;
-                    if (usage.prompt_tokens > 0)
-                        return usage.prompt_tokens;
-                }
-            }
-            catch
-            {
-                // fall back to character-based estimate below
-            }
-
-            var chat = _d.GetChatServiceAsync().Result;
-            var vm = chat?.CurrentChatViewModel;
-            if (vm == null || vm.Messages.Count == 0)
-                return 0;
-
-            int totalChars = 0;
-            for (int i = 0; i < vm.Messages.Count; i++)
-            {
-                var msg = vm.Messages[i];
-                if (msg == null) continue;
-                if (!string.IsNullOrEmpty(msg.content))
-                    totalChars += msg.content.Length;
-                // Count attachment paths as ~100 tokens each (image tokens)
-                if (msg.attachments != null)
-                    totalChars += msg.attachments.Count * 400;
-            }
-            // Rough estimate: 1 token ≈ 4 chars for English, ~2 chars for CJK
-            // Use 3 as middle ground
-            return totalChars / 3;
-        }
-
         private void UpdateContextBar()
         {
             if (_contextBar == null) return;
@@ -971,7 +931,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     contextWindow = provider.contextWindow;
                 // 4. Heuristic guess
                 if (contextWindow <= 0)
-                    contextWindow = GuessContextWindow(provider, chat.CurrentSessionModel);
+                    contextWindow = ChatContextWindowEstimator.GuessContextWindow(provider, chat.CurrentSessionModel);
             }
 
             if (contextWindow <= 0)
@@ -990,7 +950,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch { }
             if (used <= 0)
-                used = EstimateSessionTokens();
+                used = ChatContextWindowEstimator.EstimateSessionTokens(_d.GetAppAsync, _d.GetChatServiceAsync);
             float ratio = (float)used / contextWindow;
             ratio = Mathf.Clamp01(ratio);
 
@@ -1008,41 +968,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _contextBarLabel.text = LocalizationExtensions.Get("chat.context.usage", "~{0} / {1} tokens")
                 .Replace("{0}", used.ToString("N0"))
                 .Replace("{1}", contextWindow.ToString("N0"));
-        }
-
-        private static int GuessContextWindow(ProviderConfig provider, string selectedModel = null)
-        {
-            // Use the currently-selected model when available; fall back to the provider default.
-            string modelId = !string.IsNullOrEmpty(selectedModel) ? selectedModel
-                : (provider != null ? provider.defaultModel : null);
-
-            if (string.IsNullOrEmpty(modelId))
-                return 8192;
-
-            string m = modelId.ToLowerInvariant();
-            // Large-context flagship models
-            if (m.Contains("gpt-4o") || m.Contains("gpt-4-turbo") || m.Contains("claude-3") || m.Contains("gemini-1.5"))
-                return 128000;
-            // Llama 3 / 3.1 / 3.2 — 128 k by default
-            if (m.Contains("llama-3") || m.Contains("llama3") || m.Contains("llama_3"))
-                return 131072;
-            // Hermes models (Nous-Hermes, hermes-3, etc.) typically 128 k
-            if (m.Contains("hermes"))
-                return 131072;
-            // Mistral / Mixtral
-            if (m.Contains("mistral") || m.Contains("mixtral"))
-                return 32768;
-            // GPT-4 classic
-            if (m.Contains("gpt-4") || m.Contains("claude"))
-                return 8192;
-            // GPT-3.5
-            if (m.Contains("gpt-3.5"))
-                return 16384;
-            // Small models
-            if (m.Contains("phi") || m.Contains("gemma"))
-                return 4096;
-            // Generic local / unknown
-            return 8192;
         }
 
         // ===== Message Rendering (delegated to ChatMessageListRenderer) =====
@@ -1107,63 +1032,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _pickerRoot = null;
         }
 
-        private Dictionary<string, string> ParseToolArguments(string argumentsJson)
-        {
-            var result = new Dictionary<string, string>();
-            if (string.IsNullOrWhiteSpace(argumentsJson))
-                return result;
-
-            try
-            {
-                int start = argumentsJson.IndexOf('{');
-                int end = argumentsJson.LastIndexOf('}');
-                if (start < 0 || end <= start)
-                    return result;
-
-                string obj = argumentsJson.Substring(start, end - start + 1);
-                int pos = 0;
-                while (pos < obj.Length)
-                {
-                    int keyStart = obj.IndexOf('"', pos);
-                    if (keyStart < 0)
-                        break;
-                    int keyEnd = obj.IndexOf('"', keyStart + 1);
-                    if (keyEnd < 0)
-                        break;
-                    string key = obj.Substring(keyStart + 1, keyEnd - keyStart - 1);
-                    pos = keyEnd + 1;
-
-                    int colon = obj.IndexOf(':', pos);
-                    if (colon < 0)
-                        break;
-                    pos = colon + 1;
-
-                    while (pos < obj.Length && char.IsWhiteSpace(obj[pos]))
-                        pos++;
-
-                    if (pos >= obj.Length || obj[pos] != '"')
-                    {
-                        pos++;
-                        continue;
-                    }
-
-                    int valStart = pos + 1;
-                    int valEnd = obj.IndexOf('"', valStart);
-                    if (valEnd < 0)
-                        break;
-
-                    string val = obj.Substring(valStart, valEnd - valStart);
-                    // basic unescape
-                    val = val.Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\\"", "\"").Replace("\\\\", "\\");
-                    result[key] = val;
-                    pos = valEnd + 1;
-                }
-            }
-            catch { /* ignore parse errors, return what we have */ }
-
-            return result;
-        }
-
         private async Task ProcessAgentToolLoopAsync(ChatService chat, bool originalStreaming)
         {
             if (chat == null || chat.CurrentChatViewModel == null)
@@ -1201,7 +1069,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         if (tc == null || tc.function == null)
                             continue;
 
-                        var parameters = ParseToolArguments(tc.function.arguments);
+                        var parameters = ToolExecutorHelper.ParseToolArguments(tc.function.arguments);
 
                         var request = new ToolCallRequest
                         {
