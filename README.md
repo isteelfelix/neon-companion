@@ -4,9 +4,7 @@ Source-available Unity client for connecting to personal AI agents with avatar v
 
 ## About the Project
 
-**neon-companion** is a cross-platform desktop/mobile application that allows you to chat with your own AI agents through an OpenAI-compatible API. The app supports custom backends, multiple providers, chat history, and 2D avatar visualization.
-
-This is currently the **first working prototype**. Core chat functionality and custom provider connection are already implemented and usable.
+**neon-companion** is a cross-platform desktop/mobile application that allows you to chat with your own AI agents through an OpenAI-compatible API. The app supports custom backends, multiple providers, chat history, 2D/3D avatar visualization, and a native markdown rendering engine.
 
 This project is intended as a personal companion shell for self-hosted agents, with room for community forks and extensions.
 
@@ -18,25 +16,49 @@ This project is intended as a personal companion shell for self-hosted agents, w
 - ✅ Model switcher in chat topbar (per-session model selection)
 - ✅ Chat sessions and history
 - ✅ Connection to self-hosted agents (tested with Hermes + Grok)
+- ✅ Native markdown rendering (SelectableMarkdownElement) with syntax highlighting
 - ✅ 2D avatar rendering with sprite-sheet motion packs
 - ✅ Fixed MVP 2D action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
 - ✅ Custom NeonDropdown UI component
-- ✅ Chat attachments (images)
+- ✅ Chat attachments (images, drag-and-drop, clipboard paste)
 - ✅ Hermes session routing + inventory integration
+- ✅ Agent approval system (WebSocket RPC)
+- ✅ Window chrome service (borderless desktop window)
+- ✅ Chat commands (/help, /clear, /new, /system, /temp, /tokens)
+- ✅ Stop button (cancel generation)
+- ✅ Export chat as markdown
+- ✅ Token counter + response time in bubbles
+- ✅ Reasoning/thinking block display
+- ✅ Tool call visualization with emoji + expandable diffs
+- ✅ Plugin/extension system
+- ✅ Contributor docs + donate system
+- ✅ Cyberpunk splash screen
 - 🚧 Cross-platform builds (Desktop + Mobile)
-- 📋 Desktop-first 3D realtime avatar layer is planned separately
+- 🚧 Voice input/output pipeline
+- 🚧 3D avatar architecture (Avatar3DLoader, Avatar3DRenderer)
+- 📋 VR support planned (M4+)
 
-## Features (MVP)
+## Features
 
 - Connect any OpenAI-compatible API (including self-hosted)
 - Switch between providers directly in the app
 - Auto-discover available models from provider endpoints
 - Per-session model switching from chat topbar
-- Persistent chat sessions
+- Native markdown rendering with syntax highlighting for 15+ languages
+- Diff-fenced code blocks with +/-/@@ coloring
+- Agent approval flow for tool calls
+- Drag-and-drop files into chat
+- Clipboard image paste
+- Chat export to markdown
+- Stop/cancel in-progress generation
+- Chat commands (/help, /clear, /new, /system, /temp, /tokens)
+- Persistent chat sessions with folders
 - Modern dark UI built with Unity UI Toolkit
-- Lightweight 2D sprite-sheet baseline with continuous states + one-shot reactions
-- Chat with image attachments
-- Resizable sidebar rail
+- Design token system (CSS variables throughout)
+- 2D sprite-sheet baseline with continuous states + one-shot reactions
+- Plugin system for extensions (DLL-based)
+- Customizable avatars with persona/instructions
+- Themes
 
 ## Getting Started
 
@@ -63,7 +85,7 @@ This project is intended as a personal companion shell for self-hosted agents, w
 
 Project version is tracked in the root [`VERSION`](VERSION) file and follows semantic versioning (`MAJOR.MINOR.PATCH`).
 
-Current version: `0.2.0` (post-M2, pre-M4).
+Current version: `0.3.0`.
 
 ## Connecting Your Own Agent
 
@@ -90,8 +112,12 @@ More detailed information is available in the `docs/` folder:
 - [Cross-Platform](docs/07_CrossPlatform.md)
 - [Build & Deploy](docs/08_Build_and_Deploy.md)
 - [Roadmap](docs/09_Roadmap.md)
+- [Changelog](docs/11_Changelog.md)
 - [Feature Tracker](docs/12_Feature_Tracker.md)
 - [Avatar Motion Research](docs/13_Avatar_Motion_Research.md)
+- [Provider Adapter](docs/14_Provider_Adapter.md)
+- [Platform Architecture](docs/16_Platform_Architecture.md)
+- [iOS Platform Architecture](docs/17_iOS_Platform_Architecture.md)
 
 ## Contributing
 
@@ -112,7 +138,6 @@ Maintained by iSteelFelix with contributions from the community.
 
 - **iSteelFelix** — creator, owner, product direction, engineering
 - **Neon** — AI companion, in-repo contributor, co-builder of `neon-companion`
-
 
 ## Android Support
 

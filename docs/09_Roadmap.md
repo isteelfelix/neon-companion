@@ -2,13 +2,13 @@
 
 ## Фазы развития
 
-### M0 — Базовый MVP
+### M0 — Базовый MVP ✅
 - Текстовой чат
 - Подключение OpenAI-совместимых API
 - Смена 2D аватаров
 - Сохранение истории
 
-### M1 — Улучшенный опыт
+### M1 — Улучшенный опыт ✅
 - Несколько аватаров с базовой sprite-sheet анимацией
 - Фиксация MVP action set: `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
 - Разделение continuous states и one-shot reactions
@@ -17,18 +17,27 @@
 - Улучшенный UI
 - Поддержка нескольких провайдеров одновременно
 
-### M2 — Голос и 3D
-- Голосовой ввод/вывод
-- Базовый lipsync
-- Desktop-first 3D realtime аватары
-- Research asset-pipeline: генерация 2D motion clips/sprite sheets через внешние инструменты
+### M2 — UI и полировка ✅
+- SelectableMarkdownElement — нативный markdown-движок
+- ChatController рефакторинг (5477→1315 строк, 11 подклассов)
+- Design token migration (hardcoded rgba → CSS variables)
+- Agent approval system
+- Drag-and-drop, clipboard paste
+- Chat commands, stop button, export
+- Window chrome service
+- Cyberpunk splash screen
+- Provider Adapter архитектура
 
-### M3 — VR и расширения
+### M3 — Голос, 3D, мобильные платформы 🔧
+- Голосовой ввод/вывод — pipeline реализован, UI не завершена
+- Lipsync controller — реализован
+- 3D аватары — архитектура (Avatar3DLoader, Avatar3DRenderer), модели не добавлены
+- Android — код готов, ожидает device testing
+- iOS — в разработке
+- Тестирование и runtime фиксы
+
+### M4 — VR, публикация, полировка 📋
 - Поддержка VR (Quest, PCVR)
-- Кастомизация аватаров
-- Плагины и расширения
-
-### M4 — Полировка и распространение
-- Публикация в itch.io / GitHub Releases
-- Документация для контрибьюторов
-- Донат-система
+- Публикация itch.io / GitHub Releases
+- Документация для контрибьюторов ✅
+- Донат-система ✅
