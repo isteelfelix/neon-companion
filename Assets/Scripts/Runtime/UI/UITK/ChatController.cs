@@ -132,11 +132,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Chat search (U-38) — delegated to ChatSearchController
         private ChatSearchController _searchController;
 
-        // Message selection mode (U-31/U-32)
-        private bool _isSelectionMode;
-        private readonly HashSet<int> _selectedMessages = new HashSet<int>();
-        private VisualElement _selectionBar;
-        private Label _selectionCountLabel;
+        // Message selection mode (U-31/U-32) — delegated to ChatSelectionManager
+        private ChatSelectionManager _selectionManager;
 
         // Forward picker (U-33)
         private VisualElement _sessionPickerOverlay;
@@ -267,35 +264,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.Composer?.parent != null)
                 _d.Composer.parent.Add(_queueIndicator);
 
-            // Selection action bar (U-31/U-32) — created dynamically, inserted before composer so it appears
-            // just above the input (not as a full-width bar at the very bottom under composer).
-            _selectionBar = new VisualElement();
-            _selectionBar.name = "selection-bar";
-            _selectionBar.AddToClassList("selection-bar");
-            _selectionBar.style.display = DisplayStyle.None;
-
-            _selectionCountLabel = new Label();
-            _selectionCountLabel.AddToClassList("selection-bar__count");
-            _selectionBar.Add(_selectionCountLabel);
-
-            var deleteBtn = new Button(OnDeleteSelected) { text = LocalizationExtensions.Get("chat.selection.delete", "Delete") };
-            deleteBtn.AddToClassList("selection-bar__btn selection-bar__btn--danger");
-            _selectionBar.Add(deleteBtn);
-
-            var forwardBtn = new Button(OnForwardSelected) { text = LocalizationExtensions.Get("chat.selection.forward", "Forward") };
-            forwardBtn.AddToClassList("selection-bar__btn");
-            _selectionBar.Add(forwardBtn);
-
-            var cancelBtn = new Button(ExitSelectionMode) { text = LocalizationExtensions.Get("chat.selection.cancel", "Cancel") };
-            cancelBtn.AddToClassList("selection-bar__btn");
-            _selectionBar.Add(cancelBtn);
-
-            if (_d.Composer?.parent != null)
-            {
-                var parent = _d.Composer.parent;
-                int composerIndex = parent.IndexOf(_d.Composer);
-                parent.Insert(composerIndex, _selectionBar);
-            }
+            // Selection action bar (U-31/U-32) — delegated to ChatSelectionManager
+            _selectionManager = new ChatSelectionManager(
+                _d.MessagesList,
+                _d.Composer,
+                () => DismissSessionPicker(),
+                () => RenderTranscript(_d.GetChatServiceAsync().Result?.CurrentChatViewModel?.Messages));
+            _selectionManager.OnBulkDelete += OnSelectionBulkDelete;
+            _selectionManager.OnBulkForward += OnSelectionBulkForward;
 
             // Drag-and-drop file support (U-44)
             var chatMain = _d.Composer?.parent;
@@ -398,11 +374,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _queueIndicator = null;
             }
 
-            if (_selectionBar != null)
+            if (_selectionManager != null)
             {
-                _selectionBar.RemoveFromHierarchy();
-                _selectionBar = null;
-                _selectionCountLabel = null;
+                _selectionManager.OnBulkDelete -= OnSelectionBulkDelete;
+                _selectionManager.OnBulkForward -= OnSelectionBulkForward;
+                _selectionManager.Teardown();
+                _selectionManager = null;
             }
 
             // Drag-and-drop file support (U-44)
@@ -2325,7 +2302,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _editController?.CancelEdit();
             if (_searchController != null && _searchController.IsVisible)
                 _searchController.Hide();
-            if (_isSelectionMode)
+            if (_selectionManager != null && _selectionManager.IsSelecting)
                 _messageRowCache.Clear();
             _d.MessagesList.Clear();
 
@@ -2346,7 +2323,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 string renderKey = BuildMessageRenderKey(i, message);
                 VisualElement row = null;
-                if (!_isSelectionMode)
+                if (_selectionManager == null || !_selectionManager.IsSelecting)
                     _messageRowCache.TryGetValue(renderKey, out row);
                 if (row == null)
                     row = CreateMessageElement(message, ShowImageLightbox, ScrollTranscriptToBottom);
@@ -2359,10 +2336,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // Capture index outside any inner block for safe closure (C# 9 rule)
                 int rowIndex = i;
 
-                // Apply selection state (U-31) after creating the row (adapted for static CreateMessageElement + current pointer handling)
-                if (_isSelectionMode)
+                // Apply selection state (U-31) after creating the row
+                if (_selectionManager != null && _selectionManager.IsSelecting)
                 {
-                    bool selected = _selectedMessages.Contains(rowIndex);
+                    bool selected = _selectionManager.IsIndexSelected(rowIndex);
                     if (selected)
                         row.AddToClassList("transcript__row--selected");
 
@@ -2370,12 +2347,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (!isSystemRow)
                     {
                         // Click/tap toggles selection (replaces normal right-click/long-press behavior in selection mode)
-                        row.RegisterCallback<ClickEvent>(_ => ToggleSelection(rowIndex));
+                        row.RegisterCallback<ClickEvent>(_ => _selectionManager.ToggleSelection(rowIndex));
                     }
                 }
 
                 _d.MessagesList.Add(row);
-                if (!_isSelectionMode)
+                if (_selectionManager == null || !_selectionManager.IsSelecting)
                     nextCache[renderKey] = row;
                 hasVisibleMessages = true;
             }
@@ -3982,7 +3959,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             evt.PreventDefault();
 #pragma warning restore CS0618
 
-            if (_isSelectionMode)
+            if (_selectionManager != null && _selectionManager.IsSelecting)
                 return;
 
             VisualElement bubble = ResolveBubbleFromEvent(target, pos);
@@ -4017,7 +3994,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 evt.PreventDefault();
 #pragma warning restore CS0618
 
-                if (_isSelectionMode)
+                if (_selectionManager != null && _selectionManager.IsSelecting)
                     return;
                 return;
             }
@@ -4041,7 +4018,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool isUser = bubble.ClassListContains("transcript__bubble--user");
 
-            if (_isSelectionMode)
+            if (_selectionManager != null && _selectionManager.IsSelecting)
             {
                 // Selection mode: per-row ClickEvent handles toggles for selectable messages.
                 // No long-press/context menu here; selection toggles are handled by row ClickEvent.
@@ -4071,7 +4048,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     {
                         if (longPressSelect)
                         {
-                            EnterSelectionMode(_longPressIndex);
+                            _selectionManager?.EnterSelectionMode(_longPressIndex);
                         }
                         else
                         {
@@ -4388,95 +4365,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        // ===== Message selection (U-31/U-32) =====
+        // ===== Message selection (U-31/U-32) — event handlers for ChatSelectionManager =====
 
-        private void EnterSelectionMode(int initialIndex)
+        private void OnSelectionBulkDelete(IReadOnlyList<string> ids)
         {
-            _isSelectionMode = true;
-            _selectedMessages.Clear();
-            _selectedMessages.Add(initialIndex);
-            RenderSelectionUI();
-            RenderTranscript(_d.GetChatServiceAsync().Result?.CurrentChatViewModel?.Messages);
-        }
-
-        private void ExitSelectionMode()
-        {
-            DismissSessionPicker();
-            _isSelectionMode = false;
-            _selectedMessages.Clear();
-            RenderSelectionUI();
-            RenderTranscript(_d.GetChatServiceAsync().Result?.CurrentChatViewModel?.Messages);
-        }
-
-        private void ToggleSelection(int index)
-        {
-            bool isSelected;
-            if (_selectedMessages.Contains(index))
-            {
-                _selectedMessages.Remove(index);
-                isSelected = false;
-            }
-            else
-            {
-                _selectedMessages.Add(index);
-                isSelected = true;
-            }
-
-            UpdateSelectionRowState(index, isSelected);
-
-            if (_selectedMessages.Count == 0)
-                ExitSelectionMode();
-            else
-                RenderSelectionUI();
-        }
-
-        private void UpdateSelectionRowState(int index, bool isSelected)
-        {
-            if (_d.MessagesList == null)
-                return;
-
-            foreach (var child in _d.MessagesList.Children())
-            {
-                var row = child as VisualElement;
-                if (row == null || !(row.userData is int))
-                    continue;
-
-                int rowIndex = (int)row.userData;
-                if (rowIndex != index)
-                    continue;
-
-                if (isSelected)
-                    row.AddToClassList("transcript__row--selected");
-                else
-                    row.RemoveFromClassList("transcript__row--selected");
-                break;
-            }
-        }
-
-        private void RenderSelectionUI()
-        {
-            if (_selectionBar == null) return;
-            if (_isSelectionMode)
-            {
-                _selectionBar.style.display = DisplayStyle.Flex;
-                _selectionCountLabel.text = LocalizationExtensions.Get("chat.selection.count", "Selected: {0}")
-                    .Replace("{0}", _selectedMessages.Count.ToString());
-            }
-            else
-            {
-                _selectionBar.style.display = DisplayStyle.None;
-            }
-        }
-
-        private void OnDeleteSelected()
-        {
-            if (_selectedMessages.Count == 0) return;
-
             var chat = _d.GetChatServiceAsync().Result;
             if (chat?.CurrentChatViewModel == null) return;
 
-            // Sort indices descending to remove from end first
-            var indices = new List<int>(_selectedMessages);
+            var indices = new List<int>(ids.Count);
+            for (int i = 0; i < ids.Count; i++)
+            {
+                int idx;
+                if (int.TryParse(ids[i], out idx))
+                    indices.Add(idx);
+            }
             indices.Sort((a, b) => b.CompareTo(a));
 
             for (int i = 0; i < indices.Count; i++)
@@ -4487,25 +4389,30 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _ = chat.SaveCurrentSessionAsync();
-            ExitSelectionMode();
             _d.RenderMessages(chat.CurrentChatViewModel.Messages);
         }
 
-        private void OnForwardSelected()
+        private void OnSelectionBulkForward(IReadOnlyList<string> ids)
         {
-            _ = ForwardSelectedAsync();
+            _ = ForwardSelectedAsync(ids);
         }
 
-        private async Task ForwardSelectedAsync()
+        private async Task ForwardSelectedAsync(IReadOnlyList<string> ids)
         {
-            if (_selectedMessages.Count == 0) return;
+            if (ids == null || ids.Count == 0) return;
 
             var chat = await _d.GetChatServiceAsync();
             if (chat == null || chat.CurrentChatViewModel == null) return;
 
             var source = chat.CurrentChatViewModel.Messages;
             var toForward = new List<ChatMessage>();
-            var indices = new List<int>(_selectedMessages);
+            var indices = new List<int>(ids.Count);
+            for (int i = 0; i < ids.Count; i++)
+            {
+                int idx;
+                if (int.TryParse(ids[i], out idx))
+                    indices.Add(idx);
+            }
             indices.Sort();
 
             for (int i = 0; i < indices.Count; i++)
@@ -4517,7 +4424,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (toForward.Count == 0)
             {
-                ExitSelectionMode();
+                _selectionManager?.ExitSelectionMode();
                 return;
             }
 
@@ -4534,7 +4441,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (candidates.Count == 0)
             {
-                ExitSelectionMode();
+                _selectionManager?.ExitSelectionMode();
                 return;
             }
 
@@ -4546,7 +4453,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             int added = await chat.AppendMessagesToSessionAsync(target.sessionId, toForward);
-            ExitSelectionMode();
+            _selectionManager?.ExitSelectionMode();
 
             if (added > 0)
             {
@@ -4565,8 +4472,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Find root to attach (reuse pattern from context menu)
             VisualElement root = null;
-            if (_selectionBar != null && _selectionBar.panel != null)
-                root = GetDocumentRoot(_selectionBar);
+            var selBar = _selectionManager?.SelectionBar;
+            if (selBar != null && selBar.panel != null)
+                root = GetDocumentRoot(selBar);
             if (root == null && _d.MessagesList != null && _d.MessagesList.panel != null)
                 root = GetDocumentRoot(_d.MessagesList);
             if (root == null)
@@ -4707,7 +4615,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
             }
 
-            EnterSelectionMode(index);
+            _selectionManager?.EnterSelectionMode(index);
         }
 
         // ===== Static events for bubble action buttons =====
