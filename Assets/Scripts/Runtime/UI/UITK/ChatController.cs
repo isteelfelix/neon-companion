@@ -96,10 +96,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _streamingStatsFooter;
         private Label _streamingStatsLabel;
         private IVisualElementScheduledItem _statsUpdateSchedule;
-        private readonly ToolCallUiHelper _toolCallUiHelper = new ToolCallUiHelper();
-        private ApprovalPrompt _currentApprovalPrompt;
-        private VisualElement _currentApprovalElement;
-        private TaskCompletionSource<bool> _pendingApprovalTcs;
+        private ToolCallApprovalController _approvalController;
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private string _chatSubtitle = string.Empty;
         private VisualElement _composerPreviews;
@@ -163,6 +160,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.RenderMessages,
                 _d.LoadSessionsAsync,
                 () => RegenerateLastAsync());
+
+            _approvalController = new ToolCallApprovalController(
+                _d.MessagesList,
+                ScrollTranscriptToBottom,
+                _d.GetAppAsync,
+                _d.ShowSystemMessage,
+                () => _isSending,
+                () => _isStreamingResponse,
+                () => _currentChatService);
         }
 
         public void SetVoiceRecording(bool value) { _inputManager?.SetVoiceRecording(value); }
@@ -187,8 +193,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             CopyRequested += OnCopyClicked;
             RegenerateRequested += OnRegenerateClicked;
 
-            // Subscribe to Hermes transport clarify/approval events
-            SubscribeToHermesTransportEvents();
+            _approvalController?.Subscribe();
+            if (_approvalController != null)
+                _approvalController.OnStopRequested += OnStopClicked;
 
             if (_contextMenu != null)
             {
@@ -303,7 +310,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             CopyRequested -= OnCopyClicked;
             RegenerateRequested -= OnRegenerateClicked;
-            UnsubscribeFromHermesTransportEvents();
+            if (_approvalController != null)
+                _approvalController.OnStopRequested -= OnStopClicked;
+            _approvalController?.Unsubscribe();
 
             if (_contextMenu != null)
             {
@@ -347,8 +356,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _isSending = false;
             _isStreamingResponse = false;
-            _toolCallUiHelper.Clear();
-            DismissCurrentApprovalPrompt();
+            _approvalController?.ClearToolProgress();
+            _approvalController?.Dismiss();
             if (_contextMenu != null)
                 _contextMenu.Hide();
             _editController?.CancelEdit();
@@ -451,7 +460,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnStopClicked()
         {
-            DismissCurrentApprovalPrompt();
+            _approvalController?.Dismiss();
             DismissSessionPicker();
             if (_contextMenu != null)
                 _contextMenu.Hide();
@@ -462,7 +471,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public async Task SendCurrentMessageAsync()
         {
             _notifications.MarkRead();
-            DismissCurrentApprovalPrompt();
+            _approvalController?.Dismiss();
             DismissSessionPicker();
             if (_contextMenu != null)
                 _contextMenu.Hide();
@@ -535,8 +544,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     AddStreamingBubble();
                     await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken, OnToolProgress);
                     ClearThinkingBubble();
-                    _toolCallUiHelper.Clear();
-                    DismissCurrentApprovalPrompt();
+                    _approvalController?.ClearToolProgress();
+                    _approvalController?.Dismiss();
                     DismissSessionPicker();
                     _streamingBubble = null;
                     _streamingLabel = null;
@@ -624,8 +633,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 _streamingBubble = null;
                 _streamingLabel = null;
-                _toolCallUiHelper.Clear();
-                DismissCurrentApprovalPrompt();
+                _approvalController?.ClearToolProgress();
+                _approvalController?.Dismiss();
                 DismissSessionPicker();
                 _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
             }
@@ -640,7 +649,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 _streamingBubble = null;
                 _streamingLabel = null;
-                DismissCurrentApprovalPrompt();
+                _approvalController?.Dismiss();
                 DismissSessionPicker();
                 _d.MessageInput.value = composerText;
                 _inputManager.QueueComposerHeightUpdate();
@@ -896,7 +905,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (bubble != null)
                 bubble.Insert(1, _streamingTypingDots);
 
-            _toolCallUiHelper.SetBubble(bubble);
+            _approvalController?.SetBubble(bubble);
 
             // Activate stats footer for this streaming assistant bubble (created hidden in CreateMessageElement)
             if (bubble != null)
@@ -979,7 +988,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetDisplay(_d.ThinkingBubble, DisplayStyle.Flex);
             }
 
-            bool insertedNewEntry = _toolCallUiHelper.OnToolProgress(tool, label, emoji, status);
+            bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(tool, label, emoji, status);
             if (insertedNewEntry)
             {
                 _streamingLabel = null;
@@ -990,7 +999,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Hermes executes tools server-side, so its approval request must be
             // surfaced from streaming progress. Generic OpenAI local tools still
             // block in ProcessAgentToolLoopAsync before ToolExecutor runs.
-            if (ShouldPromptForStreamingApproval(status))
+            if (_approvalController != null && _approvalController.ShouldPromptForStreamingApproval(status))
             {
                 var req = new ToolCallRequest
                 {
@@ -999,7 +1008,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     description = !string.IsNullOrEmpty(label) ? label : tool,
                     parameters = new Dictionary<string, string>()
                 };
-                _ = HandleStreamingApprovalRequestAsync(req);
+                _ = _approvalController.HandleStreamingApprovalAsync(req);
             }
         }
 
@@ -1986,7 +1995,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task RegenerateLastAsync()
         {
-            DismissCurrentApprovalPrompt();
+            _approvalController?.Dismiss();
             DismissSessionPicker();
             try
             {
@@ -2014,8 +2023,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                         AddStreamingBubble();
                         await chat.RegenerateAsync(OnStreamToken, OnToolProgress);
                         ClearThinkingBubble();
-                        _toolCallUiHelper.Clear();
-                        DismissCurrentApprovalPrompt();
+                        _approvalController?.ClearToolProgress();
+                        _approvalController?.Dismiss();
                         DismissSessionPicker();
                         _streamingBubble = null;
                         _streamingLabel = null;
@@ -2097,7 +2106,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     }
                     _streamingBubble = null;
                     _streamingLabel = null;
-                    DismissCurrentApprovalPrompt();
+                    _approvalController?.Dismiss();
                     DismissSessionPicker();
                     _d.ShowSystemMessage(ex.Message);
                     NeonLogger.LogError(ex.ToString());
@@ -3328,96 +3337,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 element.style.display = display;
         }
 
-        // ===== Agent Tool Approval (Part B) =====
-
-        private async Task<AppSettings> GetSettingsAsync()
-        {
-            try
-            {
-                var app = await _d.GetAppAsync();
-                if (app != null && app.Settings != null)
-                    return app.Settings.Load();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError("Failed to load settings for tool approval: " + ex);
-            }
-            return null;
-        }
-
-        private async Task SaveSettingsAsync(AppSettings settings)
-        {
-            try
-            {
-                var app = await _d.GetAppAsync();
-                if (app != null && app.Settings != null && settings != null)
-                    app.Settings.Save(settings);
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError("Failed to save settings for tool approval: " + ex);
-            }
-        }
-
-        private async Task<bool> IsToolAlwaysApprovedAsync(string toolName)
-        {
-            if (string.IsNullOrWhiteSpace(toolName))
-                return false;
-            var settings = await GetSettingsAsync();
-            if (settings == null || settings.alwaysApprovedTools == null)
-                return false;
-            for (int i = 0; i < settings.alwaysApprovedTools.Count; i++)
-            {
-                if (string.Equals(settings.alwaysApprovedTools[i], toolName, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            return false;
-        }
-
-        private async Task SaveAlwaysApprovedToolAsync(string toolName)
-        {
-            if (string.IsNullOrWhiteSpace(toolName))
-                return;
-            var settings = await GetSettingsAsync();
-            if (settings == null)
-                return;
-            if (settings.alwaysApprovedTools == null)
-                settings.alwaysApprovedTools = new List<string>();
-            bool exists = false;
-            for (int i = 0; i < settings.alwaysApprovedTools.Count; i++)
-            {
-                if (string.Equals(settings.alwaysApprovedTools[i], toolName, StringComparison.OrdinalIgnoreCase))
-                {
-                    exists = true;
-                    break;
-                }
-            }
-            if (!exists)
-            {
-                settings.alwaysApprovedTools.Add(toolName);
-                await SaveSettingsAsync(settings);
-            }
-        }
-
-        private void DismissCurrentApprovalPrompt()
-        {
-            if (_currentApprovalElement != null)
-            {
-                if (_currentApprovalElement.parent != null)
-                    _currentApprovalElement.RemoveFromHierarchy();
-                _currentApprovalElement = null;
-            }
-            _currentApprovalPrompt = null;
-
-            // Unblock RequestToolApproval if an approval was pending when dismiss was called
-            // externally (e.g. by streaming re-render). Denied because the UI is gone.
-            if (_pendingApprovalTcs != null)
-            {
-                _pendingApprovalTcs.TrySetResult(false);
-                _pendingApprovalTcs = null;
-            }
-        }
-
         private void DismissSessionPicker()
         {
             if (_sessionPickerOverlay != null && _sessionPickerOverlay.parent != null)
@@ -3435,270 +3354,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _pickerOutsideHandler = null;
             _pickerRoot = null;
-        }
-
-        private bool IsApprovalRequestStatus(string status)
-        {
-            if (string.IsNullOrWhiteSpace(status))
-                return false;
-            if (string.Equals(status, "requesting", StringComparison.OrdinalIgnoreCase))
-                return true;
-            if (string.Equals(status, "approval_required", StringComparison.OrdinalIgnoreCase))
-                return true;
-            if (string.Equals(status, "pending_approval", StringComparison.OrdinalIgnoreCase))
-                return true;
-            if (status.IndexOf("approve", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            if (status.IndexOf("confirm", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            if (status.IndexOf("permission", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            if (status.IndexOf("waiting", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            if (status.IndexOf("request", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            return false;
-        }
-
-        private bool ShouldPromptForStreamingApproval(string status)
-        {
-            if (!IsApprovalRequestStatus(status))
-                return false;
-
-            if (string.Equals(status, "requesting", StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            // Hermes approval requests have request ids and are handled by
-            // OnHermesApprovalRequest. Prompting from tool progress would create
-            // a local-only approval that cannot be sent back to the server.
-            if (IsCurrentProviderHermes())
-                return false;
-
-            return true;
-        }
-
-        private bool IsCurrentProviderHermes()
-        {
-            // Check global backend mode first
-            var selector = GlobalBackendSelector.Instance;
-            if (selector != null && selector.CurrentMode == BackendMode.Hermes)
-                return true;
-
-            var provider = _currentChatService != null ? _currentChatService.CurrentProvider : null;
-            if (provider == null)
-                return false;
-
-            if (!string.IsNullOrWhiteSpace(provider.backendType) &&
-                string.Equals(provider.backendType, "hermes", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            if (!string.IsNullOrWhiteSpace(provider.defaultModel) &&
-                provider.defaultModel.IndexOf("hermes", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-
-            return false;
-        }
-
-        // === Hermes Transport Events ===
-
-        private void SubscribeToHermesTransportEvents()
-        {
-            var selector = GlobalBackendSelector.Instance;
-            if (selector == null)
-                return;
-
-            selector.OnModeChanged += OnBackendModeChanged;
-            OnBackendModeChanged(selector.CurrentMode);
-        }
-
-        private void UnsubscribeFromHermesTransportEvents()
-        {
-            var selector = GlobalBackendSelector.Instance;
-            if (selector != null)
-                selector.OnModeChanged -= OnBackendModeChanged;
-
-            if (_hermesTransport != null)
-            {
-                _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
-                _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
-                _hermesTransport = null;
-            }
-        }
-
-        private void OnBackendModeChanged(BackendMode mode)
-        {
-            // Unsubscribe from old transport
-            if (_hermesTransport != null)
-            {
-                _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
-                _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
-            }
-
-            // Subscribe to new transport
-            if (mode == BackendMode.Hermes)
-            {
-                var selector = GlobalBackendSelector.Instance;
-                if (selector != null && selector.SessionManager != null)
-                {
-                    _hermesTransport = selector.SessionManager;
-                    _hermesTransport.OnClarifyRequest += OnHermesClarifyRequest;
-                    _hermesTransport.OnApprovalRequest += OnHermesApprovalRequest;
-                }
-            }
-            else
-            {
-                _hermesTransport = null;
-            }
-        }
-
-        private IChatTransport _hermesTransport;
-
-        private void OnHermesClarifyRequest(ClarifyRequest request)
-        {
-            if (request == null)
-                return;
-
-            // Show clarify question as system message
-            string question = request.question ?? "Clarify?";
-            _d.ShowSystemMessage?.Invoke("[Hermes] " + question);
-
-            // Create choice buttons in the chat
-            if (request.choices != null && request.choices.Length > 0)
-            {
-                ShowClarifyChoices(request);
-            }
-            else
-            {
-                // No choices — free text input needed, auto-respond for now
-                _ = AutoRespondToClarify(request, "ok");
-            }
-        }
-
-        private void ShowClarifyChoices(ClarifyRequest request)
-        {
-            if (_d.MessagesList == null || request.choices == null)
-                return;
-
-            var container = new VisualElement();
-            container.AddToClassList("clarify-choices");
-            container.style.marginTop = 4;
-            container.style.marginLeft = 40;
-            container.style.flexDirection = FlexDirection.Row;
-            container.style.flexWrap = Wrap.Wrap;
-
-            for (int i = 0; i < request.choices.Length; i++)
-            {
-                string choice = request.choices[i];
-                var btn = new Button(() => OnClarifyChoiceSelected(request, choice))
-                {
-                    text = choice
-                };
-                btn.AddToClassList("clarify-choices__btn");
-                container.Add(btn);
-            }
-
-            _d.MessagesList.Add(container);
-            ScrollTranscriptToBottom();
-        }
-
-        private void OnClarifyChoiceSelected(ClarifyRequest request, string choice)
-        {
-            // Remove choice buttons
-            // (they'll be cleaned up on next message, but disable them now)
-            DisableClarifyButtons();
-
-            // Show user's choice as system message
-            _d.ShowSystemMessage?.Invoke("[You] " + choice);
-
-            // Send response
-            _ = SendClarifyResponse(request, choice);
-        }
-
-        private async System.Threading.Tasks.Task SendClarifyResponse(ClarifyRequest request, string answer)
-        {
-            var selector = GlobalBackendSelector.Instance;
-            if (selector?.SessionManager == null)
-                return;
-
-            await selector.SessionManager.RespondToClarify(request.requestId, answer);
-        }
-
-        private async System.Threading.Tasks.Task AutoRespondToClarify(ClarifyRequest request, string defaultAnswer)
-        {
-            await System.Threading.Tasks.Task.Delay(100);
-
-            var selector = GlobalBackendSelector.Instance;
-            if (selector?.SessionManager == null)
-                return;
-
-            string answer = defaultAnswer ?? "ok";
-            await selector.SessionManager.RespondToClarify(request.requestId, answer);
-        }
-
-        private void DisableClarifyButtons()
-        {
-            if (_d.MessagesList == null)
-                return;
-
-            var buttons = _d.MessagesList.Query<Button>().ToList();
-            for (int i = 0; i < buttons.Count; i++)
-            {
-                if (buttons[i].parent != null &&
-                    buttons[i].parent.ClassListContains("clarify-choices"))
-                {
-                    buttons[i].SetEnabled(false);
-                }
-            }
-        }
-
-        private void OnHermesApprovalRequest(ApprovalRequest request)
-        {
-            if (request == null)
-                return;
-
-            _ = HandleHermesApprovalRequestAsync(request);
-        }
-
-        private async System.Threading.Tasks.Task HandleHermesApprovalRequestAsync(ApprovalRequest request)
-        {
-            if (request == null || _currentApprovalPrompt != null)
-                return;
-
-            var toolReq = new ToolCallRequest
-            {
-                id = request.requestId,
-                toolName = request.type ?? "approval",
-                description = request.description ?? "Approval needed",
-                parameters = new System.Collections.Generic.Dictionary<string, string>()
-            };
-
-            bool approved = await RequestToolApproval(toolReq);
-
-            // Send approval response back to Hermes gateway. Wrap in try-catch so a
-            // dropped WS or RPC failure doesn't silently lose the user's decision.
-            try
-            {
-                var selector = GlobalBackendSelector.Instance;
-                if (selector?.SessionManager != null)
-                    await selector.SessionManager.RespondToApproval(approved);
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError("[Hermes] Failed to send approval response: " + ex.Message);
-            }
-
-            if (!approved)
-            {
-                try
-                {
-                    if (_isSending || _isStreamingResponse)
-                        OnStopClicked();
-                }
-                catch (Exception ex)
-                {
-                    NeonLogger.LogError("Error stopping on Hermes approval reject: " + ex);
-                }
-            }
         }
 
         private Dictionary<string, string> ParseToolArguments(string argumentsJson)
@@ -3758,79 +3413,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             return result;
         }
 
-        private async Task<bool> RequestToolApproval(ToolCallRequest request)
-        {
-            if (request == null)
-                return true;
-
-            var settings = await GetSettingsAsync();
-            if (settings != null && string.Equals(settings.toolPermissionMode, "auto", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (await IsToolAlwaysApprovedAsync(request.toolName))
-                return true;
-
-            var prompt = new ApprovalPrompt();
-            var approvalElement = prompt.Create(request);
-            _currentApprovalPrompt = prompt;
-            _currentApprovalElement = approvalElement;
-            _d.MessagesList.Add(approvalElement);
-            ScrollTranscriptToBottom();
-
-            bool approved = false;
-            bool always = false;
-            var completionSource = new TaskCompletionSource<bool>();
-            _pendingApprovalTcs = completionSource;
-
-            prompt.OnDecision += (a, alwaysApprove) =>
-            {
-                approved = a;
-                always = alwaysApprove;
-                _pendingApprovalTcs = null;
-                completionSource.TrySetResult(true);
-            };
-
-            await completionSource.Task;
-
-            if (approvalElement != null && approvalElement.parent != null)
-                approvalElement.RemoveFromHierarchy();
-
-            _currentApprovalPrompt = null;
-            _currentApprovalElement = null;
-            _pendingApprovalTcs = null;
-
-            if (always && approved)
-            {
-                await SaveAlwaysApprovedToolAsync(request.toolName);
-            }
-
-            return approved;
-        }
-
-        private async Task HandleStreamingApprovalRequestAsync(ToolCallRequest request)
-        {
-            if (request == null)
-                return;
-            if (_currentApprovalPrompt != null)
-                return;
-
-            bool approved = await RequestToolApproval(request);
-            if (!approved)
-            {
-                try
-                {
-                    if (_isSending || _isStreamingResponse)
-                        OnStopClicked();
-                }
-                catch (Exception ex)
-                {
-                    NeonLogger.LogError("Error stopping on tool reject: " + ex);
-                }
-            }
-        }
-
         private async Task ProcessAgentToolLoopAsync(ChatService chat, bool originalStreaming)
         {
             if (chat == null || chat.CurrentChatViewModel == null)
@@ -3878,7 +3460,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                             parameters = parameters
                         };
 
-                        bool approved = await RequestToolApproval(request);
+                        bool approved = await _approvalController.RequestToolApprovalAsync(request);
                         if (!approved)
                         {
                             _d.ShowSystemMessage(LocalizationExtensions.Get("tool.approval.denied", "Tool execution denied."));
@@ -3906,8 +3488,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     // Continue generation with tool results in history (no new user message)
                     try
                     {
-                        DismissCurrentApprovalPrompt();
-                        _toolCallUiHelper.Clear();
+                        _approvalController?.Dismiss();
+                        _approvalController?.ClearToolProgress();
 
                         await chat.RegenerateAsync(null, null);
 
