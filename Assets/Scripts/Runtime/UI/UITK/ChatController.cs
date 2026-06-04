@@ -1154,6 +1154,17 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var overlay = new VisualElement();
             overlay.AddToClassList("session-picker-overlay");
+            // Inline fallback: the overlay attaches to the document root, which is outside this view's
+            // stylesheet scope — without these the picker renders unstyled and full-width.
+            overlay.style.position = Position.Absolute;
+            overlay.style.left = 0;
+            overlay.style.right = 0;
+            overlay.style.top = 0;
+            overlay.style.bottom = 0;
+            overlay.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);
+            overlay.style.flexDirection = FlexDirection.Column;
+            overlay.style.justifyContent = Justify.Center;
+            overlay.style.alignItems = Align.Center;
 
             // Find root to attach (reuse pattern from context menu)
             VisualElement root = null;
@@ -1171,9 +1182,36 @@ namespace NeonCompanion.Runtime.UI.UITK
             var picker = new VisualElement();
             picker.AddToClassList("session-picker");
             picker.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
+            // Inline fallback (stylesheet may be out of scope at the document root).
+            var pickerBorder = new Color(0.227f, 0.251f, 0.322f, 1f); // --line-3
+            picker.style.flexDirection = FlexDirection.Column;
+            picker.style.backgroundColor = new Color(0.137f, 0.153f, 0.196f, 1f); // --bg-4
+            picker.style.borderTopWidth = 1f;
+            picker.style.borderBottomWidth = 1f;
+            picker.style.borderLeftWidth = 1f;
+            picker.style.borderRightWidth = 1f;
+            picker.style.borderTopColor = pickerBorder;
+            picker.style.borderBottomColor = pickerBorder;
+            picker.style.borderLeftColor = pickerBorder;
+            picker.style.borderRightColor = pickerBorder;
+            picker.style.borderTopLeftRadius = 10f;
+            picker.style.borderTopRightRadius = 10f;
+            picker.style.borderBottomLeftRadius = 10f;
+            picker.style.borderBottomRightRadius = 10f;
+            picker.style.minWidth = 280f;
+            picker.style.maxWidth = 360f;
+            picker.style.maxHeight = 420f;
+            picker.style.paddingTop = 8f;
+            picker.style.paddingBottom = 8f;
+            picker.style.paddingLeft = 8f;
+            picker.style.paddingRight = 8f;
 
             var headerLabel = new Label(LocalizationExtensions.Get("chat.selection.pick_session", "Pick a chat to forward to"));
             headerLabel.AddToClassList("session-picker__header");
+            headerLabel.style.color = new Color(0.604f, 0.635f, 0.702f, 1f); // --text-2
+            headerLabel.style.fontSize = 13f;
+            headerLabel.style.paddingLeft = 6f;
+            headerLabel.style.paddingBottom = 8f;
             picker.Add(headerLabel);
 
             var listScroll = new ScrollView();
@@ -1188,13 +1226,29 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 var item = new VisualElement();
                 item.AddToClassList("session-picker__item");
+                item.style.flexDirection = FlexDirection.Row;
+                item.style.alignItems = Align.Center;
+                item.style.paddingTop = 8f;
+                item.style.paddingBottom = 8f;
+                item.style.paddingLeft = 10f;
+                item.style.paddingRight = 10f;
+                item.style.borderTopLeftRadius = 6f;
+                item.style.borderTopRightRadius = 6f;
+                item.style.borderBottomLeftRadius = 6f;
+                item.style.borderBottomRightRadius = 6f;
 
                 string titleText = string.IsNullOrWhiteSpace(s.title) ? LocalizationExtensions.Get("chat.new", "New chat") : s.title;
                 var titleLabel = new Label(titleText);
                 titleLabel.AddToClassList("session-picker__title");
+                titleLabel.style.flexGrow = 1f;
+                titleLabel.style.color = new Color(0.847f, 0.863f, 0.902f, 1f); // --text-1
+                titleLabel.style.fontSize = 13f;
 
                 var timeLabel = new Label(FormatSessionTimestamp(s.updatedAtUnix));
                 timeLabel.AddToClassList("session-picker__time");
+                timeLabel.style.color = new Color(0.42f, 0.45f, 0.53f, 1f); // --text-3
+                timeLabel.style.fontSize = 11f;
+                timeLabel.style.marginLeft = 8f;
 
                 item.Add(titleLabel);
                 item.Add(timeLabel);
@@ -1219,6 +1273,23 @@ namespace NeonCompanion.Runtime.UI.UITK
             })
             { text = LocalizationExtensions.Get("chat.selection.cancel", "Cancel") };
             cancelBtn.AddToClassList("selection-bar__btn");
+            cancelBtn.style.backgroundColor = new Color(0.137f, 0.153f, 0.196f, 1f); // --bg-4
+            cancelBtn.style.color = new Color(0.847f, 0.863f, 0.902f, 1f); // --text-1
+            cancelBtn.style.borderTopWidth = 1f;
+            cancelBtn.style.borderBottomWidth = 1f;
+            cancelBtn.style.borderLeftWidth = 1f;
+            cancelBtn.style.borderRightWidth = 1f;
+            var cancelBorder = new Color(0.176f, 0.196f, 0.251f, 1f); // --line-2
+            cancelBtn.style.borderTopColor = cancelBorder;
+            cancelBtn.style.borderBottomColor = cancelBorder;
+            cancelBtn.style.borderLeftColor = cancelBorder;
+            cancelBtn.style.borderRightColor = cancelBorder;
+            cancelBtn.style.borderTopLeftRadius = 8f;
+            cancelBtn.style.borderTopRightRadius = 8f;
+            cancelBtn.style.borderBottomLeftRadius = 8f;
+            cancelBtn.style.borderBottomRightRadius = 8f;
+            cancelBtn.style.paddingLeft = 16f;
+            cancelBtn.style.paddingRight = 16f;
             footer.Add(cancelBtn);
             picker.Add(footer);
 
@@ -1274,8 +1345,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                 DismissSessionPicker();
                 tcs.TrySetResult(session);
             });
-            item.RegisterCallback<PointerEnterEvent>(_ => item.AddToClassList("session-picker__item--hover"));
-            item.RegisterCallback<PointerLeaveEvent>(_ => item.RemoveFromClassList("session-picker__item--hover"));
+            item.RegisterCallback<PointerEnterEvent>(_ =>
+            {
+                item.AddToClassList("session-picker__item--hover");
+                item.style.backgroundColor = new Color(0.486f, 0.478f, 0.929f, 0.16f); // --accent-soft
+            });
+            item.RegisterCallback<PointerLeaveEvent>(_ =>
+            {
+                item.RemoveFromClassList("session-picker__item--hover");
+                item.style.backgroundColor = Color.clear;
+            });
         }
 
         private void OnSelectMessageRequested(string messageIndexStr)

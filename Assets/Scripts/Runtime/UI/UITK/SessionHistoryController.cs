@@ -569,15 +569,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             menu.AddToClassList("session-context-menu");
             // Inline fallback so the menu renders correctly regardless of stylesheet scope
             menu.style.flexDirection = FlexDirection.Column;
-            menu.style.backgroundColor = new Color(0.118f, 0.137f, 0.196f, 0.98f);
+            menu.style.backgroundColor = new Color(0.137f, 0.153f, 0.196f, 0.98f);
             menu.style.borderTopWidth = 1f;
             menu.style.borderRightWidth = 1f;
             menu.style.borderBottomWidth = 1f;
             menu.style.borderLeftWidth = 1f;
-            menu.style.borderTopColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
-            menu.style.borderRightColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
-            menu.style.borderBottomColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
-            menu.style.borderLeftColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            menu.style.borderTopColor = new Color(0.227f, 0.251f, 0.322f, 1f);
+            menu.style.borderRightColor = new Color(0.227f, 0.251f, 0.322f, 1f);
+            menu.style.borderBottomColor = new Color(0.227f, 0.251f, 0.322f, 1f);
+            menu.style.borderLeftColor = new Color(0.227f, 0.251f, 0.322f, 1f);
             menu.style.borderTopLeftRadius = 8f;
             menu.style.borderTopRightRadius = 8f;
             menu.style.borderBottomLeftRadius = 8f;
@@ -692,7 +692,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var textLabel = new Label(labelText);
             textLabel.AddToClassList("message-context-menu__label");
             textLabel.style.fontSize = 13f;
-            textLabel.style.color = new Color(0.878f, 0.878f, 0.878f, 1f); // #e0e0e0
+            textLabel.style.color = new Color(0.847f, 0.863f, 0.902f, 1f); // --text-1
 
             item.Add(iconLabel);
             item.Add(textLabel);
@@ -707,7 +707,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             item.RegisterCallback<PointerEnterEvent>(_ =>
             {
                 item.AddToClassList("message-context-menu__item--hover");
-                item.style.backgroundColor = new Color(1f, 1f, 1f, 0.08f);
+                item.style.backgroundColor = new Color(0.486f, 0.478f, 0.929f, 0.16f); // --accent-soft
             });
             item.RegisterCallback<PointerLeaveEvent>(_ =>
             {
@@ -760,15 +760,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             popup.AddToClassList("folder-name-input-popup");
             // Inline fallback styles (CSS may be template-scoped)
             popup.style.flexDirection = FlexDirection.Column;
-            popup.style.backgroundColor = new Color(0.118f, 0.137f, 0.196f, 0.98f);
+            popup.style.backgroundColor = new Color(0.137f, 0.153f, 0.196f, 0.98f);
             popup.style.borderTopWidth = 1f;
             popup.style.borderRightWidth = 1f;
             popup.style.borderBottomWidth = 1f;
             popup.style.borderLeftWidth = 1f;
-            popup.style.borderTopColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
-            popup.style.borderRightColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
-            popup.style.borderBottomColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
-            popup.style.borderLeftColor = new Color(0.392f, 0.471f, 0.784f, 0.3f);
+            popup.style.borderTopColor = new Color(0.227f, 0.251f, 0.322f, 1f);
+            popup.style.borderRightColor = new Color(0.227f, 0.251f, 0.322f, 1f);
+            popup.style.borderBottomColor = new Color(0.227f, 0.251f, 0.322f, 1f);
+            popup.style.borderLeftColor = new Color(0.227f, 0.251f, 0.322f, 1f);
             popup.style.borderTopLeftRadius = 8f;
             popup.style.borderTopRightRadius = 8f;
             popup.style.borderBottomLeftRadius = 8f;

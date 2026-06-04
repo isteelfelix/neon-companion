@@ -25,7 +25,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             _menuElement.AddToClassList("message-context-menu");
             // Inline fallback so menu remains visible even if stylesheet scope changes.
             _menuElement.style.position = Position.Absolute;
-            _menuElement.style.backgroundColor = new Color(0.12f, 0.14f, 0.2f, 0.98f);
+            _menuElement.style.backgroundColor = new Color(0.137f, 0.153f, 0.196f, 0.98f); // --bg-4
+            var menuBorderColor = new Color(0.227f, 0.251f, 0.322f, 1f); // --line-3
+            _menuElement.style.borderTopWidth = 1f;
+            _menuElement.style.borderBottomWidth = 1f;
+            _menuElement.style.borderLeftWidth = 1f;
+            _menuElement.style.borderRightWidth = 1f;
+            _menuElement.style.borderTopColor = menuBorderColor;
+            _menuElement.style.borderBottomColor = menuBorderColor;
+            _menuElement.style.borderLeftColor = menuBorderColor;
+            _menuElement.style.borderRightColor = menuBorderColor;
             _menuElement.style.borderTopLeftRadius = 8f;
             _menuElement.style.borderTopRightRadius = 8f;
             _menuElement.style.borderBottomLeftRadius = 8f;
@@ -103,7 +112,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var textLabel = new Label(labelText);
             textLabel.AddToClassList("message-context-menu__label");
             textLabel.style.fontSize = 13f;
-            textLabel.style.color = new Color(0.878f, 0.878f, 0.878f, 1f); // #e0e0e0
+            textLabel.style.color = new Color(0.847f, 0.863f, 0.902f, 1f); // --text-1
 
             item.Add(iconLabel);
             item.Add(textLabel);
@@ -118,7 +127,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             item.RegisterCallback<PointerEnterEvent>(_ =>
             {
                 item.AddToClassList("message-context-menu__item--hover");
-                item.style.backgroundColor = new Color(1f, 1f, 1f, 0.08f);
+                item.style.backgroundColor = new Color(0.486f, 0.478f, 0.929f, 0.16f); // --accent-soft
             });
             item.RegisterCallback<PointerLeaveEvent>(_ =>
             {

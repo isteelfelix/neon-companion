@@ -21,6 +21,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private bool _isSelectionMode;
         private readonly HashSet<int> _selectedMessages = new HashSet<int>();
         private VisualElement _selectionBar;
+        private VisualElement _composer;
         private Label _selectionCountLabel;
 
         internal bool IsSelecting => _isSelectionMode;
@@ -168,7 +169,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _selectionBar.Add(_selectionCountLabel);
 
             var deleteBtn = new Button(OnDeleteSelected) { text = LocalizationExtensions.Get("chat.selection.delete", "Delete") };
-            deleteBtn.AddToClassList("selection-bar__btn selection-bar__btn--danger");
+            deleteBtn.AddToClassList("selection-bar__btn");
+            deleteBtn.AddToClassList("selection-bar__btn--danger");
             _selectionBar.Add(deleteBtn);
 
             var forwardBtn = new Button(OnForwardSelected) { text = LocalizationExtensions.Get("chat.selection.forward", "Forward") };
@@ -179,11 +181,35 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             cancelBtn.AddToClassList("selection-bar__btn");
             _selectionBar.Add(cancelBtn);
 
-            if (composer?.parent != null)
+            _composer = composer;
+            EnsureBarAttached();
+        }
+
+        // The composer's parent can be null at construction time (the chat view isn't attached to a
+        // panel yet), in which case the initial Insert is skipped and the bar stays detached — setting
+        // display:Flex on it then shows nothing. Re-attach lazily whenever we need to show the bar; by
+        // selection time the UI is live and composer.parent is valid.
+        private void EnsureBarAttached()
+        {
+            if (_selectionBar == null || _selectionBar.parent != null)
+                return;
+
+            // Preferred: insert right before the composer.
+            if (_composer?.parent != null)
             {
-                var parent = composer.parent;
-                int composerIndex = parent.IndexOf(composer);
-                parent.Insert(composerIndex, _selectionBar);
+                var parent = _composer.parent;
+                parent.Insert(parent.IndexOf(_composer), _selectionBar);
+                return;
+            }
+
+            // Fallback: the composer reference may have been null/detached at construction time.
+            // The transcript (messages list) is always live in the same column (.chat-main) when the
+            // user can interact, so drop the bar right after it.
+            if (_messagesList?.parent != null)
+            {
+                var parent = _messagesList.parent;
+                int idx = parent.IndexOf(_messagesList) + 1;
+                parent.Insert(idx, _selectionBar);
             }
         }
 
@@ -232,9 +258,20 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             UpdateSelectionRowState(index, isSelected);
 
             if (_selectedMessages.Count == 0)
+            {
                 ExitSelectionMode();
+            }
             else
+            {
+                // The hold/long-press path calls ToggleSelection directly without first entering
+                // selection mode, so turn it on here — otherwise RenderSelectionUI sees mode=false
+                // and hides the action bar (the "hold-to-select shows nothing" bug).
+                bool wasSelectionMode = _isSelectionMode;
+                _isSelectionMode = true;
                 RenderSelectionUI();
+                if (!wasSelectionMode)
+                    _onSelectionModeChanged?.Invoke();
+            }
         }
 
         private void UpdateSelectionRowState(int index, bool isSelected)
@@ -265,6 +302,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (_selectionBar == null) return;
             if (_isSelectionMode)
             {
+                EnsureBarAttached();
                 _selectionBar.style.display = DisplayStyle.Flex;
                 _selectionCountLabel.text = LocalizationExtensions.Get("chat.selection.count", "Selected: {0}")
                     .Replace("{0}", _selectedMessages.Count.ToString());
