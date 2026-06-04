@@ -1,45 +1,97 @@
 # 11_Changelog.md
 
-## [Unreleased]
+## [0.3.0] - 2026-06-04
 
 ### Added
-- **SelectableMarkdownElement** — custom native markdown rendering engine for UITK. Full document model (Block → InlineRun), block-level reconciliation for streaming (unchanged blocks not re-rendered), word-wrap via flex-wrap rows, glyph-level text selection with pointer drag + Ctrl+A/Ctrl+C, link click-through, ANSI escape code stripping. Replaces all TextField-based transcript bodies.
-- Syntax highlighting for code blocks: language-agnostic keyword/string/comment/number tokenizer. Supported languages: C#, Python, JS/TS, Go, Rust, Java, Ruby, Shell, Kotlin, Scala, Swift, PHP, YAML, JSON. Diff-fenced blocks (`language: diff`/`patch`) render with +/-/@@ coloring.
-- Shared diff palette (`DiffAddColor/Bg`, `DiffDelColor/Bg`, `DiffHunkColor/Bg`, `DiffContextColor`) used by both `SetDiff` and diff code blocks.
-- Design token migration: all hardcoded `rgba()` colors in ChatView.uss replaced with `var(--bg-0)`, `var(--text-1)`, `var(--accent)`, `var(--ok)`, `var(--warn)`, `var(--danger)`, etc.
-- Tool entry styling: left accent stripe (`border-left-color`) for running/done/reasoning states, hover background transition, semi-bold GeistMono font for tool names.
-- Reasoning/thinking block: dedicated `.reasoning-entry__details` + `.reasoning-entry__text` styles (italic, accent stripe, dark surface).
-- Approval prompt: pill buttons with border + hover transitions (approve=green, reject=red, always=accent), warning accent stripe, icon color.
-- Clarify choices: pill buttons with accent border + hover fill, white-space normal for wrapping.
-- Composer input wrapped in `ScrollView` (`.composer__scroll`) — TextField grows to content height, ScrollView caps at 140px with vertical scrollbar. Caret-follow on overflow.
-- Message row cache (`_messageRowCache` + `BuildMessageRenderKey`) — reuses VisualElement instances across transcript re-renders instead of recreating.
-- `EmitCodeChunks()` extracted for reuse between plain, highlighted, and diff code block rendering.
-- `GetDiffLineStyle()` shared between `ParseDiff` (per-block) and diff-fenced code blocks.
-- `StripAnsi()` removes ANSI escape sequences from incoming text before parsing.
-- U-53: `IsImageFilePath` protected from `ArgumentException` on control characters (try/catch around `Path.GetExtension` + `GetInvalidPathChars` guard).
-
-### Fixed
-- **Hermes WS disconnect mid-generation**: `HermesSessionManager.HandleGatewayStateChange` now fires `OnError` when state transitions to `Disconnected` or `Error`. Previously, a WebSocket drop during streaming left `_hermesGenerationComplete` TCS unresolved, hanging the UI on "Выполнение..." until the 5-minute safety timeout.
-- Composer Shift+Enter newline: caret index captured before text mutation (was racing with next keystroke), deferred apply via `schedule.Execute`. Prevents newline appending at end then getting stripped by `Trim()`.
-- `_isDragOver` guarded with `#if UNITY_EDITOR` — only read in editor drag handlers, no runtime cost.
-- Horizontal scrollbar hidden in transcript view (`.transcript > .unity-scroller--horizontal { display: none }`).
-- Bubble sizing: markdown-heavy messages get wider bubbles (86%/92% vs 72%/86%).
-- Paragraph flex-wrap: `Wrap.NoWrap` forced on column containers to prevent rows wrapping into side-by-side columns.
-- `FlushParagraph` joins with `'\n'` (not `' '`) to preserve Shift+Enter hard breaks.
-- `ResetTokenSpacing` zeros implicit Label margins/padding to eliminate phantom gaps between word-wrapped chunks.
-- `MakeInlineLabel` uses `WhiteSpace.Pre` (not `NoWrap`) to preserve trailing spaces between words.
+- **SelectableMarkdownElement** — нативный markdown-движок для UITK. Блочная модель (paragraph/heading/quote/list/code/table/rule), инлайн-токенизация (bold/italic/strike/code/links), word-wrap через flex-wrap rows, glyph-level выделение текста с pointer drag + Ctrl+A/Ctrl+C, link click-through. Заменяет все TextField-based тела транскрипта.
+- **Синтаксис-хайлайтинг** для code blocks: C#, Python, JS/TS, Go, Rust, Java, Ruby, Shell, Kotlin, Scala, Swift, PHP, YAML, JSON. Diff-fenced блоки (`language: diff`/`patch`) с +/-/@@ окраской.
+- **Window chrome service** — borderless desktop window management.
+- **Agent Approval System** — WebSocket RPC approval flow для tool calls в чате.
+- **Drag-and-drop файлов** в чат.
+- **Emoji для tool events** — ToolEventPayload + ToolCallUpdate с эмодзи-маппингом.
+- **Avatar view mode settings** + предзагрузка спрайтшитов при старте.
+- **Чат-команды** — /help, /clear, /new, /system, /temp, /tokens.
+- **Кнопка стоп** — отмена генерации.
+- **Экспорт чата** в markdown.
+- **API key toggle** — show/hide в редакторе провайдера.
+- **Счётчик токенов + время ответа** в bubbles.
+- **A-04** — scale-and-crop для кастомных аватаров (Telegram-style crop editor).
+- **Plugin/extension system** — IPlugin, PluginManager, DLL loading.
+- **Contributor docs** + donate system (Buy Me a Coffee, GitHub Sponsors).
+- **3D avatar architecture** — Avatar3DLoader, Avatar3DRenderer (GLB/GLTF).
+- **Voice pipeline** — VoiceInputManager, VoiceOutputManager, WebGL + Android support.
+- **Lipsync controller** — phoneme-to-viseme mapping.
+- **Sprite sheet animation system** — SpriteSheetAnimator, SpriteSheetAnimationLoader, AvatarMotionPack.
+- **Themes page** + настройки тем.
+- **Cyberpunk splash screen** с динамическими эффектами.
+- **History screen** — экран сессий с удалением.
+- **Provider-aware sessions** — сессии сохраняют контекст провайдера.
+- **Custom avatar management** — загрузка, кастомизация, persona.
+- **Localization system** — JsonLocalizationService + en.json/ru.json.
+- **AppManager + NeonLogger** — logging infrastructure.
+- **NeonDropdown** — кастомный UITK компонент (замена DropdownField).
+- **ModelDiscoveryService** — кэшированное обнаружение моделей по /v1/models.
+- **Model picker в чате** — NeonDropdown в topbar + overlay.
+- **Hermes inventory endpoint** интеграция.
+- **Многострочный ввод** — auto vertical scroller.
+- **Масштабируемый rail сайдбара** (160–400px).
+- **Режимы аватара** — Static, Animated, Volume3D.
+- **Motion pack формат** — formatVersion, spriteSheetPath, frameRate, pingPong.
+- **DiffTextField** — TextField + generateVisualContent event для diff highlighting.
+- **Inline diff display** в expandable tool entries.
+- **Reasoning/thinking block** — dedicated стили для thinking bubble.
+- **Clarify choices** — pill buttons с hover fill.
 
 ### Changed
-- `CreateTranscriptBody` always uses `SelectableMarkdownElement` — removed TextField fallback branch.
-- Streaming label (`_streamingLabel`) changed from `TextField` to `SelectableMarkdownElement` with `StringBuilder` buffer for incremental markdown re-rendering.
-- `Query<Label>` → `Query<VisualElement>` in inline edit hide/show for compatibility with `SelectableMarkdownElement`.
-- Inline code style: `var(--accent-text)` color + `var(--accent-soft)` background (was hardcoded gray).
-- Bullet/numbered markers: `var(--accent-2)` color (was hardcoded `#888`).
-- Blockquote: `var(--accent)` left border + `var(--text-2)` color (was hardcoded rgba).
-- Link color: `var(--accent-text)` (was hardcoded `#6ea8fe`).
-- Strikethrough color: `var(--text-3)` (was hardcoded `rgba(255,255,255,0.35)`).
-- Code block: `var(--bg-0)` background + `var(--line-1)` border + `var(--text-1)` text color.
-- Stats footer / timestamp: `var(--text-3)` (was hardcoded rgba).
+- **ChatController рефакторинг**: 5477→1315 строк, 11 подклассов вынесено:
+  - ChatMessageListRenderer, ChatStreamingCoordinator, ToolCallApprovalController
+  - ChatSelectionManager, ChatMessageEditController, ChatAttachmentManager
+  - ChatSearchController, ChatInputManager, ChatNotificationManager
+  - QueuedMessage DTO → Models/Chat/
+- **MainViewController рефакторинг**: вынесены NavigationController, ProvidersController, SessionHistoryController, AvatarGalleryController, VoiceController, LayoutController, SettingsController, PanelResizeHandler.
+- **Design token migration**: все hardcoded `rgba()` → `var(--bg-0)`, `var(--text-1)`, `var(--accent)`, `var(--ok)`, `var(--warn)`, `var(--danger)`, `var(--line-*)`.
+- **Streaming label**: `TextField` → `SelectableMarkdownElement` с `StringBuilder` buffer.
+- **Composer wrapped in ScrollView** — растёт до 140px, дальше scrollbar.
+- **Message row cache** (`_messageRowCache` + `BuildMessageRenderKey`) — переиспользование VisualElement instances.
+- Tool entry styling: left accent stripe для running/done/reasoning states.
+- Bubble sizing: markdown-heavy messages получают шире (86%/92% vs 72%/86%).
+- Providers UI refactored — improved layout + provider edit overlay.
+- Avatar gallery → ScrollView.
+
+### Fixed
+- **Hermes WS disconnect mid-generation**: `HandleGatewayStateChange` теперь firing `OnError` при `Disconnected`/`Error`. Раньше WS-drop во время streaming оставлял UI зависшим на «Выполнение...» до 5-минутного timeout.
+- **Session not found after restart** + approval hanging.
+- **Approval**: REST API вместо nonexistent RPC, затем WS RPC с правильными params.
+- Composer Shift+Enter newline: caret index перед text mutation, deferred apply.
+- Text duplication — `AddMessageSegments` теперь трекает text vs tool segments отдельно.
+- Text invisible в bubble когда есть tools + missing stats + raw call ID в thinking bubble.
+- Model switch: updates UI immediately, fires gateway async (matches Desktop).
+- Model switching через `slash.exec` via gateway.
+- ContainsMarkdown: tables detect by any line starting with `|`.
+- Merge ALL text segments для markdown table rendering.
+- Compile errors: array fields, nullable bool, USS border shorthand.
+- USS border-left shorthand → longhand properties.
+- Horizontal scrollbar hidden в transcript view.
+- Paragraph flex-wrap: `Wrap.NoWrap` на column containers.
+- `FlushParagraph` joins с `'\n'` (не `' '`) для Shift+Enter hard breaks.
+- `ResetTokenSpacing` zeros implicit Label margins/padding.
+- `MakeInlineLabel` uses `WhiteSpace.Pre` для trailing spaces.
+- IsImageFilePath crash на control characters (try/catch + `GetInvalidPathChars` guard).
+- U-11: rail overflow hidden.
+- U-12: multiline input overflow.
+- A-10: все 6 avatar animation clips теперь trigger correctly.
+- Model selection saves locally, no global /model mutation.
+- `HermesSessionManager.HandleGatewayStateChange` fires `OnError` on disconnect.
+- `_isDragOver` guarded с `#if UNITY_EDITOR`.
+- Various cursor issues: removed unsupported `Cursor.SetCursor` runtime texture.
+- SelectableMarkdownElement v3: Label-based (Unity 6.4 compat), убраны Painter2D/TextDecoration dependencies.
+- Tool segments show human-readable context вместо raw call ID.
+- Context window shows correct size из gateway + accurate token count.
+
+### Known Issues
+- **U-33**: Пересылка сообщений между чатами не работает.
+- **U-49**: Входящие вложения от AI — gateway отдаёт HTML вместо изображений.
+- **C-10**: Provider Adapter — model switching работает для OpenAI, но не для Hermes (model list shows, но switching не применяется).
 
 ## [0.2.0] - 2026-05-27
 
