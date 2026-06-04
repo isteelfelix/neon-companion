@@ -74,7 +74,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private Deps _d;
         private bool _isSending;
-        private bool _isStreamingResponse;
 #if UNITY_EDITOR
         // Editor-only drag-overlay state; the only read lives in the #if UNITY_EDITOR drag handlers.
         private bool _isDragOver;
@@ -84,18 +83,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ChatNotificationManager _notifications;
         private ChatInputManager _inputManager;
         private ChatService _currentChatService;
-        private VisualElement _streamingBubble;
-        private SelectableMarkdownElement _streamingLabel;
-        private VisualElement _streamingTypingDots;
-        private readonly StringBuilder _streamingTextBuffer = new StringBuilder();
-        private readonly StringBuilder _streamingSegmentBuffer = new StringBuilder();
-        private IVisualElementScheduledItem _inlineTypingSchedule;
-        private int _inlineTypingFrame;
-        private DateTime _streamingStartTime;
-        private int _estimatedTokens;
-        private VisualElement _streamingStatsFooter;
-        private Label _streamingStatsLabel;
-        private IVisualElementScheduledItem _statsUpdateSchedule;
+        private ChatStreamingCoordinator _streamingCoordinator;
         private ToolCallApprovalController _approvalController;
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private string _chatSubtitle = string.Empty;
@@ -141,7 +129,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const int MaxToolIterations = 10;
 
         public bool IsSending => _isSending;
-        public bool IsStreamingResponse => _isStreamingResponse;
+        public bool IsStreamingResponse => _streamingCoordinator != null && _streamingCoordinator.IsStreaming;
         public string ChatSubtitle => _chatSubtitle;
         public string SessionSearchQuery => _searchController != null ? _searchController.SessionSearchQuery : string.Empty;
 
@@ -167,8 +155,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.GetAppAsync,
                 _d.ShowSystemMessage,
                 () => _isSending,
-                () => _isStreamingResponse,
+                () => _streamingCoordinator != null && _streamingCoordinator.IsStreaming,
                 () => _currentChatService);
+
+            _streamingCoordinator = new ChatStreamingCoordinator(
+                _d.MessagesList,
+                ScrollTranscriptToBottom,
+                m => CreateMessageElement(m),
+                ApplyTextCursor,
+                bubble => _approvalController?.SetBubble(bubble),
+                () => { _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamStart(); _d.RefreshAvatarMotionState?.Invoke(); });
         }
 
         public void SetVoiceRecording(bool value) { _inputManager?.SetVoiceRecording(value); }
@@ -355,7 +351,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _isSending = false;
-            _isStreamingResponse = false;
+            _streamingCoordinator?.Abort();
             _approvalController?.ClearToolProgress();
             _approvalController?.Dismiss();
             if (_contextMenu != null)
@@ -366,15 +362,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             HideLightbox();
             _searchController?.Dispose();
             _searchController = null;
-            _streamingBubble = null;
-            _streamingLabel = null;
-            StopInlineTypingAnimation();
-            StopStreamingStatsUpdate();
-            if (_streamingTypingDots != null)
-            {
-                _streamingTypingDots.RemoveFromHierarchy();
-                _streamingTypingDots = null;
-            }
 
             _messageQueue.Clear();
             if (_queueIndicator != null)
@@ -541,24 +528,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (streaming)
                 {
-                    AddStreamingBubble();
-                    await chat.SendMessageAsync(message, pendingAttachments, OnStreamToken, OnToolProgress);
+                    _streamingCoordinator.Begin();
+                    await chat.SendMessageAsync(message, pendingAttachments, _streamingCoordinator.OnToken, OnToolProgress);
                     ClearThinkingBubble();
                     _approvalController?.ClearToolProgress();
                     _approvalController?.Dismiss();
                     DismissSessionPicker();
-                    _streamingBubble = null;
-                    _streamingLabel = null;
-                    StopInlineTypingAnimation();
 
-                    // After streaming completes, get real usage from client (adapted from suggested chat.CurrentProvider.GetClient pattern)
-                    // Use exact token count if provided via stream_options; set final stats without ~ estimate
-                    Label statsLabelForFinal = _streamingStatsLabel;
-                    if (_statsUpdateSchedule != null)
-                    {
-                        _statsUpdateSchedule.Pause();
-                        _statsUpdateSchedule = null;
-                    }
+                    // Finalize stats with real usage from client
+                    _streamingCoordinator.PauseStatsSchedule();
                     try
                     {
                         var app = _d.GetAppAsync().Result;
@@ -568,16 +546,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                             var usage = client.LastStreamUsage;
                             if (usage.total_tokens > 0)
                             {
-                                _estimatedTokens = usage.total_tokens;
-                                double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
+                                double elapsed = (DateTime.UtcNow - _streamingCoordinator.StartTime).TotalSeconds;
                                 if (elapsed < 0)
                                     elapsed = 0;
-                                if (statsLabelForFinal != null)
-                                {
-                                    string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
-                                    string exactTemplate = template.Replace("~", string.Empty);
-                                    statsLabelForFinal.text = string.Format(exactTemplate, _estimatedTokens, elapsed);
-                                }
+                                _streamingCoordinator.SetFinalStats(usage.total_tokens, elapsed);
                                 // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
                                 try
                                 {
@@ -587,7 +559,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                                         var last = vm.Messages[vm.Messages.Count - 1];
                                         if (last != null && string.Equals(NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
                                         {
-                                            last.tokenCount = _estimatedTokens;
+                                            last.tokenCount = _streamingCoordinator.EstimatedTokens;
                                             last.responseTimeSeconds = (float)elapsed;
                                         }
                                     }
@@ -601,12 +573,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         // keep estimate if client not available or no usage chunk
                     }
 
-                    StopStreamingStatsUpdate();
-                    if (_streamingTypingDots != null)
-                    {
-                        _streamingTypingDots.RemoveFromHierarchy();
-                        _streamingTypingDots = null;
-                    }
+                    _streamingCoordinator.Abort();
                 }
                 else
                 {
@@ -624,15 +591,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             catch (OperationCanceledException)
             {
                 // User clicked stop — keep partial response (critical for local LLMs)
-                StopInlineTypingAnimation();
-                StopStreamingStatsUpdate();
-                if (_streamingTypingDots != null)
-                {
-                    _streamingTypingDots.RemoveFromHierarchy();
-                    _streamingTypingDots = null;
-                }
-                _streamingBubble = null;
-                _streamingLabel = null;
+                _streamingCoordinator?.Abort();
                 _approvalController?.ClearToolProgress();
                 _approvalController?.Dismiss();
                 DismissSessionPicker();
@@ -640,15 +599,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                StopStreamingStatsUpdate();
-                StopInlineTypingAnimation();
-                if (_streamingTypingDots != null)
-                {
-                    _streamingTypingDots.RemoveFromHierarchy();
-                    _streamingTypingDots = null;
-                }
-                _streamingBubble = null;
-                _streamingLabel = null;
+                _streamingCoordinator?.Abort();
                 _approvalController?.Dismiss();
                 DismissSessionPicker();
                 _d.MessageInput.value = composerText;
@@ -877,106 +828,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        // ===== Streaming =====
-
-        private void AddStreamingBubble()
-        {
-            if (_d.MessagesList == null) return;
-            var placeholder = CreateMessageElement(new ChatMessage { role = "assistant", content = "" });
-            _d.MessagesList.Add(placeholder);
-
-            var bubble = placeholder.Q<VisualElement>(className: "transcript__bubble");
-
-            _streamingBubble = bubble;
-            _streamingLabel = null;
-            _streamingTextBuffer.Length = 0;
-            _streamingSegmentBuffer.Length = 0;
-
-            _streamingTypingDots = new VisualElement();
-            _streamingTypingDots.AddToClassList("typing--inline");
-            for (int i = 0; i < 3; i++)
-            {
-                var dot = new VisualElement();
-                dot.AddToClassList("typing__dot");
-                if (i == 1) dot.AddToClassList("typing__dot--delay-1");
-                if (i == 2) dot.AddToClassList("typing__dot--delay-2");
-                _streamingTypingDots.Add(dot);
-            }
-            if (bubble != null)
-                bubble.Insert(1, _streamingTypingDots);
-
-            _approvalController?.SetBubble(bubble);
-
-            // Activate stats footer for this streaming assistant bubble (created hidden in CreateMessageElement)
-            if (bubble != null)
-            {
-                _streamingStatsFooter = bubble.Q<VisualElement>(className: "transcript__stats");
-                _streamingStatsLabel = _streamingStatsFooter != null ? _streamingStatsFooter.Q<Label>(className: "transcript__stats-label") : null;
-                if (_streamingStatsFooter != null)
-                    _streamingStatsFooter.style.display = DisplayStyle.Flex;
-            }
-            StartStreamingStatsUpdate();
-
-            StartInlineTypingAnimation();
-            ScrollTranscriptToBottom();
-        }
-
-        private void EnsureStreamingLabel()
-        {
-            if (_streamingLabel != null || _streamingBubble == null)
-                return;
-
-            _streamingLabel = new SelectableMarkdownElement();
-            _streamingLabel.SetMarkdown(string.Empty);
-            _streamingLabel.AddToClassList("transcript__body");
-            _streamingLabel.style.minWidth = 0;
-            _streamingLabel.style.width = Length.Percent(100);
-            _streamingLabel.style.minHeight = 20;
-            ApplyTextCursor(_streamingLabel);
-
-            // Insert body before stats footer (if present) so stats appears after content in layout.
-            // (Stats is appended at end of CreateMessageElement; dynamic adds would otherwise bury it.)
-            var statsFooter = _streamingBubble.Q<VisualElement>(className: "transcript__stats");
-            if (statsFooter != null && statsFooter.parent == _streamingBubble)
-            {
-                int idx = _streamingBubble.IndexOf(statsFooter);
-                _streamingBubble.Insert(idx, _streamingLabel);
-            }
-            else
-            {
-                _streamingBubble.Add(_streamingLabel);
-            }
-        }
-
-        private void OnStreamToken(string token)
-        {
-            if (_streamingTypingDots != null)
-            {
-                StopInlineTypingAnimation();
-                _streamingTypingDots.RemoveFromHierarchy();
-                _streamingTypingDots = null;
-                _isStreamingResponse = true;
-                _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamStart();
-                _d.RefreshAvatarMotionState();
-            }
-
-            EnsureStreamingLabel();
-            if (_streamingLabel != null)
-            {
-                _streamingTextBuffer.Append(token);
-                _streamingSegmentBuffer.Append(token);
-                _streamingLabel.SetMarkdown(_streamingSegmentBuffer.ToString());
-            }
-
-            if (!string.IsNullOrEmpty(token))
-            {
-                _estimatedTokens += Math.Max(1, token.Length / 4);
-            }
-
-            UpdateStreamingStats();
-            ScrollTranscriptToBottom();
-        }
-
         private void OnToolProgress(string tool, string label, string emoji, string status)
         {
             if (_d.ThinkingBubble != null && _d.ThinkingText != null)
@@ -990,10 +841,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(tool, label, emoji, status);
             if (insertedNewEntry)
-            {
-                _streamingLabel = null;
-                _streamingSegmentBuffer.Length = 0;
-            }
+                _streamingCoordinator?.ResetStreamingSegment();
             ScrollTranscriptToBottom();
 
             // Hermes executes tools server-side, so its approval request must be
@@ -1042,7 +890,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _isSending = isSending;
             if (!isSending)
             {
-                _isStreamingResponse = false;
                 _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamEnd();
             }
 
@@ -2020,23 +1867,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                     if (streaming)
                     {
-                        AddStreamingBubble();
-                        await chat.RegenerateAsync(OnStreamToken, OnToolProgress);
+                        _streamingCoordinator.Begin();
+                        await chat.RegenerateAsync(_streamingCoordinator.OnToken, OnToolProgress);
                         ClearThinkingBubble();
                         _approvalController?.ClearToolProgress();
                         _approvalController?.Dismiss();
                         DismissSessionPicker();
-                        _streamingBubble = null;
-                        _streamingLabel = null;
-                        StopInlineTypingAnimation();
 
-                        // After streaming completes (regenerate path), get real usage from client
-                        Label statsLabelForFinal = _streamingStatsLabel;
-                        if (_statsUpdateSchedule != null)
-                        {
-                            _statsUpdateSchedule.Pause();
-                            _statsUpdateSchedule = null;
-                        }
+                        // Finalize stats with real usage from client
+                        _streamingCoordinator.PauseStatsSchedule();
                         try
                         {
                             var app = _d.GetAppAsync().Result;
@@ -2046,16 +1885,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                                 var usage = client.LastStreamUsage;
                                 if (usage.total_tokens > 0)
                                 {
-                                    _estimatedTokens = usage.total_tokens;
-                                    double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
+                                    double elapsed = (DateTime.UtcNow - _streamingCoordinator.StartTime).TotalSeconds;
                                     if (elapsed < 0)
                                         elapsed = 0;
-                                    if (statsLabelForFinal != null)
-                                    {
-                                        string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
-                                        string exactTemplate = template.Replace("~", string.Empty);
-                                        statsLabelForFinal.text = string.Format(exactTemplate, _estimatedTokens, elapsed);
-                                    }
+                                    _streamingCoordinator.SetFinalStats(usage.total_tokens, elapsed);
                                     // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
                                     try
                                     {
@@ -2065,7 +1898,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                                             var last = vm.Messages[vm.Messages.Count - 1];
                                             if (last != null && string.Equals(NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
                                             {
-                                                last.tokenCount = _estimatedTokens;
+                                                last.tokenCount = _streamingCoordinator.EstimatedTokens;
                                                 last.responseTimeSeconds = (float)elapsed;
                                             }
                                         }
@@ -2079,12 +1912,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                             // keep estimate if no real usage
                         }
 
-                        StopStreamingStatsUpdate();
-                        if (_streamingTypingDots != null)
-                        {
-                            _streamingTypingDots.RemoveFromHierarchy();
-                            _streamingTypingDots = null;
-                        }
+                        _streamingCoordinator.Abort();
                     }
                     else
                     {
@@ -2097,15 +1925,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 catch (Exception ex)
                 {
-                    StopStreamingStatsUpdate();
-                    StopInlineTypingAnimation();
-                    if (_streamingTypingDots != null)
-                    {
-                        _streamingTypingDots.RemoveFromHierarchy();
-                        _streamingTypingDots = null;
-                    }
-                    _streamingBubble = null;
-                    _streamingLabel = null;
+                    _streamingCoordinator?.Abort();
                     _approvalController?.Dismiss();
                     DismissSessionPicker();
                     _d.ShowSystemMessage(ex.Message);
@@ -3233,88 +3053,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             });
             return list;
-        }
-
-        // ===== Streaming Stats (token count + elapsed time footer) =====
-
-        private void StartStreamingStatsUpdate()
-        {
-            // Kill prior schedule without clearing the labels we just assigned for this stream
-            if (_statsUpdateSchedule != null)
-            {
-                _statsUpdateSchedule.Pause();
-                _statsUpdateSchedule = null;
-            }
-            _streamingStartTime = DateTime.UtcNow;
-            _estimatedTokens = 0;
-            if (_streamingStatsLabel == null)
-                return;
-            UpdateStreamingStats();
-            _statsUpdateSchedule = _streamingStatsLabel.schedule.Execute(() =>
-            {
-                if (_streamingStatsLabel == null)
-                {
-                    if (_statsUpdateSchedule != null)
-                    {
-                        _statsUpdateSchedule.Pause();
-                        _statsUpdateSchedule = null;
-                    }
-                    return;
-                }
-                UpdateStreamingStats();
-            }).Every(500);
-        }
-
-        private void StopStreamingStatsUpdate()
-        {
-            if (_statsUpdateSchedule != null)
-            {
-                _statsUpdateSchedule.Pause();
-                _statsUpdateSchedule = null;
-            }
-            _streamingStatsLabel = null;
-            _streamingStatsFooter = null;
-        }
-
-        private void UpdateStreamingStats()
-        {
-            if (_streamingStatsLabel == null)
-                return;
-            double elapsed = (DateTime.UtcNow - _streamingStartTime).TotalSeconds;
-            if (elapsed < 0)
-                elapsed = 0;
-            string stats = LocalizationExtensions.GetFormat("chat.stats.footer", "~{0} tok · {1:F1}s", _estimatedTokens, elapsed);
-            _streamingStatsLabel.text = stats;
-        }
-
-        // ===== Inline Typing Animation =====
-
-        private void StartInlineTypingAnimation()
-        {
-            _inlineTypingFrame = 0;
-            _inlineTypingSchedule?.Pause();
-            _inlineTypingSchedule = _d.MessagesList?.schedule.Execute(() =>
-            {
-                if (_streamingTypingDots == null)
-                {
-                    _inlineTypingSchedule?.Pause();
-                    return;
-                }
-
-                var dots = _streamingTypingDots.Query<VisualElement>(className: "typing__dot").ToList();
-                for (int i = 0; i < dots.Count; i++)
-                {
-                    dots[i].style.opacity = i == (_inlineTypingFrame % 3) ? 1f : 0.25f;
-                }
-
-                _inlineTypingFrame++;
-            }).Every(200);
-        }
-
-        private void StopInlineTypingAnimation()
-        {
-            _inlineTypingSchedule?.Pause();
-            _inlineTypingSchedule = null;
         }
 
         // ===== Utility =====
