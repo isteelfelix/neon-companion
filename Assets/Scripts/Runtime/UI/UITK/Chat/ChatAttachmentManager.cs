@@ -8,7 +8,6 @@ using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Models.Chat;
 using NeonCompanion.Runtime.Platform;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK.Chat
@@ -23,11 +22,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly TextField _messageInput;
         private readonly Func<Task<CompanionApp>> _getAppAsync;
         private readonly Action<string> _showSystemMessage;
-        private readonly Func<VisualElement> _getOverlayRoot;
+        private readonly Action<string> _showImageLightbox;
 
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private VisualElement _composerPreviews;
-        private VisualElement _lightbox;
         private IFileDropService _fileDropService;
 #if UNITY_EDITOR
         private bool _isDragOver;
@@ -45,13 +43,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             TextField messageInput,
             Func<Task<CompanionApp>> getAppAsync,
             Action<string> showSystemMessage,
-            Func<VisualElement> getOverlayRoot)
+            Action<string> showImageLightbox)
         {
             _composer = composer;
             _messageInput = messageInput;
             _getAppAsync = getAppAsync;
             _showSystemMessage = showSystemMessage;
-            _getOverlayRoot = getOverlayRoot;
+            _showImageLightbox = showImageLightbox;
         }
 
         // ===== Public API =====
@@ -160,7 +158,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
 #endif
             UnbindRuntimeFileDrop();
-            HideLightbox();
         }
 
         // ===== Paste handling (Ctrl+V) =====
@@ -496,11 +493,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         var img = new Image();
                         img.AddToClassList("composer__preview-img");
                         img.scaleMode = ScaleMode.ScaleAndCrop;
-                        img.schedule.Execute(() => LoadImageAsync(img, attachment.path));
+                        img.schedule.Execute(() => ChatMessageListRenderer.LoadImageAsync(img, attachment.path));
                         string previewPath = attachment.path; // capture for closure
                         img.RegisterCallback<ClickEvent>(evt =>
                         {
-                            ShowImageLightbox(previewPath);
+                            _showImageLightbox?.Invoke(previewPath);
                             evt.StopPropagation();
                         });
                         thumb.Add(img);
@@ -536,75 +533,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
             RenderComposerPreviews();
             OnAttachmentsChanged?.Invoke();
-        }
-
-        // ===== Image Lightbox =====
-
-        private void ShowImageLightbox(string imagePath)
-        {
-            if (string.IsNullOrEmpty(imagePath)) return;
-
-            VisualElement root = _getOverlayRoot?.Invoke();
-            if (root == null) return;
-
-            HideLightbox();
-
-            _lightbox = new VisualElement();
-            _lightbox.name = "image-lightbox";
-            _lightbox.AddToClassList("lightbox");
-            _lightbox.focusable = true;
-            _lightbox.pickingMode = PickingMode.Position;
-            ApplyFullscreenOverlayLayout(_lightbox);
-
-            // Click on the dark background closes the overlay
-            _lightbox.RegisterCallback<ClickEvent>(evt =>
-            {
-                if (evt.target == _lightbox)
-                {
-                    HideLightbox();
-                    evt.StopPropagation();
-                }
-            });
-
-            // ESC closes the overlay (requires focus — set below)
-            _lightbox.RegisterCallback<KeyDownEvent>(evt =>
-            {
-                if (evt.keyCode == KeyCode.Escape)
-                {
-                    HideLightbox();
-                    evt.StopPropagation();
-                }
-            });
-
-            // Image element — ScaleToFit preserves aspect ratio within the USS-defined bounds
-            var imgEl = new Image();
-            imgEl.AddToClassList("lightbox__image");
-            imgEl.scaleMode = ScaleMode.ScaleToFit;
-            ApplyLightboxImageLayout(imgEl);
-            // Stop propagation so click on image itself does NOT close the overlay
-            imgEl.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
-            LoadImageAsync(imgEl, imagePath);
-            _lightbox.Add(imgEl);
-
-            // Close button (×) — top-right corner
-            var closeBtn = new Button(HideLightbox);
-            closeBtn.text = "\u00d7";
-            closeBtn.AddToClassList("lightbox__close");
-            ApplyLightboxCloseLayout(closeBtn);
-            _lightbox.Add(closeBtn);
-
-            root.Add(_lightbox);
-            _lightbox.BringToFront();
-
-            // Focus after layout tick so ESC key events are received
-            _lightbox.schedule.Execute(() => _lightbox?.Focus()).StartingIn(50);
-        }
-
-        private void HideLightbox()
-        {
-            if (_lightbox == null) return;
-            _lightbox.RemoveFromHierarchy();
-            _lightbox = null;
         }
 
         // ===== Static helpers =====
@@ -718,38 +646,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         // ===== Image loading and layout =====
 
-        private static async void LoadImageAsync(Image imageElement, string path, Action onLoaded = null)
-        {
-            if (imageElement == null || string.IsNullOrEmpty(path))
-                return;
-
-            try
-            {
-                string url = "file://" + path;
-                using (var request = UnityWebRequestTexture.GetTexture(url))
-                {
-                    var operation = request.SendWebRequest();
-                    while (!operation.isDone)
-                        await Task.Yield();
-
-                    if (request.result == UnityWebRequest.Result.Success)
-                    {
-                        var dh = request.downloadHandler as DownloadHandlerTexture;
-                        if (dh != null)
-                        {
-                            imageElement.image = dh.texture;
-                            if (onLoaded != null)
-                                onLoaded();
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // Silent fail — image simply won't render
-            }
-        }
-
         private static bool IsImageFile(string path)
         {
             if (string.IsNullOrEmpty(path))
@@ -784,64 +680,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
             return ext == ".png" || ext == ".jpg" || ext == ".jpeg"
                 || ext == ".gif" || ext == ".webp" || ext == ".bmp";
-        }
-
-        private static void ApplyFullscreenOverlayLayout(VisualElement overlay)
-        {
-            if (overlay == null)
-                return;
-
-            overlay.style.position = Position.Absolute;
-            overlay.style.left = 0;
-            overlay.style.right = 0;
-            overlay.style.top = 0;
-            overlay.style.bottom = 0;
-            overlay.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.87f));
-            overlay.style.alignItems = Align.Center;
-            overlay.style.justifyContent = Justify.Center;
-        }
-
-        private static void ApplyLightboxImageLayout(Image image)
-        {
-            if (image == null)
-                return;
-
-            image.style.width = Length.Percent(80f);
-            image.style.height = Length.Percent(80f);
-            image.style.borderTopLeftRadius = 8f;
-            image.style.borderTopRightRadius = 8f;
-            image.style.borderBottomLeftRadius = 8f;
-            image.style.borderBottomRightRadius = 8f;
-            image.style.borderTopWidth = 1f;
-            image.style.borderRightWidth = 1f;
-            image.style.borderBottomWidth = 1f;
-            image.style.borderLeftWidth = 1f;
-            image.style.borderTopColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
-            image.style.borderRightColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
-            image.style.borderBottomColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
-            image.style.borderLeftColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
-        }
-
-        private static void ApplyLightboxCloseLayout(Button closeButton)
-        {
-            if (closeButton == null)
-                return;
-
-            closeButton.style.position = Position.Absolute;
-            closeButton.style.top = 16f;
-            closeButton.style.right = 16f;
-            closeButton.style.width = 36f;
-            closeButton.style.height = 36f;
-            closeButton.style.minWidth = 36f;
-            closeButton.style.minHeight = 36f;
-            closeButton.style.borderTopLeftRadius = 18f;
-            closeButton.style.borderTopRightRadius = 18f;
-            closeButton.style.borderBottomLeftRadius = 18f;
-            closeButton.style.borderBottomRightRadius = 18f;
-            closeButton.style.paddingLeft = 0f;
-            closeButton.style.paddingRight = 0f;
-            closeButton.style.paddingTop = 0f;
-            closeButton.style.paddingBottom = 0f;
         }
 
         // ===== File type helpers =====

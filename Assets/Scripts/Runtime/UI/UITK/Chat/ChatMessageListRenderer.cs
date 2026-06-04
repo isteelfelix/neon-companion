@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.UI.UITK;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK.Chat
@@ -21,7 +23,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Label _topbarSubtitle;
         private readonly Label _navChatCount;
         private readonly Action<string> _setChatSubtitle;
-        private readonly Action<string> _onImageClick;
         private readonly Action _scrollToBottomCallback;
         private readonly Func<bool> _isSelecting;
         private readonly Func<int, bool> _isIndexSelected;
@@ -30,6 +31,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         internal VisualElement _transcriptContextRoot;
         private readonly Dictionary<string, VisualElement> _messageRowCache = new Dictionary<string, VisualElement>();
+        private VisualElement _lightbox;
 
         private bool _pinBottomQueued;
 
@@ -47,7 +49,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Label topbarSubtitle,
             Label navChatCount,
             Action<string> setChatSubtitle,
-            Action<string> onImageClick,
             Action scrollToBottomCallback,
             Func<bool> isSelecting,
             Func<int, bool> isIndexSelected,
@@ -60,7 +61,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _topbarSubtitle = topbarSubtitle;
             _navChatCount = navChatCount;
             _setChatSubtitle = setChatSubtitle;
-            _onImageClick = onImageClick;
             _scrollToBottomCallback = scrollToBottomCallback;
             _isSelecting = isSelecting;
             _isIndexSelected = isIndexSelected;
@@ -143,6 +143,179 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
         }
 
+        internal void ShowImageLightbox(string imagePath)
+        {
+            if (string.IsNullOrEmpty(imagePath))
+                return;
+
+            VisualElement root = GetOverlayRoot();
+            if (root == null)
+                return;
+
+            HideLightbox();
+
+            _lightbox = new VisualElement();
+            _lightbox.name = "image-lightbox";
+            _lightbox.AddToClassList("lightbox");
+            _lightbox.focusable = true;
+            _lightbox.pickingMode = PickingMode.Position;
+            ApplyFullscreenOverlayLayout(_lightbox);
+
+            _lightbox.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == _lightbox)
+                {
+                    HideLightbox();
+                    evt.StopPropagation();
+                }
+            });
+
+            _lightbox.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                {
+                    HideLightbox();
+                    evt.StopPropagation();
+                }
+            });
+
+            var image = new Image();
+            image.AddToClassList("lightbox__image");
+            image.scaleMode = ScaleMode.ScaleToFit;
+            ApplyLightboxImageLayout(image);
+            image.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+            LoadImageAsync(image, imagePath);
+            _lightbox.Add(image);
+
+            var closeButton = new Button(HideLightbox);
+            closeButton.text = "\u00d7";
+            closeButton.AddToClassList("lightbox__close");
+            ApplyLightboxCloseLayout(closeButton);
+            _lightbox.Add(closeButton);
+
+            root.Add(_lightbox);
+            _lightbox.BringToFront();
+            _lightbox.schedule.Execute(() => _lightbox?.Focus()).StartingIn(50);
+        }
+
+        internal void HideLightbox()
+        {
+            if (_lightbox == null)
+                return;
+            _lightbox.RemoveFromHierarchy();
+            _lightbox = null;
+        }
+
+        private VisualElement GetOverlayRoot()
+        {
+            if (_messagesList != null && _messagesList.panel != null)
+                return _messagesList.panel.visualTree;
+            if (_transcriptContextRoot != null && _transcriptContextRoot.panel != null)
+                return _transcriptContextRoot.panel.visualTree;
+            return null;
+        }
+
+        internal static async void LoadImageAsync(Image imageElement, string path, Action onLoaded = null)
+        {
+            if (imageElement == null || string.IsNullOrEmpty(path))
+                return;
+
+            try
+            {
+                string url = "file://" + path;
+                using (var request = UnityWebRequestTexture.GetTexture(url))
+                {
+                    var operation = request.SendWebRequest();
+                    while (!operation.isDone)
+                        await Task.Yield();
+
+                    if (request.result == UnityWebRequest.Result.Success)
+                    {
+                        var download = request.downloadHandler as DownloadHandlerTexture;
+                        if (download != null)
+                        {
+                            imageElement.image = download.texture;
+                            onLoaded?.Invoke();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Silent fail: image simply does not render.
+            }
+        }
+
+        internal static void RegisterClick(Button button, Action handler)
+        {
+            if (button != null)
+                button.clicked += handler;
+        }
+
+        internal static void UnregisterClick(Button button, Action handler)
+        {
+            if (button != null)
+                button.clicked -= handler;
+        }
+
+        private static void ApplyFullscreenOverlayLayout(VisualElement overlay)
+        {
+            if (overlay == null)
+                return;
+
+            overlay.style.position = Position.Absolute;
+            overlay.style.left = 0;
+            overlay.style.right = 0;
+            overlay.style.top = 0;
+            overlay.style.bottom = 0;
+            overlay.style.backgroundColor = new StyleColor(new Color(0f, 0f, 0f, 0.87f));
+            overlay.style.alignItems = Align.Center;
+            overlay.style.justifyContent = Justify.Center;
+        }
+
+        private static void ApplyLightboxImageLayout(Image image)
+        {
+            if (image == null)
+                return;
+
+            image.style.width = Length.Percent(80f);
+            image.style.height = Length.Percent(80f);
+            image.style.borderTopLeftRadius = 8f;
+            image.style.borderTopRightRadius = 8f;
+            image.style.borderBottomLeftRadius = 8f;
+            image.style.borderBottomRightRadius = 8f;
+            image.style.borderTopWidth = 1f;
+            image.style.borderRightWidth = 1f;
+            image.style.borderBottomWidth = 1f;
+            image.style.borderLeftWidth = 1f;
+            image.style.borderTopColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+            image.style.borderRightColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+            image.style.borderBottomColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+            image.style.borderLeftColor = new StyleColor(new Color(1f, 1f, 1f, 0.12f));
+        }
+
+        private static void ApplyLightboxCloseLayout(Button closeButton)
+        {
+            if (closeButton == null)
+                return;
+
+            closeButton.style.position = Position.Absolute;
+            closeButton.style.top = 16f;
+            closeButton.style.right = 16f;
+            closeButton.style.width = 36f;
+            closeButton.style.height = 36f;
+            closeButton.style.minWidth = 36f;
+            closeButton.style.minHeight = 36f;
+            closeButton.style.borderTopLeftRadius = 18f;
+            closeButton.style.borderTopRightRadius = 18f;
+            closeButton.style.borderBottomLeftRadius = 18f;
+            closeButton.style.borderBottomRightRadius = 18f;
+            closeButton.style.paddingLeft = 0f;
+            closeButton.style.paddingRight = 0f;
+            closeButton.style.paddingTop = 0f;
+            closeButton.style.paddingBottom = 0f;
+        }
+
         private void RenderTranscript(IReadOnlyList<ChatMessage> messages)
         {
             if (_messagesList == null)
@@ -175,7 +348,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 if (!selecting)
                     _messageRowCache.TryGetValue(renderKey, out row);
                 if (row == null)
-                    row = CreateMessageElement(message, _onImageClick, _scrollToBottomCallback);
+                    row = CreateMessageElement(message, ShowImageLightbox, _scrollToBottomCallback);
 
                 row.userData = i;
                 var bubbleForTag = row.Q<VisualElement>(className: "transcript__bubble");
@@ -460,7 +633,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         var imageElement = new Image();
                         imageElement.AddToClassList("transcript__image");
                         imageElement.scaleMode = ScaleMode.ScaleToFit;
-                        ChatController.LoadImageAsync(imageElement, attachment.path, onImageLoaded);
+                        LoadImageAsync(imageElement, attachment.path, onImageLoaded);
                         string imgPath = attachment.path;
                         if (onImageClick != null)
                         {
@@ -496,21 +669,21 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 copyBtn.AddToClassList("icon");
                 copyBtn.AddToClassList("icon--copy");
                 copyBtn.tooltip = "Копировать";
-                ChatController.RegisterClickStatic(copyBtn, () => ChatController.OnCopyClickedStatic());
+                RegisterClick(copyBtn, () => ChatController.OnCopyClickedStatic());
 
                 var refreshBtn = new Button();
                 refreshBtn.AddToClassList("iconbtn");
                 refreshBtn.AddToClassList("icon");
                 refreshBtn.AddToClassList("icon--refresh");
                 refreshBtn.tooltip = "Пересоздать";
-                ChatController.RegisterClickStatic(refreshBtn, () => ChatController.OnRegenerateClickedStatic());
+                RegisterClick(refreshBtn, () => ChatController.OnRegenerateClickedStatic());
 
                 var listenBtn = new Button();
                 listenBtn.AddToClassList("iconbtn");
                 listenBtn.AddToClassList("icon");
                 listenBtn.AddToClassList("icon--headphones");
                 listenBtn.tooltip = "Озвучить";
-                ChatController.RegisterClickStatic(listenBtn, () => ChatController.OnListenClickedStatic());
+                RegisterClick(listenBtn, () => ChatController.OnListenClickedStatic());
 
                 actions.Add(copyBtn);
                 actions.Add(refreshBtn);
