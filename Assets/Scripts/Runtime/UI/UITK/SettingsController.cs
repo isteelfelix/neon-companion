@@ -552,10 +552,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsStoragePath != null)
                     _settingsStoragePath.text = Application.persistentDataPath;
 
+                // Single source of truth: Player Settings → bundleVersion (Application.version).
                 if (_settingsVersion != null)
-                    _settingsVersion.text = string.IsNullOrEmpty(Application.version) ? "0.2.0" : Application.version;
+                    _settingsVersion.text = Application.version;
                 if (_brandVersion != null)
-                    _brandVersion.text = string.IsNullOrEmpty(Application.version) ? "0.2.0" : Application.version;
+                    _brandVersion.text = Application.version;
 
                 RefreshPluginStatus(app);
                 SetAvatarShape(s.avatarShape ?? "round", save: false);

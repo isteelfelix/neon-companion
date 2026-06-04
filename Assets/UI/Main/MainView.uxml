@@ -16,7 +16,7 @@
             <ui:VisualElement class="rail__brand">
                 <ui:VisualElement class="brand__mark" />
                 <ui:Label text="Neon" class="brand__name" />
-                <ui:Label name="brand-version" text="0.2.0" class="brand__tag" />
+                <ui:Label name="brand-version" text="" class="brand__tag" />
             </ui:VisualElement>
 
             <ui:Label text="Рабочее пространство" class="nav__group" />
