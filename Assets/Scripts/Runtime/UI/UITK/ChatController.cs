@@ -102,7 +102,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TaskCompletionSource<bool> _pendingApprovalTcs;
         private readonly List<ChatAttachment> _pendingComposerAttachments = new List<ChatAttachment>();
         private string _chatSubtitle = string.Empty;
-        private string _sessionSearchQuery = string.Empty;
         private VisualElement _composerPreviews;
         private VisualElement _lightbox;
 
@@ -135,16 +134,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _editingSaveBtn;
         private Button _editingCancelBtn;
 
-        // Chat search (U-38)
-        private string _searchQuery = string.Empty;
-        private int _currentMatchIndex = -1;
-        private List<int> _matchingMessageIndices = new List<int>();
-        private VisualElement _searchBar;
-        private TextField _searchInput;
-        private Label _searchCountLabel;
-        private Button _searchUpBtn;
-        private Button _searchDownBtn;
-        private Button _searchCloseBtn;
+        // Chat search (U-38) — delegated to ChatSearchController
+        private ChatSearchController _searchController;
 
         // Message selection mode (U-31/U-32)
         private bool _isSelectionMode;
@@ -163,7 +154,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public bool IsSending => _isSending;
         public bool IsStreamingResponse => _isStreamingResponse;
         public string ChatSubtitle => _chatSubtitle;
-        public string SessionSearchQuery => _sessionSearchQuery;
+        public string SessionSearchQuery => _searchController != null ? _searchController.SessionSearchQuery : string.Empty;
 
         public void SetDeps(Deps deps)
         {
@@ -174,11 +165,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             _notifications = new ChatNotificationManager(_d.NavChatCount);
             _inputManager = new ChatInputManager(_d.MessageInput, _d.Composer, _d.EnterToSend);
             _inputManager.OnSubmit += _ => OnSendClicked();
+            _searchController = new ChatSearchController(_d.MessagesList, _d.GetChatServiceAsync);
         }
 
         public void SetVoiceRecording(bool value) { _inputManager?.SetVoiceRecording(value); }
         public void SetChatSubtitle(string value) { _chatSubtitle = value ?? string.Empty; }
-        public void SetSessionSearchQuery(string value) { _sessionSearchQuery = value ?? string.Empty; }
+        public void SetSessionSearchQuery(string value) { _searchController?.SetSessionSearchQuery(value); }
         public void ShowSystemMessage(string text) { _d.ShowSystemMessage?.Invoke(text); }
 
         public void RegisterCallbacks()
@@ -384,19 +376,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_contextMenu != null)
                 _contextMenu.Hide();
             CancelInlineEdit();
-            CloseSearch();
+            _searchController?.Hide();
             DismissSessionPicker();
             HideLightbox();
-            if (_searchBar != null)
-            {
-                _searchBar.RemoveFromHierarchy();
-                _searchBar = null;
-                _searchInput = null;
-                _searchCountLabel = null;
-                _searchUpBtn = null;
-                _searchDownBtn = null;
-                _searchCloseBtn = null;
-            }
+            _searchController?.Dispose();
+            _searchController = null;
             _streamingBubble = null;
             _streamingLabel = null;
             StopInlineTypingAnimation();
@@ -1210,345 +1194,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnSearchClicked()
         {
-            if (_searchBar != null && _searchBar.style.display != DisplayStyle.None)
+            if (_searchController != null && _searchController.IsVisible)
             {
-                CloseSearch();
+                _searchController.Hide();
                 return;
             }
-            ShowSearchBar();
+            _searchController?.Show();
         }
 
-        private void ShowSearchBar()
-        {
-            EnsureSearchBarCreated();
-            if (_searchBar == null)
-                return;
-
-            var list = _d.MessagesList;
-            if (list != null)
-            {
-                var parent = list.parent as VisualElement;
-                if (parent != null && _searchBar.parent != parent)
-                {
-                    parent.Insert(0, _searchBar);
-                }
-            }
-
-            _searchBar.style.display = DisplayStyle.Flex;
-
-            if (_searchInput != null)
-            {
-                _searchInput.value = _searchQuery ?? string.Empty;
-                _searchInput.Focus();
-                _searchInput.schedule.Execute(() =>
-                {
-                    if (_searchInput != null && _searchInput.panel != null)
-                        _searchInput.SelectAll();
-                }).StartingIn(60);
-            }
-
-            if (!string.IsNullOrEmpty(_searchQuery))
-            {
-                FindMatches();
-                HighlightMatches();
-                ScrollToCurrentMatch();
-            }
-            else
-            {
-                UpdateSearchCountLabel();
-            }
-        }
-
-        private void EnsureSearchBarCreated()
-        {
-            if (_searchBar != null)
-                return;
-
-            _searchBar = new VisualElement();
-            _searchBar.AddToClassList("search-bar");
-            _searchBar.style.display = DisplayStyle.None;
-
-            var icon = new VisualElement();
-            icon.AddToClassList("icon");
-            icon.AddToClassList("icon--search");
-            icon.style.width = 14;
-            icon.style.height = 14;
-            icon.style.marginLeft = 4;
-            icon.style.marginRight = 4;
-            icon.style.flexShrink = 0;
-            _searchBar.Add(icon);
-
-            _searchInput = new TextField();
-            _searchInput.AddToClassList("search-bar__input");
-            _searchInput.RegisterValueChangedCallback(evt => OnSearchQueryChanged(evt.newValue));
-            _searchInput.RegisterCallback<KeyDownEvent>(OnSearchInputKeyDown, TrickleDown.TrickleDown);
-            _searchBar.Add(_searchInput);
-
-            _searchCountLabel = new Label("0/0");
-            _searchCountLabel.AddToClassList("search-bar__count");
-            _searchBar.Add(_searchCountLabel);
-
-            _searchUpBtn = new Button(GoToPrevMatch);
-            _searchUpBtn.text = "\u2191";
-            _searchUpBtn.AddToClassList("iconbtn");
-            _searchUpBtn.style.width = 22;
-            _searchUpBtn.style.height = 22;
-            _searchUpBtn.style.fontSize = 11;
-            _searchUpBtn.tooltip = LocalizationExtensions.Get("chat.search.previous", "Previous match");
-            _searchBar.Add(_searchUpBtn);
-
-            _searchDownBtn = new Button(GoToNextMatch);
-            _searchDownBtn.text = "\u2193";
-            _searchDownBtn.AddToClassList("iconbtn");
-            _searchDownBtn.style.width = 22;
-            _searchDownBtn.style.height = 22;
-            _searchDownBtn.style.fontSize = 11;
-            _searchDownBtn.tooltip = LocalizationExtensions.Get("chat.search.next", "Next match");
-            _searchBar.Add(_searchDownBtn);
-
-            _searchCloseBtn = new Button(CloseSearch);
-            _searchCloseBtn.text = "\u2715";
-            _searchCloseBtn.AddToClassList("iconbtn");
-            _searchCloseBtn.style.width = 22;
-            _searchCloseBtn.style.height = 22;
-            _searchCloseBtn.style.fontSize = 11;
-            _searchCloseBtn.tooltip = LocalizationExtensions.Get("chat.search.close", "Close search");
-            _searchBar.Add(_searchCloseBtn);
-        }
-
-        private void OnSearchInputKeyDown(KeyDownEvent evt)
-        {
-            if (evt.keyCode == KeyCode.Escape)
-            {
-                CloseSearch();
-                evt.StopPropagation();
-            }
-            else if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
-            {
-                GoToNextMatch();
-                evt.StopPropagation();
-            }
-        }
-
-        private bool IsSearchBarVisible()
-        {
-            return _searchBar != null && _searchBar.style.display != DisplayStyle.None;
-        }
-
-        private void CloseSearch()
-        {
-            _searchQuery = string.Empty;
-            _currentMatchIndex = -1;
-            _matchingMessageIndices.Clear();
-
-            if (_searchBar != null)
-            {
-                _searchBar.style.display = DisplayStyle.None;
-            }
-            if (_searchInput != null)
-            {
-                _searchInput.value = string.Empty;
-            }
-
-            ClearSearchHighlights();
-            UpdateSearchCountLabel();
-        }
-
-        private void ClearSearchHighlights()
-        {
-            if (_d.MessagesList == null)
-                return;
-
-            foreach (var child in _d.MessagesList.Children())
-            {
-                var ve = child as VisualElement;
-                if (ve != null)
-                {
-                    ve.RemoveFromClassList("transcript__row--search-match");
-                    ve.RemoveFromClassList("transcript__row--search-current");
-                }
-            }
-        }
-
-        private void OnSearchQueryChanged(string query)
-        {
-            _searchQuery = query ?? string.Empty;
-            FindMatches();
-            HighlightMatches();
-            ScrollToCurrentMatch();
-        }
-
-        private void FindMatches()
-        {
-            _matchingMessageIndices.Clear();
-
-            if (string.IsNullOrEmpty(_searchQuery))
-            {
-                _currentMatchIndex = -1;
-                return;
-            }
-
-            var messages = GetCurrentMessages();
-            if (messages == null)
-            {
-                _currentMatchIndex = -1;
-                return;
-            }
-
-            for (int i = 0; i < messages.Count; i++)
-            {
-                var m = messages[i];
-                if (m != null &&
-                    !string.IsNullOrEmpty(m.content) &&
-                    m.content.IndexOf(_searchQuery, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    _matchingMessageIndices.Add(i);
-                }
-            }
-
-            _currentMatchIndex = _matchingMessageIndices.Count > 0 ? 0 : -1;
-        }
-
-        private IReadOnlyList<ChatMessage> GetCurrentMessages()
-        {
-            try
-            {
-                var chatTask = _d.GetChatServiceAsync();
-                if (chatTask == null)
-                    return null;
-                // Safe .Result pattern used elsewhere in this controller for UI sync paths
-                var chat = chatTask.Result;
-                return chat != null ? chat.CurrentChatViewModel?.Messages : null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private void HighlightMatches()
-        {
-            if (_d.MessagesList == null)
-                return;
-
-            ClearSearchHighlights();
-
-            if (string.IsNullOrEmpty(_searchQuery) || _matchingMessageIndices.Count == 0)
-            {
-                UpdateSearchCountLabel();
-                return;
-            }
-
-            int currentMsgIdx = -1;
-            if (_currentMatchIndex >= 0 && _currentMatchIndex < _matchingMessageIndices.Count)
-            {
-                currentMsgIdx = _matchingMessageIndices[_currentMatchIndex];
-            }
-
-            foreach (var child in _d.MessagesList.Children())
-            {
-                var ve = child as VisualElement;
-                if (ve != null && ve.userData is int msgIdx)
-                {
-                    bool isMatch = false;
-                    for (int k = 0; k < _matchingMessageIndices.Count; k++)
-                    {
-                        if (_matchingMessageIndices[k] == msgIdx)
-                        {
-                            isMatch = true;
-                            break;
-                        }
-                    }
-                    if (isMatch)
-                    {
-                        ve.AddToClassList("transcript__row--search-match");
-                        if (msgIdx == currentMsgIdx)
-                        {
-                            ve.AddToClassList("transcript__row--search-current");
-                        }
-                    }
-                }
-            }
-
-            UpdateSearchCountLabel();
-        }
-
-        private void UpdateSearchCountLabel()
-        {
-            if (_searchCountLabel == null)
-                return;
-
-            int total = _matchingMessageIndices != null ? _matchingMessageIndices.Count : 0;
-            int cur = (total > 0 && _currentMatchIndex >= 0) ? (_currentMatchIndex + 1) : 0;
-            _searchCountLabel.text = total > 0 ? (cur + "/" + total) : "0/0";
-        }
-
-        private void GoToNextMatch()
-        {
-            if (_matchingMessageIndices == null || _matchingMessageIndices.Count == 0)
-                return;
-
-            int count = _matchingMessageIndices.Count;
-            if (_currentMatchIndex < 0)
-                _currentMatchIndex = 0;
-            else
-                _currentMatchIndex = (_currentMatchIndex + 1) % count;
-
-            HighlightMatches();
-            ScrollToCurrentMatch();
-        }
-
-        private void GoToPrevMatch()
-        {
-            if (_matchingMessageIndices == null || _matchingMessageIndices.Count == 0)
-                return;
-
-            int count = _matchingMessageIndices.Count;
-            if (_currentMatchIndex < 0)
-                _currentMatchIndex = count - 1;
-            else
-                _currentMatchIndex = (_currentMatchIndex - 1 + count) % count;
-
-            HighlightMatches();
-            ScrollToCurrentMatch();
-        }
-
-        private void ScrollToCurrentMatch()
-        {
-            if (_d.MessagesList == null || _currentMatchIndex < 0 || _matchingMessageIndices == null || _currentMatchIndex >= _matchingMessageIndices.Count)
-                return;
-
-            int targetMsgIdx = _matchingMessageIndices[_currentMatchIndex];
-            VisualElement targetRow = null;
-
-            foreach (var child in _d.MessagesList.Children())
-            {
-                if (child.userData is int idx && idx == targetMsgIdx)
-                {
-                    targetRow = child;
-                    break;
-                }
-            }
-
-            if (targetRow == null)
-                return;
-
-            try
-            {
-                _d.MessagesList.ScrollTo(targetRow);
-            }
-            catch
-            {
-                // Fallback for older UITK: approximate offset
-                var content = _d.MessagesList.contentContainer;
-                if (content != null)
-                {
-                    float y = targetRow.layout.y - 60f;
-                    if (y < 0f) y = 0f;
-                    _d.MessagesList.scrollOffset = new Vector2(0f, y);
-                }
-            }
-        }
+        // Search methods moved to ChatSearchController
 
         // ===== Attachments =====
 
@@ -2669,8 +2323,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             bool hasSession = messages != null;
             SetDisplay(_d.Composer, hasSession ? DisplayStyle.Flex : DisplayStyle.None);
             CancelInlineEdit();
-            if (IsSearchBarVisible())
-                CloseSearch();
+            if (_searchController != null && _searchController.IsVisible)
+                _searchController.Hide();
             if (_isSelectionMode)
                 _messageRowCache.Clear();
             _d.MessagesList.Clear();
