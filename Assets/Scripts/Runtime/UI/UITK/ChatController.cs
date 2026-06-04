@@ -126,7 +126,21 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _contextMenu = new MessageContextMenu();
 
             _notifications = new ChatNotificationManager(_d.NavChatCount);
-            _inputManager = new ChatInputManager(_d.MessageInput, _d.Composer, _d.EnterToSend);
+            _inputManager = new ChatInputManager(
+                _d.MessageInput,
+                _d.Composer,
+                _d.EnterToSend,
+                _d.GetChatServiceAsync,
+                _d.ShowSystemMessage,
+                _d.OpenModelPickerAsync,
+                _d.ApplyModelSelectionAsync,
+                _d.RenderMessages,
+                () =>
+                {
+                    _messageQueue.Clear();
+                    RenderQueueIndicator();
+                },
+                StartNewSessionAsync);
             _inputManager.OnSubmit += _ => OnSendClicked();
             _attachmentManager = new ChatAttachmentManager(
                 _d.Composer,
@@ -541,188 +555,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _ = SendCurrentMessageAsync();
         }
 
-        private async Task<bool> TryHandleCommandAsync(string message)
+        private Task<bool> TryHandleCommandAsync(string message)
         {
-            if (string.IsNullOrWhiteSpace(message))
-                return false;
-
-            string trimmed = message.Trim();
-            if (!trimmed.StartsWith("/", StringComparison.Ordinal))
-                return false;
-
-            // Split into command and args
-            string command;
-            string args = null;
-            int spaceIdx = trimmed.IndexOf(' ');
-            if (spaceIdx > 0)
-            {
-                command = trimmed.Substring(0, spaceIdx).ToLowerInvariant();
-                args = trimmed.Substring(spaceIdx + 1).Trim();
-            }
-            else
-            {
-                command = trimmed.ToLowerInvariant();
-            }
-
-            switch (command)
-            {
-                case "/model":
-                    return await HandleModelCommandAsync(args);
-                case "/help":
-                    return HandleHelpCommand();
-                case "/clear":
-                    return await HandleClearCommandAsync();
-                case "/new":
-                    return await HandleNewCommandAsync();
-                case "/system":
-                    return HandleSystemCommand(args);
-                case "/temp":
-                    return HandleTempCommand(args);
-                case "/tokens":
-                    return HandleTokensCommand(args);
-                default:
-                    _d.ShowSystemMessage($"Неизвестная команда: {command}. Введите /help для списка.");
-                    return true;
-            }
-        }
-
-        private async Task<bool> HandleModelCommandAsync(string args)
-        {
-            if (string.IsNullOrWhiteSpace(args))
-            {
-                await _d.OpenModelPickerAsync();
-                return true;
-            }
-
-            await _d.ApplyModelSelectionAsync(args, false);
-            return true;
-        }
-
-        private bool HandleHelpCommand()
-        {
-            _d.ShowSystemMessage(
-                "Доступные команды:\n" +
-                "/model — выбрать модель\n" +
-                "/model <id> — установить модель\n" +
-                "/system <текст> — установить системный промпт\n" +
-                "/system — очистить системный промпт\n" +
-                "/temp <0-2> — установить температуру\n" +
-                "/tokens <число> — установить макс. токенов\n" +
-                "/clear — очистить историю чата\n" +
-                "/new — новая сессия\n" +
-                "/help — показать эту справку");
-            return true;
-        }
-
-        private async Task<bool> HandleClearCommandAsync()
-        {
-            var chat = await _d.GetChatServiceAsync();
-            if (chat != null)
-            {
-                await chat.ClearCurrentSessionAsync();
-                _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
-                _messageQueue.Clear();
-                RenderQueueIndicator();
-                _d.ShowSystemMessage("История очищена.");
-            }
-            return true;
-        }
-
-        private async Task<bool> HandleNewCommandAsync()
-        {
-            bool started = await StartNewSessionAsync();
-            if (started)
-                _d.ShowSystemMessage(LocalizationExtensions.Get("chat.new.started", "Новая сессия начата."));
-            return true;
-        }
-
-        private bool HandleSystemCommand(string args)
-        {
-            // Need to get ChatService and set system prompt on current ViewModel
-            // This is async because GetChatServiceAsync is async
-            // Store for async execution
-            _ = SetSystemPromptAsync(args);
-            return true;
-        }
-
-        private async Task SetSystemPromptAsync(string args)
-        {
-            var chat = await _d.GetChatServiceAsync();
-            if (chat?.CurrentChatViewModel == null) return;
-
-            if (string.IsNullOrWhiteSpace(args))
-            {
-                chat.CurrentChatViewModel.SystemPrompt = null;
-                _d.ShowSystemMessage("Системный промпт очищен.");
-            }
-            else
-            {
-                chat.CurrentChatViewModel.SystemPrompt = args;
-                _d.ShowSystemMessage($"Системный промпт установлен: {args}");
-            }
-        }
-
-        private bool HandleTempCommand(string args)
-        {
-            if (string.IsNullOrWhiteSpace(args))
-            {
-                _d.ShowSystemMessage("Использование: /temp <0-2>");
-                return true;
-            }
-
-            if (float.TryParse(args, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out float temp))
-            {
-                if (temp < 0f || temp > 2f)
-                {
-                    _d.ShowSystemMessage("Температура должна быть от 0 до 2.");
-                    return true;
-                }
-                // Need async to get ChatService
-                _ = SetTempAsync(temp);
-                return true;
-            }
-
-            _d.ShowSystemMessage("Неверное число. Использование: /temp <0-2>");
-            return true;
-        }
-
-        private async Task SetTempAsync(float temp)
-        {
-            var chat = await _d.GetChatServiceAsync();
-            if (chat?.CurrentChatViewModel != null)
-            {
-                chat.CurrentChatViewModel.Temperature = temp;
-                _d.ShowSystemMessage($"Температура: {temp}");
-            }
-        }
-
-        private bool HandleTokensCommand(string args)
-        {
-            if (string.IsNullOrWhiteSpace(args))
-            {
-                _d.ShowSystemMessage("Использование: /tokens <число>");
-                return true;
-            }
-
-            if (int.TryParse(args, out int tokens) && tokens > 0)
-            {
-                _ = SetTokensAsync(tokens);
-                return true;
-            }
-
-            _d.ShowSystemMessage("Неверное число. Использование: /tokens <число>");
-            return true;
-        }
-
-        private async Task SetTokensAsync(int tokens)
-        {
-            var chat = await _d.GetChatServiceAsync();
-            if (chat?.CurrentChatViewModel != null)
-            {
-                chat.CurrentChatViewModel.MaxTokens = tokens;
-                _d.ShowSystemMessage($"Макс. токенов: {tokens}");
-            }
+            return _inputManager.TryHandleCommandAsync(message);
         }
 
         private void OnToolProgress(string tool, string label, string emoji, string status)
