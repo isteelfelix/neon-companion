@@ -88,9 +88,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _contextBarFill;
         private Label _contextBarLabel;
 
-        // Message context menu (U-29/U-30)
-        private MessageContextMenu _contextMenu;
-
         // Message list rendering (U-29) — delegated to ChatMessageListRenderer
         private ChatMessageListRenderer _messageListRenderer;
 
@@ -119,9 +116,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void SetDeps(Deps deps)
         {
             _d = deps;
-            if (_contextMenu == null)
-                _contextMenu = new MessageContextMenu();
-
             _notifications = new ChatNotificationManager(_d.NavChatCount);
             _inputManager = new ChatInputManager(
                 _d.MessageInput,
@@ -150,7 +144,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.GetChatServiceAsync,
                 _d.RenderMessages,
                 _d.LoadSessionsAsync,
-                () => RegenerateLastAsync());
+                () => RegenerateLastAsync(),
+                _d);
 
             _approvalController = new ToolCallApprovalController(
                 _d.MessagesList,
@@ -178,7 +173,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _messageListRenderer = new ChatMessageListRenderer(
                 _d.MessagesList,
-                _contextMenu,
+                _editController,
                 _d.GetAvatarDisplayName,
                 _d.TopbarSubtitle,
                 _d.NavChatCount,
@@ -188,6 +183,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 i => _selectionManager != null && _selectionManager.IsIndexSelected(i),
                 i => _selectionManager?.ToggleSelection(i),
                 () => { _ = StartNewSessionAsync(); });
+            _editController.SetMessageListRenderer(_messageListRenderer);
         }
 
         public void SetVoiceRecording(bool value) { _inputManager?.SetVoiceRecording(value); }
@@ -214,13 +210,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_approvalController != null)
                 _approvalController.OnStopRequested += OnStopClicked;
 
-            if (_contextMenu != null)
-            {
-                _contextMenu.OnEditRequested += OnEditMessageRequested;
-                _contextMenu.OnDeleteRequested += OnDeleteMessageRequested;
-                _contextMenu.OnCopyRequested += OnCopyMessageRequested;
-                _contextMenu.OnSelectRequested += OnSelectMessageRequested;
-            }
+            _editController?.RegisterCallbacks(OnSelectMessageRequested);
 
             // Context menu triggers on transcript (right-click + long-press) — delegated to renderer
             _messageListRenderer?.RegisterCallbacks();
@@ -295,13 +285,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _approvalController.OnStopRequested -= OnStopClicked;
             _approvalController?.Unsubscribe();
 
-            if (_contextMenu != null)
-            {
-                _contextMenu.OnEditRequested -= OnEditMessageRequested;
-                _contextMenu.OnDeleteRequested -= OnDeleteMessageRequested;
-                _contextMenu.OnCopyRequested -= OnCopyMessageRequested;
-                _contextMenu.OnSelectRequested -= OnSelectMessageRequested;
-            }
+            _editController?.UnregisterCallbacks();
 
             if (_d.MessageInput != null)
             {
@@ -316,9 +300,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _streamingCoordinator?.Abort();
             _approvalController?.ClearToolProgress();
             _approvalController?.Dismiss();
-            if (_contextMenu != null)
-                _contextMenu.Hide();
-            _editController?.CancelEdit();
+            _editController?.Hide();
             _searchController?.Hide();
             DismissSessionPicker();
             _messageListRenderer?.HideLightbox();
@@ -370,9 +352,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _approvalController?.Dismiss();
             DismissSessionPicker();
-            if (_contextMenu != null)
-                _contextMenu.Hide();
-            _editController?.CancelEdit();
+            _editController?.Hide();
             _currentChatService?.CancelCurrentGeneration();
         }
 
@@ -381,9 +361,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _notifications.MarkRead();
             _approvalController?.Dismiss();
             DismissSessionPicker();
-            if (_contextMenu != null)
-                _contextMenu.Hide();
-            _editController?.CancelEdit();
+            _editController?.Hide();
 
             bool hasPendingAttachments = _attachmentManager != null && _attachmentManager.CurrentAttachments.Count > 0;
             if (_d.MessageInput == null)
@@ -772,9 +750,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             try
             {
-                if (_contextMenu != null)
-                    _contextMenu.Hide();
-                _editController?.CancelEdit();
+                _editController?.Hide();
 
                 var chat = await _d.GetChatServiceAsync();
                 if (chat == null)
@@ -1090,7 +1066,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             bool hasSession = messages != null;
             SetDisplay(_d.Composer, hasSession ? DisplayStyle.Flex : DisplayStyle.None);
-            _editController?.CancelEdit();
+            _editController?.Hide();
             if (_searchController != null && _searchController.IsVisible)
                 _searchController.Hide();
 
@@ -1587,129 +1563,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             return null;
-        }
-
-        private static int? GetMessageIndexFromElement(VisualElement el)
-        {
-            while (el != null)
-            {
-                if (el.userData is int)
-                    return (int)el.userData;
-                el = el.parent;
-            }
-            return null;
-        }
-
-        private void ShowMessageContextMenu(VisualElement target, int messageIndex, bool isUser, Vector2 position)
-        {
-            if (_contextMenu == null)
-                _contextMenu = new MessageContextMenu();
-
-            // Hide any previous
-            _contextMenu.Hide();
-
-            // Pass click position for reliable placement near the tapped/clicked message bubble.
-            _contextMenu.ShowAt(target, messageIndex, isUser, position);
-        }
-
-        private void OnEditMessageRequested(string messageIndexStr)
-        {
-            if (_contextMenu != null)
-                _contextMenu.Hide();
-
-            int index;
-            if (!int.TryParse(messageIndexStr, out index))
-                return;
-
-            var chat = _d.GetChatServiceAsync().Result;
-            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
-                return;
-
-            var messages = chat.CurrentChatViewModel.Messages;
-            if (index < 0 || index >= messages.Count)
-                return;
-
-            var msg = messages[index];
-            string role = ChatMessageListRenderer.NormalizeRole(msg.role);
-            if (!string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
-                return; // edit only for user
-
-            // Find matching visual element by tagged index
-            if (_d.MessagesList == null)
-                return;
-
-            VisualElement targetRow = null;
-            foreach (var child in _d.MessagesList.Children())
-            {
-                if (child.userData is int)
-                {
-                    int idx = (int)child.userData;
-                    if (idx == index)
-                    {
-                        targetRow = child;
-                        break;
-                    }
-                }
-            }
-            if (targetRow == null)
-                return;
-
-            var bubble = targetRow.Q<VisualElement>(className: "transcript__bubble");
-            if (bubble == null)
-                return;
-
-            _editController.BeginEditMessage(index, bubble, msg.content ?? string.Empty);
-        }
-
-        private void OnDeleteMessageRequested(string messageIndexStr)
-        {
-            _ = DeleteMessageAsync(messageIndexStr);
-        }
-
-        private async Task DeleteMessageAsync(string messageIndexStr)
-        {
-            if (_contextMenu != null)
-                _contextMenu.Hide();
-
-            int index;
-            if (!int.TryParse(messageIndexStr, out index))
-                return;
-
-            var chat = await _d.GetChatServiceAsync();
-            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
-                return;
-
-            var messages = chat.CurrentChatViewModel.Messages;
-            if (index >= 0 && index < messages.Count)
-            {
-                messages.RemoveAt(index);
-                _d.RenderMessages(messages);
-                await chat.SaveCurrentSessionAsync();
-                await _d.LoadSessionsAsync();
-                _d.ShowSystemMessage(LocalizationExtensions.Get("msg.deleted", "Message deleted"));
-            }
-        }
-
-        private void OnCopyMessageRequested(string messageIndexStr)
-        {
-            if (_contextMenu != null)
-                _contextMenu.Hide();
-
-            int index;
-            if (!int.TryParse(messageIndexStr, out index))
-                return;
-
-            var chat = _d.GetChatServiceAsync().Result;
-            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
-                return;
-
-            var messages = chat.CurrentChatViewModel.Messages;
-            if (index >= 0 && index < messages.Count)
-            {
-                string content = messages[index].content ?? string.Empty;
-                GUIUtility.systemCopyBuffer = content;
-                _d.ShowSystemMessage(LocalizationExtensions.Get("msg.copied", "Copied"));
-            }
         }
 
         // ===== Message selection (U-31/U-32) — event handlers for ChatSelectionManager =====

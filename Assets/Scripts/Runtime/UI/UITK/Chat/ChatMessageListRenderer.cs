@@ -18,7 +18,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
     internal class ChatMessageListRenderer
     {
         private readonly ScrollView _messagesList;
-        private readonly MessageContextMenu _contextMenu;
+        private readonly ChatMessageEditController _messageEditController;
         private readonly Func<string> _getAvatarDisplayName;
         private readonly Label _topbarSubtitle;
         private readonly Label _navChatCount;
@@ -44,7 +44,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         internal ChatMessageListRenderer(
             ScrollView messagesList,
-            MessageContextMenu contextMenu,
+            ChatMessageEditController messageEditController,
             Func<string> getAvatarDisplayName,
             Label topbarSubtitle,
             Label navChatCount,
@@ -56,7 +56,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Action onNewSessionRequested)
         {
             _messagesList = messagesList;
-            _contextMenu = contextMenu;
+            _messageEditController = messageEditController;
             _getAvatarDisplayName = getAvatarDisplayName;
             _topbarSubtitle = topbarSubtitle;
             _navChatCount = navChatCount;
@@ -936,12 +936,12 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (bubble.ClassListContains("transcript__bubble--system"))
                 return;
 
-            int? msgIndex = GetMessageIndexFromElement(bubble);
+            int? msgIndex = ChatMessageEditController.GetMessageIndexFromElement(bubble);
             if (msgIndex == null)
                 return;
 
             bool isUser = bubble.ClassListContains("transcript__bubble--user");
-            ShowMessageContextMenu(bubble, msgIndex.Value, isUser, pos);
+            _messageEditController.ShowMessageContextMenu(bubble, msgIndex.Value, isUser, pos);
         }
 
         private void OnTranscriptPointerDown(PointerDownEvent evt)
@@ -975,7 +975,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (bubble.ClassListContains("transcript__bubble--system"))
                 return;
 
-            int? msgIndex = GetMessageIndexFromElement(bubble);
+            int? msgIndex = ChatMessageEditController.GetMessageIndexFromElement(bubble);
             if (msgIndex == null)
                 return;
 
@@ -1013,7 +1013,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         }
                         else
                         {
-                            ShowMessageContextMenu(_longPressTarget, _longPressIndex, _longPressIsUser, _longPressPos);
+                            _messageEditController.ShowMessageContextMenu(_longPressTarget, _longPressIndex, _longPressIsUser, _longPressPos);
                         }
                     }
                     _longPressTarget = null;
@@ -1152,26 +1152,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
 
             return null;
-        }
-
-        private static int? GetMessageIndexFromElement(VisualElement el)
-        {
-            while (el != null)
-            {
-                if (el.userData is int)
-                    return (int)el.userData;
-                el = el.parent;
-            }
-            return null;
-        }
-
-        private void ShowMessageContextMenu(VisualElement target, int messageIndex, bool isUser, Vector2 position)
-        {
-            if (_contextMenu == null)
-                return;
-
-            _contextMenu.Hide();
-            _contextMenu.ShowAt(target, messageIndex, isUser, position);
         }
 
         private void OnTranscriptGeometryForScroll(GeometryChangedEvent evt)

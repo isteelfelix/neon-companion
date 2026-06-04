@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Data.Models;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK.Chat
@@ -14,6 +15,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Action<IReadOnlyList<ChatMessage>> _renderMessages;
         private readonly Func<Task> _loadSessionsAsync;
         private readonly Func<Task> _regenerateAsync;
+        private readonly ChatController.Deps _d;
+        private readonly MessageContextMenu _contextMenu;
+        private ChatMessageListRenderer _messageListRenderer;
+        private Action<string> _onSelectRequested;
 
         private int? _editingMessageIndex;
         private VisualElement _editingBubble;
@@ -28,12 +33,155 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Func<Task<ChatService>> getChatServiceAsync,
             Action<IReadOnlyList<ChatMessage>> renderMessages,
             Func<Task> loadSessionsAsync,
-            Func<Task> regenerateAsync)
+            Func<Task> regenerateAsync,
+            ChatController.Deps deps)
         {
             _getChatServiceAsync = getChatServiceAsync;
             _renderMessages = renderMessages;
             _loadSessionsAsync = loadSessionsAsync;
             _regenerateAsync = regenerateAsync;
+            _d = deps;
+            _contextMenu = new MessageContextMenu();
+        }
+
+        internal void SetMessageListRenderer(ChatMessageListRenderer messageListRenderer)
+        {
+            _messageListRenderer = messageListRenderer;
+        }
+
+        internal void RegisterCallbacks(Action<string> onSelectRequested)
+        {
+            _onSelectRequested = onSelectRequested;
+            _contextMenu.OnEditRequested += OnEditMessageRequested;
+            _contextMenu.OnDeleteRequested += OnDeleteMessageRequested;
+            _contextMenu.OnCopyRequested += OnCopyMessageRequested;
+            _contextMenu.OnSelectRequested += OnSelectRequested;
+        }
+
+        internal void UnregisterCallbacks()
+        {
+            _contextMenu.OnEditRequested -= OnEditMessageRequested;
+            _contextMenu.OnDeleteRequested -= OnDeleteMessageRequested;
+            _contextMenu.OnCopyRequested -= OnCopyMessageRequested;
+            _contextMenu.OnSelectRequested -= OnSelectRequested;
+            _onSelectRequested = null;
+        }
+
+        internal void Hide()
+        {
+            _contextMenu.Hide();
+            CancelEdit();
+        }
+
+        internal void ShowMessageContextMenu(VisualElement target, int messageIndex, bool isUser, Vector2 position)
+        {
+            _contextMenu.Hide();
+            _contextMenu.ShowAt(target, messageIndex, isUser, position);
+        }
+
+        internal static int? GetMessageIndexFromElement(VisualElement el)
+        {
+            while (el != null)
+            {
+                if (el.userData is int)
+                    return (int)el.userData;
+                el = el.parent;
+            }
+            return null;
+        }
+
+        private void OnSelectRequested(string messageIndex)
+        {
+            _onSelectRequested?.Invoke(messageIndex);
+        }
+
+        private void OnEditMessageRequested(string messageIndexStr)
+        {
+            _contextMenu.Hide();
+
+            int index;
+            if (!int.TryParse(messageIndexStr, out index))
+                return;
+
+            var chat = _d.GetChatServiceAsync().Result;
+            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
+                return;
+
+            var messages = chat.CurrentChatViewModel.Messages;
+            if (index < 0 || index >= messages.Count)
+                return;
+
+            var msg = messages[index];
+            string role = ChatMessageListRenderer.NormalizeRole(msg.role);
+            if (!string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (_d.MessagesList == null)
+                return;
+
+            VisualElement targetRow = null;
+            foreach (var child in _d.MessagesList.Children())
+            {
+                if (child.userData is int && (int)child.userData == index)
+                {
+                    targetRow = child;
+                    break;
+                }
+            }
+            if (targetRow == null)
+                return;
+
+            var bubble = targetRow.Q<VisualElement>(className: "transcript__bubble");
+            if (bubble != null)
+                BeginEditMessage(index, bubble, msg.content ?? string.Empty);
+        }
+
+        private void OnDeleteMessageRequested(string messageIndexStr)
+        {
+            _ = DeleteMessageAsync(messageIndexStr);
+        }
+
+        private async Task DeleteMessageAsync(string messageIndexStr)
+        {
+            _contextMenu.Hide();
+
+            int index;
+            if (!int.TryParse(messageIndexStr, out index))
+                return;
+
+            var chat = await _d.GetChatServiceAsync();
+            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
+                return;
+
+            var messages = chat.CurrentChatViewModel.Messages;
+            if (index >= 0 && index < messages.Count)
+            {
+                messages.RemoveAt(index);
+                _messageListRenderer.Render(messages);
+                await chat.SaveCurrentSessionAsync();
+                await _d.LoadSessionsAsync();
+                _d.ShowSystemMessage(LocalizationExtensions.Get("msg.deleted", "Message deleted"));
+            }
+        }
+
+        private void OnCopyMessageRequested(string messageIndexStr)
+        {
+            _contextMenu.Hide();
+
+            int index;
+            if (!int.TryParse(messageIndexStr, out index))
+                return;
+
+            var chat = _d.GetChatServiceAsync().Result;
+            if (chat == null || chat.CurrentChatViewModel == null || chat.CurrentChatViewModel.Messages == null)
+                return;
+
+            var messages = chat.CurrentChatViewModel.Messages;
+            if (index >= 0 && index < messages.Count)
+            {
+                GUIUtility.systemCopyBuffer = messages[index].content ?? string.Empty;
+                _d.ShowSystemMessage(LocalizationExtensions.Get("msg.copied", "Copied"));
+            }
         }
 
         internal void BeginEditMessage(int index, VisualElement bubble, string currentContent)
