@@ -71,7 +71,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         // QueuedMessage extracted to Models/Chat/QueuedMessage.cs
 
         private Deps _d;
-        private bool _isSending;
         private ChatNotificationManager _notifications;
         private ChatInputManager _inputManager;
         private ChatAttachmentManager _attachmentManager;
@@ -112,7 +111,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private const int MaxToolIterations = 10;
 
-        public bool IsSending => _isSending;
+        public bool IsSending => _streamingCoordinator != null && _streamingCoordinator.IsSending;
         public bool IsStreamingResponse => _streamingCoordinator != null && _streamingCoordinator.IsStreaming;
         public string ChatSubtitle => _chatSubtitle;
         public string SessionSearchQuery => _searchController != null ? _searchController.SessionSearchQuery : string.Empty;
@@ -158,7 +157,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ScrollTranscriptToBottom,
                 _d.GetAppAsync,
                 _d.ShowSystemMessage,
-                () => _isSending,
+                () => IsSending,
                 () => _streamingCoordinator != null && _streamingCoordinator.IsStreaming,
                 () => _currentChatService);
 
@@ -168,7 +167,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 m => ChatMessageListRenderer.CreateMessageElement(m),
                 ApplyTextCursor,
                 bubble => _approvalController?.SetBubble(bubble),
-                () => { _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamStart(); _d.RefreshAvatarMotionState?.Invoke(); });
+                () => { _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamStart(); _d.RefreshAvatarMotionState?.Invoke(); },
+                _d.ThinkingBubble,
+                _d.ThinkingText,
+                _d.SendButton,
+                _d.StopButton,
+                _approvalController,
+                () => _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamEnd(),
+                _d.RefreshAvatarMotionState);
 
             _messageListRenderer = new ChatMessageListRenderer(
                 _d.MessagesList,
@@ -303,7 +309,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _messageListRenderer?.UnregisterCallbacks();
 
-            _isSending = false;
+            _streamingCoordinator?.SetSending(false);
             _streamingCoordinator?.Abort();
             _approvalController?.ClearToolProgress();
             _approvalController?.Dismiss();
@@ -344,7 +350,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnComposerTextChangedForAvatar(ChangeEvent<string> evt)
         {
-            if (_isSending || _inputManager == null)
+            if (IsSending || _inputManager == null)
                 return;
 
             _d.RefreshAvatarMotionState?.Invoke();
@@ -392,7 +398,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             // If currently sending, queue the message instead (commands already handled above and execute immediately)
-            if (_isSending)
+            if (IsSending)
             {
                 var qAttach = _attachmentManager.CloneCurrent();
                 string qMsg = StripAttachmentTokens(composerText, qAttach);
@@ -559,83 +565,17 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnToolProgress(string tool, string label, string emoji, string status)
         {
-            if (_d.ThinkingBubble != null && _d.ThinkingText != null)
-            {
-                string displayText = string.IsNullOrEmpty(label) ? GetThinkingText(tool) : label;
-                if (displayText.Length > 40)
-                    displayText = displayText.Substring(0, 40) + "...";
-                _d.ThinkingText.text = displayText;
-                SetDisplay(_d.ThinkingBubble, DisplayStyle.Flex);
-            }
-
-            bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(tool, label, emoji, status);
-            if (insertedNewEntry)
-                _streamingCoordinator?.ResetStreamingSegment();
-            ScrollTranscriptToBottom();
-
-            // Hermes executes tools server-side, so its approval request must be
-            // surfaced from streaming progress. Generic OpenAI local tools still
-            // block in ProcessAgentToolLoopAsync before ToolExecutor runs.
-            if (_approvalController != null && _approvalController.ShouldPromptForStreamingApproval(status))
-            {
-                var req = new ToolCallRequest
-                {
-                    id = Guid.NewGuid().ToString("N"),
-                    toolName = tool ?? string.Empty,
-                    description = !string.IsNullOrEmpty(label) ? label : tool,
-                    parameters = new Dictionary<string, string>()
-                };
-                _ = _approvalController.HandleStreamingApprovalAsync(req);
-            }
-        }
-
-        private static string GetThinkingText(string tool)
-        {
-            if (string.IsNullOrWhiteSpace(tool))
-                return LocalizationExtensions.Get("thinking.default", "Thinking...");
-
-            string lower = tool.ToLowerInvariant();
-            if (lower.Contains("terminal") || lower.Contains("bash") || lower.Contains("shell"))
-                return LocalizationExtensions.Get("thinking.parsing", "Running...");
-            if (lower.Contains("search") || lower.Contains("grep"))
-                return LocalizationExtensions.Get("thinking.searching", "Searching...");
-            if (lower.Contains("read"))
-                return LocalizationExtensions.Get("thinking.reading", "Reading...");
-            if (lower.Contains("write") || lower.Contains("edit"))
-                return LocalizationExtensions.Get("thinking.writing", "Writing...");
-            return LocalizationExtensions.Get("thinking.default", "Thinking...");
+            _streamingCoordinator?.OnToolProgress(tool, label, emoji, status);
         }
 
         private void ClearThinkingBubble()
         {
-            if (_d.ThinkingBubble != null)
-                SetDisplay(_d.ThinkingBubble, DisplayStyle.None);
-            if (_d.ThinkingText != null)
-                _d.ThinkingText.text = string.Empty;
+            _streamingCoordinator?.ClearThinkingBubble();
         }
 
         private void SetSending(bool isSending)
         {
-            _isSending = isSending;
-            if (!isSending)
-            {
-                _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamEnd();
-            }
-
-            if (_d.SendButton != null)
-                _d.SendButton.SetEnabled(!isSending);
-
-            // Show stop button during generation (critical for local LLMs that may loop), hide send button
-            if (_d.StopButton != null)
-            {
-                _d.StopButton.style.display = isSending ? DisplayStyle.Flex : DisplayStyle.None;
-            }
-            if (_d.SendButton != null)
-            {
-                _d.SendButton.style.display = isSending ? DisplayStyle.None : DisplayStyle.Flex;
-            }
-
-            _d.RefreshAvatarMotionState();
+            _streamingCoordinator?.SetSending(isSending);
         }
 
         // Notification badge extracted to Chat/ChatNotificationManager.cs
@@ -887,7 +827,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             try
             {
                 var chat = await _d.GetChatServiceAsync();
-                if (chat == null || _isSending) return;
+                if (chat == null || IsSending) return;
 
                 var messages = chat.CurrentChatViewModel?.Messages;
                 if (messages == null || messages.Count == 0) return;

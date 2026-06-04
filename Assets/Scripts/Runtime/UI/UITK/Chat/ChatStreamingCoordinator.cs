@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
+using NeonCompanion.Runtime.Api.Tools;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using UnityEngine.UIElements;
@@ -14,6 +16,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Action<VisualElement> _applyTextCursor;
         private readonly Action<VisualElement> _onBubbleReady;
         private readonly Action _onFirstToken;
+        private readonly VisualElement _thinkingBubble;
+        private readonly Label _thinkingText;
+        private readonly Button _sendButton;
+        private readonly Button _stopButton;
+        private readonly ToolCallApprovalController _approvalController;
+        private readonly Action _onStreamEnd;
+        private readonly Action _refreshAvatarMotionState;
 
         private VisualElement _bubble;
         private NeonCompanion.Runtime.UI.UITK.SelectableMarkdownElement _label;
@@ -29,6 +38,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private IVisualElementScheduledItem _statsSchedule;
 
         internal bool IsStreaming { get; private set; }
+        internal bool IsSending { get; private set; }
         internal DateTime StartTime { get { return _startTime; } }
         internal int EstimatedTokens { get { return _estimatedTokens; } }
 
@@ -38,7 +48,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Func<ChatMessage, VisualElement> createMessageElement,
             Action<VisualElement> applyTextCursor,
             Action<VisualElement> onBubbleReady,
-            Action onFirstToken)
+            Action onFirstToken,
+            VisualElement thinkingBubble,
+            Label thinkingText,
+            Button sendButton,
+            Button stopButton,
+            ToolCallApprovalController approvalController,
+            Action onStreamEnd,
+            Action refreshAvatarMotionState)
         {
             _messagesList = messagesList;
             _scrollToBottom = scrollToBottom;
@@ -46,6 +63,82 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _applyTextCursor = applyTextCursor;
             _onBubbleReady = onBubbleReady;
             _onFirstToken = onFirstToken;
+            _thinkingBubble = thinkingBubble;
+            _thinkingText = thinkingText;
+            _sendButton = sendButton;
+            _stopButton = stopButton;
+            _approvalController = approvalController;
+            _onStreamEnd = onStreamEnd;
+            _refreshAvatarMotionState = refreshAvatarMotionState;
+        }
+
+        internal void OnToolProgress(string tool, string label, string emoji, string status)
+        {
+            if (_thinkingBubble != null && _thinkingText != null)
+            {
+                string displayText = string.IsNullOrEmpty(label) ? GetThinkingText(tool) : label;
+                if (displayText.Length > 40)
+                    displayText = displayText.Substring(0, 40) + "...";
+                _thinkingText.text = displayText;
+                _thinkingBubble.style.display = DisplayStyle.Flex;
+            }
+
+            bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(tool, label, emoji, status);
+            if (insertedNewEntry)
+                ResetStreamingSegment();
+            _scrollToBottom?.Invoke();
+
+            if (_approvalController != null && _approvalController.ShouldPromptForStreamingApproval(status))
+            {
+                var request = new ToolCallRequest
+                {
+                    id = Guid.NewGuid().ToString("N"),
+                    toolName = tool ?? string.Empty,
+                    description = !string.IsNullOrEmpty(label) ? label : tool,
+                    parameters = new Dictionary<string, string>()
+                };
+                _ = _approvalController.HandleStreamingApprovalAsync(request);
+            }
+        }
+
+        internal void ClearThinkingBubble()
+        {
+            if (_thinkingBubble != null)
+                _thinkingBubble.style.display = DisplayStyle.None;
+            if (_thinkingText != null)
+                _thinkingText.text = string.Empty;
+        }
+
+        internal void SetSending(bool isSending)
+        {
+            IsSending = isSending;
+            if (!isSending)
+                _onStreamEnd?.Invoke();
+
+            _sendButton?.SetEnabled(!isSending);
+            if (_stopButton != null)
+                _stopButton.style.display = isSending ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_sendButton != null)
+                _sendButton.style.display = isSending ? DisplayStyle.None : DisplayStyle.Flex;
+
+            _refreshAvatarMotionState?.Invoke();
+        }
+
+        private static string GetThinkingText(string tool)
+        {
+            if (string.IsNullOrWhiteSpace(tool))
+                return LocalizationExtensions.Get("thinking.default", "Thinking...");
+
+            string lower = tool.ToLowerInvariant();
+            if (lower.Contains("terminal") || lower.Contains("bash") || lower.Contains("shell"))
+                return LocalizationExtensions.Get("thinking.parsing", "Running...");
+            if (lower.Contains("search") || lower.Contains("grep"))
+                return LocalizationExtensions.Get("thinking.searching", "Searching...");
+            if (lower.Contains("read"))
+                return LocalizationExtensions.Get("thinking.reading", "Reading...");
+            if (lower.Contains("write") || lower.Contains("edit"))
+                return LocalizationExtensions.Get("thinking.writing", "Writing...");
+            return LocalizationExtensions.Get("thinking.default", "Thinking...");
         }
 
         internal void Begin()
