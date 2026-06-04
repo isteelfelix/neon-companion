@@ -73,8 +73,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             int count = messages?.Count ?? 0;
             string avatarName = _getAvatarDisplayName?.Invoke() ?? string.Empty;
             string subtitle = string.IsNullOrEmpty(avatarName)
-                ? ChatController.MessageCountText(count)
-                : $"{ChatController.MessageCountText(count)} · {avatarName}";
+                ? ChatAttachmentManager.MessageCountText(count)
+                : $"{ChatAttachmentManager.MessageCountText(count)} · {avatarName}";
 
             if (_topbarSubtitle != null)
                 _topbarSubtitle.text = subtitle;
@@ -628,7 +628,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         continue;
 
                     if (!string.IsNullOrEmpty(attachment.path) &&
-                        (attachment.kind == "image" || ChatController.IsImageFile(attachment.path)))
+                        (attachment.kind == "image" || ChatAttachmentManager.IsImageFile(attachment.path)))
                     {
                         var imageElement = new Image();
                         imageElement.AddToClassList("transcript__image");
@@ -647,7 +647,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     }
                     else
                     {
-                        var attachmentLabel = new Label($"[file] {ChatController.GetAttachmentDisplayName(attachment)}");
+                        var attachmentLabel = new Label($"[file] {ChatAttachmentManager.GetAttachmentDisplayName(attachment)}");
                         attachmentLabel.AddToClassList("transcript__body");
                         attachmentLabel.style.fontSize = 11f;
                         attachmentLabel.focusable = true;
@@ -771,7 +771,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             bodyElement.style.minHeight = 20;
             if (!isAssistant)
                 bodyElement.AddToClassList("transcript__body--user");
-            ChatController.ApplyTextCursor(bodyElement);
+            ApplyTextCursor(bodyElement);
             return bodyElement;
         }
 
@@ -1129,6 +1129,42 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 el = el.parent;
             }
             return false;
+        }
+
+        private static Texture2D s_TextCursorTex;
+
+        internal static void ApplyTextCursor(VisualElement el)
+        {
+            el.RegisterCallback<MouseEnterEvent>(_ =>
+                UnityEngine.Cursor.SetCursor(GetTextCursorTexture(), new Vector2(4, 11), CursorMode.ForceSoftware));
+            el.RegisterCallback<MouseLeaveEvent>(_ =>
+                UnityEngine.Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto));
+        }
+
+        private static Texture2D GetTextCursorTexture()
+        {
+            if (s_TextCursorTex != null)
+                return s_TextCursorTex;
+
+            const int w = 10, h = 22;
+            s_TextCursorTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var px = new Color32[w * h];
+            var c = new Color32(220, 220, 220, 255);
+            var transparent = new Color32(0, 0, 0, 0);
+            for (int i = 0; i < px.Length; i++)
+                px[i] = transparent;
+            for (int x = 2; x <= 7; x++)
+            {
+                px[(h - 1) * w + x] = c;
+                px[(h - 2) * w + x] = c;
+                px[x] = c;
+                px[w + x] = c;
+            }
+            for (int y = 2; y <= h - 3; y++)
+                px[y * w + 4] = c;
+            s_TextCursorTex.SetPixels32(px);
+            s_TextCursorTex.Apply(false);
+            return s_TextCursorTex;
         }
 
         private VisualElement ResolveBubbleFromEvent(VisualElement target, Vector2 panelPosition)

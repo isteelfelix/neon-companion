@@ -160,7 +160,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.MessagesList,
                 ScrollTranscriptToBottom,
                 m => ChatMessageListRenderer.CreateMessageElement(m),
-                ApplyTextCursor,
+                ChatMessageListRenderer.ApplyTextCursor,
                 bubble => _approvalController?.SetBubble(bubble),
                 () => { _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamStart(); _d.RefreshAvatarMotionState?.Invoke(); },
                 _d.ThinkingBubble,
@@ -330,7 +330,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void InitState()
         {
-            SetSending(false);
+            _streamingCoordinator?.SetSending(false);
         }
 
         private void OnComposerTextChangedForAvatar(ChangeEvent<string> evt)
@@ -382,7 +382,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (IsSending)
             {
                 var qAttach = _attachmentManager.CloneCurrent();
-                string qMsg = StripAttachmentTokens(composerText, qAttach);
+                string qMsg = ChatAttachmentManager.StripAttachmentTokens(composerText, qAttach);
                 _messageQueue.Enqueue(new QueuedMessage { Message = qMsg, Attachments = qAttach });
                 _d.MessageInput.value = string.Empty;
                 _inputManager.QueueComposerHeightUpdate();
@@ -392,11 +392,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             var pendingAttachments = _attachmentManager.CloneCurrent();
-            string message = StripAttachmentTokens(composerText, pendingAttachments);
+            string message = ChatAttachmentManager.StripAttachmentTokens(composerText, pendingAttachments);
             _d.MessageInput.value = string.Empty;
             ClearPendingComposerAttachments();
             _inputManager.QueueComposerHeightUpdate();
-            SetSending(true);
+            _streamingCoordinator?.SetSending(true);
             _d.GetAvatarAnimationController?.Invoke()?.TriggerSend();
 
             ChatService chat = null;
@@ -428,8 +428,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (streaming)
                 {
                     _streamingCoordinator.Begin();
-                    await chat.SendMessageAsync(message, pendingAttachments, _streamingCoordinator.OnToken, OnToolProgress);
-                    ClearThinkingBubble();
+                    await chat.SendMessageAsync(message, pendingAttachments, _streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
+                    _streamingCoordinator.ClearThinkingBubble();
                     _approvalController?.ClearToolProgress();
                     _approvalController?.Dismiss();
                     DismissSessionPicker();
@@ -515,7 +515,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             finally
             {
                 _currentChatService = null;
-                SetSending(false);
+                _streamingCoordinator?.SetSending(false);
 
                 // Show notification badge if window not focused
                 if (!Application.isFocused)
@@ -542,21 +542,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Task<bool> TryHandleCommandAsync(string message)
         {
             return _inputManager.TryHandleCommandAsync(message);
-        }
-
-        private void OnToolProgress(string tool, string label, string emoji, string status)
-        {
-            _streamingCoordinator?.OnToolProgress(tool, label, emoji, status);
-        }
-
-        private void ClearThinkingBubble()
-        {
-            _streamingCoordinator?.ClearThinkingBubble();
-        }
-
-        private void SetSending(bool isSending)
-        {
-            _streamingCoordinator?.SetSending(isSending);
         }
 
         // Notification badge extracted to Chat/ChatNotificationManager.cs
@@ -816,7 +801,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (messages.Count == 0) return;
 
-                SetSending(true);
+                _streamingCoordinator?.SetSending(true);
                 try
                 {
                     bool streaming = _d.UseStreaming();
@@ -827,8 +812,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (streaming)
                     {
                         _streamingCoordinator.Begin();
-                        await chat.RegenerateAsync(_streamingCoordinator.OnToken, OnToolProgress);
-                        ClearThinkingBubble();
+                        await chat.RegenerateAsync(_streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
+                        _streamingCoordinator.ClearThinkingBubble();
                         _approvalController?.ClearToolProgress();
                         _approvalController?.Dismiss();
                         DismissSessionPicker();
@@ -893,7 +878,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 finally
                 {
-                    SetSending(false);
+                    _streamingCoordinator?.SetSending(false);
                 }
             }
             catch (Exception ex)
@@ -1065,7 +1050,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void RenderMessages(IReadOnlyList<ChatMessage> messages)
         {
             bool hasSession = messages != null;
-            SetDisplay(_d.Composer, hasSession ? DisplayStyle.Flex : DisplayStyle.None);
+            ChatAttachmentManager.SetDisplay(_d.Composer, hasSession ? DisplayStyle.Flex : DisplayStyle.None);
             _editController?.Hide();
             if (_searchController != null && _searchController.IsVisible)
                 _searchController.Hide();
@@ -1079,139 +1064,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void ScrollTranscriptToBottom()
         {
             _messageListRenderer?.ScrollToBottom();
-        }
-
-        // ===== Static Helpers =====
-
-        private static string StripAttachmentTokens(string composerText, IReadOnlyList<ChatAttachment> attachments)
-        {
-            string text = composerText ?? string.Empty;
-            if (attachments != null)
-            {
-                for (int i = 0; i < attachments.Count; i++)
-                {
-                    string name = attachments[i]?.name;
-                    if (string.IsNullOrWhiteSpace(name))
-                        continue;
-
-                    string token = $"[attachment: {name}]";
-                    text = text.Replace(token, string.Empty);
-                }
-            }
-
-            return CollapseWhitespace(text).Trim();
-        }
-
-        private static string CollapseWhitespace(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            var sb = new StringBuilder(value.Length);
-            bool previousWasInlineWhitespace = false;
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                if (c == '\r')
-                    continue;
-
-                if (c == '\n')
-                {
-                    sb.Append('\n');
-                    previousWasInlineWhitespace = false;
-                    continue;
-                }
-
-                if (char.IsWhiteSpace(c))
-                {
-                    if (!previousWasInlineWhitespace)
-                        sb.Append(' ');
-                    previousWasInlineWhitespace = true;
-                }
-                else
-                {
-                    sb.Append(c);
-                    previousWasInlineWhitespace = false;
-                }
-            }
-
-            return sb.ToString();
-        }
-
-        private static string GuessImageMediaType(string path)
-        {
-            string extension = System.IO.Path.GetExtension(path)?.ToLowerInvariant();
-            switch (extension)
-            {
-                case ".png": return "image/png";
-                case ".jpg": return "image/jpeg";
-                case ".jpeg": return "image/jpeg";
-                case ".webp": return "image/webp";
-                case ".gif": return "image/gif";
-                case ".bmp": return "image/bmp";
-                default: return "application/octet-stream";
-            }
-        }
-
-        internal static string MessageCountText(int count)
-        {
-            int mod100 = count % 100;
-            int mod10 = count % 10;
-            string word;
-
-            if (mod100 >= 11 && mod100 <= 14)
-                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
-            else if (mod10 == 1)
-                word = LocalizationExtensions.Get("chat.messages.one", "сообщение");
-            else if (mod10 >= 2 && mod10 <= 4)
-                word = LocalizationExtensions.Get("chat.messages.few", "сообщения");
-            else
-                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
-
-            return $"{count} {word}";
-        }
-
-        internal static string GetAttachmentDisplayName(ChatAttachment attachment)
-        {
-            if (attachment == null)
-                return string.Empty;
-            return !string.IsNullOrWhiteSpace(attachment.name) ? attachment.name : "image";
-        }
-
-
-        internal static bool IsImageFile(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return false;
-            string ext = System.IO.Path.GetExtension(path);
-            if (string.IsNullOrEmpty(ext))
-                return false;
-            return string.Equals(ext, ".png", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(ext, ".jpg", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(ext, ".jpeg", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(ext, ".gif", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(ext, ".webp", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static List<ChatAttachment> CloneAttachments(IReadOnlyList<ChatAttachment> attachments)
-        {
-            if (attachments == null || attachments.Count == 0)
-                return new List<ChatAttachment>();
-
-            var clone = new List<ChatAttachment>(attachments.Count);
-            for (int i = 0; i < attachments.Count; i++)
-            {
-                var src = attachments[i];
-                if (src == null) { clone.Add(null); continue; }
-                clone.Add(new ChatAttachment
-                {
-                    kind = src.kind,
-                    name = src.name,
-                    path = src.path,
-                    mediaType = src.mediaType
-                });
-            }
-            return clone;
         }
 
         private static IReadOnlyList<ChatMessage> BuildPendingMessages(IReadOnlyList<ChatMessage> existing, string userMessage, IReadOnlyList<ChatAttachment> attachments)
@@ -1235,12 +1087,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ===== Utility =====
-
-        private static void SetDisplay(VisualElement element, DisplayStyle display)
-        {
-            if (element != null)
-                element.style.display = display;
-        }
 
         private void DismissSessionPicker()
         {
@@ -1420,149 +1266,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 chat.UseStreaming = originalStreaming;
             }
-        }
-
-        // ===== Message context menu (U-29/U-30) delegated to ChatMessageListRenderer =====
-
-        private static VisualElement FindBubbleAncestor(VisualElement el)
-        {
-            while (el != null)
-            {
-                if (el.ClassListContains("transcript__bubble"))
-                    return el;
-                el = el.parent;
-            }
-            return null;
-        }
-
-        private Vector2 NormalizeToPanelPosition(Vector2 position)
-        {
-            if (_d.MessagesList == null)
-                return position;
-
-            // If already in panel space, it should lie within or near the transcript bounds.
-            if (_d.MessagesList.worldBound.Contains(position))
-                return position;
-
-            // Fallback: treat value as local-to-messages-list and convert to panel/world space.
-            return _d.MessagesList.LocalToWorld(position);
-        }
-
-        private bool TryGetEventPosition(EventBase eventBase, out Vector2 position)
-        {
-            if (eventBase is MouseDownEvent)
-            {
-                position = ((MouseDownEvent)eventBase).mousePosition;
-                return true;
-            }
-
-            if (eventBase is MouseUpEvent)
-            {
-                position = ((MouseUpEvent)eventBase).mousePosition;
-                return true;
-            }
-
-            if (eventBase is PointerDownEvent)
-            {
-                position = ((PointerDownEvent)eventBase).position;
-                return true;
-            }
-
-            if (eventBase is PointerUpEvent)
-            {
-                position = ((PointerUpEvent)eventBase).position;
-                return true;
-            }
-
-            position = Vector2.zero;
-            return false;
-        }
-
-        private bool IsInsideMessagesList(VisualElement element)
-        {
-            if (_d.MessagesList == null || element == null)
-                return false;
-
-            var current = element;
-            while (current != null)
-            {
-                if (current == _d.MessagesList)
-                    return true;
-                current = current.parent;
-            }
-
-            return false;
-        }
-
-        // Returns true if 'el' is inside (or is) a read-only transcript TextField.
-        // Used to skip long-press selection when the user is selecting text (U-34).
-        private static bool IsInsideSelectableTextField(VisualElement el)
-        {
-            while (el != null)
-            {
-                if (el is SelectableMarkdownElement)
-                    return true;
-                if (el is TextField && el.ClassListContains("transcript__body"))
-                    return true;
-                el = el.parent;
-            }
-            return false;
-        }
-
-        // Registers mouse-enter/leave callbacks that swap to a text I-beam cursor (U-34).
-        private static Texture2D s_TextCursorTex;
-
-        internal static void ApplyTextCursor(VisualElement el)
-        {
-            el.RegisterCallback<MouseEnterEvent>(_ =>
-                UnityEngine.Cursor.SetCursor(GetTextCursorTexture(), new Vector2(4, 11), CursorMode.ForceSoftware));
-            el.RegisterCallback<MouseLeaveEvent>(_ =>
-                UnityEngine.Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto));
-        }
-
-        private static Texture2D GetTextCursorTexture()
-        {
-            if (s_TextCursorTex != null)
-                return s_TextCursorTex;
-
-            const int w = 10, h = 22;
-            s_TextCursorTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-            var px = new Color32[w * h];
-            var c = new Color32(220, 220, 220, 255);
-            var t = new Color32(0, 0, 0, 0);
-            for (int i = 0; i < px.Length; i++) px[i] = t;
-            // top crossbar (Unity: y=0 is bottom, top rows = h-1 and h-2)
-            for (int x = 2; x <= 7; x++) { px[(h - 1) * w + x] = c; px[(h - 2) * w + x] = c; }
-            // bottom crossbar
-            for (int x = 2; x <= 7; x++) { px[0 * w + x] = c; px[1 * w + x] = c; }
-            // vertical stem (center x = 4 or 5, use 4)
-            for (int y = 2; y <= h - 3; y++) px[y * w + 4] = c;
-            s_TextCursorTex.SetPixels32(px);
-            s_TextCursorTex.Apply(false);
-            return s_TextCursorTex;
-        }
-
-        private VisualElement ResolveBubbleFromEvent(VisualElement target, Vector2 panelPosition)
-        {
-            var bubble = FindBubbleAncestor(target);
-            if (bubble != null)
-                return bubble;
-
-            if (_d.MessagesList == null)
-                return null;
-
-            foreach (var child in _d.MessagesList.Children())
-            {
-                var row = child as VisualElement;
-                if (row == null)
-                    continue;
-
-                var candidate = row.Q<VisualElement>(className: "transcript__bubble");
-                if (candidate != null && candidate.worldBound.Contains(panelPosition))
-                    return candidate;
-            }
-
-            return null;
         }
 
         // ===== Message selection (U-31/U-32) — event handlers for ChatSelectionManager =====

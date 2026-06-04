@@ -580,7 +580,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             return text;
         }
 
-        private static string CollapseWhitespace(string value)
+        internal static string CollapseWhitespace(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return string.Empty;
@@ -616,7 +616,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             return sb.ToString();
         }
 
-        private static List<ChatAttachment> CloneAttachments(IReadOnlyList<ChatAttachment> attachments)
+        internal static List<ChatAttachment> CloneAttachments(IReadOnlyList<ChatAttachment> attachments)
         {
             if (attachments == null || attachments.Count == 0)
                 return new List<ChatAttachment>();
@@ -637,7 +637,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             return clone;
         }
 
-        private static string GetAttachmentDisplayName(ChatAttachment attachment)
+        internal static string GetAttachmentDisplayName(ChatAttachment attachment)
         {
             if (attachment == null)
                 return string.Empty;
@@ -646,7 +646,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         // ===== Image loading and layout =====
 
-        private static bool IsImageFile(string path)
+        internal static bool IsImageFile(string path)
         {
             if (string.IsNullOrEmpty(path))
                 return false;
@@ -730,7 +730,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
         }
 
-        private static string GuessImageMediaType(string path)
+        internal static string GuessImageMediaType(string path)
         {
             string extension = System.IO.Path.GetExtension(path)?.ToLowerInvariant();
             switch (extension)
@@ -743,6 +743,30 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 case ".bmp": return "image/bmp";
                 default: return "application/octet-stream";
             }
+        }
+
+        internal static string MessageCountText(int count)
+        {
+            int mod100 = count % 100;
+            int mod10 = count % 10;
+            string word;
+
+            if (mod100 >= 11 && mod100 <= 14)
+                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
+            else if (mod10 == 1)
+                word = LocalizationExtensions.Get("chat.messages.one", "сообщение");
+            else if (mod10 >= 2 && mod10 <= 4)
+                word = LocalizationExtensions.Get("chat.messages.few", "сообщения");
+            else
+                word = LocalizationExtensions.Get("chat.messages.many", "сообщений");
+
+            return $"{count} {word}";
+        }
+
+        internal static void SetDisplay(VisualElement element, DisplayStyle display)
+        {
+            if (element != null)
+                element.style.display = display;
         }
 
         // ── Windows clipboard bitmap support (PNG/JFIF/CF_DIB via user32 / kernel32 P/Invoke) ──

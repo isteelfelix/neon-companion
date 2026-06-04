@@ -6,6 +6,7 @@ using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.UI.UITK.Chat;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -321,7 +322,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             providerLabel.AddToClassList("history__provider");
 
             int count = session.messages?.Count ?? 0;
-            var metaLabel = new Label(ChatController.MessageCountText(count));
+            var metaLabel = new Label(ChatAttachmentManager.MessageCountText(count));
             metaLabel.AddToClassList("history__meta");
 
             var deleteBtn = new Button { text = "\u00d7" };
