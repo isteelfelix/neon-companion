@@ -13,6 +13,7 @@ using NeonCompanion.Runtime.Donation;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.UI.Platform;
+using NeonCompanion.Runtime.UI.UITK.Chat;
 using NeonCompanion.Runtime.UI.Avatars;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
@@ -1003,7 +1004,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_messagesList != null)
             {
                 var msg = new ChatMessage { role = "system", content = text };
-                _messagesList.Add(ChatController.CreateMessageElement(msg));
+                _messagesList.Add(ChatMessageListRenderer.CreateMessageElement(msg));
                 // Scroll to bottom
                 var content = _messagesList.contentContainer;
                 if (content != null && content.childCount > 0)

@@ -102,14 +102,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Message context menu (U-29/U-30)
         private MessageContextMenu _contextMenu;
 
-        // Long-press state for mobile context menu
-        private VisualElement _longPressTarget;
-        private int _longPressIndex;
-        private bool _longPressIsUser;
-        private Vector2 _longPressPos;
-        private IVisualElementScheduledItem _longPressSchedule;
-        private VisualElement _transcriptContextRoot;
-        private readonly Dictionary<string, VisualElement> _messageRowCache = new Dictionary<string, VisualElement>();
+        // Message list rendering (U-29) — delegated to ChatMessageListRenderer
+        private ChatMessageListRenderer _messageListRenderer;
 
         // Inline edit state — delegated to ChatMessageEditController
         private ChatMessageEditController _editController;
@@ -161,10 +155,24 @@ namespace NeonCompanion.Runtime.UI.UITK
             _streamingCoordinator = new ChatStreamingCoordinator(
                 _d.MessagesList,
                 ScrollTranscriptToBottom,
-                m => CreateMessageElement(m),
+                m => ChatMessageListRenderer.CreateMessageElement(m),
                 ApplyTextCursor,
                 bubble => _approvalController?.SetBubble(bubble),
                 () => { _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamStart(); _d.RefreshAvatarMotionState?.Invoke(); });
+
+            _messageListRenderer = new ChatMessageListRenderer(
+                _d.MessagesList,
+                _contextMenu,
+                _d.GetAvatarDisplayName,
+                _d.TopbarSubtitle,
+                _d.NavChatCount,
+                s => { _chatSubtitle = s; },
+                ShowImageLightbox,
+                ScrollTranscriptToBottom,
+                () => _selectionManager != null && _selectionManager.IsSelecting,
+                i => _selectionManager != null && _selectionManager.IsIndexSelected(i),
+                i => _selectionManager?.ToggleSelection(i),
+                () => { _ = StartNewSessionAsync(); });
         }
 
         public void SetVoiceRecording(bool value) { _inputManager?.SetVoiceRecording(value); }
@@ -201,22 +209,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _contextMenu.OnSelectRequested += OnSelectMessageRequested;
             }
 
-            // Context menu triggers on transcript (right-click + long-press)
-            if (_d.MessagesList != null)
-            {
-                _d.MessagesList.RegisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
-                _d.MessagesList.RegisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
-                _d.MessagesList.RegisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
-                _d.MessagesList.RegisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
-
-                _transcriptContextRoot = GetDocumentRoot(_d.MessagesList);
-                if (_transcriptContextRoot != null)
-                {
-                    _transcriptContextRoot.RegisterCallback<MouseDownEvent>(OnTranscriptRootMouseDown, TrickleDown.TrickleDown);
-                    if (_transcriptContextRoot != _d.MessagesList)
-                        _transcriptContextRoot.RegisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
-                }
-            }
+            // Context menu triggers on transcript (right-click + long-press) — delegated to renderer
+            _messageListRenderer?.RegisterCallbacks();
 
             if (_d.MessageInput != null)
             {
@@ -272,7 +266,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.MessagesList,
                 _d.Composer,
                 () => DismissSessionPicker(),
-                () => RenderTranscript(_d.GetChatServiceAsync().Result?.CurrentChatViewModel?.Messages));
+                () => _messageListRenderer?.Render(_d.GetChatServiceAsync().Result?.CurrentChatViewModel?.Messages));
             _selectionManager.OnBulkDelete += OnSelectionBulkDelete;
             _selectionManager.OnBulkForward += OnSelectionBulkForward;
 
@@ -318,24 +312,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _contextMenu.OnSelectRequested -= OnSelectMessageRequested;
             }
 
-            if (_d.MessagesList != null)
-            {
-                _d.MessagesList.UnregisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
-                _d.MessagesList.UnregisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
-                _d.MessagesList.UnregisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
-                _d.MessagesList.UnregisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
-            }
-
-            if (_transcriptContextRoot != null && _transcriptContextRoot != _d.MessagesList)
-            {
-                _transcriptContextRoot.UnregisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
-            }
-            if (_transcriptContextRoot != null)
-            {
-                _transcriptContextRoot.UnregisterCallback<MouseDownEvent>(OnTranscriptRootMouseDown, TrickleDown.TrickleDown);
-                _transcriptContextRoot = null;
-            }
-
             if (_d.MessageInput != null)
             {
                 _d.MessageInput.UnregisterCallback<KeyDownEvent>(OnComposerKeyDownForPaste, TrickleDown.TrickleDown);
@@ -344,11 +320,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _inputManager?.UnregisterCallbacks();
 
-            if (_pinBottomQueued)
-            {
-                _pinBottomQueued = false;
-                _d.MessagesList?.contentContainer?.UnregisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
-            }
+            _messageListRenderer?.UnregisterCallbacks();
 
             _isSending = false;
             _streamingCoordinator?.Abort();
@@ -557,7 +529,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                                     if (vm != null && vm.Messages != null && vm.Messages.Count > 0)
                                     {
                                         var last = vm.Messages[vm.Messages.Count - 1];
-                                        if (last != null && string.Equals(NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
+                                        if (last != null && string.Equals(ChatMessageListRenderer.NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
                                         {
                                             last.tokenCount = _streamingCoordinator.EstimatedTokens;
                                             last.responseTimeSeconds = (float)elapsed;
@@ -1761,8 +1733,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 var msg = messages[i];
                 if (msg == null || string.IsNullOrWhiteSpace(msg.content)) continue;
-                string role = NormalizeRole(msg.role);
-                sb.AppendLine($"[{DisplayRole(role)}]");
+                string role = ChatMessageListRenderer.NormalizeRole(msg.role);
+                sb.AppendLine($"[{ChatMessageListRenderer.DisplayRole(role)}]");
                 sb.AppendLine(msg.content);
                 sb.AppendLine();
             }
@@ -1896,7 +1868,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                                         if (vm != null && vm.Messages != null && vm.Messages.Count > 0)
                                         {
                                             var last = vm.Messages[vm.Messages.Count - 1];
-                                            if (last != null && string.Equals(NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
+                                            if (last != null && string.Equals(ChatMessageListRenderer.NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
                                             {
                                                 last.tokenCount = _streamingCoordinator.EstimatedTokens;
                                                 last.responseTimeSeconds = (float)elapsed;
@@ -2101,558 +2073,25 @@ namespace NeonCompanion.Runtime.UI.UITK
             return 8192;
         }
 
-        // ===== Message Rendering =====
+        // ===== Message Rendering (delegated to ChatMessageListRenderer) =====
 
         public void RenderMessages(IReadOnlyList<ChatMessage> messages)
         {
-            int count = messages?.Count ?? 0;
-            string avatarName = _d.GetAvatarDisplayName?.Invoke() ?? string.Empty;
-            _chatSubtitle = string.IsNullOrEmpty(avatarName)
-                ? MessageCountText(count)
-                : $"{MessageCountText(count)} · {avatarName}";
-
-            if (_d.TopbarSubtitle != null)
-                _d.TopbarSubtitle.text = _chatSubtitle;
-
-            if (_d.NavChatCount != null)
-                _d.NavChatCount.text = count.ToString();
-
-            RenderTranscript(messages);
-            UpdateContextBar();
-        }
-
-        private void RenderTranscript(IReadOnlyList<ChatMessage> messages)
-        {
-            if (_d.MessagesList == null)
-                return;
-
             bool hasSession = messages != null;
             SetDisplay(_d.Composer, hasSession ? DisplayStyle.Flex : DisplayStyle.None);
             _editController?.CancelEdit();
             if (_searchController != null && _searchController.IsVisible)
                 _searchController.Hide();
-            if (_selectionManager != null && _selectionManager.IsSelecting)
-                _messageRowCache.Clear();
-            _d.MessagesList.Clear();
 
-            if (messages == null || messages.Count == 0)
-            {
-                _messageRowCache.Clear();
-                _d.MessagesList.Add(CreateEmptyTranscript(hasSession));
-                return;
-            }
-
-            bool hasVisibleMessages = false;
-            var nextCache = new Dictionary<string, VisualElement>();
-            for (int i = 0; i < messages.Count; i++)
-            {
-                var message = messages[i];
-                if (!HasRenderableMessageContent(message))
-                    continue;
-
-                string renderKey = BuildMessageRenderKey(i, message);
-                VisualElement row = null;
-                if (_selectionManager == null || !_selectionManager.IsSelecting)
-                    _messageRowCache.TryGetValue(renderKey, out row);
-                if (row == null)
-                    row = CreateMessageElement(message, ShowImageLightbox, ScrollTranscriptToBottom);
-                // Tag with model index so context menu / edit can identify which message it represents
-                row.userData = i;
-                var bubbleForTag = row.Q<VisualElement>(className: "transcript__bubble");
-                if (bubbleForTag != null)
-                    bubbleForTag.userData = i;
-
-                // Capture index outside any inner block for safe closure (C# 9 rule)
-                int rowIndex = i;
-
-                // Apply selection state (U-31) after creating the row
-                if (_selectionManager != null && _selectionManager.IsSelecting)
-                {
-                    bool selected = _selectionManager.IsIndexSelected(rowIndex);
-                    if (selected)
-                        row.AddToClassList("transcript__row--selected");
-
-                    bool isSystemRow = row.ClassListContains("transcript__row--system");
-                    if (!isSystemRow)
-                    {
-                        // Click/tap toggles selection (replaces normal right-click/long-press behavior in selection mode)
-                        row.RegisterCallback<ClickEvent>(_ => _selectionManager.ToggleSelection(rowIndex));
-                    }
-                }
-
-                _d.MessagesList.Add(row);
-                if (_selectionManager == null || !_selectionManager.IsSelecting)
-                    nextCache[renderKey] = row;
-                hasVisibleMessages = true;
-            }
-
-            _messageRowCache.Clear();
-            foreach (var pair in nextCache)
-                _messageRowCache[pair.Key] = pair.Value;
-
-            if (!hasVisibleMessages)
-            {
-                _messageRowCache.Clear();
-                _d.MessagesList.Add(CreateEmptyTranscript(true));
-                return;
-            }
-
-            ScrollTranscriptToBottom();
+            _messageListRenderer?.Render(messages);
+            UpdateContextBar();
         }
 
-        private static string BuildMessageRenderKey(int index, ChatMessage message)
-        {
-            unchecked
-            {
-                int hash = 17;
-                hash = AppendHash(hash, index);
-                if (message != null)
-                {
-                    hash = AppendHash(hash, message.role);
-                    hash = AppendHash(hash, message.content);
-                    hash = AppendHash(hash, message.model);
-                    hash = AppendHash(hash, message.reasoning);
-                    hash = AppendHash(hash, message.unixTimeSeconds.GetHashCode());
-                    hash = AppendHash(hash, message.tool_call_id);
-                    hash = AppendHash(hash, message.tokenCount);
-                    hash = AppendHash(hash, message.responseTimeSeconds.GetHashCode());
-
-                    int attachmentCount = message.attachments != null ? message.attachments.Count : 0;
-                    hash = AppendHash(hash, attachmentCount);
-                    for (int i = 0; i < attachmentCount; i++)
-                    {
-                        ChatAttachment attachment = message.attachments[i];
-                        if (attachment == null)
-                            continue;
-                        hash = AppendHash(hash, attachment.kind);
-                        hash = AppendHash(hash, attachment.name);
-                        hash = AppendHash(hash, attachment.path);
-                        hash = AppendHash(hash, attachment.mediaType);
-                    }
-
-                    int segmentCount = message.segments != null ? message.segments.Count : 0;
-                    hash = AppendHash(hash, segmentCount);
-                    for (int i = 0; i < segmentCount; i++)
-                    {
-                        ChatMessageSegment segment = message.segments[i];
-                        if (segment == null)
-                            continue;
-                        hash = AppendHash(hash, segment.kind);
-                        hash = AppendHash(hash, segment.key);
-                        hash = AppendHash(hash, segment.text);
-                        hash = AppendHash(hash, segment.tool);
-                        hash = AppendHash(hash, segment.label);
-                        hash = AppendHash(hash, segment.emoji);
-                        hash = AppendHash(hash, segment.status);
-                        hash = AppendHash(hash, segment.inlineDiff);
-                    }
-                }
-                return index.ToString() + ":" + hash.ToString();
-            }
-        }
-
-        private static int AppendHash(int hash, string value)
-        {
-            unchecked
-            {
-                if (value == null)
-                    return hash * 31;
-                for (int i = 0; i < value.Length; i++)
-                    hash = hash * 31 + value[i];
-                return hash;
-            }
-        }
-
-        private static int AppendHash(int hash, int value)
-        {
-            unchecked
-            {
-                return hash * 31 + value;
-            }
-        }
-
-        private VisualElement CreateEmptyTranscript(bool hasSession)
-        {
-            var container = new VisualElement();
-            container.AddToClassList("transcript__empty");
-
-            string titleText = hasSession
-                ? LocalizationExtensions.Get("chat.empty.title", "Пока нет сообщений")
-                : LocalizationExtensions.Get("chat.empty.no_session.title", "Чат не создан");
-            var title = new Label(titleText);
-            title.AddToClassList("transcript__empty-title");
-
-            string bodyText = hasSession
-                ? LocalizationExtensions.Get("chat.empty.body", "Начни диалог ниже, и здесь появится полная история текущей сессии.")
-                : LocalizationExtensions.Get("chat.empty.no_session.body", "Создай новый чат, чтобы начать диалог с активным провайдером.");
-            var body = new Label(bodyText);
-            body.AddToClassList("transcript__empty-body");
-
-            container.Add(title);
-            container.Add(body);
-
-            if (!hasSession)
-            {
-                var createButton = new Button(OnNewSessionClicked)
-                {
-                    text = LocalizationExtensions.Get("chat.empty.create", "Создать новый чат")
-                };
-                createButton.AddToClassList("btn");
-                createButton.AddToClassList("btn--primary");
-                createButton.AddToClassList("transcript__empty-action");
-                container.Add(createButton);
-            }
-
-            return container;
-        }
-
-        internal static VisualElement CreateMessageElement(ChatMessage message, Action<string> onImageClick = null, Action onImageLoaded = null)
-        {
-            string role = NormalizeRole(message.role);
-
-            var row = new VisualElement();
-            row.AddToClassList("transcript__row");
-            row.AddToClassList($"transcript__row--{role}");
-
-            var bubble = new VisualElement();
-            bubble.AddToClassList("transcript__bubble");
-            bubble.AddToClassList($"transcript__bubble--{role}");
-            if (IsMarkdownHeavyMessage(message))
-                bubble.AddToClassList("transcript__bubble--markdown");
-
-            VisualElement actions = null;
-
-            var meta = new VisualElement();
-            meta.AddToClassList("transcript__meta");
-
-            var roleLabel = new Label(DisplayRole(role));
-            roleLabel.AddToClassList("transcript__role");
-
-            Label modelLabel = null;
-            if (role == "assistant" && !string.IsNullOrWhiteSpace(message.model))
-            {
-                modelLabel = new Label(message.model);
-                modelLabel.style.fontSize = 11f;
-                modelLabel.style.color = new Color(0.62f, 0.66f, 0.78f, 1f);
-                modelLabel.style.marginLeft = 6f;
-                modelLabel.style.paddingLeft = 6f;
-                modelLabel.style.paddingRight = 6f;
-                modelLabel.style.paddingTop = 1f;
-                modelLabel.style.paddingBottom = 1f;
-                modelLabel.style.backgroundColor = new Color(0.18f, 0.2f, 0.28f, 0.9f);
-                modelLabel.style.borderTopLeftRadius = 8f;
-                modelLabel.style.borderTopRightRadius = 8f;
-                modelLabel.style.borderBottomLeftRadius = 8f;
-                modelLabel.style.borderBottomRightRadius = 8f;
-            }
-
-            var timeLabel = new Label(FormatMessageTime(message.unixTimeSeconds));
-            timeLabel.AddToClassList("transcript__time");
-
-            meta.Add(roleLabel);
-            if (modelLabel != null)
-                meta.Add(modelLabel);
-            meta.Add(timeLabel);
-            bubble.Add(meta);
-
-            // Expandable reasoning/thinking section
-            if (!string.IsNullOrWhiteSpace(message.reasoning))
-            {
-                var reasoningRoot = new VisualElement();
-                reasoningRoot.AddToClassList("tool-entry-root");
-
-                var reasoningHeader = new VisualElement();
-                reasoningHeader.AddToClassList("tool-entry");
-                reasoningHeader.AddToClassList("tool-entry--header");
-                reasoningHeader.AddToClassList("tool-entry--reasoning");
-
-                var toggleLabel = new Label("▶");
-                toggleLabel.AddToClassList("tool-entry__toggle");
-
-                var iconLabel = new Label("💭");
-                iconLabel.AddToClassList("tool-entry__icon");
-
-                var nameLabel = new Label("Thinking");
-                nameLabel.AddToClassList("tool-entry__name");
-
-                reasoningHeader.Add(toggleLabel);
-                reasoningHeader.Add(iconLabel);
-                reasoningHeader.Add(nameLabel);
-
-                var reasoningDetails = new VisualElement();
-                reasoningDetails.AddToClassList("reasoning-entry__details");
-                reasoningDetails.style.display = DisplayStyle.None;
-
-                var reasoningText = new TextField();
-                reasoningText.isReadOnly = true;
-                reasoningText.multiline = true;
-                reasoningText.value = message.reasoning;
-                reasoningText.AddToClassList("reasoning-entry__text");
-                reasoningDetails.Add(reasoningText);
-
-                reasoningRoot.Add(reasoningHeader);
-                reasoningRoot.Add(reasoningDetails);
-
-                bool reasoningExpanded = false;
-                reasoningHeader.RegisterCallback<ClickEvent>(evt =>
-                {
-                    reasoningExpanded = !reasoningExpanded;
-                    toggleLabel.text = reasoningExpanded ? "▼" : "▶";
-                    reasoningDetails.style.display = reasoningExpanded ? DisplayStyle.Flex : DisplayStyle.None;
-                    evt.StopPropagation();
-                });
-
-                bubble.Add(reasoningRoot);
-            }
-
-            bool hasTextSegment = AddMessageSegments(bubble, message);
-            if (!hasTextSegment && !string.IsNullOrWhiteSpace(message.content))
-            {
-                bool isAssistant = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase);
-                bubble.Add(CreateTranscriptBody(message.content, isAssistant));
-            }
-
-            if (message.attachments != null && message.attachments.Count > 0)
-            {
-                var attachmentWrap = new VisualElement();
-                attachmentWrap.AddToClassList("transcript__attachments");
-
-                for (int i = 0; i < message.attachments.Count; i++)
-                {
-                    var attachment = message.attachments[i];
-                    if (attachment == null)
-                        continue;
-
-                    if (!string.IsNullOrEmpty(attachment.path) &&
-                        (attachment.kind == "image" || IsImageFile(attachment.path)))
-                    {
-                        var imageElement = new Image();
-                        imageElement.AddToClassList("transcript__image");
-                        imageElement.scaleMode = ScaleMode.ScaleToFit;
-                        LoadImageAsync(imageElement, attachment.path, onImageLoaded);
-                        string imgPath = attachment.path; // capture for closure
-                        if (onImageClick != null)
-                        {
-                            imageElement.RegisterCallback<ClickEvent>(evt =>
-                            {
-                                onImageClick(imgPath);
-                                evt.StopPropagation();
-                            });
-                        }
-                        attachmentWrap.Add(imageElement);
-                    }
-                    else
-                    {
-                        var attachmentLabel = new Label($"[file] {GetAttachmentDisplayName(attachment)}");
-                        attachmentLabel.AddToClassList("transcript__body");
-                        attachmentLabel.style.fontSize = 11f;
-                        attachmentLabel.focusable = true;
-                        attachmentWrap.Add(attachmentLabel);
-                    }
-                }
-
-                if (attachmentWrap.childCount > 0)
-                    bubble.Add(attachmentWrap);
-            }
-
-            // Add hover action buttons for assistant messages
-            if (role == "assistant")
-            {
-                actions = new VisualElement();
-                actions.AddToClassList("transcript__bubble-actions");
-
-                var copyBtn = new Button();
-                copyBtn.AddToClassList("iconbtn");
-                copyBtn.AddToClassList("icon");
-                copyBtn.AddToClassList("icon--copy");
-                copyBtn.tooltip = "Копировать";
-                RegisterClickStatic(copyBtn, () => OnCopyClickedStatic());
-
-                var refreshBtn = new Button();
-                refreshBtn.AddToClassList("iconbtn");
-                refreshBtn.AddToClassList("icon");
-                refreshBtn.AddToClassList("icon--refresh");
-                refreshBtn.tooltip = "Пересоздать";
-                RegisterClickStatic(refreshBtn, () => OnRegenerateClickedStatic());
-
-                var listenBtn = new Button();
-                listenBtn.AddToClassList("iconbtn");
-                listenBtn.AddToClassList("icon");
-                listenBtn.AddToClassList("icon--headphones");
-                listenBtn.tooltip = "Озвучить";
-                RegisterClickStatic(listenBtn, () => OnListenClickedStatic());
-
-                actions.Add(copyBtn);
-                actions.Add(refreshBtn);
-                actions.Add(listenBtn);
-            }
-
-            // Actions live INSIDE the bubble (absolutely positioned) so that only
-            // hovering the bubble itself reveals them — not the empty space in the row.
-            if (actions != null)
-                bubble.Add(actions);
-
-            // Stats footer for assistant (after body/attachments in flow; actions are absolute so order ok).
-            // Hidden by default; streaming path makes visible + updates it.
-            // For completed messages with persisted usage (U-28), show immediately.
-            if (role == "assistant")
-            {
-                var statsFooter = new VisualElement();
-                statsFooter.AddToClassList("transcript__stats");
-                var statsLabel = new Label();
-                statsLabel.AddToClassList("transcript__stats-label");
-                statsFooter.Add(statsLabel);
-                bubble.Add(statsFooter);
-
-                if (message.tokenCount > 0)
-                {
-                    statsFooter.style.display = DisplayStyle.Flex;
-                    double t = message.responseTimeSeconds > 0 ? message.responseTimeSeconds : 0.0;
-                    string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
-                    string exact = template.Replace("~", string.Empty);
-                    statsLabel.text = string.Format(exact, message.tokenCount, t);
-                }
-                else
-                {
-                    statsFooter.style.display = DisplayStyle.None;
-                }
-            }
-
-            row.Add(bubble);
-
-            return row;
-        }
-
-        private static bool AddMessageSegments(VisualElement bubble, ChatMessage message)
-        {
-            if (bubble == null || message == null || message.segments == null || message.segments.Count == 0)
-                return false;
-
-            // Collect all segments, merging ALL text into one block for proper markdown rendering.
-            // Tool entries stay in their original positions relative to text.
-            var allText = new System.Text.StringBuilder();
-            bool hasText = false;
-
-            for (int i = 0; i < message.segments.Count; i++)
-            {
-                var segment = message.segments[i];
-                if (segment == null)
-                    continue;
-
-                if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(segment.text))
-                {
-                    allText.Append(segment.text);
-                    hasText = true;
-                }
-            }
-
-            // Render combined text as one block (tables, code blocks, etc. stay intact)
-            if (hasText)
-            {
-                bubble.Add(CreateTranscriptBody(allText.ToString(), true));
-            }
-
-            // Render tool entries separately (after text, in order)
-            for (int i = 0; i < message.segments.Count; i++)
-            {
-                var segment = message.segments[i];
-                if (segment == null) continue;
-                if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
-                {
-                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff));
-                }
-            }
-
-            return hasText;
-        }
-
-        private static VisualElement CreateTranscriptBody(string text, bool isAssistant = false)
-        {
-            var bodyElement = new SelectableMarkdownElement();
-            bodyElement.SetMarkdown(text ?? string.Empty);
-            bodyElement.AddToClassList("transcript__body");
-            bodyElement.style.minWidth = 0;
-            bodyElement.style.width = Length.Percent(100);
-            bodyElement.style.minHeight = 20;
-            if (!isAssistant)
-                bodyElement.AddToClassList("transcript__body--user");
-            ApplyTextCursor(bodyElement);
-            return bodyElement;
-        }
-
-        private static bool IsMarkdownHeavyMessage(ChatMessage message)
-        {
-            if (message == null)
-                return false;
-            string text = message.content ?? string.Empty;
-            return MarkdownRenderer.ContainsMarkdown(text);
-        }
-
-        private static void MakeTranscriptLabelsFocusable(VisualElement root)
-        {
-            if (root == null)
-                return;
-            var labels = root.Query<Label>().ToList();
-            for (int i = 0; i < labels.Count; i++)
-            {
-                labels[i].focusable = true;
-            }
-        }
-
-        private void OnScrollBottomClicked() { ScrollTranscriptToBottom(); }
-
-        private bool _pinBottomQueued;
+        private void OnScrollBottomClicked() { _messageListRenderer?.ScrollToBottom(); }
 
         public void ScrollTranscriptToBottom()
         {
-            var list = _d.MessagesList;
-            if (list == null)
-                return;
-
-            var content = list.contentContainer;
-            if (content == null)
-                return;
-
-            // Try immediately (covers cases where layout is already up to date),
-            // then re-pin once the newly added/grown content has actually been
-            // laid out — otherwise we measure a stale height and stop short of
-            // the just-added message.
-            list.schedule.Execute(PinTranscriptToBottom);
-            list.schedule.Execute(PinTranscriptToBottom).StartingIn(50);
-            list.schedule.Execute(PinTranscriptToBottom).StartingIn(150);
-            list.schedule.Execute(PinTranscriptToBottom).StartingIn(300);
-
-            if (_pinBottomQueued)
-                return;
-            _pinBottomQueued = true;
-            content.RegisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
-        }
-
-        private void OnTranscriptGeometryForScroll(GeometryChangedEvent evt)
-        {
-            _pinBottomQueued = false;
-            _d.MessagesList?.contentContainer?.UnregisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
-            PinTranscriptToBottom();
-        }
-
-        private void PinTranscriptToBottom()
-        {
-            var list = _d.MessagesList;
-            var content = list?.contentContainer;
-            var viewport = list?.contentViewport;
-            if (content == null || viewport == null || content.childCount == 0)
-                return;
-
-            float viewportHeight = viewport.layout.height;
-            float contentHeight = content.layout.height;
-            if (viewportHeight <= 0f || contentHeight <= 0f)
-                return;
-
-            float maxScroll = Mathf.Max(0f, contentHeight - viewportHeight);
-            Vector2 scrollOffset = list.scrollOffset;
-            list.scrollOffset = new Vector2(scrollOffset.x, maxScroll);
-            SetDisplay(_d.ScrollBottomBtn, DisplayStyle.None);
+            _messageListRenderer?.ScrollToBottom();
         }
 
         // ===== Static Helpers =====
@@ -2727,46 +2166,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private static string NormalizeRole(string role)
-        {
-            if (string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
-                return "user";
-
-            if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
-                return "system";
-
-            if (string.Equals(role, "tool", StringComparison.OrdinalIgnoreCase))
-                return "tool";
-
-            return "assistant";
-        }
-
-        private static string DisplayRole(string role)
-        {
-            switch (role)
-            {
-                case "user":
-                    return LocalizationExtensions.Get("chat.role.you", "Ты");
-                case "system":
-                    return LocalizationExtensions.Get("chat.role.system", "Система");
-                case "tool":
-                    return LocalizationExtensions.Get("chat.role.tool", "Инструмент");
-                default:
-                    return LocalizationExtensions.Get("chat.role.neon", "Neon");
-            }
-        }
-
-        private static string FormatMessageTime(long unixTimeSeconds)
-        {
-            if (unixTimeSeconds <= 0)
-                return string.Empty;
-
-            return DateTimeOffset
-                .FromUnixTimeSeconds(unixTimeSeconds)
-                .ToLocalTime()
-                .ToString("HH:mm");
-        }
-
         internal static string MessageCountText(int count)
         {
             int mod100 = count % 100;
@@ -2785,40 +2184,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return $"{count} {word}";
         }
 
-        private static bool HasRenderableMessageContent(ChatMessage message)
-        {
-            if (message == null)
-                return false;
-            if (!string.IsNullOrWhiteSpace(message.content))
-                return true;
-            if (message.segments != null)
-            {
-                for (int i = 0; i < message.segments.Count; i++)
-                {
-                    if (HasRenderableSegmentContent(message.segments[i]))
-                        return true;
-                }
-            }
-            if (message.attachments != null && message.attachments.Count > 0)
-                return true;
-            return false;
-        }
-
-        private static bool HasRenderableSegmentContent(ChatMessageSegment segment)
-        {
-            if (segment == null)
-                return false;
-
-            if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
-                return !string.IsNullOrWhiteSpace(segment.tool) || !string.IsNullOrWhiteSpace(segment.label);
-
-            if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
-                return !string.IsNullOrWhiteSpace(segment.text);
-
-            return false;
-        }
-
-        private static string GetAttachmentDisplayName(ChatAttachment attachment)
+        internal static string GetAttachmentDisplayName(ChatAttachment attachment)
         {
             if (attachment == null)
                 return string.Empty;
@@ -2902,8 +2268,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.Composer != null && _d.Composer.panel != null)
                 return _d.Composer.panel.visualTree;
 
-            if (_transcriptContextRoot != null && _transcriptContextRoot.panel != null)
-                return _transcriptContextRoot.panel.visualTree;
+            if (_messageListRenderer != null && _messageListRenderer._transcriptContextRoot != null && _messageListRenderer._transcriptContextRoot.panel != null)
+                return _messageListRenderer._transcriptContextRoot.panel.visualTree;
 
             return null;
         }
@@ -2968,7 +2334,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ────────────────────────────────────────────────────────────
 
-        private static async void LoadImageAsync(Image imageElement, string path, Action onLoaded = null)
+        internal static async void LoadImageAsync(Image imageElement, string path, Action onLoaded = null)
         {
             if (imageElement == null || string.IsNullOrEmpty(path))
                 return;
@@ -3000,7 +2366,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private static bool IsImageFile(string path)
+        internal static bool IsImageFile(string path)
         {
             if (string.IsNullOrEmpty(path))
                 return false;
@@ -3255,171 +2621,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        // ===== Message context menu (U-29/U-30) =====
-
-        private void OnTranscriptRootMouseDown(MouseDownEvent evt)
-        {
-            if (_d.MessagesList == null || evt == null)
-                return;
-
-            bool isContextButton = evt.button != 0 || (evt.pressedButtons & 2) != 0;
-            if (!isContextButton)
-                return;
-
-            VisualElement target = evt.target as VisualElement;
-            Vector2 pos = evt.mousePosition;
-            bool insideByTarget = IsInsideMessagesList(target);
-            bool insideByPos = _d.MessagesList.worldBound.Contains(pos);
-            if (!insideByTarget && !insideByPos)
-                return;
-
-            evt.StopImmediatePropagation();
-            evt.StopPropagation();
-#pragma warning disable CS0618
-            evt.PreventDefault();
-#pragma warning restore CS0618
-
-            if (_selectionManager != null && _selectionManager.IsSelecting)
-                return;
-
-            VisualElement bubble = ResolveBubbleFromEvent(target, pos);
-            if (bubble == null)
-                return;
-
-            if (bubble.ClassListContains("transcript__bubble--system"))
-                return;
-
-            int? msgIndex = GetMessageIndexFromElement(bubble);
-            if (msgIndex == null)
-                return;
-
-            bool isUser = bubble.ClassListContains("transcript__bubble--user");
-            ShowMessageContextMenu(bubble, msgIndex.Value, isUser, pos);
-        }
-
-        private void OnTranscriptPointerDown(PointerDownEvent evt)
-        {
-            if (_d.MessagesList == null)
-                return;
-
-            Vector2 pos = evt.position;
-            bool isContextButton = evt.button != 0 || (evt.pressedButtons & 2) != 0;
-
-            if (isContextButton)
-            {
-                // Always suppress default context behavior (blue strip / native fallback).
-                evt.StopImmediatePropagation();
-                evt.StopPropagation();
-#pragma warning disable CS0618
-                evt.PreventDefault();
-#pragma warning restore CS0618
-
-                if (_selectionManager != null && _selectionManager.IsSelecting)
-                    return;
-                return;
-            }
-
-            // Do not start long-press / selection mode when the left-click landed on a
-            // selectable transcript TextField — the user is selecting text, not the message.
-            if (evt.button == 0 && IsInsideSelectableTextField(evt.target as VisualElement))
-                return;
-
-            VisualElement bubble = ResolveBubbleFromEvent(evt.target as VisualElement, pos);
-            if (bubble == null)
-                return;
-
-            // Skip system bubbles for context menu
-            if (bubble.ClassListContains("transcript__bubble--system"))
-                return;
-
-            int? msgIndex = GetMessageIndexFromElement(bubble);
-            if (msgIndex == null)
-                return;
-
-            bool isUser = bubble.ClassListContains("transcript__bubble--user");
-
-            if (_selectionManager != null && _selectionManager.IsSelecting)
-            {
-                // Selection mode: per-row ClickEvent handles toggles for selectable messages.
-                // No long-press/context menu here; selection toggles are handled by row ClickEvent.
-                return;
-            }
-
-            if (evt.button == 0)
-            {
-                bool longPressSelect = string.Equals(evt.pointerType, "mouse", StringComparison.OrdinalIgnoreCase);
-
-                // Start long-press timer for mobile
-                _longPressTarget = bubble;
-                _longPressIndex = msgIndex.Value;
-                _longPressIsUser = isUser;
-                _longPressPos = pos;
-
-                if (_longPressSchedule != null)
-                {
-                    _longPressSchedule.Pause();
-                    _longPressSchedule = null;
-                }
-
-                _longPressSchedule = bubble.schedule.Execute(() =>
-                {
-                    _longPressSchedule = null;
-                    if (_longPressTarget != null)
-                    {
-                        if (longPressSelect)
-                        {
-                            _selectionManager?.EnterSelectionMode(_longPressIndex);
-                        }
-                        else
-                        {
-                            ShowMessageContextMenu(_longPressTarget, _longPressIndex, _longPressIsUser, _longPressPos);
-                        }
-                    }
-                    _longPressTarget = null;
-                }).StartingIn(480);
-            }
-        }
-
-        private void OnTranscriptContextMenuPopulate(ContextualMenuPopulateEvent evt)
-        {
-            if (_d.MessagesList == null || evt == null)
-                return;
-
-            var target = evt.target as VisualElement;
-            Vector2 triggerPos;
-            bool hasTriggerPos = TryGetEventPosition(evt.triggerEvent, out triggerPos);
-            bool insideByTarget = IsInsideMessagesList(target);
-            bool insideByPos = hasTriggerPos && _d.MessagesList.worldBound.Contains(triggerPos);
-            if (!insideByTarget && !insideByPos)
-                return;
-
-            // Always suppress Unity's default context menu path in transcript.
-            evt.StopImmediatePropagation();
-            evt.StopPropagation();
-#pragma warning disable CS0618
-            evt.PreventDefault();
-#pragma warning restore CS0618
-        }
-
-        private void OnTranscriptPointerUp(PointerUpEvent evt)
-        {
-            CancelLongPress();
-        }
-
-        private void OnTranscriptPointerCancel(PointerCancelEvent evt)
-        {
-            CancelLongPress();
-        }
-
-        private void CancelLongPress()
-        {
-            if (_longPressSchedule != null)
-            {
-                _longPressSchedule.Pause();
-                _longPressSchedule = null;
-            }
-            _longPressTarget = null;
-        }
+        // ===== Message context menu (U-29/U-30) delegated to ChatMessageListRenderer =====
 
         private static VisualElement FindBubbleAncestor(VisualElement el)
         {
@@ -3509,7 +2711,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Registers mouse-enter/leave callbacks that swap to a text I-beam cursor (U-34).
         private static Texture2D s_TextCursorTex;
 
-        private static void ApplyTextCursor(VisualElement el)
+        internal static void ApplyTextCursor(VisualElement el)
         {
             el.RegisterCallback<MouseEnterEvent>(_ =>
                 UnityEngine.Cursor.SetCursor(GetTextCursorTexture(), new Vector2(4, 11), CursorMode.ForceSoftware));
@@ -3603,7 +2805,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             var msg = messages[index];
-            string role = NormalizeRole(msg.role);
+            string role = ChatMessageListRenderer.NormalizeRole(msg.role);
             if (!string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
                 return; // edit only for user
 
@@ -3891,12 +3093,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private VisualElement GetDocumentRoot(VisualElement start)
+        internal static VisualElement GetDocumentRoot(VisualElement el)
         {
-            if (start == null)
+            if (el == null)
                 return null;
-            var el = start;
-            var panelVisualTree = start.panel != null ? start.panel.visualTree : null;
+            var panelVisualTree = el.panel != null ? el.panel.visualTree : null;
             while (el.parent != null && el.parent != panelVisualTree)
                 el = el.parent;
             return el;
@@ -3929,7 +3130,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 if (index >= 0 && index < chat.CurrentChatViewModel.Messages.Count)
                 {
-                    string role = NormalizeRole(chat.CurrentChatViewModel.Messages[index].role);
+                    string role = ChatMessageListRenderer.NormalizeRole(chat.CurrentChatViewModel.Messages[index].role);
                     if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
                         return;
                 }
@@ -3944,11 +3145,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         internal static event Action RegenerateRequested;
         internal static event Action ListenRequested;
 
-        private static void OnCopyClickedStatic() => CopyRequested?.Invoke();
-        private static void OnRegenerateClickedStatic() => RegenerateRequested?.Invoke();
-        private static void OnListenClickedStatic() => ListenRequested?.Invoke();
+        internal static void OnCopyClickedStatic() => CopyRequested?.Invoke();
+        internal static void OnRegenerateClickedStatic() => RegenerateRequested?.Invoke();
+        internal static void OnListenClickedStatic() => ListenRequested?.Invoke();
 
-        private static void RegisterClickStatic(Button button, Action handler)
+        internal static void RegisterClickStatic(Button button, Action handler)
         {
             if (button != null)
                 button.clicked += handler;
