@@ -9,6 +9,7 @@ using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Models.Chat;
 using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
@@ -70,11 +71,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Action PlayNotificationSound;
         }
 
-        private class QueuedMessage
-        {
-            public string Message;
-            public List<ChatAttachment> Attachments;
-        }
+        // QueuedMessage extracted to Models/Chat/QueuedMessage.cs
 
         private Deps _d;
         private bool _isSending;
