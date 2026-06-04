@@ -265,7 +265,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.MessagesList,
                 _d.Composer,
                 () => DismissSessionPicker(),
-                () => _messageListRenderer?.Render(_d.GetChatServiceAsync().Result?.CurrentChatViewModel?.Messages));
+                () => _messageListRenderer?.Render(_d.GetChatServiceAsync().Result?.CurrentChatViewModel?.Messages),
+                _d,
+                _messageListRenderer,
+                ShowSessionPickerAsync);
             _selectionManager.OnBulkDelete += OnSelectionBulkDelete;
             _selectionManager.OnBulkForward += OnSelectionBulkForward;
 
@@ -1713,98 +1716,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnSelectionBulkDelete(IReadOnlyList<string> ids)
         {
-            var chat = _d.GetChatServiceAsync().Result;
-            if (chat?.CurrentChatViewModel == null) return;
-
-            var indices = new List<int>(ids.Count);
-            for (int i = 0; i < ids.Count; i++)
-            {
-                int idx;
-                if (int.TryParse(ids[i], out idx))
-                    indices.Add(idx);
-            }
-            indices.Sort((a, b) => b.CompareTo(a));
-
-            for (int i = 0; i < indices.Count; i++)
-            {
-                int idx = indices[i];
-                if (idx >= 0 && idx < chat.CurrentChatViewModel.Messages.Count)
-                    chat.CurrentChatViewModel.Messages.RemoveAt(idx);
-            }
-
-            _ = chat.SaveCurrentSessionAsync();
-            _d.RenderMessages(chat.CurrentChatViewModel.Messages);
+            _selectionManager?.OnSelectionBulkDelete(ids);
         }
 
         private void OnSelectionBulkForward(IReadOnlyList<string> ids)
         {
-            _ = ForwardSelectedAsync(ids);
-        }
-
-        private async Task ForwardSelectedAsync(IReadOnlyList<string> ids)
-        {
-            if (ids == null || ids.Count == 0) return;
-
-            var chat = await _d.GetChatServiceAsync();
-            if (chat == null || chat.CurrentChatViewModel == null) return;
-
-            var source = chat.CurrentChatViewModel.Messages;
-            var toForward = new List<ChatMessage>();
-            var indices = new List<int>(ids.Count);
-            for (int i = 0; i < ids.Count; i++)
-            {
-                int idx;
-                if (int.TryParse(ids[i], out idx))
-                    indices.Add(idx);
-            }
-            indices.Sort();
-
-            for (int i = 0; i < indices.Count; i++)
-            {
-                int idx = indices[i];
-                if (idx >= 0 && idx < source.Count)
-                    toForward.Add(source[idx]);
-            }
-
-            if (toForward.Count == 0)
-            {
-                _selectionManager?.ExitSelectionMode();
-                return;
-            }
-
-            var all = await chat.GetAllSessionsAsync();
-            string currentId = chat.CurrentSessionId;
-
-            var candidates = new List<ChatSession>();
-            for (int i = 0; i < all.Count; i++)
-            {
-                var s = all[i];
-                if (s != null && s.sessionId != currentId)
-                    candidates.Add(s);
-            }
-
-            if (candidates.Count == 0)
-            {
-                _selectionManager?.ExitSelectionMode();
-                return;
-            }
-
-            var target = await ShowSessionPickerAsync(candidates);
-            if (target == null)
-            {
-                // Cancel or outside click — leave selection mode active so user can try again or cancel
-                return;
-            }
-
-            int added = await chat.AppendMessagesToSessionAsync(target.sessionId, toForward);
-            _selectionManager?.ExitSelectionMode();
-
-            if (added > 0)
-            {
-                string done = LocalizationExtensions.Get("chat.selection.forward_done", "Forwarded {0} messages")
-                    .Replace("{0}", added.ToString());
-                _d.ShowSystemMessage(done);
-            }
+            _selectionManager?.OnSelectionBulkForward(ids);
         }
 
         private async Task<ChatSession> ShowSessionPickerAsync(List<ChatSession> candidates)

@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Models.Chat;
+using NeonCompanion.Runtime.UI.UITK;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK.Chat
@@ -10,6 +14,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly ScrollView _messagesList;
         private readonly Action _dismissSessionPicker;
         private readonly Action _onSelectionModeChanged;
+        private readonly ChatController.Deps _d;
+        private readonly ChatMessageListRenderer _messageListRenderer;
+        private readonly Func<List<ChatSession>, Task<ChatSession>> _showSessionPickerAsync;
 
         private bool _isSelectionMode;
         private readonly HashSet<int> _selectedMessages = new HashSet<int>();
@@ -39,12 +46,114 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             ScrollView messagesList,
             VisualElement composer,
             Action dismissSessionPicker,
-            Action onSelectionModeChanged)
+            Action onSelectionModeChanged,
+            ChatController.Deps deps,
+            ChatMessageListRenderer messageListRenderer,
+            Func<List<ChatSession>, Task<ChatSession>> showSessionPickerAsync)
         {
             _messagesList = messagesList;
             _dismissSessionPicker = dismissSessionPicker;
             _onSelectionModeChanged = onSelectionModeChanged;
+            _d = deps;
+            _messageListRenderer = messageListRenderer;
+            _showSessionPickerAsync = showSessionPickerAsync;
             BuildSelectionBar(composer);
+        }
+
+        internal void OnSelectionBulkDelete(IReadOnlyList<string> ids)
+        {
+            var chat = _d.GetChatServiceAsync().Result;
+            if (chat == null || chat.CurrentChatViewModel == null)
+                return;
+
+            var indices = new List<int>(ids.Count);
+            for (int i = 0; i < ids.Count; i++)
+            {
+                int idx;
+                if (int.TryParse(ids[i], out idx))
+                    indices.Add(idx);
+            }
+            indices.Sort((a, b) => b.CompareTo(a));
+
+            for (int i = 0; i < indices.Count; i++)
+            {
+                int idx = indices[i];
+                if (idx >= 0 && idx < chat.CurrentChatViewModel.Messages.Count)
+                    chat.CurrentChatViewModel.Messages.RemoveAt(idx);
+            }
+
+            _ = chat.SaveCurrentSessionAsync();
+            _messageListRenderer.Render(chat.CurrentChatViewModel.Messages);
+        }
+
+        internal void OnSelectionBulkForward(IReadOnlyList<string> ids)
+        {
+            _ = ForwardSelectedAsync(ids);
+        }
+
+        private async Task ForwardSelectedAsync(IReadOnlyList<string> ids)
+        {
+            if (ids == null || ids.Count == 0)
+                return;
+
+            var chat = await _d.GetChatServiceAsync();
+            if (chat == null || chat.CurrentChatViewModel == null)
+                return;
+
+            var source = chat.CurrentChatViewModel.Messages;
+            var toForward = new List<ChatMessage>();
+            var indices = new List<int>(ids.Count);
+            for (int i = 0; i < ids.Count; i++)
+            {
+                int idx;
+                if (int.TryParse(ids[i], out idx))
+                    indices.Add(idx);
+            }
+            indices.Sort();
+
+            for (int i = 0; i < indices.Count; i++)
+            {
+                int idx = indices[i];
+                if (idx >= 0 && idx < source.Count)
+                    toForward.Add(source[idx]);
+            }
+
+            if (toForward.Count == 0)
+            {
+                ExitSelectionMode();
+                return;
+            }
+
+            var all = await chat.GetAllSessionsAsync();
+            string currentId = chat.CurrentSessionId;
+
+            var candidates = new List<ChatSession>();
+            for (int i = 0; i < all.Count; i++)
+            {
+                var session = all[i];
+                if (session != null && session.sessionId != currentId)
+                    candidates.Add(session);
+            }
+
+            if (candidates.Count == 0)
+            {
+                ExitSelectionMode();
+                return;
+            }
+
+            var target = await _showSessionPickerAsync(candidates);
+            if (target == null)
+                return;
+
+            int added = await chat.AppendMessagesToSessionAsync(target.sessionId, toForward);
+            ExitSelectionMode();
+
+            if (added > 0)
+            {
+                string done = LocalizationExtensions.Get("chat.selection.forward_done", "Forwarded {0} messages")
+                    .Replace("{0}", added.ToString());
+                _d.ShowSystemMessage(done);
+            }
         }
 
         private void BuildSelectionBar(VisualElement composer)
