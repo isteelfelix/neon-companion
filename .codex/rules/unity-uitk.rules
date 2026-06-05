@@ -2,13 +2,11 @@
 
 ## C# 9 (Unity 2022.3) — NO EXCEPTIONS
 
-```
-❌ switch expressions        → use switch statement
-❌ is not null / is not x    → use == null / !(x is string)
-❌ tuple deconstruction      → use separate variables
-❌ target-typed new()        → use new TypeName()
-❌ pattern matching props    → use if/else chains
-```
+- NO switch expressions — use switch statement
+- NO is not null / is not x — use == null / !(x is string)
+- NO tuple deconstruction — use separate variables
+- NO target-typed new() — use new TypeName()
+- NO pattern matching with properties — use if/else chains
 
 ### Common Mistakes
 - `[Serializable]` — ALWAYS `using System;` + `[Serializable]`, NEVER `[UnityEngine.Serializable]`

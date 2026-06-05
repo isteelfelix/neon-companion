@@ -33,6 +33,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
         private string _currentProviderId;
+        private string _lastConfigHash;
 
         public bool IsVoicePlaying => _isVoicePlaying;
         public bool IsVoiceRecording => _isVoiceRecording;
@@ -78,47 +79,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             ProviderConfig provider = chat.CurrentProvider;
-            string newProviderId = provider != null ? provider.id : null;
-            bool providerChanged = _currentProviderId != newProviderId;
-            _currentProviderId = newProviderId;
+            AppSettings settings = _d.GetAppSettings != null ? _d.GetAppSettings() : new AppSettings();
+            string configHash = ComputeConfigHash(provider, settings);
 
-            if (providerChanged && _voiceService != null)
+            if (_lastConfigHash != configHash)
             {
-                var mb = _voiceService as MonoBehaviour;
-                if (mb != null)
-                {
-                    if (mb.gameObject == _d.gameObject)
-                        UnityEngine.Object.Destroy(mb);
-                    else
-                        UnityEngine.Object.Destroy(mb.gameObject);
-                }
-                _voiceService = null;
-
-                if (_voiceOutputManager != null)
-                {
-                    if (_voiceBoundToChat)
-                        _voiceOutputManager.UnbindChat(chat);
-                    UnityEngine.Object.Destroy(_voiceOutputManager);
-                    _voiceOutputManager = null;
-                }
-                _voiceBoundToChat = false;
-
-                if (_voiceInputManager != null)
-                {
-                    UnityEngine.Object.Destroy(_voiceInputManager);
-                    _voiceInputManager = null;
-                }
-
-                if (_lipsyncController != null)
-                {
-                    UnityEngine.Object.Destroy(_lipsyncController);
-                    _lipsyncController = null;
-                }
+                ReinitializeVoiceService(provider, settings, chat);
+                _lastConfigHash = configHash;
             }
 
             if (_voiceService == null)
             {
-                AppSettings settings = _d.GetAppSettings != null ? _d.GetAppSettings() : new AppSettings();
                 IVoiceService created = VoiceServiceFactory.Create(provider, settings);
                 if (created != null)
                 {
@@ -167,6 +138,67 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             RefreshVoiceControls();
             await Task.CompletedTask;
+        }
+
+        private string ComputeConfigHash(ProviderConfig provider, AppSettings settings)
+        {
+            if (provider == null || settings == null)
+                return "";
+            return (provider.id ?? "") + "|" + (provider.baseUrl ?? "") + "|"
+                + (provider.ttsVoice ?? "") + "|" + (provider.ttsModel ?? "") + "|"
+                + provider.ttsSpeed.ToString() + "|"
+                + (settings.inputDeviceName ?? "") + "|" + settings.outputVolume.ToString();
+        }
+
+        private void ReinitializeVoiceService(ProviderConfig provider, AppSettings settings, ChatService chat)
+        {
+            UnbindVoiceAnimationEvents();
+
+            if (_voiceOutputManager != null)
+            {
+                if (_voiceBoundToChat && chat != null)
+                    _voiceOutputManager.UnbindChat(chat);
+                UnityEngine.Object.Destroy(_voiceOutputManager);
+                _voiceOutputManager = null;
+                _voiceBoundToChat = false;
+            }
+
+            if (_voiceInputManager != null)
+            {
+                UnityEngine.Object.Destroy(_voiceInputManager);
+                _voiceInputManager = null;
+            }
+
+            if (_lipsyncController != null)
+            {
+                UnityEngine.Object.Destroy(_lipsyncController);
+                _lipsyncController = null;
+            }
+
+            if (_voiceService != null)
+            {
+                var mb = _voiceService as MonoBehaviour;
+                if (mb != null)
+                {
+                    if (mb.gameObject == _d.gameObject)
+                        UnityEngine.Object.Destroy(mb);
+                    else
+                        UnityEngine.Object.Destroy(mb.gameObject);
+                }
+                _voiceService = null;
+            }
+
+            IVoiceService created = VoiceServiceFactory.Create(provider, settings);
+            if (created != null)
+            {
+                _voiceService = created;
+            }
+            else
+            {
+                _voiceService = _d.gameObject.GetComponent<WebSpeechBridge>();
+                if (_voiceService == null)
+                    _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
+            }
         }
 
         internal void OnVoiceRecordingStarted()

@@ -32,7 +32,7 @@ namespace NeonCompanion.Runtime.Voice
 
         public bool IsRecording => _isRecording;
         public bool IsSpeaking  => _isSpeaking;
-        public bool IsAvailable => true;
+        public bool IsAvailable => !string.IsNullOrEmpty(_baseUrl) && !string.IsNullOrEmpty(_apiKey);
 
         public event Action<string> OnSpeechRecognized;
         public event Action OnPlaybackComplete;
@@ -71,6 +71,28 @@ namespace NeonCompanion.Runtime.Voice
                 StopCoroutine(_vadCoroutine);
                 _vadCoroutine = null;
             }
+            if (_isRecording)
+            {
+                Microphone.End(_activeDevice);
+                _isRecording = false;
+            }
+            if (_playbackCoroutine != null)
+            {
+                StopCoroutine(_playbackCoroutine);
+                _playbackCoroutine = null;
+            }
+            if (_audioSource != null)
+                _audioSource.Stop();
+            if (_recordingClip != null)
+            {
+                Destroy(_recordingClip);
+                _recordingClip = null;
+            }
+            if (_isSpeaking)
+            {
+                _isSpeaking = false;
+                OnPlaybackComplete?.Invoke();
+            }
         }
 
         public void StartRecording()
@@ -85,7 +107,7 @@ namespace NeonCompanion.Runtime.Voice
             }
 
             _activeDevice  = FindInputDevice(_inputDeviceName);
-            _recordingClip = Microphone.Start(_activeDevice, true, 60, 16000);
+            _recordingClip = Microphone.Start(_activeDevice, false, 60, 16000);
             _isRecording   = true;
             _vadCoroutine  = StartCoroutine(VadCoroutine());
         }
@@ -111,6 +133,8 @@ namespace NeonCompanion.Runtime.Voice
             float[] samples = new float[pos * _recordingClip.channels];
             _recordingClip.GetData(samples, 0);
             byte[] wav = BuildWav(samples, 1, 16000, 16);
+            Destroy(_recordingClip);
+            _recordingClip = null;
             StartCoroutine(TranscribeCoroutine(wav));
             return wav;
         }
@@ -214,6 +238,7 @@ namespace NeonCompanion.Runtime.Voice
 
                 using (UnityWebRequest request = UnityWebRequest.Post(url, form))
                 {
+                    request.timeout = 30;
                     request.SetRequestHeader("Authorization", "Bearer " + _apiKey);
                     yield return request.SendWebRequest();
 
@@ -257,6 +282,7 @@ namespace NeonCompanion.Runtime.Voice
                 request.uploadHandler               = new UploadHandlerRaw(bodyBytes);
                 request.uploadHandler.contentType   = "application/json";
                 request.downloadHandler             = new DownloadHandlerAudioClip(url, AudioType.MPEG);
+                request.timeout                     = 60;
                 request.SetRequestHeader("Authorization", "Bearer " + _apiKey);
                 request.SetRequestHeader("Content-Type", "application/json");
                 yield return request.SendWebRequest();
@@ -271,6 +297,7 @@ namespace NeonCompanion.Runtime.Voice
                         yield return null;
                         while (_audioSource != null && _audioSource.isPlaying)
                             yield return null;
+                        Destroy(clip);
                     }
                 }
                 else
