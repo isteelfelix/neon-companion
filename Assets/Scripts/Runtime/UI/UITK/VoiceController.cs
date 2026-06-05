@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
+using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -20,6 +21,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<Task<ChatService>> GetChatServiceAsync;
             public Func<ChatService> GetChatServiceSync;
             public Func<bool> IsBound;
+            public Func<AppSettings> GetAppSettings;
         }
 
         private Deps _d;
@@ -30,6 +32,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _voiceBoundToChat;
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
+        private string _currentProviderId;
 
         public bool IsVoicePlaying => _isVoicePlaying;
         public bool IsVoiceRecording => _isVoiceRecording;
@@ -74,11 +77,59 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (chat == null)
                 return;
 
+            ProviderConfig provider = chat.CurrentProvider;
+            string newProviderId = provider != null ? provider.id : null;
+            bool providerChanged = _currentProviderId != newProviderId;
+            _currentProviderId = newProviderId;
+
+            if (providerChanged && _voiceService != null)
+            {
+                var mb = _voiceService as MonoBehaviour;
+                if (mb != null)
+                {
+                    if (mb.gameObject == _d.gameObject)
+                        UnityEngine.Object.Destroy(mb);
+                    else
+                        UnityEngine.Object.Destroy(mb.gameObject);
+                }
+                _voiceService = null;
+
+                if (_voiceOutputManager != null)
+                {
+                    if (_voiceBoundToChat)
+                        _voiceOutputManager.UnbindChat(chat);
+                    UnityEngine.Object.Destroy(_voiceOutputManager);
+                    _voiceOutputManager = null;
+                }
+                _voiceBoundToChat = false;
+
+                if (_voiceInputManager != null)
+                {
+                    UnityEngine.Object.Destroy(_voiceInputManager);
+                    _voiceInputManager = null;
+                }
+
+                if (_lipsyncController != null)
+                {
+                    UnityEngine.Object.Destroy(_lipsyncController);
+                    _lipsyncController = null;
+                }
+            }
+
             if (_voiceService == null)
             {
-                _voiceService = _d.gameObject.GetComponent<WebSpeechBridge>();
-                if (_voiceService == null)
-                    _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
+                AppSettings settings = _d.GetAppSettings != null ? _d.GetAppSettings() : new AppSettings();
+                IVoiceService created = VoiceServiceFactory.Create(provider, settings);
+                if (created != null)
+                {
+                    _voiceService = created;
+                }
+                else
+                {
+                    _voiceService = _d.gameObject.GetComponent<WebSpeechBridge>();
+                    if (_voiceService == null)
+                        _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
+                }
             }
 
             if (_voiceOutputManager == null)

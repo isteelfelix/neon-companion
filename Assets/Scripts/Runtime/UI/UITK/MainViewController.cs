@@ -831,7 +831,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetChatServiceSync = () => _chatService,
-                IsBound = () => _isBound
+                IsBound = () => _isBound,
+                GetAppSettings = () => _app != null && _app.Settings != null ? _app.Settings.Load() : new NeonCompanion.Runtime.Data.Models.AppSettings()
             };
         }
 
