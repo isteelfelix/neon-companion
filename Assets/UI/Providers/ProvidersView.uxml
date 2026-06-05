@@ -76,6 +76,32 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
+                <!-- Voice section (OpenAI-compatible providers only; hidden for Hermes) -->
+                <ui:VisualElement name="edit-voice-section">
+                    <ui:VisualElement class="field">
+                        <ui:Label text="Провайдер распознавания (STT)" class="label" />
+                        <nc:NeonDropdown name="edit-stt-provider" choices-csv="OpenAI Whisper,Groq Whisper,Local (faster-whisper)" class="input" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="field">
+                        <ui:Label text="Провайдер синтеза (TTS)" class="label" />
+                        <nc:NeonDropdown name="edit-tts-provider" choices-csv="Edge (free),OpenAI TTS,ElevenLabs,MiniMax,Mistral" class="input" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="field">
+                        <ui:Label text="Голос TTS" class="label" />
+                        <ui:TextField name="edit-tts-voice" class="input" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="field__row">
+                        <ui:VisualElement class="field field--half">
+                            <ui:Label text="Скорость речи" class="label" />
+                            <ui:Slider name="edit-tts-speed" low-value="0.25" high-value="4" value="1" show-input-field="true" class="input slider-input" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="field field--half">
+                            <ui:Label text="Язык распознавания" class="label" />
+                            <ui:TextField name="edit-stt-language" class="input input--mono" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
                 <ui:VisualElement name="test-row" class="testrow">
                     <ui:VisualElement name="test-row-icon" class="icon icon--check testrow__icon" />
                     <ui:Label name="test-row-label" class="testrow__label" />

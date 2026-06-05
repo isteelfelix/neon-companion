@@ -109,6 +109,15 @@ namespace NeonCompanion.Runtime.UI.UITK
         private CancellationTokenSource _autoDiscoverCts;
         private readonly Dictionary<string, string> _modelPresetByLabel = new Dictionary<string, string>();
 
+        // Voice editor fields (queried lazily from ProviderEditPanel)
+        private VisualElement _editVoiceSection;
+        private NeonDropdown _editSttProvider;
+        private NeonDropdown _editTtsProvider;
+        private TextField _editTtsVoice;
+        private Slider _editTtsSpeed;
+        private TextField _editSttLanguage;
+        private bool _voiceFieldsQueried;
+
         // Model picker overlay (created lazily)
         private VisualElement _modelPickerOverlay;
         private VisualElement _modelPickerDialog;
@@ -454,12 +463,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.EditMaxTokens != null)
                 _d.EditMaxTokens.SetValueWithoutNotify(_editingProvider.maxTokens.ToString());
 
+            bool isHermes = ChatService.IsHermesProvider(_editingProvider);
+
             // Temperature / max tokens only apply to the OpenAI HTTP path. Hermes drives
             // generation server-side (session.create ignores them), so hide that row.
             var generationRow = _d.EditTemperature?.parent?.parent;
-            SetDisplay(generationRow, ChatService.IsHermesProvider(_editingProvider)
-                ? DisplayStyle.None
-                : DisplayStyle.Flex);
+            SetDisplay(generationRow, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
+
+            // Voice section: shown for OpenAI-compatible providers only.
+            EnsureVoiceEditorFields();
+            SetDisplay(_editVoiceSection, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
+            if (!isHermes)
+                SyncVoiceFieldsToUi(_editingProvider);
 
             SetTestRow(null, string.Empty);
             _d.ProviderEditPanel.style.display = DisplayStyle.Flex;
@@ -1961,11 +1976,90 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.EditMaxTokens != null && int.TryParse(_d.EditMaxTokens.value, out int tokens))
                 draft.maxTokens = tokens;
 
+            if (!ChatService.IsHermesProvider(draft))
+            {
+                EnsureVoiceEditorFields();
+                if (_editSttProvider != null) draft.sttProvider = MapSttLabelToCode(_editSttProvider.value);
+                if (_editTtsProvider != null) draft.ttsProvider = MapTtsLabelToCode(_editTtsProvider.value);
+                if (_editTtsVoice != null)    draft.ttsVoice    = _editTtsVoice.value;
+                if (_editTtsSpeed != null)    draft.ttsSpeed    = _editTtsSpeed.value;
+                if (_editSttLanguage != null) draft.sttLanguage = _editSttLanguage.value;
+            }
+
             // Backend type is fixed when the provider editor opens/creates the draft.
             // Saving must never migrate a provider between Hermes and OpenAI just because
             // the active chat backend or filter dropdown changed while editing.
 
             return draft;
+        }
+
+        private void EnsureVoiceEditorFields()
+        {
+            if (_voiceFieldsQueried) return;
+            _voiceFieldsQueried = true;
+            if (_d.ProviderEditPanel == null) return;
+            _editVoiceSection = _d.ProviderEditPanel.Q<VisualElement>("edit-voice-section");
+            _editSttProvider  = _d.ProviderEditPanel.Q<NeonDropdown>("edit-stt-provider");
+            _editTtsProvider  = _d.ProviderEditPanel.Q<NeonDropdown>("edit-tts-provider");
+            _editTtsVoice     = _d.ProviderEditPanel.Q<TextField>("edit-tts-voice");
+            _editTtsSpeed     = _d.ProviderEditPanel.Q<Slider>("edit-tts-speed");
+            _editSttLanguage  = _d.ProviderEditPanel.Q<TextField>("edit-stt-language");
+        }
+
+        private void SyncVoiceFieldsToUi(ProviderConfig provider)
+        {
+            EnsureVoiceEditorFields();
+
+            if (_editSttProvider != null)
+                _editSttProvider.SetValueWithoutNotify(MapSttCodeToLabel(provider.sttProvider));
+
+            if (_editTtsProvider != null)
+                _editTtsProvider.SetValueWithoutNotify(MapTtsCodeToLabel(provider.ttsProvider));
+
+            if (_editTtsVoice != null)
+                _editTtsVoice.SetValueWithoutNotify(provider.ttsVoice ?? string.Empty);
+
+            if (_editTtsSpeed != null)
+                _editTtsSpeed.SetValueWithoutNotify(provider.ttsSpeed > 0f ? provider.ttsSpeed : 1f);
+
+            if (_editSttLanguage != null)
+                _editSttLanguage.SetValueWithoutNotify(provider.sttLanguage ?? string.Empty);
+        }
+
+        private static string MapSttCodeToLabel(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return "OpenAI Whisper";
+            if (string.Equals(code, "groq",  StringComparison.OrdinalIgnoreCase)) return "Groq Whisper";
+            if (string.Equals(code, "local", StringComparison.OrdinalIgnoreCase)) return "Local (faster-whisper)";
+            return "OpenAI Whisper";
+        }
+
+        private static string MapSttLabelToCode(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return "openai";
+            if (label.IndexOf("Groq",  StringComparison.OrdinalIgnoreCase) >= 0) return "groq";
+            if (label.IndexOf("Local", StringComparison.OrdinalIgnoreCase) >= 0) return "local";
+            return "openai";
+        }
+
+        private static string MapTtsCodeToLabel(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return "Edge (free)";
+            if (string.Equals(code, "openai",     StringComparison.OrdinalIgnoreCase)) return "OpenAI TTS";
+            if (string.Equals(code, "elevenlabs", StringComparison.OrdinalIgnoreCase)) return "ElevenLabs";
+            if (string.Equals(code, "minimax",    StringComparison.OrdinalIgnoreCase)) return "MiniMax";
+            if (string.Equals(code, "mistral",    StringComparison.OrdinalIgnoreCase)) return "Mistral";
+            return "Edge (free)";
+        }
+
+        private static string MapTtsLabelToCode(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return "edge";
+            if (label.IndexOf("OpenAI",     StringComparison.OrdinalIgnoreCase) >= 0) return "openai";
+            if (label.IndexOf("ElevenLabs", StringComparison.OrdinalIgnoreCase) >= 0) return "elevenlabs";
+            if (label.IndexOf("MiniMax",    StringComparison.OrdinalIgnoreCase) >= 0) return "minimax";
+            if (label.IndexOf("Mistral",    StringComparison.OrdinalIgnoreCase) >= 0) return "mistral";
+            return "edge";
         }
 
         // ============================================================
@@ -1977,16 +2071,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (source == null) return null;
             return new ProviderConfig
             {
-                id           = source.id,
-                displayName  = source.displayName,
-                baseUrl      = source.baseUrl,
-                apiKey       = source.apiKey,
-                defaultModel = source.defaultModel,
-                temperature  = source.temperature,
-                maxTokens    = source.maxTokens,
+                id            = source.id,
+                displayName   = source.displayName,
+                baseUrl       = source.baseUrl,
+                apiKey        = source.apiKey,
+                defaultModel  = source.defaultModel,
+                temperature   = source.temperature,
+                maxTokens     = source.maxTokens,
                 contextWindow = source.contextWindow,
-                isEnabled    = source.isEnabled,
-                backendType  = source.backendType
+                isEnabled     = source.isEnabled,
+                backendType   = source.backendType,
+                sttProvider   = source.sttProvider,
+                ttsProvider   = source.ttsProvider,
+                ttsVoice      = source.ttsVoice,
+                ttsModel      = source.ttsModel,
+                ttsSpeed      = source.ttsSpeed,
+                sttLanguage   = source.sttLanguage
             };
         }
 

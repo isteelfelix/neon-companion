@@ -75,6 +75,29 @@
                     <ui:Toggle name="settings-voice-io" class="settings-toggle" value="true" />
                 </ui:VisualElement>
 
+                <ui:VisualElement name="settings-voice-section">
+                    <ui:VisualElement class="settings-row">
+                        <ui:VisualElement class="settings-row__copy">
+                            <ui:Label text="Устройство записи" class="settings-row__name" />
+                            <ui:Label text="Микрофон для голосового ввода." class="settings-row__sub" />
+                        </ui:VisualElement>
+                        <nc:NeonDropdown name="settings-input-device" class="settings-dropdown" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="settings-row">
+                        <ui:VisualElement class="settings-row__copy">
+                            <ui:Label text="Громкость" class="settings-row__name" />
+                            <ui:Label text="Громкость воспроизведения голосовых ответов." class="settings-row__sub" />
+                        </ui:VisualElement>
+                        <ui:Slider name="settings-output-volume" low-value="0" high-value="1" value="0.8" show-input-field="true" class="input slider-input" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="settings-row">
+                        <ui:VisualElement class="settings-row__copy">
+                            <ui:Label text="Устройство воспроизведения" class="settings-row__name" />
+                            <ui:Label name="settings-output-device-info" text="Системный по умолчанию" class="settings-row__sub" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
                 <ui:VisualElement class="settings-row settings-row--last">
                     <ui:VisualElement class="settings-row__copy">
                         <ui:Label text="Горячая клавиша закрытия" class="settings-row__name" />

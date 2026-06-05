@@ -72,6 +72,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _shapeSquare;
         private Button _shapeHex;
 
+        // ===== Voice device UI =====
+        private VisualElement _settingsVoiceSection;
+        private NeonDropdown _settingsInputDevice;
+        private Slider _settingsOutputVolume;
+
         // ===== Settings action buttons =====
         private Button _settingsOpenFolderBtn;
         private Button _settingsExportBtn;
@@ -156,6 +161,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _shapeRound  = root.Q<Button>("shape-round");
             _shapeSquare = root.Q<Button>("shape-square");
             _shapeHex    = root.Q<Button>("shape-hex");
+
+            // Voice device controls
+            _settingsVoiceSection = root.Q<VisualElement>("settings-voice-section");
+            _settingsInputDevice  = root.Q<NeonDropdown>("settings-input-device");
+            _settingsOutputVolume = root.Q<Slider>("settings-output-volume");
 
             // Settings action buttons
             _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
@@ -322,7 +332,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterToggleChanged(_settingsStreaming,     _ => SaveSettings());
             RegisterToggleChanged(_settingsEnterToSend,   _ => SaveSettings());
             RegisterToggleChanged(_settingsSystemPrompt, _ => SaveSettings());
-            RegisterToggleChanged(_settingsVoiceIo,      _ => { SaveSettings(); _deps.RefreshVoiceControls?.Invoke(); });
+            RegisterToggleChanged(_settingsVoiceIo,      _ => { SaveSettings(); _deps.RefreshVoiceControls?.Invoke(); RefreshVoiceSection(); });
             RegisterToggleChanged(_settingsEncryptKeys,  _ => SaveSettings());
             RegisterToggleChanged(_settingsMaskLogs,     _ => SaveSettings());
             RegisterToggleChanged(_settingsShowHalo,    v => { ApplyHaloVisibility(v); SaveSettings(); });
@@ -333,6 +343,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_settingsToolPermission != null)
                 _settingsToolPermission.RegisterCallback<ChangeEvent<string>>(OnSettingsToolPermissionChanged);
+
+            if (_settingsInputDevice != null)
+                _settingsInputDevice.RegisterCallback<ChangeEvent<string>>(OnVoiceInputDeviceChanged);
+
+            if (_settingsOutputVolume != null)
+                _settingsOutputVolume.RegisterCallback<ChangeEvent<float>>(OnVoiceOutputVolumeChanged);
 
             RegisterClick(_settingsOpenFolderBtn,  OnOpenFolderClicked);
             RegisterClick(_settingsExportBtn,      OnExportChatsClicked);
@@ -359,6 +375,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_settingsToolPermission != null)
                 _settingsToolPermission.UnregisterCallback<ChangeEvent<string>>(OnSettingsToolPermissionChanged);
+
+            if (_settingsInputDevice != null)
+                _settingsInputDevice.UnregisterCallback<ChangeEvent<string>>(OnVoiceInputDeviceChanged);
+
+            if (_settingsOutputVolume != null)
+                _settingsOutputVolume.UnregisterCallback<ChangeEvent<float>>(OnVoiceOutputVolumeChanged);
 
             UnregisterClick(_settingsOpenFolderBtn,  OnOpenFolderClicked);
             UnregisterClick(_settingsExportBtn,      OnExportChatsClicked);
@@ -582,6 +604,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _settingsHotkeyCaptureBtn.text = _closeHotkey;
 
                 _deps.RefreshVoiceControls?.Invoke();
+                PopulateVoiceDeviceDropdown(s.inputDeviceName);
+                if (_settingsOutputVolume != null)
+                    _settingsOutputVolume.SetValueWithoutNotify(s.outputVolume);
+                RefreshVoiceSection();
                 loaded = true;
             }
             catch (Exception ex)
@@ -619,6 +645,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsBreathing != null)     s.breathingAnimation = _settingsBreathing.value;
                 if (_settingsLanguage != null)      s.language           = ResolveLanguageCode(_settingsLanguage.value);
                 if (_settingsToolPermission != null) s.toolPermissionMode = ResolvePermissionMode(_settingsToolPermission.value);
+                if (_settingsInputDevice != null)   s.inputDeviceName     = _settingsInputDevice.value ?? string.Empty;
+                if (_settingsOutputVolume != null)  s.outputVolume        = _settingsOutputVolume.value;
 
                 s.avatarShape      = _avatarShape;
                 s.activeAvatarId   = _deps.GetActiveAvatarId?.Invoke() ?? "neon";
@@ -1075,6 +1103,66 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 NeonLogger.LogError(ex.ToString());
             }
+        }
+
+        // ============================================================
+        // Voice device helpers
+        // ============================================================
+
+        private void PopulateVoiceDeviceDropdown(string savedDeviceName)
+        {
+            if (_settingsInputDevice == null)
+                return;
+
+            string[] devices = UnityEngine.Microphone.devices;
+            var choices = new List<string>();
+
+            if (devices == null || devices.Length == 0)
+            {
+                choices.Add(LocalizationExtensions.Get("settings.voice.input_device.none", "No devices"));
+                _settingsInputDevice.choices = choices;
+                _settingsInputDevice.SetValueWithoutNotify(choices[0]);
+                return;
+            }
+
+            foreach (string d in devices)
+                choices.Add(d);
+
+            _settingsInputDevice.choices = choices;
+
+            string selected = string.Empty;
+            if (!string.IsNullOrEmpty(savedDeviceName))
+            {
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    if (string.Equals(choices[i], savedDeviceName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        selected = choices[i];
+                        break;
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(selected) && choices.Count > 0)
+                selected = choices[0];
+
+            _settingsInputDevice.SetValueWithoutNotify(selected);
+        }
+
+        private void RefreshVoiceSection()
+        {
+            bool enabled = _settingsVoiceIo != null && _settingsVoiceIo.value;
+            SetDisplay(_settingsVoiceSection, enabled ? DisplayStyle.Flex : DisplayStyle.None);
+        }
+
+        private void OnVoiceInputDeviceChanged(ChangeEvent<string> evt)
+        {
+            SaveSettings();
+        }
+
+        private void OnVoiceOutputVolumeChanged(ChangeEvent<float> evt)
+        {
+            SaveSettings();
         }
 
         // ============================================================

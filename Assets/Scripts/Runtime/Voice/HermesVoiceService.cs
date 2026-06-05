@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using NeonCompanion.Runtime.Core;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -17,10 +18,22 @@ namespace NeonCompanion.Runtime.Voice
         private bool _isRecording;
         private bool _isSpeaking;
         private Coroutine _playbackCoroutine;
-        private string _tempFilePath;
+        private Coroutine _vadCoroutine;
+
+        // VAD constants
+        private const float VadThreshold      = 0.075f;
+        private const float SilenceTimeoutSec  = 1.25f;
+        private const int   VadWindowFrames   = 1600;    // 0.1 s at 16 kHz
+        private const float IdleTimeoutSec    = 12f;
+
+        // Temp file tracking
+        private readonly List<string> _tempFiles       = new List<string>();
+        private readonly List<float>  _tempFileTimes   = new List<float>();
+        private int _tempFileCounter;
+        private const float TempFileMaxAgeSec = 300f;   // 5 minutes
 
         public bool IsRecording => _isRecording;
-        public bool IsSpeaking => _isSpeaking;
+        public bool IsSpeaking  => _isSpeaking;
         public bool IsAvailable => true;
 
         public event Action<string> OnSpeechRecognized;
@@ -28,7 +41,7 @@ namespace NeonCompanion.Runtime.Voice
 
         public void Initialize(string hermesRestUrl, string inputDeviceName, float outputVolume)
         {
-            _hermesRestUrl = hermesRestUrl != null ? hermesRestUrl.TrimEnd('/') : "";
+            _hermesRestUrl   = hermesRestUrl != null ? hermesRestUrl.TrimEnd('/') : "";
             _inputDeviceName = inputDeviceName;
 
             if (_audioSource == null)
@@ -42,23 +55,51 @@ namespace NeonCompanion.Runtime.Voice
 
         private void OnDestroy()
         {
-            if (!string.IsNullOrEmpty(_tempFilePath) && System.IO.File.Exists(_tempFilePath))
-                System.IO.File.Delete(_tempFilePath);
+            if (_vadCoroutine != null)
+            {
+                StopCoroutine(_vadCoroutine);
+                _vadCoroutine = null;
+            }
+
+            for (int i = 0; i < _tempFiles.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(_tempFiles[i]) && System.IO.File.Exists(_tempFiles[i]))
+                {
+                    try { System.IO.File.Delete(_tempFiles[i]); }
+                    catch { }
+                }
+            }
+            _tempFiles.Clear();
+            _tempFileTimes.Clear();
         }
 
         public void StartRecording()
         {
             if (_isRecording)
                 return;
-            _activeDevice = FindInputDevice(_inputDeviceName);
+
+            if (Microphone.devices.Length == 0)
+            {
+                NeonLogger.LogWarning("HermesVoiceService: no microphone devices available");
+                return;
+            }
+
+            _activeDevice  = FindInputDevice(_inputDeviceName);
             _recordingClip = Microphone.Start(_activeDevice, true, 60, 16000);
-            _isRecording = true;
+            _isRecording   = true;
+            _vadCoroutine  = StartCoroutine(VadCoroutine());
         }
 
         public byte[] StopRecording()
         {
             if (!_isRecording)
                 return new byte[0];
+
+            if (_vadCoroutine != null)
+            {
+                StopCoroutine(_vadCoroutine);
+                _vadCoroutine = null;
+            }
 
             int pos = Microphone.GetPosition(_activeDevice);
             Microphone.End(_activeDevice);
@@ -100,51 +141,120 @@ namespace NeonCompanion.Runtime.Voice
         }
 
         // ============================================================
+        // VAD
+        // ============================================================
+
+        private IEnumerator VadCoroutine()
+        {
+            float recordStart    = Time.realtimeSinceStartup;
+            bool  anySpeechSeen  = false;
+            float lastSpeechTime = -1f;
+
+            while (_isRecording)
+            {
+                yield return new WaitForSeconds(0.1f);
+
+                if (_recordingClip == null) break;
+
+                int pos = Microphone.GetPosition(_activeDevice);
+                if (pos < VadWindowFrames) continue;
+
+                int channels    = _recordingClip.channels;
+                int windowStart = pos - VadWindowFrames;
+                float[] samples = new float[VadWindowFrames * channels];
+                _recordingClip.GetData(samples, windowStart);
+
+                float rms = 0f;
+                for (int i = 0; i < samples.Length; i++)
+                    rms += samples[i] * samples[i];
+                rms = samples.Length > 0 ? Mathf.Sqrt(rms / samples.Length) : 0f;
+
+                float now = Time.realtimeSinceStartup;
+
+                if (rms > VadThreshold)
+                {
+                    anySpeechSeen  = true;
+                    lastSpeechTime = now;
+                }
+
+                if (anySpeechSeen && lastSpeechTime > 0f && (now - lastSpeechTime) > SilenceTimeoutSec)
+                {
+                    _vadCoroutine = null;
+                    StopRecording();
+                    yield break;
+                }
+
+                if (!anySpeechSeen && (now - recordStart) > IdleTimeoutSec)
+                {
+                    _vadCoroutine = null;
+                    StopRecording();
+                    yield break;
+                }
+            }
+
+            _vadCoroutine = null;
+        }
+
+        // ============================================================
         // Coroutines
         // ============================================================
 
         private IEnumerator TranscribeCoroutine(byte[] wavBytes)
         {
-            string url = _hermesRestUrl + "/api/audio/transcribe";
+            string url    = _hermesRestUrl + "/api/audio/transcribe";
             string base64 = System.Convert.ToBase64String(wavBytes);
-            string json = "{\"data_url\":\"data:audio/wav;base64," + base64 + "\",\"mime_type\":\"audio/wav\"}";
+            string json   = "{\"data_url\":\"data:audio/wav;base64," + base64 + "\",\"mime_type\":\"audio/wav\"}";
             byte[] bodyBytes = System.Text.Encoding.UTF8.GetBytes(json);
+            bool succeeded = false;
 
-            using (UnityWebRequest request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                request.uploadHandler = new UploadHandlerRaw(bodyBytes);
-                request.uploadHandler.contentType = "application/json";
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.SetRequestHeader("Content-Type", "application/json");
-                yield return request.SendWebRequest();
+                using (UnityWebRequest request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
+                {
+                    request.uploadHandler             = new UploadHandlerRaw(bodyBytes);
+                    request.uploadHandler.contentType = "application/json";
+                    request.downloadHandler           = new DownloadHandlerBuffer();
+                    request.SetRequestHeader("Content-Type", "application/json");
+                    yield return request.SendWebRequest();
 
-                if (request.result == UnityWebRequest.Result.Success)
-                {
-                    HermesTranscribeResponse resp = JsonUtility.FromJson<HermesTranscribeResponse>(request.downloadHandler.text);
-                    string text = (resp != null && resp.ok && resp.transcript != null) ? resp.transcript : "";
-                    OnSpeechRecognized?.Invoke(text);
-                }
-                else
-                {
-                    NeonLogger.LogWarning("HermesVoiceService STT error: " + request.error);
-                    OnSpeechRecognized?.Invoke("");
+                    if (request.result == UnityWebRequest.Result.Success)
+                    {
+                        HermesTranscribeResponse resp = JsonUtility.FromJson<HermesTranscribeResponse>(request.downloadHandler.text);
+                        string text = (resp != null && resp.ok && resp.transcript != null) ? resp.transcript : "";
+                        OnSpeechRecognized?.Invoke(text);
+                        succeeded = true;
+                        break;
+                    }
+
+                    if (attempt == 0)
+                    {
+                        NeonLogger.LogWarning("HermesVoiceService STT error (will retry): " + request.error);
+                        yield return new WaitForSeconds(0.5f);
+                    }
+                    else
+                    {
+                        NeonLogger.LogWarning("HermesVoiceService STT error (final): " + request.error);
+                    }
                 }
             }
+
+            if (!succeeded)
+                OnSpeechRecognized?.Invoke("");
         }
 
         private IEnumerator SpeakCoroutine(string text)
         {
-            string url = _hermesRestUrl + "/api/audio/speak";
-            string json = "{\"text\":" + JsonQuote(text) + "}";
+            string url       = _hermesRestUrl + "/api/audio/speak";
+            string json      = "{\"text\":" + JsonQuote(text) + "}";
             byte[] bodyBytes = System.Text.Encoding.UTF8.GetBytes(json);
 
             HermesSpeakResponse resp = null;
 
             using (UnityWebRequest request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
             {
-                request.uploadHandler = new UploadHandlerRaw(bodyBytes);
+                request.uploadHandler             = new UploadHandlerRaw(bodyBytes);
                 request.uploadHandler.contentType = "application/json";
-                request.downloadHandler = new DownloadHandlerBuffer();
+                request.downloadHandler           = new DownloadHandlerBuffer();
                 request.SetRequestHeader("Content-Type", "application/json");
                 yield return request.SendWebRequest();
 
@@ -171,10 +281,15 @@ namespace NeonCompanion.Runtime.Voice
 
                     if (audioBytes != null)
                     {
-                        _tempFilePath = System.IO.Path.Combine(Application.temporaryCachePath, "neon_hermes_tts.mp3");
-                        System.IO.File.WriteAllBytes(_tempFilePath, audioBytes);
+                        PruneStaleTempFiles();
+                        string fileName = "neon_hermes_tts_" + _tempFileCounter + ".mp3";
+                        _tempFileCounter++;
+                        string filePath = System.IO.Path.Combine(Application.temporaryCachePath, fileName);
+                        System.IO.File.WriteAllBytes(filePath, audioBytes);
+                        _tempFiles.Add(filePath);
+                        _tempFileTimes.Add(Time.realtimeSinceStartup);
 
-                        string fileUri = "file://" + _tempFilePath;
+                        string fileUri = "file://" + filePath;
                         using (UnityWebRequest fileReq = new UnityWebRequest(fileUri, UnityWebRequest.kHttpVerbGET))
                         {
                             fileReq.downloadHandler = new DownloadHandlerAudioClip(fileUri, AudioType.MPEG);
@@ -205,9 +320,31 @@ namespace NeonCompanion.Runtime.Voice
                 }
             }
 
-            _isSpeaking = false;
+            _isSpeaking        = false;
             _playbackCoroutine = null;
             OnPlaybackComplete?.Invoke();
+        }
+
+        // ============================================================
+        // Temp file management
+        // ============================================================
+
+        private void PruneStaleTempFiles()
+        {
+            float now = Time.realtimeSinceStartup;
+            for (int i = _tempFiles.Count - 1; i >= 0; i--)
+            {
+                if (now - _tempFileTimes[i] > TempFileMaxAgeSec)
+                {
+                    if (!string.IsNullOrEmpty(_tempFiles[i]) && System.IO.File.Exists(_tempFiles[i]))
+                    {
+                        try { System.IO.File.Delete(_tempFiles[i]); }
+                        catch { }
+                    }
+                    _tempFiles.RemoveAt(i);
+                    _tempFileTimes.RemoveAt(i);
+                }
+            }
         }
 
         // ============================================================
@@ -238,25 +375,25 @@ namespace NeonCompanion.Runtime.Voice
 
         private static byte[] BuildWav(float[] samples, int channels, int sampleRate, int bitsPerSample)
         {
-            int byteRate = sampleRate * channels * bitsPerSample / 8;
+            int byteRate   = sampleRate * channels * bitsPerSample / 8;
             int blockAlign = channels * bitsPerSample / 8;
-            int dataSize = samples.Length * (bitsPerSample / 8);
-            byte[] wav = new byte[44 + dataSize];
+            int dataSize   = samples.Length * (bitsPerSample / 8);
+            byte[] wav     = new byte[44 + dataSize];
             int o = 0;
 
-            WriteStr(wav, o, "RIFF");            o += 4;
-            WriteI32(wav, o, 36 + dataSize);     o += 4;
-            WriteStr(wav, o, "WAVE");            o += 4;
-            WriteStr(wav, o, "fmt ");            o += 4;
-            WriteI32(wav, o, 16);                o += 4;
-            WriteI16(wav, o, 1);                 o += 2;  // PCM format
-            WriteI16(wav, o, (short)channels);   o += 2;
-            WriteI32(wav, o, sampleRate);        o += 4;
-            WriteI32(wav, o, byteRate);          o += 4;
-            WriteI16(wav, o, (short)blockAlign); o += 2;
+            WriteStr(wav, o, "RIFF");               o += 4;
+            WriteI32(wav, o, 36 + dataSize);        o += 4;
+            WriteStr(wav, o, "WAVE");               o += 4;
+            WriteStr(wav, o, "fmt ");               o += 4;
+            WriteI32(wav, o, 16);                   o += 4;
+            WriteI16(wav, o, 1);                    o += 2;  // PCM format
+            WriteI16(wav, o, (short)channels);      o += 2;
+            WriteI32(wav, o, sampleRate);           o += 4;
+            WriteI32(wav, o, byteRate);             o += 4;
+            WriteI16(wav, o, (short)blockAlign);    o += 2;
             WriteI16(wav, o, (short)bitsPerSample); o += 2;
-            WriteStr(wav, o, "data");            o += 4;
-            WriteI32(wav, o, dataSize);          o += 4;
+            WriteStr(wav, o, "data");               o += 4;
+            WriteI32(wav, o, dataSize);             o += 4;
 
             for (int i = 0; i < samples.Length; i++)
             {
