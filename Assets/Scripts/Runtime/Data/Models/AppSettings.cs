@@ -30,5 +30,10 @@ namespace NeonCompanion.Runtime.Data.Models
         public string backendMode = "openai"; // "openai" | "hermes"
         public string hermesWsUrl = "";
         public string hermesRestUrl = "";
+
+        // Voice (universal)
+        public string inputDeviceName = "";   // microphone device name (empty = system default)
+        public string outputDeviceName = "";  // speaker device name (empty = system default)
+        public float outputVolume = 0.8f;     // 0.0-1.0
     }
 }
