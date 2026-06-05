@@ -1,6 +1,6 @@
 # Voice System Implementation Plan
 
-> **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
+> **For Hermes:** Follow `neon-companion-orchestration` skill. Check quotas first, then delegate via Claude Code (tmux) or Codex CLI — NOT via `delegate_task` subagents. Neon = orchestrator only.
 
 **Goal:** Replace the native WebSpeechBridge with backend-proxied voice services — one for OpenAI-compatible backends, one for Hermes backend — plus proper voice settings at both app and provider level.
 
