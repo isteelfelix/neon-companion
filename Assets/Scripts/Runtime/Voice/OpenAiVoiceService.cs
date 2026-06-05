@@ -130,11 +130,31 @@ namespace NeonCompanion.Runtime.Voice
             if (_recordingClip == null || pos <= 0)
                 return new byte[0];
 
-            float[] samples = new float[pos * _recordingClip.channels];
-            _recordingClip.GetData(samples, 0);
-            byte[] wav = BuildWav(samples, 1, 16000, 16);
+            int recChannels = _recordingClip.channels;
+            float[] rawSamples = new float[pos * recChannels];
+            _recordingClip.GetData(rawSamples, 0);
             Destroy(_recordingClip);
             _recordingClip = null;
+
+            // STT APIs expect mono. Downmix multichannel to mono before encoding.
+            float[] samples;
+            if (recChannels > 1)
+            {
+                samples = new float[pos];
+                for (int i = 0; i < pos; i++)
+                {
+                    float sum = 0f;
+                    for (int c = 0; c < recChannels; c++)
+                        sum += rawSamples[i * recChannels + c];
+                    samples[i] = sum / recChannels;
+                }
+            }
+            else
+            {
+                samples = rawSamples;
+            }
+
+            byte[] wav = BuildWav(samples, 1, 16000, 16);
             StartCoroutine(TranscribeCoroutine(wav));
             return wav;
         }

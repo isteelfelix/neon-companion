@@ -243,6 +243,55 @@
     padding: 3px 0;
 }
 
+/* ---- Slider (volume, etc.) ---- */
+
+.slider-input {
+    height: 36px;
+    min-width: 160px;
+    max-width: 200px;
+    flex-shrink: 0;
+}
+
+.slider-input .unity-base-slider__text-field {
+    min-width: 52px;
+    max-width: 52px;
+    margin-left: 8px;
+}
+
+.slider-input .unity-base-slider__text-field > .unity-text-field__input,
+.slider-input .unity-base-slider__text-field > .unity-base-text-field__input {
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 8px;
+    color: var(--text-1);
+    font-size: 12px;
+    height: 28px;
+    padding: 0 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.slider-input .unity-base-slider__text-field > .unity-text-field__input:focus,
+.slider-input .unity-base-slider__text-field > .unity-base-text-field__input:focus {
+    border-color: var(--accent);
+}
+
+.slider-input .unity-base-slider__tracker {
+    background-color: var(--bg-3);
+    border-radius: 2px;
+    border-width: 0;
+    height: 4px;
+}
+
+.slider-input .unity-base-slider__dragger {
+    background-color: var(--accent);
+    border-width: 0;
+    border-radius: 7px;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+}
+
 /* ---- Hotkey capture button ---- */
 
 .btn--hotkey-capture {

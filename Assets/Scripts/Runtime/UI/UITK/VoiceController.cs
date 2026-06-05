@@ -32,7 +32,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _voiceBoundToChat;
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
-        private string _currentProviderId;
         private string _lastConfigHash;
 
         public bool IsVoicePlaying => _isVoicePlaying;
@@ -78,6 +77,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (chat == null)
                 return;
 
+            if (_d.IsVoiceEnabledBySettings != null && !_d.IsVoiceEnabledBySettings())
+                return;
+
             ProviderConfig provider = chat.CurrentProvider;
             AppSettings settings = _d.GetAppSettings != null ? _d.GetAppSettings() : new AppSettings();
             string configHash = ComputeConfigHash(provider, settings);
@@ -97,34 +99,28 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 else
                 {
-                    _voiceService = _d.gameObject.GetComponent<WebSpeechBridge>();
-                    if (_voiceService == null)
-                        _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
+                    _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
                 }
             }
 
             if (_voiceOutputManager == null)
             {
-                _voiceOutputManager = _d.gameObject.GetComponent<VoiceOutputManager>();
-                if (_voiceOutputManager == null)
-                    _voiceOutputManager = _d.gameObject.AddComponent<VoiceOutputManager>();
+                // Always AddComponent — never GetComponent. ReinitializeVoiceService destroys
+                // old components with Object.Destroy (deferred), so GetComponent would still
+                // return the pending-destroy instance and wire a dead manager to the pipeline.
+                _voiceOutputManager = _d.gameObject.AddComponent<VoiceOutputManager>();
                 _voiceOutputManager.Initialize(_voiceService, _d.IsVoiceEnabledBySettings, () => _voiceInputManager != null && _voiceInputManager.IsRecording);
             }
 
             if (_voiceInputManager == null)
             {
-                _voiceInputManager = _d.gameObject.GetComponent<VoiceInputManager>();
-                if (_voiceInputManager == null)
-                    _voiceInputManager = _d.gameObject.AddComponent<VoiceInputManager>();
+                _voiceInputManager = _d.gameObject.AddComponent<VoiceInputManager>();
                 _voiceInputManager.Initialize(_voiceService, _d.MicButton, _d.IsVoiceEnabledBySettings, _d.SendVoiceMessageAsync, _d.OnVoiceRecordingStarted);
             }
 
-            // V-02: connect lipsync to voice pipeline (was never created/initialized)
             if (_lipsyncController == null)
             {
-                _lipsyncController = _d.gameObject.GetComponent<LipsyncController>();
-                if (_lipsyncController == null)
-                    _lipsyncController = _d.gameObject.AddComponent<LipsyncController>();
+                _lipsyncController = _d.gameObject.AddComponent<LipsyncController>();
                 _lipsyncController.Initialize(_voiceOutputManager, _voiceInputManager);
             }
 
@@ -195,9 +191,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             else
             {
-                _voiceService = _d.gameObject.GetComponent<WebSpeechBridge>();
-                if (_voiceService == null)
-                    _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
+                // Old bridge was destroyed above (deferred). AddComponent always — GetComponent
+                // would return the pending-destroy instance during the same frame.
+                _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
             }
         }
 
