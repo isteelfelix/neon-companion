@@ -119,9 +119,24 @@ namespace NeonCompanion.Runtime.Api.Hermes
     }
 
     [Serializable]
+    public class TerminalExecutePayload
+    {
+        public string request_id;
+        public string command;
+        public int timeout_ms;
+    }
+
+    [Serializable]
     public class ErrorPayload
     {
         public string message;
+    }
+
+    public class TerminalExecuteRequest
+    {
+        public string RequestId;
+        public string Command;
+        public int TimeoutMs;
     }
 
     // === HermesSessionManager ===
@@ -151,6 +166,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public event Action<ApprovalRequest> OnApprovalRequest;
         public event Action<string> OnError;
         public event Action<TransportState> OnStateChanged;
+
+        public event Action<TerminalExecuteRequest> OnTerminalExecute;
 
         // === Constructor ===
 
@@ -340,6 +357,19 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 new { request_id = requestId, answer });
         }
 
+        public async Task RespondToTerminal(string requestId, ProcessResult result)
+        {
+            await _gateway.Request<object>(
+                RpcMethods.TerminalRespond,
+                new { 
+                    request_id = requestId,
+                    stdout = result.stdout,
+                    stderr = result.stderr,
+                    exit_code = result.exitCode,
+                    timed_out = result.timedOut
+                });
+        }
+
         public async Task RespondToApproval(bool approved)
         {
             string choice = approved ? "once" : "deny";
@@ -368,6 +398,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             _gateway.On(GatewayEvents.ClarifyRequest, HandleClarifyRequest);
             _gateway.On(GatewayEvents.ApprovalRequest, HandleApprovalRequest);
             _gateway.On(GatewayEvents.SudoRequest, HandleSudoRequest);
+            _gateway.On(GatewayEvents.TerminalExecute, HandleTerminalExecute);
             _gateway.On(GatewayEvents.Error, HandleError);
         }
 
@@ -644,6 +675,20 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 requestId = payload.request_id,
                 question = payload.question,
                 choices = payload.choices
+            });
+        }
+
+        private void HandleTerminalExecute(GatewayEvent evt)
+        {
+            if (!IsActiveEvent(evt)) return;
+            var payload = evt.Payload.ToObject<TerminalExecutePayload>();
+            if (payload == null) return;
+            
+            OnTerminalExecute?.Invoke(new TerminalExecuteRequest
+            {
+                RequestId = payload.request_id,
+                Command = payload.command ?? string.Empty,
+                TimeoutMs = payload.timeout_ms > 0 ? payload.timeout_ms : 30000
             });
         }
 

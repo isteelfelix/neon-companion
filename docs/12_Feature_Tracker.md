@@ -102,6 +102,7 @@
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 | U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
 | U-53 | IsImageFilePath crash on control characters | ✅ | M2 | Path.GetExtension throws ArgumentException on newlines/tabs in pasted multi-line markdown. Fixed: GetInvalidPathChars guard + try/catch. |
+| U-54 | Terminal remote exec (Hermes WS RPC) | ⏳ | M2 | Client-side: GatewayEvents.TerminalExecute, RpcMethods.TerminalRespond, TerminalExecutePayload/Request, HandleTerminalExecute, RespondToTerminal, TerminalController.ExecuteRemoteCommand, MainViewController bridge (OnTerminalExecute sub + respond). Matches clarify pattern exactly. Gateway-side blocking not yet upstream. |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |

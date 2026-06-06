@@ -1,5 +1,10 @@
 # 11_Changelog.md
 
+## [Unreleased]
+
+### Added
+- **Terminal remote execution for Hermes** — Phase 2 WS RPC: `terminal.execute` event handler + `terminal.respond` RPC. Client executes via ProcessExecutionService (local shell on user machine) and responds with stdout/stderr/exit/timed_out. Follows exact clarify/approval request-respond pattern (GatewayEvents, IsActiveEvent, Handle*, RespondTo*). Bridge in MainViewController subscribes OnTerminalExecute (Hermes-only), lazy-inits TerminalController, calls ExecuteRemoteCommand + RespondToTerminal. C# 9 compliant, no chat code changes beyond wiring.
+
 ## [0.3.1] - 2026-06-06
 
 ### Added

@@ -16,6 +16,7 @@ using NeonCompanion.Runtime.UI.Platform;
 using NeonCompanion.Runtime.UI.UITK.Chat;
 using NeonCompanion.Runtime.UI.Avatars;
 using NeonCompanion.Runtime.UI.UITK.Terminal;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -98,6 +99,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _avatarContentHost;
         private VisualElement _terminalHost;
         private bool _rightPanelIsTerminal;
+
+        private HermesSessionManager _terminalHermesManager;
 
         // ===== Avatar gallery =====
 
@@ -375,6 +378,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // Apply current mode
                 _navigationController.ApplyBackendModeVisibility(
                     backendSelector.CurrentMode == Core.BackendMode.Hermes ? "hermes" : "openai");
+                if (backendSelector.CurrentMode == Core.BackendMode.Hermes)
+                    SetupTerminalRemoteBridge();
             }
 
             _ = RefreshAsync();
@@ -399,6 +404,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             var backendSelector = Core.GlobalBackendSelector.Instance;
             if (backendSelector != null)
                 backendSelector.OnModeChanged -= OnBackendModeChangedForNav;
+
+            TeardownTerminalRemoteBridge();
         }
 
         private void OnBackendModeChangedForNav(Core.BackendMode mode)
@@ -406,6 +413,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             string modeStr = mode == Core.BackendMode.Hermes ? "hermes" : "openai";
             _navigationController.ApplyBackendModeVisibility(modeStr);
             _ = _sessionHistoryController.RefreshSessionsFromCacheAsync();
+
+            if (mode == Core.BackendMode.Hermes)
+            {
+                SetupTerminalRemoteBridge();
+            }
+            else
+            {
+                TeardownTerminalRemoteBridge();
+            }
         }
 
         private void Bind(VisualElement root)
@@ -1108,6 +1124,71 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _terminalController = gameObject.AddComponent<TerminalController>();
             _terminalController.Initialize(_terminalHost);
+
+            // Wire remote terminal execution bridge (for hermes terminal.execute) after controller ready
+            SetupTerminalRemoteBridge();
+        }
+
+        private void SetupTerminalRemoteBridge()
+        {
+            var selector = Core.GlobalBackendSelector.Instance;
+            if (selector == null || selector.SessionManager == null)
+                return;
+
+            if (_terminalHermesManager != null)
+            {
+                _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
+            }
+
+            _terminalHermesManager = selector.SessionManager;
+            _terminalHermesManager.OnTerminalExecute += HandleRemoteTerminalExecute;
+        }
+
+        private void TeardownTerminalRemoteBridge()
+        {
+            if (_terminalHermesManager != null)
+            {
+                _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
+                _terminalHermesManager = null;
+            }
+        }
+
+        private async void HandleRemoteTerminalExecute(TerminalExecuteRequest request)
+        {
+            if (request == null)
+                return;
+
+            if (_terminalController == null)
+            {
+                EnsureTerminalController();
+            }
+
+            Core.ProcessResult result;
+            try
+            {
+                result = await _terminalController.ExecuteRemoteCommand(request.Command, request.TimeoutMs);
+            }
+            catch (Exception ex)
+            {
+                result = new Core.ProcessResult
+                {
+                    exitCode = -1,
+                    stderr = "Bridge error: " + ex.Message
+                };
+            }
+
+            var selector = Core.GlobalBackendSelector.Instance;
+            if (selector != null && selector.SessionManager != null)
+            {
+                try
+                {
+                    await selector.SessionManager.RespondToTerminal(request.RequestId, result);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[Terminal] Failed to respond to terminal RPC: " + ex.Message);
+                }
+            }
         }
 
         private static void RegisterClick(VisualElement element, EventCallback<ClickEvent> handler)

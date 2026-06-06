@@ -81,6 +81,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string ApprovalRequest = "approval.request";
         public const string SudoRequest = "sudo.request";
         public const string SecretRequest = "secret.request";
+        public const string TerminalExecute = "terminal.execute";
         public const string Error = "error";
         public const string BackgroundComplete = "background.complete";
     }
@@ -98,6 +99,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string PromptSubmit = "prompt.submit";
         public const string ClarifyRespond = "clarify.respond";
         public const string ApprovalRespond = "approval.respond";
+        public const string TerminalRespond = "terminal.respond";
         public const string ConfigGet = "config.get";
         public const string ImageAttach = "image.attach";
         public const string ImageDetach = "image.detach";
