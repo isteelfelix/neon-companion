@@ -82,8 +82,9 @@ namespace NeonCompanion.Runtime.Core
 
                     string so = string.Empty;
                     string se = string.Empty;
-                    try { so = await stdoutTask; } catch { }
-                    try { se = await stderrTask; } catch { }
+                    var drainTimeout = Task.Delay(2000);
+                    try { await Task.WhenAny(stdoutTask, drainTimeout); so = stdoutTask.IsCompleted ? stdoutTask.Result : string.Empty; } catch { }
+                    try { await Task.WhenAny(stderrTask, drainTimeout); se = stderrTask.IsCompleted ? stderrTask.Result : string.Empty; } catch { }
 
                     result.stdout = so ?? string.Empty;
                     result.stderr = (se ?? string.Empty) + "\n[Process timed out after " + timeoutMs + " ms]";

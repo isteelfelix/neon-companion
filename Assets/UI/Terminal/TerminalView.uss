@@ -48,8 +48,7 @@
     color: var(--text-1);
     font-size: 11px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    white-space: normal;
     -unity-text-align: upper-left;
 }
 

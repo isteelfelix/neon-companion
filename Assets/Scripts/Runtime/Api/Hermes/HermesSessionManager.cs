@@ -681,6 +681,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private void HandleTerminalExecute(GatewayEvent evt)
         {
             if (!IsActiveEvent(evt)) return;
+            if (evt.Payload == null) return;
             var payload = evt.Payload.ToObject<TerminalExecutePayload>();
             if (payload == null) return;
             

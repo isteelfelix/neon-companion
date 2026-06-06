@@ -200,10 +200,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
 
         public async Task<ProcessResult> ExecuteRemoteCommand(string command, int timeoutMs = 30000)
         {
-            // Same as local execution but called from event handler
             if (_processService == null)
                 ResolveService();
-            
+
             if (_processService == null)
             {
                 return new ProcessResult
@@ -212,8 +211,30 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                     stderr = "ProcessExecutionService not available"
                 };
             }
-            
-            return await _processService.ExecuteAsync(command, timeoutMs);
+
+            if (_isExecuting)
+            {
+                return new ProcessResult
+                {
+                    exitCode = -1,
+                    stderr = "Terminal is busy"
+                };
+            }
+
+            _isExecuting = true;
+            SetStatus("executing");
+            SetInputEnabled(false);
+
+            try
+            {
+                return await _processService.ExecuteAsync(command, timeoutMs);
+            }
+            finally
+            {
+                _isExecuting = false;
+                SetStatus("idle");
+                SetInputEnabled(true);
+            }
         }
 
         private void OnInputKeyDown(KeyDownEvent evt)
