@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:Style src="../Theme/Tokens.uss" />
+    <ui:Style src="../Theme/Components.uss" />
+    <ui:Style src="TerminalView.uss" />
+
+    <ui:VisualElement name="terminal-root" class="terminal-root">
+        <ui:VisualElement class="terminal-header">
+            <ui:Label text="Terminal" class="terminal-title" />
+            <ui:Label name="terminal-status" class="terminal-status" text="Ready" />
+        </ui:VisualElement>
+
+        <ui:ScrollView name="terminal-output-scroll" class="terminal-output-scroll" vertical-scroller-visibility="AlwaysVisible">
+            <ui:Label name="terminal-output" class="terminal-output" />
+        </ui:ScrollView>
+
+        <ui:VisualElement class="terminal-input-row">
+            <ui:TextField name="terminal-input" class="terminal-input" placeholder="Enter command..." />
+            <ui:Button name="terminal-submit" text="Run" class="btn btn--primary terminal-submit-btn" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -15,6 +15,7 @@ using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.UI.Platform;
 using NeonCompanion.Runtime.UI.UITK.Chat;
 using NeonCompanion.Runtime.UI.Avatars;
+using NeonCompanion.Runtime.UI.UITK.Terminal;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -89,7 +90,17 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly VoiceController _voiceController = new VoiceController();
         private readonly LayoutController _layoutController = new LayoutController();
 
+        // ===== Terminal (right panel tab) =====
+        private TerminalController _terminalController;
+        private VisualElement _rightTabBar;
+        private Button _avatarTabBtn;
+        private Button _terminalTabBtn;
+        private VisualElement _avatarContentHost;
+        private VisualElement _terminalHost;
+        private bool _rightPanelIsTerminal;
+
         // ===== Avatar gallery =====
+
         private static readonly string[] BuiltInAvatarIds =
             { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
         private static readonly Dictionary<string, BuiltInAvatarMeta> BuiltInAvatarMetaById = new Dictionary<string, BuiltInAvatarMeta>
@@ -429,6 +440,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _resizeHandle = root.Q<VisualElement>("resize-handle");
             _avatarPanel  = root.Q<VisualElement>("avatar-panel");
             _railElement = root.Q<VisualElement>("rail");
+
+            // Setup terminal toggle tabs inside right avatar panel (no UXML change)
+            SetupRightPanelTabs();
             _railResizeHandle = root.Q<VisualElement>("rail-resize-handle");
             _topbarSep = root.Q<VisualElement>("topbar-sep");
             _typingIndicator = root.Q<VisualElement>("typing-indicator");
@@ -883,6 +897,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _settingsController.RegisterCallbacks();
+
+            // Terminal tabs (defensive re-register)
+            RegisterClick(_avatarTabBtn, OnAvatarTabClicked);
+            RegisterClick(_terminalTabBtn, OnTerminalTabClicked);
         }
 
         private void UnregisterCallbacks()
@@ -902,9 +920,194 @@ namespace NeonCompanion.Runtime.UI.UITK
             _voiceController.UnregisterCallbacks();
             _providersController.UnregisterCallbacks();
 
+            // Terminal tabs
+            UnregisterClick(_avatarTabBtn, OnAvatarTabClicked);
+            UnregisterClick(_terminalTabBtn, OnTerminalTabClicked);
+
             _typingSchedule?.Pause();
             _scrollBottomButtonSchedule?.Pause();
             _scrollBottomButtonSchedule = null;
+        }
+
+        // ============================================================
+        // Right panel tabs: Avatar <-> Terminal (MVP terminal phase 1)
+        // ============================================================
+
+        private void SetupRightPanelTabs()
+        {
+            if (_avatarPanel == null)
+                return;
+
+            // Create tab bar (small header with two buttons)
+            _rightTabBar = new VisualElement();
+            _rightTabBar.name = "right-panel-tabs";
+            _rightTabBar.style.flexDirection = FlexDirection.Row;
+            _rightTabBar.style.flexShrink = 0;
+            _rightTabBar.style.borderBottomWidth = 1;
+            _rightTabBar.style.borderBottomColor = new StyleColor(new Color(0.14f, 0.15f, 0.20f));
+            _rightTabBar.style.backgroundColor = new StyleColor(new Color(0.10f, 0.11f, 0.14f));
+
+            _avatarTabBtn = new Button();
+            _avatarTabBtn.text = LocalizationExtensions.Get("tab.avatar", "Avatar");
+            _avatarTabBtn.style.flexGrow = 1;
+            _avatarTabBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _avatarTabBtn.style.fontSize = 11;
+            _avatarTabBtn.style.paddingTop = 4;
+            _avatarTabBtn.style.paddingBottom = 4;
+            _avatarTabBtn.AddToClassList("btn");
+            _avatarTabBtn.AddToClassList("btn--ghost");
+
+            _terminalTabBtn = new Button();
+            _terminalTabBtn.text = LocalizationExtensions.Get("terminal.title", "Terminal");
+            _terminalTabBtn.style.flexGrow = 1;
+            _terminalTabBtn.style.fontSize = 11;
+            _terminalTabBtn.style.paddingTop = 4;
+            _terminalTabBtn.style.paddingBottom = 4;
+            _terminalTabBtn.AddToClassList("btn");
+            _terminalTabBtn.AddToClassList("btn--ghost");
+
+            _rightTabBar.Add(_avatarTabBtn);
+            _rightTabBar.Add(_terminalTabBtn);
+
+            // Insert tab bar as first child
+            _avatarPanel.Insert(0, _rightTabBar);
+
+            // Create/reparent avatar content host (move existing children except tab bar)
+            _avatarContentHost = new VisualElement();
+            _avatarContentHost.name = "avatar-content-host";
+            _avatarContentHost.style.flexGrow = 1;
+            _avatarContentHost.style.flexDirection = FlexDirection.Column;
+
+            // Move current children (thinking + avatar hero) into the content host
+            // Note: children[0] is now our tab bar, so start from 1
+            var toMove = new System.Collections.Generic.List<VisualElement>();
+            for (int i = 1; i < _avatarPanel.childCount; i++)
+            {
+                toMove.Add(_avatarPanel[i]);
+            }
+            for (int i = 0; i < toMove.Count; i++)
+            {
+                _avatarPanel.Remove(toMove[i]);
+                _avatarContentHost.Add(toMove[i]);
+            }
+            _avatarPanel.Add(_avatarContentHost);
+
+            // Create terminal host (hidden initially)
+            _terminalHost = new VisualElement();
+            _terminalHost.name = "terminal-host";
+            _terminalHost.style.flexGrow = 1;
+            _terminalHost.style.flexDirection = FlexDirection.Column;
+            _terminalHost.style.display = DisplayStyle.None;
+            _avatarPanel.Add(_terminalHost);
+
+            // Load TerminalView UXML into host if possible (editor), else controller will build fallback
+            bool loadedFromUxml = false;
+#if UNITY_EDITOR
+            try
+            {
+                var uxml = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/UI/Terminal/TerminalView.uxml");
+                if (uxml != null)
+                {
+                    uxml.CloneTree(_terminalHost);
+                    loadedFromUxml = true;
+
+                    // Also load USS for styles in editor play mode
+                    var uss = UnityEditor.AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/UI/Terminal/TerminalView.uss");
+                    if (uss != null && _root != null)
+                    {
+                        if (!_root.styleSheets.Contains(uss))
+                            _root.styleSheets.Add(uss);
+                    }
+                }
+            }
+            catch { }
+#endif
+            // If no UXML (player or missing), the TerminalController builds C# UI inside host
+
+            // Tabs are registered in RegisterCallbacks() / UnregisterCallbacks()
+
+            // Start in avatar mode
+            _rightPanelIsTerminal = false;
+            ApplyRightTabVisuals();
+        }
+
+        private void SwitchRightPanelTab(bool showTerminal)
+        {
+            if (_rightPanelIsTerminal == showTerminal)
+                return;
+
+            _rightPanelIsTerminal = showTerminal;
+            ApplyRightTabVisuals();
+
+            if (_avatarContentHost != null)
+                _avatarContentHost.style.display = showTerminal ? DisplayStyle.None : DisplayStyle.Flex;
+
+            if (_terminalHost != null)
+                _terminalHost.style.display = showTerminal ? DisplayStyle.Flex : DisplayStyle.None;
+
+            if (showTerminal)
+            {
+                // Hide avatar-specific overlays while terminal is active
+                if (_thinkingBubble != null)
+                    _thinkingBubble.style.display = DisplayStyle.None;
+
+                EnsureTerminalController();
+            }
+            else
+            {
+                // Restore thinking bubble visibility to controller logic (it manages its own display)
+                // No forced show here; ChatController/animation will control it.
+            }
+        }
+
+        private void ApplyRightTabVisuals()
+        {
+            // Simple active styling via text + subtle bg (no z, full USS would enhance)
+            if (_avatarTabBtn != null)
+            {
+                bool active = !_rightPanelIsTerminal;
+                _avatarTabBtn.style.backgroundColor = active
+                    ? new StyleColor(new Color(0.12f, 0.13f, 0.17f))
+                    : StyleKeyword.Null;
+                _avatarTabBtn.style.color = active
+                    ? new StyleColor(new Color(0.95f, 0.96f, 0.98f))
+                    : new StyleColor(new Color(0.6f, 0.64f, 0.7f));
+            }
+            if (_terminalTabBtn != null)
+            {
+                bool active = _rightPanelIsTerminal;
+                _terminalTabBtn.style.backgroundColor = active
+                    ? new StyleColor(new Color(0.12f, 0.13f, 0.17f))
+                    : StyleKeyword.Null;
+                _terminalTabBtn.style.color = active
+                    ? new StyleColor(new Color(0.95f, 0.96f, 0.98f))
+                    : new StyleColor(new Color(0.6f, 0.64f, 0.7f));
+            }
+        }
+
+        private void OnAvatarTabClicked()
+        {
+            SwitchRightPanelTab(false);
+        }
+
+        private void OnTerminalTabClicked()
+        {
+            SwitchRightPanelTab(true);
+        }
+
+        private void EnsureTerminalController()
+        {
+            if (_terminalController != null)
+            {
+                _terminalController.SetVisible(true);
+                return;
+            }
+
+            if (_terminalHost == null)
+                return;
+
+            _terminalController = gameObject.AddComponent<TerminalController>();
+            _terminalController.Initialize(_terminalHost);
         }
 
         private static void RegisterClick(VisualElement element, EventCallback<ClickEvent> handler)

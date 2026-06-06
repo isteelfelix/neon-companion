@@ -70,6 +70,7 @@ namespace NeonCompanion.Runtime.Core
             var providerManager = new ProviderManager(providers);
             var modelDiscoveryService = new ModelDiscoveryService(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
+            var processExecutionService = new ProcessExecutionService();
 
             // Backend selector — global mode switch (Hermes vs OpenAI)
             var backendSelector = gameObject.AddComponent<GlobalBackendSelector>();
@@ -164,6 +165,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<ProviderManager>(providerManager);
             services.Register<ModelDiscoveryService>(modelDiscoveryService);
             services.Register<ChatService>(chatService);
+            services.Register<ProcessExecutionService>(processExecutionService);
             services.Register<ILocalizationService>(localizationService);
             services.Register<GlobalBackendSelector>(backendSelector);
 

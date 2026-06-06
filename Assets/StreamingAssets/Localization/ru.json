@@ -366,5 +366,12 @@
   "chat.selection.forward": "Переслать",
   "chat.selection.pick_session": "Выберите чат для пересылки",
   "chat.selection.forward_done": "Переслано сообщений: {0}",
-  "common.close": "Закрыть"
+  "common.close": "Закрыть",
+  "terminal.title": "Терминал",
+  "terminal.status.idle": "Готов",
+  "terminal.status.executing": "Выполняется...",
+  "terminal.status.error": "Ошибка",
+  "terminal.status.timeout": "Время истекло",
+  "terminal.input.placeholder": "Введите команду...",
+  "terminal.output.empty": "Вывод пока пуст. Введите команду выше."
 }

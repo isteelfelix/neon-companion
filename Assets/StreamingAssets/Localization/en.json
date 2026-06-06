@@ -366,5 +366,12 @@
   "chat.selection.forward": "Forward",
   "chat.selection.pick_session": "Pick a chat to forward to",
   "chat.selection.forward_done": "Forwarded {0} messages",
-  "common.close": "Close"
+  "common.close": "Close",
+  "terminal.title": "Terminal",
+  "terminal.status.idle": "Ready",
+  "terminal.status.executing": "Running...",
+  "terminal.status.error": "Error",
+  "terminal.status.timeout": "Timed out",
+  "terminal.input.placeholder": "Enter command...",
+  "terminal.output.empty": "No output yet. Type a command above."
 }

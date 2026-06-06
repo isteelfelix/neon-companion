@@ -1,0 +1,81 @@
+/* Terminal panel styles — reuse tokens, no unsupported props (no gap/z-index/calc/pointer-events/box-shadow) */
+.terminal-root {
+    flex-grow: 1;
+    flex-direction: column;
+    background-color: var(--bg-2);
+    overflow: hidden;
+}
+
+.terminal-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    background-color: var(--bg-1);
+}
+
+.terminal-title {
+    color: var(--text-0);
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.terminal-status {
+    color: var(--text-2);
+    font-size: 10px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    padding: 1px 6px;
+    border-radius: 4px;
+    background-color: var(--bg-3);
+    border-width: 1px;
+    border-color: var(--line-2);
+}
+
+.terminal-output-scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 80px;
+    background-color: var(--bg-1);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    padding: 6px 8px;
+}
+
+.terminal-output {
+    color: var(--text-1);
+    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    -unity-text-align: upper-left;
+}
+
+.terminal-input-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 8px;
+    flex-shrink: 0;
+    background-color: var(--bg-2);
+}
+
+.terminal-input {
+    flex-grow: 1;
+    margin-right: 6px;
+    background-color: var(--bg-0);
+    color: var(--text-0);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.terminal-submit-btn {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 11px;
+}
