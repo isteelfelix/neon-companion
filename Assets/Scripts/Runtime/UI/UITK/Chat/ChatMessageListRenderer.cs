@@ -691,7 +691,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 listenBtn.AddToClassList("icon");
                 listenBtn.AddToClassList("icon--headphones");
                 listenBtn.tooltip = LocalizationExtensions.Get("tooltip.listen", "Speak last response");
-                RegisterClick(listenBtn, () => ChatController.OnListenClickedStatic());
+                RegisterClick(listenBtn, () => ChatController.OnListenMessageClickedStatic(message));
 
                 actions.Add(copyBtn);
                 actions.Add(refreshBtn);
@@ -724,8 +724,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 }
             }
 
-            // Voice bubble — shown on user messages that have a recorded WAV file.
-            if (role == "user" && !string.IsNullOrEmpty(message.audioPath)
+            // Voice bubble — user messages with a recorded WAV, or assistant messages with a
+            // synthesized TTS clip. Both replay from the cached file (no re-synthesis).
+            if ((role == "user" || role == "assistant") && !string.IsNullOrEmpty(message.audioPath)
                 && System.IO.File.Exists(message.audioPath))
             {
                 string capturedPath = message.audioPath;
@@ -733,6 +734,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
                 var voiceBubble = new VisualElement();
                 voiceBubble.AddToClassList("voice-bubble");
+                // Don't let a tap on the play button bubble up into message selection.
+                voiceBubble.RegisterCallback<PointerDownEvent>(StopBubbleActionPointerDown);
+                voiceBubble.RegisterCallback<PointerUpEvent>(StopBubbleActionPointerUp);
 
                 var playBtn = new Button();
                 playBtn.AddToClassList("voice-bubble__play");

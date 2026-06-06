@@ -562,9 +562,10 @@
 }
 
 .mic-btn--recording {
-    color: var(--accent);
-    border-color: rgba(124, 122, 237, 0.45);
-    background-color: var(--accent-soft);
+    color: rgb(255, 255, 255);
+    border-color: rgb(255, 84, 84);
+    background-color: rgb(220, 48, 48);
+    scale: 1.1 1.1;
 }
 
 .composer--focused {

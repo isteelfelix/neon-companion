@@ -162,11 +162,13 @@ namespace NeonCompanion.Runtime.Platform
         public bool IsRecording => false;
         public bool IsSpeaking => false;
         public bool IsAvailable => false;
+        public bool AutoStopOnSilence { get; set; } = true;
 
 #pragma warning disable 0067
         public event System.Action<string> OnSpeechRecognized;
         public event System.Action OnPlaybackComplete;
         public event System.Action<string, float> OnRecordingComplete;
+        public event System.Action<string, float> OnSpeechAudioReady;
 #pragma warning restore 0067
 
         public void StartRecording() { }

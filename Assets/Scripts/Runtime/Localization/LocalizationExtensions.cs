@@ -42,9 +42,18 @@ namespace NeonCompanion.Runtime.Localization
             if (_service == null)
                 return fallback ?? key;
 
+            // With an explicit fallback, look up quietly so a missing key doesn't spam warnings.
+            if (fallback != null)
+            {
+                string found;
+                if (_service.TryGet(key, out found) && !string.IsNullOrEmpty(found))
+                    return found;
+                return fallback;
+            }
+
             string value = _service.Get(key);
             if (string.IsNullOrEmpty(value) || value == key)
-                return fallback ?? value ?? key;
+                return value ?? key;
 
             return value;
         }

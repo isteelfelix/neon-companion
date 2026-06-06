@@ -197,6 +197,16 @@ namespace NeonCompanion.Runtime.Localization
             return key;
         }
 
+        public bool TryGet(string key, out string value)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                value = null;
+                return false;
+            }
+            return _strings.TryGetValue(key, out value);
+        }
+
         public string Get(string key, params object[] args)
         {
             string format = Get(key);

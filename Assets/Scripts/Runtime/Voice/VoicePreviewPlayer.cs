@@ -70,7 +70,11 @@ namespace NeonCompanion.Runtime.Voice
         private IEnumerator LoadAndPlay(string wavPath, float volume)
         {
             string uri = "file://" + wavPath;
-            using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(uri, AudioType.WAV))
+            // User recordings are WAV; assistant TTS clips are MP3 — pick the decoder by extension.
+            AudioType audioType = wavPath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
+                ? AudioType.MPEG
+                : AudioType.WAV;
+            using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(uri, audioType))
             {
                 yield return req.SendWebRequest();
 

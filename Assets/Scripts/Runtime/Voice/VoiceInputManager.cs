@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Localization;
 using UnityEngine;
@@ -17,9 +18,11 @@ namespace NeonCompanion.Runtime.Voice
         private Action _onRecordingStarted;
         private bool _pulseGrowing = true;
         private float _pulseOpacity = 1f;
+        private bool _isHolding;
 
-        // Set by OnRecordingComplete so HandleSpeechRecognized can attach it to the outgoing message.
-        private string _pendingVoicePath = "";
+        // One entry per completed recording, in order, so each transcription result is paired
+        // with its own WAV file (a single shared field would be clobbered by back-to-back records).
+        private readonly Queue<string> _pendingVoicePaths = new Queue<string>();
 
         public bool IsRecording => _voiceService?.IsRecording ?? false;
 
@@ -47,10 +50,19 @@ namespace NeonCompanion.Runtime.Voice
             {
                 _voiceService.OnSpeechRecognized += HandleSpeechRecognized;
                 _voiceService.OnRecordingComplete += HandleRecordingComplete;
+                // Hold-to-record: the user controls start/stop, so disable silence auto-stop.
+                _voiceService.AutoStopOnSilence = false;
             }
 
             if (_micButton != null)
-                _micButton.clicked += ToggleRecording;
+            {
+                // Register in the TrickleDown (capture) phase: Button's built-in Clickable
+                // calls StopImmediatePropagation() in BubbleUp, which would otherwise eat
+                // these handlers and break press-and-hold.
+                _micButton.RegisterCallback<PointerDownEvent>(OnMicPointerDown, TrickleDown.TrickleDown);
+                _micButton.RegisterCallback<PointerUpEvent>(OnMicPointerUp, TrickleDown.TrickleDown);
+                _micButton.RegisterCallback<PointerCaptureOutEvent>(OnMicPointerCaptureOut);
+            }
 
             UpdateMicButtonState();
         }
@@ -64,7 +76,11 @@ namespace NeonCompanion.Runtime.Voice
             }
 
             if (_micButton != null)
-                _micButton.clicked -= ToggleRecording;
+            {
+                _micButton.UnregisterCallback<PointerDownEvent>(OnMicPointerDown, TrickleDown.TrickleDown);
+                _micButton.UnregisterCallback<PointerUpEvent>(OnMicPointerUp, TrickleDown.TrickleDown);
+                _micButton.UnregisterCallback<PointerCaptureOutEvent>(OnMicPointerCaptureOut);
+            }
         }
 
         private void Update()
@@ -93,9 +109,10 @@ namespace NeonCompanion.Runtime.Voice
             UpdateMicButtonState();
         }
 
-        private void ToggleRecording()
+        // Hold-to-record: press starts capture, release stops and ships it.
+        private void OnMicPointerDown(PointerDownEvent evt)
         {
-            if (_voiceService == null || _micButton == null)
+            if (_voiceService == null || _micButton == null || IsRecording)
                 return;
 
             if (!_voiceService.IsAvailable || !(_isVoiceEnabled?.Invoke() ?? false))
@@ -107,10 +124,32 @@ namespace NeonCompanion.Runtime.Voice
             if (!EnsureMicrophonePermission())
                 return;
 
+            // No manual CapturePointer here — the Button's built-in Clickable already captures
+            // the pointer, so PointerUp is delivered even if the cursor leaves the button.
+            // Manually capturing on top of that left the capture stuck and froze all UI clicks.
+            _isHolding = true;
+            StartRecording();
+        }
+
+        private void OnMicPointerUp(PointerUpEvent evt)
+        {
+            if (!_isHolding)
+                return;
+            _isHolding = false;
+
             if (IsRecording)
                 StopRecording();
-            else
-                StartRecording();
+        }
+
+        // Safety: if the pointer capture is released without a PointerUp reaching us (e.g. the
+        // window loses focus mid-hold), end the recording so the mic can't get stuck on.
+        private void OnMicPointerCaptureOut(PointerCaptureOutEvent evt)
+        {
+            if (!_isHolding)
+                return;
+            _isHolding = false;
+            if (IsRecording)
+                StopRecording();
         }
 
         private void StartRecording()
@@ -147,7 +186,7 @@ namespace NeonCompanion.Runtime.Voice
 
         private void HandleRecordingComplete(string wavPath, float durationSecs)
         {
-            _pendingVoicePath = wavPath ?? "";
+            _pendingVoicePaths.Enqueue(wavPath ?? "");
         }
 
         private void HandleSpeechRecognized(string text)
@@ -157,8 +196,9 @@ namespace NeonCompanion.Runtime.Voice
             UpdateMicVisual(false);
             OnRecordingStopped?.Invoke();
 
-            string path = _pendingVoicePath;
-            _pendingVoicePath = "";
+            // Pair this result with the WAV from the matching recording (FIFO). Empty for
+            // backends that don't capture a file (e.g. WebSpeechBridge).
+            string path = _pendingVoicePaths.Count > 0 ? _pendingVoicePaths.Dequeue() : "";
 
             // Fire the voice message event. VoiceController decides whether to show
             // a preview or send directly (based on whether path is non-empty).

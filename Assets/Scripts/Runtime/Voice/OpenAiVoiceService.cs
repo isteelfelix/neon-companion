@@ -30,16 +30,24 @@ namespace NeonCompanion.Runtime.Voice
         private const int   VadWindowFrames  = 1600;   // 0.1 s at 16 kHz
         private const float IdleTimeoutSec   = 12f;
 
+        // Below this, treat the recording as empty and skip STT (avoids a 400 on near-silence).
+        private const int   MinRecordingSamples = 3200;  // ~0.2 s at 16 kHz
+
         // Temp file tracking
         private int _tempFileCounter;
 
         public bool IsRecording => _isRecording;
         public bool IsSpeaking  => _isSpeaking;
         public bool IsAvailable => !string.IsNullOrEmpty(_baseUrl) && !string.IsNullOrEmpty(_apiKey);
+        public bool AutoStopOnSilence { get; set; } = true;
 
         public event Action<string> OnSpeechRecognized;
         public event Action OnPlaybackComplete;
         public event Action<string, float> OnRecordingComplete;
+        // OpenAI TTS streams the clip without saving a file, so no cached bubble is produced here.
+#pragma warning disable 0067
+        public event Action<string, float> OnSpeechAudioReady;
+#pragma warning restore 0067
 
         public void Initialize(
             string baseUrl,
@@ -126,7 +134,8 @@ namespace NeonCompanion.Runtime.Voice
                 return;
             }
             _isRecording  = true;
-            _vadCoroutine = StartCoroutine(VadCoroutine());
+            if (AutoStopOnSilence)
+                _vadCoroutine = StartCoroutine(VadCoroutine());
         }
 
         public byte[] StopRecording()
@@ -144,8 +153,16 @@ namespace NeonCompanion.Runtime.Voice
             Microphone.End(_activeDevice);
             _isRecording = false;
 
-            if (_recordingClip == null || pos <= 0)
+            if (_recordingClip == null || pos < MinRecordingSamples)
+            {
+                // Too short / empty — discard instead of shipping near-silence to STT.
+                if (_recordingClip != null)
+                {
+                    Destroy(_recordingClip);
+                    _recordingClip = null;
+                }
                 return new byte[0];
+            }
 
             int recChannels = _recordingClip.channels;
             float[] rawSamples = new float[pos * recChannels];

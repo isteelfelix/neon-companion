@@ -18,10 +18,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Button MicButton;
             public VisualElement ComposerPreviews;
             public Func<bool> IsVoiceEnabledBySettings;
-            /// <summary>(transcribedText, wavFilePath) — sends the voice message to the chat.</summary>
-            public Func<string, string, Task> SendVoiceMessageAsync;
+            /// <summary>(transcribedText, wavFilePath) — sends the voice message to the chat. Returns true if accepted.</summary>
+            public Func<string, string, Task<bool>> SendVoiceMessageAsync;
             public Action OnVoiceRecordingStarted;
             public Action RefreshAvatarMotionState;
+            /// <summary>(ttsAudioPath, durationSecs) — attach a synthesized clip to the latest assistant message.</summary>
+            public Action<string, float> AttachAssistantAudio;
             public Func<Task<ChatService>> GetChatServiceAsync;
             public Func<ChatService> GetChatServiceSync;
             public Func<bool> IsBound;
@@ -115,6 +117,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _voiceOutputManager = _d.gameObject.AddComponent<VoiceOutputManager>();
                 _voiceOutputManager.Initialize(_voiceService, _d.IsVoiceEnabledBySettings,
                     () => _voiceInputManager != null && _voiceInputManager.IsRecording);
+                _voiceOutputManager.OnResponseAudioReady += HandleResponseAudioReady;
             }
 
             if (_voiceInputManager == null)
@@ -163,6 +166,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_voiceOutputManager != null)
             {
+                _voiceOutputManager.OnResponseAudioReady -= HandleResponseAudioReady;
                 if (_voiceBoundToChat && chat != null)
                     _voiceOutputManager.UnbindChat(chat);
                 UnityEngine.Object.Destroy(_voiceOutputManager);
@@ -213,6 +217,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _voiceOutputManager?.EnqueueResponse(text);
         }
 
+        private void HandleResponseAudioReady(string path, float durationSecs)
+        {
+            _d.AttachAssistantAudio?.Invoke(path, durationSecs);
+        }
+
         /// <summary>Play a WAV file (used by chat voice bubbles for replay).</summary>
         internal void PlayAudioFile(string wavPath)
         {
@@ -259,7 +268,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
+            // HideVoicePreview() clears the preview state fields, so stash the values this
+            // preview was built for and restore them after tearing down any previous bar.
+            string text = _previewText;
+            string path = _previewWavPath;
+            float durationSecs = _previewDurationSecs;
+
             HideVoicePreview();
+
+            _previewText = text;
+            _previewWavPath = path;
+            _previewDurationSecs = durationSecs;
 
             _previewBar = new VisualElement();
             _previewBar.name = "voice-preview-bar";
@@ -297,22 +316,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewBar.Add(spacer);
 
             // ── Cancel ───────────────────────────────────────────────
+            // No dedicated send button here — the composer's standard send button sends this
+            // preview (see TrySendActivePreview). Cancel (✕) discards the recording.
             var cancelBtn = new Button();
             cancelBtn.name = "voice-preview-cancel";
             cancelBtn.AddToClassList("voice-preview__cancel");
             cancelBtn.text = "✕";
             cancelBtn.clicked += OnPreviewCancelClicked;
             _previewBar.Add(cancelBtn);
-
-            // ── Send ─────────────────────────────────────────────────
-            var sendBtn = new Button();
-            sendBtn.name = "voice-preview-send";
-            sendBtn.AddToClassList("btn");
-            sendBtn.AddToClassList("btn--primary");
-            sendBtn.AddToClassList("voice-preview__send");
-            sendBtn.text = LocalizationExtensions.Get("voice.preview.send", "Отправить");
-            sendBtn.clicked += OnPreviewSendClicked;
-            _previewBar.Add(sendBtn);
 
             _d.ComposerPreviews.Add(_previewBar);
             _d.ComposerPreviews.style.display = DisplayStyle.Flex;
@@ -381,14 +392,23 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private void OnPreviewSendClicked()
+        /// <summary>
+        /// Called by the composer's standard send. If a voice preview is active, ships it and
+        /// returns true. Hides the preview first to avoid re-entry when the send re-runs the
+        /// composer flow.
+        /// </summary>
+        internal bool TrySendActivePreview()
         {
+            if (_previewBar == null)
+                return false;
+
             string text = _previewText;
             string path = _previewWavPath;
             HideVoicePreview();
 
             if (_d.SendVoiceMessageAsync != null)
                 _ = _d.SendVoiceMessageAsync(text, path);
+            return true;
         }
 
         private void UpdatePreviewPlayIcon()

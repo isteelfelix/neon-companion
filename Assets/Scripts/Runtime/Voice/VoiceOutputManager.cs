@@ -19,12 +19,28 @@ namespace NeonCompanion.Runtime.Voice
 
         public event Action<string> OnPlaybackStarted;
         public event Action OnPlaybackCompleted;
+        /// <summary>(ttsAudioFilePath, durationSecs) — a synthesized response clip was saved to disk.</summary>
+        public event Action<string, float> OnResponseAudioReady;
 
         public void Initialize(IVoiceService voiceService, Func<bool> isVoiceEnabled, Func<bool> isUserRecording)
         {
             _voiceService = voiceService;
             _isVoiceEnabled = isVoiceEnabled;
             _isUserRecording = isUserRecording;
+
+            if (_voiceService != null)
+                _voiceService.OnSpeechAudioReady += HandleSpeechAudioReady;
+        }
+
+        private void OnDestroy()
+        {
+            if (_voiceService != null)
+                _voiceService.OnSpeechAudioReady -= HandleSpeechAudioReady;
+        }
+
+        private void HandleSpeechAudioReady(string path, float durationSecs)
+        {
+            OnResponseAudioReady?.Invoke(path, durationSecs);
         }
 
         public void BindChat(ChatService chatService)
@@ -50,11 +66,9 @@ namespace NeonCompanion.Runtime.Voice
             if (string.IsNullOrWhiteSpace(response) || _voiceService == null)
                 return;
 
-            foreach (var sentence in SplitSentences(response))
-            {
-                if (!string.IsNullOrWhiteSpace(sentence))
-                    _queue.Enqueue(sentence.Trim());
-            }
+            // Enqueue the whole response as one item so it synthesizes to a single audio file
+            // (one cached clip per assistant message, not one per sentence).
+            _queue.Enqueue(response.Trim());
 
             if (!_isConsuming)
                 _ = ConsumeQueueAsync();
@@ -67,6 +81,9 @@ namespace NeonCompanion.Runtime.Voice
             {
                 while (_queue.Count > 0)
                 {
+                    if (!ServiceUsable())
+                        break;
+
                     if (!(_isVoiceEnabled?.Invoke() ?? false) || (_isUserRecording?.Invoke() ?? false))
                     {
                         _queue.Clear();
@@ -86,6 +103,13 @@ namespace NeonCompanion.Runtime.Voice
                     var timeoutTask = Task.Delay(15000);
                     var doneTask = await Task.WhenAny(tcs.Task, timeoutTask);
                     _voiceService.OnPlaybackComplete -= Complete;
+
+                    // The service (and this manager) may have been destroyed while we awaited —
+                    // e.g. the voice pipeline was reinitialized. Stop before touching dead objects;
+                    // continuing would call Speak/StartCoroutine on an inactive GameObject.
+                    if (!ServiceUsable())
+                        break;
+
                     if (doneTask == timeoutTask)
                         _voiceService.StopSpeaking();
 
@@ -96,6 +120,20 @@ namespace NeonCompanion.Runtime.Voice
             {
                 _isConsuming = false;
             }
+        }
+
+        // True only if this manager and its voice service are both still alive. Uses Unity's
+        // overloaded == so a destroyed MonoBehaviour (native object gone) reads as not usable.
+        private bool ServiceUsable()
+        {
+            if (this == null)
+                return false;
+
+            UnityEngine.Object svc = _voiceService as UnityEngine.Object;
+            if (!ReferenceEquals(svc, null) && svc == null)
+                return false; // a UnityEngine.Object service that has been destroyed
+
+            return _voiceService != null;
         }
 
         private static IEnumerable<string> SplitSentences(string text)

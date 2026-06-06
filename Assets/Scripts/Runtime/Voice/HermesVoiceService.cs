@@ -27,6 +27,10 @@ namespace NeonCompanion.Runtime.Voice
         private const int   VadWindowFrames   = 1600;    // 0.1 s at 16 kHz
         private const float IdleTimeoutSec    = 12f;
 
+        // Below this, the recording is treated as empty — sending it to STT only earns a
+        // 400 ("Audio recording is empty" / "Transcription failed"), so we discard instead.
+        private const int   MinRecordingSamples = 3200;  // ~0.2 s at 16 kHz
+
         // Temp file tracking
         private readonly List<string> _tempFiles       = new List<string>();
         private readonly List<float>  _tempFileTimes   = new List<float>();
@@ -36,10 +40,12 @@ namespace NeonCompanion.Runtime.Voice
         public bool IsRecording => _isRecording;
         public bool IsSpeaking  => _isSpeaking;
         public bool IsAvailable => !string.IsNullOrEmpty(_hermesRestUrl);
+        public bool AutoStopOnSilence { get; set; } = true;
 
         public event Action<string> OnSpeechRecognized;
         public event Action OnPlaybackComplete;
         public event Action<string, float> OnRecordingComplete;
+        public event Action<string, float> OnSpeechAudioReady;
 
         public void Initialize(string hermesRestUrl, string apiKey, string inputDeviceName, float outputVolume)
         {
@@ -125,7 +131,8 @@ namespace NeonCompanion.Runtime.Voice
                 return;
             }
             _isRecording  = true;
-            _vadCoroutine = StartCoroutine(VadCoroutine());
+            if (AutoStopOnSilence)
+                _vadCoroutine = StartCoroutine(VadCoroutine());
         }
 
         public byte[] StopRecording()
@@ -143,8 +150,16 @@ namespace NeonCompanion.Runtime.Voice
             Microphone.End(_activeDevice);
             _isRecording = false;
 
-            if (_recordingClip == null || pos <= 0)
+            if (_recordingClip == null || pos < MinRecordingSamples)
+            {
+                // Too short / empty — discard instead of shipping near-silence to STT.
+                if (_recordingClip != null)
+                {
+                    Destroy(_recordingClip);
+                    _recordingClip = null;
+                }
                 return new byte[0];
+            }
 
             int recChannels = _recordingClip.channels;
             float[] rawSamples = new float[pos * recChannels];
@@ -387,6 +402,9 @@ namespace NeonCompanion.Runtime.Voice
                                 AudioClip clip = DownloadHandlerAudioClip.GetContent(fileReq);
                                 if (clip != null)
                                 {
+                                    // Hand the saved TTS file to the UI so it can attach a replayable
+                                    // voice bubble to the assistant message (cached — no re-synthesis).
+                                    OnSpeechAudioReady?.Invoke(filePath, clip.length);
                                     _isSpeaking = true;
                                     _audioSource.PlayOneShot(clip);
                                     yield return null;

@@ -649,6 +649,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             return new ChatController.Deps
             {
+                TrySendVoicePreview = () => _voiceController != null && _voiceController.TrySendActivePreview(),
                 MessageInput = _composerInput,
                 SendButton = _sendButton,
                 StopButton = _stopButton,
@@ -833,6 +834,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SendVoiceMessageAsync = SendVoiceMessageAsync,
                 OnVoiceRecordingStarted = OnVoiceRecordingStarted,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
+                AttachAssistantAudio = AttachAssistantAudio,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetChatServiceSync = () => _chatService,
                 IsBound = () => _isBound,
@@ -872,7 +874,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _historySearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
             if (_historyPanelSearchInput != null)
                 _historyPanelSearchInput.RegisterCallback<ChangeEvent<string>>(OnHistorySearchChanged);
-            ChatController.ListenRequested += OnListenClicked;
+            ChatController.ListenMessageRequested += OnListenMessage;
 
             if (_messagesList != null)
             {
@@ -894,7 +896,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_historySearchClear, OnHistorySearchCleared);
             UnregisterClick(_historyPanelSearchBtn, OnHistorySearchToggled);
             UnregisterClick(_historyPanelSearchClear, OnHistorySearchCleared);
-            ChatController.ListenRequested -= OnListenClicked;
+            ChatController.ListenMessageRequested -= OnListenMessage;
 
             _settingsController.UnregisterCallbacks();
             _voiceController.UnregisterCallbacks();
@@ -1053,38 +1055,77 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void UpdatePanelToggleTooltips() => _layoutController.UpdatePanelToggleTooltips();
 
-        private void OnListenClicked()
+        // The clicked assistant message to attach the next synthesized clip to (headphones button).
+        // Null means "the latest assistant message" (auto-TTS of a fresh response).
+        private ChatMessage _ttsTargetMessage;
+
+        private void OnListenMessage(ChatMessage message)
         {
-            var messages = _chatService?.CurrentChatViewModel?.Messages;
-            if (messages == null || messages.Count == 0)
+            if (message == null)
+                return;
+
+            // Already have a cached clip for this message → just replay it, no re-synthesis.
+            if (!string.IsNullOrEmpty(message.audioPath) && System.IO.File.Exists(message.audioPath))
             {
-                AddSystemMessage(LocalizationExtensions.Get("system.voice.no_assistant_reply", "Нет ответа ассистента для озвучивания."));
+                _voiceController.PlayAudioFile(message.audioPath);
                 return;
             }
 
-            for (int i = messages.Count - 1; i >= 0; i--)
-            {
-                var msg = messages[i];
-                if (msg?.role == "assistant" && !string.IsNullOrWhiteSpace(msg.content))
-                {
-                    _voiceController.EnqueueVoiceResponse(msg.content);
-                    return;
-                }
-            }
+            string text = ChatMessageListRenderer.BuildMessageCopyText(message);
+            if (string.IsNullOrWhiteSpace(text))
+                return;
 
-            AddSystemMessage(LocalizationExtensions.Get("system.voice.no_assistant_reply", "Нет ответа ассистента для озвучивания."));
+            _ttsTargetMessage = message;
+            _voiceController.EnqueueVoiceResponse(text);
         }
 
         private async Task EnsureVoicePipelineAsync(ChatService chat) => await _voiceController.EnsureVoicePipelineAsync(chat);
 
-        private void OnVoiceRecordingStarted() => _voiceController.OnVoiceRecordingStarted();
-
-        private async Task SendVoiceMessageAsync(string text, string audioPath)
+        // Attach a synthesized TTS clip to the most recent assistant message so it shows a
+        // replayable voice bubble (cached — replay doesn't re-run TTS).
+        private void AttachAssistantAudio(string audioPath, float durationSecs)
         {
-            if (string.IsNullOrWhiteSpace(text) || _chatController.IsSending)
+            if (string.IsNullOrEmpty(audioPath))
                 return;
 
+            var messages = _chatService?.CurrentChatViewModel?.Messages;
+            if (messages == null)
+                return;
+
+            // Headphones on a specific (possibly older) message → attach to that one.
+            ChatMessage target = _ttsTargetMessage;
+            _ttsTargetMessage = null;
+            if (target != null)
+            {
+                target.audioPath = audioPath;
+                target.audioDurationSecs = durationSecs;
+                RenderMessages(messages);
+                return;
+            }
+
+            // Auto-TTS of a fresh response → attach to the latest assistant message.
+            for (int i = messages.Count - 1; i >= 0; i--)
+            {
+                ChatMessage m = messages[i];
+                if (m != null && string.Equals(m.role, "assistant", StringComparison.OrdinalIgnoreCase))
+                {
+                    m.audioPath = audioPath;
+                    m.audioDurationSecs = durationSecs;
+                    RenderMessages(messages);
+                    return;
+                }
+            }
+        }
+
+        private void OnVoiceRecordingStarted() => _voiceController.OnVoiceRecordingStarted();
+
+        private async Task<bool> SendVoiceMessageAsync(string text, string audioPath)
+        {
+            if (string.IsNullOrWhiteSpace(text) || _chatController.IsSending)
+                return false;
+
             await _chatController.SendDirectVoiceMessageAsync(text.Trim(), audioPath ?? "");
+            return true;
         }
 
         private bool IsVoiceEnabledBySettings()

@@ -635,6 +635,18 @@ namespace NeonCompanion.Runtime.Chat
             return SendMessageAsync(message, null, onStreamToken, null);
         }
 
+        // Voice audio to attach to the next outgoing user message, so the chat bubble keeps its
+        // playback button after re-renders (the optimistic copy alone is lost on re-render).
+        private string _pendingVoiceAudioPath;
+        private float _pendingVoiceDurationSecs;
+
+        /// <summary>Attach a recorded WAV to the next user message sent. Cleared once consumed.</summary>
+        public void SetPendingVoiceAudio(string audioPath, float durationSecs)
+        {
+            _pendingVoiceAudioPath    = audioPath;
+            _pendingVoiceDurationSecs = durationSecs;
+        }
+
         public async Task SendMessageAsync(
             string message,
             IReadOnlyList<ChatAttachment> attachments,
@@ -756,6 +768,13 @@ namespace NeonCompanion.Runtime.Chat
                     content = message,
                     unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
+                if (!string.IsNullOrEmpty(_pendingVoiceAudioPath))
+                {
+                    localUserMessage.audioPath         = _pendingVoiceAudioPath;
+                    localUserMessage.audioDurationSecs = _pendingVoiceDurationSecs;
+                    _pendingVoiceAudioPath    = null;
+                    _pendingVoiceDurationSecs = 0f;
+                }
                 _currentChatViewModel.Messages.Add(localUserMessage);
                 localUserMessageAdded = true;
 

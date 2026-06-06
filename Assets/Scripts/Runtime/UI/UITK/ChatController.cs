@@ -21,6 +21,10 @@ namespace NeonCompanion.Runtime.UI.UITK
     {
         public struct Deps
         {
+            // If a voice preview is active in the composer, this sends it and returns true,
+            // so the standard send button doubles as the voice-message send.
+            public Func<bool> TrySendVoicePreview;
+
             // UI elements
             public TextField MessageInput;
             public Button SendButton;
@@ -367,6 +371,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public async Task SendCurrentMessageAsync()
         {
+            // The standard send button also sends an active voice preview (no separate button).
+            if (_d.TrySendVoicePreview != null && _d.TrySendVoicePreview())
+                return;
+
             _notifications.MarkRead();
             _approvalController?.Dismiss();
             DismissSessionPicker();
@@ -572,6 +580,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 catch { }
             }
+
+            // Also hand the audio to the chat service so it sticks on the persisted user message
+            // (the optimistic copy from BuildPendingMessages is dropped on re-render after the reply).
+            ChatService chat = await _d.GetChatServiceAsync();
+            chat?.SetPendingVoiceAudio(_pendingVoiceAudioPath, _pendingVoiceDurationSecs);
 
             if (_d.MessageInput != null)
                 _d.MessageInput.value = text;
@@ -1497,11 +1510,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         internal static event Action CopyRequested;
         internal static event Action<string> CopyMessageRequested;
         internal static event Action RegenerateRequested;
-        internal static event Action ListenRequested;
+        internal static event Action<ChatMessage> ListenMessageRequested;
 
         internal static void OnCopyClickedStatic() => CopyRequested?.Invoke();
         internal static void OnCopyMessageClickedStatic(string text) => CopyMessageRequested?.Invoke(text);
         internal static void OnRegenerateClickedStatic() => RegenerateRequested?.Invoke();
-        internal static void OnListenClickedStatic() => ListenRequested?.Invoke();
+        internal static void OnListenMessageClickedStatic(ChatMessage message) => ListenMessageRequested?.Invoke(message);
     }
 }
