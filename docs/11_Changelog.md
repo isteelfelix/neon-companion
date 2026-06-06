@@ -1,5 +1,20 @@
 # 11_Changelog.md
 
+## [0.3.1] - 2026-06-06
+
+### Added
+- **Voice recording & preview** — VoicePreviewPlayer для записи и предпрослушивания голосовых сообщений перед отправкой. UI превью с кнопками Play/Send/Cancel.
+- **Voice attachments в чате** — аудио-вложения отображаются как playble bubbles в ChatMessageListRenderer с поддержкой воспроизведения.
+- **Voice settings UI** — выбор устройства ввода, громкость вывода, выбор устройства вывода (с ограничениями Unity), VAD параметры.
+- **IVoiceService расширение** — новые методы для записи, preview, и availability tracking.
+- **Localization** — новые ключи для voice preview, recording, settings (en + ru).
+
+### Changed
+- VoiceController значительно расширен: preview flow, attachment integration, state machine для recording.
+- VoiceInputManager: улучшена обработка аудио, VAD integration, availability tracking.
+- VoiceOutputManager: расширен для поддержки playback из recorded files.
+- HermesVoiceService / OpenAiVoiceService: добавлены методы для preview и availability.
+
 ## [0.3.0] - 2026-06-04
 
 ### Added

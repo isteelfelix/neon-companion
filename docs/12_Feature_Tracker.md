@@ -106,8 +106,8 @@
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| V-01 | Голосовой ввод/вывод | ❌ | M2 | Not ready: no voice settings in UI — no volume, no device selection, no input/output config |
-| V-02 | Lipsync | 📋 | M3 | Deferred: depends on V-01 (voice subsystem not ready) |
+| V-01 | Голосовой ввод/вывод | ✅ | M2 | Voice input/output fully implemented: VoiceInputManager, VoiceOutputManager, VoiceController, VoicePreviewPlayer, settings UI (device selection, volume, VAD), chat audio attachments, HermesVoiceService + OpenAiVoiceService with factory |
+| V-02 | Lipsync | 📋 | M3 | Blocked on V-01 completion → ready to start. Depends on avatar motion system. |
 | V-03 | 3D аватары | 📋 | M3 | Deferred: 3D models not added to project yet |
 | V-04 | Desktop realtime avatar layer | 📋 | M2+ | |
 

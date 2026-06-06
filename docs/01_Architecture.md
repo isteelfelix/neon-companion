@@ -52,7 +52,7 @@
 - Формат не решает эмоцию сам по себе; он только описывает доступные клипы
 
 ## Текущий статус и планы
-- Голосовой ввод/вывод — pipeline реализован (VoiceInputManager, VoiceOutputManager, WebGL + Android), UI не завершена
+- Голосовой ввод/вывод — полностью реализован: VoiceInputManager, VoiceOutputManager, VoiceController, VoicePreviewPlayer, settings UI (устройства, громкость, VAD), аудио-вложения в чате, HermesVoiceService + OpenAiVoiceService с фабрикой
 - 3D аватары — архитектура реализована (Avatar3DLoader, Avatar3DRenderer), модели не добавлены
 - Генерация motion assets через внешний asset-pipeline без обязательной runtime-зависимости клиента
 - VR режим (M4+)
