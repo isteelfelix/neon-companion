@@ -14,7 +14,7 @@
                 <ui:VisualElement name="composer-previews" class="composer__previews" style="display: none;" />
                 <ui:VisualElement name="composer-controls" class="composer__controls">
                     <ui:Button name="attach-btn" class="iconbtn icon icon--attach" tooltip="Добавить вложение" />
-                    <ui:Button name="mic-button" class="iconbtn icon icon--headphones mic-btn" tooltip="Голосовой ввод" />
+                    <ui:Button name="mic-button" class="iconbtn icon icon--mic mic-btn" tooltip="Голосовой ввод" />
                     <ui:TextField name="message-input" class="composer__input" placeholder="Введите сообщение..." multiline="true" />
                     <ui:VisualElement class="composer__hint">
                         <ui:Label text="⌘" class="kbd" />

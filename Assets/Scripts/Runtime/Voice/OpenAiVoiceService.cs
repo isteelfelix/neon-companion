@@ -62,6 +62,11 @@ namespace NeonCompanion.Runtime.Voice
                     _audioSource = gameObject.AddComponent<AudioSource>();
             }
             _audioSource.volume = outputVolume;
+
+            // Prime FMOD's output subsystem now so Microphone.Start() later doesn't hit
+            // FMOD_ERR_OUTPUT_INIT (error 60) when the output device is in idle state.
+            AudioClip warmup = AudioClip.Create("_fmod_warmup", 1, 1, 44100, false);
+            _audioSource.PlayOneShot(warmup, 0f);
         }
 
         private void OnDestroy()
@@ -108,8 +113,16 @@ namespace NeonCompanion.Runtime.Voice
 
             _activeDevice  = FindInputDevice(_inputDeviceName);
             _recordingClip = Microphone.Start(_activeDevice, false, 60, 16000);
-            _isRecording   = true;
-            _vadCoroutine  = StartCoroutine(VadCoroutine());
+            if (_recordingClip == null)
+            {
+                NeonLogger.LogWarning(
+                    "OpenAiVoiceService: Microphone.Start() returned null — " +
+                    "check that a default audio output device is configured in Windows Sound settings " +
+                    "(FMOD requires output device to be available when starting microphone capture).");
+                return;
+            }
+            _isRecording  = true;
+            _vadCoroutine = StartCoroutine(VadCoroutine());
         }
 
         public byte[] StopRecording()

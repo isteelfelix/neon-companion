@@ -27,6 +27,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public string emoji;
         public string status;
         public string inlineDiff;
+        public string details;
     }
 
     [Serializable]

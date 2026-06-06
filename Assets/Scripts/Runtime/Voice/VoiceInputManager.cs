@@ -106,8 +106,12 @@ namespace NeonCompanion.Runtime.Voice
         {
             _onRecordingStarted?.Invoke();
             _voiceService.StartRecording();
-            UpdateMicVisual(true);
-            OnRecordingStarted?.Invoke();
+            // IsRecording reflects actual state — Microphone.Start can fail silently,
+            // so only flip the visual and fire the event if recording actually began.
+            bool started = _voiceService.IsRecording;
+            UpdateMicVisual(started);
+            if (started)
+                OnRecordingStarted?.Invoke();
         }
 
         private void StopRecording()
@@ -132,6 +136,11 @@ namespace NeonCompanion.Runtime.Voice
 
         private void HandleSpeechRecognized(string text)
         {
+            // VAD or manual stop has ended the recording — always reset the button visual
+            // here, because VAD calls StopRecording() internally without going through us.
+            UpdateMicVisual(false);
+            OnRecordingStopped?.Invoke();
+
             if (string.IsNullOrWhiteSpace(text) || _sendRecognizedMessageAsync == null)
                 return;
 

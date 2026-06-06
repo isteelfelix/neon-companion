@@ -47,6 +47,7 @@
 .icon--copy       { background-image: url("project://database/Assets/UI/Icons/copy.svg"); }
 .icon--dots       { background-image: url("project://database/Assets/UI/Icons/dots.svg"); }
 .icon--headphones { background-image: url("project://database/Assets/UI/Icons/headphones.svg"); }
+.icon--mic        { background-image: url("project://database/Assets/UI/Icons/mic.svg"); }
 .icon--history    { background-image: url("project://database/Assets/UI/Icons/history.svg"); }
 .icon--palette      { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
 .icon--panel-left   { background-image: url("project://database/Assets/UI/Icons/panel-left.svg"); }
@@ -746,7 +747,7 @@
 
 /* Voice / mic button should be very tappable on Android */
 .app.platform-android .iconbtn--mic,
-.app.platform-android .icon--headphones {
+.app.platform-android .icon--mic {
     min-width: 48px;
     min-height: 48px;
     background-size: 24px 24px;

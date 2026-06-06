@@ -413,6 +413,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 _currentChatService = chat;
 
+                if (chat.CurrentProvider == null || chat.CurrentChatViewModel == null)
+                    await chat.GetOrCreateChatAsync();
+
                 if (chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled || chat.CurrentChatViewModel == null)
                 {
                     _d.ShowSystemMessage(LocalizationExtensions.Get("provider.not_configured.hint", "Провайдер не настроен. Перейди в Провайдеры и добавь API-ключ."));
@@ -508,7 +511,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _d.RenderMessages(null);
                 else
                     _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
-                _d.ShowSystemMessage(ex.Message);
+                _d.ShowSystemMessage(GetSendFailureMessage(ex));
                 NeonLogger.LogError(ex.ToString());
                 _d.TriggerAvatarConfused();
             }
@@ -733,11 +736,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public async Task<bool> StartNewSessionAsync()
         {
+            ChatService chat = null;
             try
             {
                 _editController?.Hide();
 
-                var chat = await _d.GetChatServiceAsync();
+                chat = await _d.GetChatServiceAsync();
                 if (chat == null)
                 {
                     _d.ShowSystemMessage(LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано."));
@@ -748,9 +752,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (string.IsNullOrEmpty(chat.CurrentSessionId) || chat.CurrentChatViewModel == null)
                 {
                     _d.RenderMessages(null);
-                    _d.ShowSystemMessage(LocalizationExtensions.Get(
-                        "chat.create.no_provider",
-                        "Провайдер не выбран. Настройте провайдера и активируйте его, чтобы создать чат."));
+                    _d.ShowSystemMessage(GetCreateChatFailureMessage(chat, null));
                     return false;
                 }
 
@@ -769,12 +771,55 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch (Exception ex)
             {
-                _d.ShowSystemMessage(LocalizationExtensions.Get(
-                    "chat.create.no_provider",
-                    "Провайдер не выбран. Настройте провайдера и активируйте его, чтобы создать чат."));
+                _d.ShowSystemMessage(GetCreateChatFailureMessage(chat, ex));
                 NeonLogger.LogError(ex.ToString());
                 return false;
             }
+        }
+
+        private static string GetCreateChatFailureMessage(ChatService chat, Exception exception)
+        {
+            if (chat == null)
+                return LocalizationExtensions.Get("system.app.not_initialized", "Приложение не инициализировано.");
+
+            if (chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled)
+            {
+                return LocalizationExtensions.Get(
+                    "chat.create.no_provider",
+                    "Провайдер не выбран. Настройте провайдера и активируйте его, чтобы создать чат.");
+            }
+
+            if (ChatService.IsHermesProvider(chat.CurrentProvider))
+            {
+                var selector = GlobalBackendSelector.Instance;
+                string details = selector != null ? selector.LastConnectionError : null;
+                if (chat.ChatTransport == null || !chat.ChatTransport.IsConnected)
+                {
+                    if (!string.IsNullOrWhiteSpace(details))
+                    {
+                        return LocalizationExtensions.GetFormat(
+                            "chat.create.hermes_ws_error",
+                            "Hermes WebSocket is not connected: {0}",
+                            details);
+                    }
+
+                    return LocalizationExtensions.Get(
+                        "chat.create.hermes_ws_disconnected",
+                        "Hermes provider is active, but WebSocket is not connected. Check the provider URL/key or server availability.");
+                }
+            }
+
+            if (exception != null && !string.IsNullOrWhiteSpace(exception.Message))
+            {
+                return LocalizationExtensions.GetFormat(
+                    "chat.create.failed_with_error",
+                    "Could not create chat: {0}",
+                    exception.Message);
+            }
+
+            return LocalizationExtensions.Get(
+                "chat.create.failed",
+                "Could not create chat. Check the provider connection and try again.");
         }
 
         // ===== Regenerate =====
@@ -971,6 +1016,22 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ===== Message Rendering (delegated to ChatMessageListRenderer) =====
+
+        private static string GetSendFailureMessage(Exception ex)
+        {
+            string message = ex != null ? ex.Message : null;
+            if (!string.IsNullOrWhiteSpace(message) &&
+                message.IndexOf("session busy", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return LocalizationExtensions.Get(
+                    "chat.hermes.session_busy",
+                    "Hermes session is still busy. Wait for the current response to finish or stop it before sending another message.");
+            }
+
+            return string.IsNullOrWhiteSpace(message)
+                ? LocalizationExtensions.Get("chat.send.failed", "Could not send message.")
+                : message;
+        }
 
         public void RenderMessages(IReadOnlyList<ChatMessage> messages)
         {

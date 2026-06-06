@@ -439,6 +439,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         hash = AppendHash(hash, segment.emoji);
                         hash = AppendHash(hash, segment.status);
                         hash = AppendHash(hash, segment.inlineDiff);
+                        hash = AppendHash(hash, segment.details);
                     }
                 }
                 return index.ToString() + ":" + hash.ToString();
@@ -754,7 +755,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 if (segment == null) continue;
                 if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
                 {
-                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff));
+                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff, segment.details));
                 }
             }
 
@@ -848,7 +849,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return false;
 
             if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
-                return !string.IsNullOrWhiteSpace(segment.tool) || !string.IsNullOrWhiteSpace(segment.label);
+                return !string.IsNullOrWhiteSpace(segment.tool) ||
+                       !string.IsNullOrWhiteSpace(segment.label) ||
+                       !string.IsNullOrWhiteSpace(segment.details) ||
+                       !string.IsNullOrWhiteSpace(segment.inlineDiff);
 
             if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
                 return !string.IsNullOrWhiteSpace(segment.text);

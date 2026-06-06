@@ -11,7 +11,7 @@ namespace NeonCompanion.Runtime.Voice
             if (provider == null)
                 return CreateFallback();
             if (ChatService.IsHermesProvider(provider))
-                return CreateHermes(settings);
+                return CreateHermes(provider, settings);
             return CreateOpenAi(provider, settings);
         }
 
@@ -35,16 +35,17 @@ namespace NeonCompanion.Runtime.Voice
             return service;
         }
 
-        private static IVoiceService CreateHermes(AppSettings settings)
+        private static IVoiceService CreateHermes(ProviderConfig provider, AppSettings settings)
         {
             string hermesRestUrl = settings != null ? settings.hermesRestUrl : "";
-            string inputDevice = settings != null ? settings.inputDeviceName : "";
-            float outputVolume = settings != null ? settings.outputVolume : 0.8f;
+            string apiKey        = provider != null ? provider.apiKey ?? "" : "";
+            string inputDevice   = settings != null ? settings.inputDeviceName : "";
+            float outputVolume   = settings != null ? settings.outputVolume : 0.8f;
 
             GameObject go = new GameObject("HermesVoiceService");
             Object.DontDestroyOnLoad(go);
             HermesVoiceService service = go.AddComponent<HermesVoiceService>();
-            service.Initialize(hermesRestUrl, inputDevice, outputVolume);
+            service.Initialize(hermesRestUrl, apiKey, inputDevice, outputVolume);
             return service;
         }
 

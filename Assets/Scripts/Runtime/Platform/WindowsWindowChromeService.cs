@@ -192,7 +192,7 @@ namespace NeonCompanion.Runtime.Platform
         /// включая загрузочный экран. AppBootstrap затем переиспользует этот же
         /// экземпляр через фабрику (не создавая дубль).
         /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoBootstrap()
         {
             if (Instance != null)
@@ -264,8 +264,11 @@ namespace NeonCompanion.Runtime.Platform
 
         public void BeginDrag()
         {
-            if (_hwnd == IntPtr.Zero)
+            if (_hwnd == IntPtr.Zero && !ResolveWindow())
                 return;
+
+            if (!_borderless)
+                ApplyBorderless();
 
             // Системное перетаскивание из client-зоны: отпускаем capture и сообщаем
             // окну, что нажатие пришлось на "заголовок".

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Platform;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -50,6 +51,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _root;
         private VisualElement _scanLine;
         private float         _scanTime;
+        private IWindowChromeService _windowChrome;
 
         // Floating particles (translate-y + fade per particle)
         private struct ParticleAnim
@@ -101,10 +103,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _orbit        = root.Q("orbit-dashed");
             _scanLine     = root.Q("scan-line");
             _root         = root;
+            _windowChrome = PlatformServiceFactory.CreateWindowChromeService();
+            if (_windowChrome != null && _windowChrome.IsAvailable)
+                _windowChrome.ApplyBorderless();
 
             // Адаптив загрузочного экрана: на низком окне (мин. 760×560) сжимаем
             // центральную колонку, чтобы лог не налезал на нижний прогресс-бар.
             root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+            root.RegisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
 
             // Tricolor gradient progress fill — generated at runtime, no PNG asset.
             if (_progressFill != null)
@@ -165,6 +171,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             StartCoroutine(FlickerTagline());
         }
 
+        private void OnDestroy()
+        {
+            if (_root == null)
+                return;
+
+            _root.UnregisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+            _root.UnregisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
+        }
+
         // Высота, ниже которой центральная колонка масштабируется, чтобы не
         // пересекаться с нижним баром (overlap начинается около ~614px).
         private const float ShortHeightThreshold = 640f;
@@ -173,6 +188,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_root == null) return;
             _root.EnableInClassList("splash--short", evt.newRect.height < ShortHeightThreshold);
+        }
+
+        private void OnRootPointerDown(PointerDownEvent evt)
+        {
+            if (evt == null || evt.button != 0)
+                return;
+
+            if (_windowChrome == null || !_windowChrome.IsAvailable)
+                return;
+
+            _windowChrome.BeginDrag();
+            evt.StopPropagation();
         }
 
         // ── Boot sequence ─────────────────────────────────────────────────────

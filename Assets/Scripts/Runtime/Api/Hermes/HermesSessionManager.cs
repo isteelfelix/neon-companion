@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Api.Hermes
@@ -208,9 +209,24 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrEmpty(ActiveSessionId))
                 throw new InvalidOperationException("No active session");
 
-            await _gateway.Request<object>(
-                RpcMethods.PromptSubmit,
-                new { session_id = ActiveSessionId, text });
+            if (Busy || AwaitingResponse)
+                throw new InvalidOperationException("Session is busy. Wait for the current response to finish.");
+
+            try
+            {
+                await _gateway.Request<object>(
+                    RpcMethods.PromptSubmit,
+                    new { session_id = ActiveSessionId, text });
+            }
+            catch
+            {
+                Busy = false;
+                AwaitingResponse = false;
+                throw;
+            }
+
+            Busy = true;
+            AwaitingResponse = true;
         }
 
         public async Task Interrupt()
@@ -412,9 +428,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
 
-            var payload = evt.Payload.ToObject<MessageDeltaPayload>();
-            if (payload != null && payload.text != null)
-                OnDelta?.Invoke(payload.text);
+            string text = ExtractText(evt.Payload);
+            if (!string.IsNullOrEmpty(text))
+                OnDelta?.Invoke(text);
         }
 
         private void HandleMessageComplete(GatewayEvent evt)
@@ -424,18 +440,21 @@ namespace NeonCompanion.Runtime.Api.Hermes
             string finalText = "";
             if (evt.Payload != null)
             {
-                var payload = evt.Payload.ToObject<MessageCompletePayload>();
-                finalText = payload?.text ?? payload?.rendered ?? "";
+                finalText = ExtractText(evt.Payload) ?? "";
             }
 
+            if (string.IsNullOrWhiteSpace(finalText) && evt.Payload != null)
+                NeonLogger.LogWarning("[Hermes] message.complete had no text payload: " + evt.Payload.ToString(Formatting.None));
+
             OnComplete?.Invoke(finalText);
+            Busy = false;
             AwaitingResponse = false;
 
             if (evt.Payload != null)
             {
-                var payload = evt.Payload.ToObject<MessageCompletePayload>();
-                if (payload?.usage != null && RuntimeInfo != null)
-                    RuntimeInfo.usage = payload.usage;
+                UsageStats usage = ExtractUsage(evt.Payload);
+                if (usage != null && RuntimeInfo != null)
+                    RuntimeInfo.usage = usage;
             }
         }
 
@@ -444,9 +463,107 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
 
-            var payload = evt.Payload.ToObject<MessageDeltaPayload>();
-            if (payload != null && payload.text != null)
-                OnReasoningDelta?.Invoke(payload.text);
+            string text = ExtractText(evt.Payload);
+            if (!string.IsNullOrEmpty(text))
+                OnReasoningDelta?.Invoke(text);
+        }
+
+        private static UsageStats ExtractUsage(JToken token)
+        {
+            if (token == null || token.Type != JTokenType.Object)
+                return null;
+
+            JToken usageToken = token["usage"];
+            if (usageToken == null || usageToken.Type != JTokenType.Object)
+                return null;
+
+            try
+            {
+                return usageToken.ToObject<UsageStats>();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string ExtractText(JToken token)
+        {
+            if (token == null)
+                return null;
+
+            if (token.Type == JTokenType.String)
+                return token.Value<string>();
+
+            string direct = FirstNonEmpty(
+                TokenString(token, "text"),
+                TokenString(token, "rendered"),
+                TokenString(token, "content"),
+                TokenString(token, "delta"),
+                TokenString(token, "message"),
+                TokenString(token, "output"),
+                TokenString(token, "result"),
+                TokenString(token, "final"),
+                TokenString(token, "response"),
+                TokenString(token, "body"));
+            if (!string.IsNullOrEmpty(direct))
+                return direct;
+
+            if (token.Type == JTokenType.Array)
+            {
+                foreach (JToken child in token.Children())
+                {
+                    string nested = ExtractText(child);
+                    if (!string.IsNullOrEmpty(nested))
+                        return nested;
+                }
+            }
+
+            if (token.Type != JTokenType.Object)
+                return null;
+
+            string[] keys = { "message", "messages", "output", "result", "final", "response", "content", "body", "data" };
+            for (int i = 0; i < keys.Length; i++)
+            {
+                JToken child = token[keys[i]];
+                if (child == null)
+                    continue;
+
+                string nested = ExtractText(child);
+                if (!string.IsNullOrEmpty(nested))
+                    return nested;
+            }
+
+            return null;
+        }
+
+        private static string TokenString(JToken token, string key)
+        {
+            if (token == null || string.IsNullOrEmpty(key))
+                return null;
+
+            if (token.Type != JTokenType.Object)
+                return null;
+
+            JToken child = token[key];
+            if (child == null || child.Type != JTokenType.String)
+                return null;
+
+            return child.Value<string>();
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            if (values == null)
+                return null;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(values[i]))
+                    return values[i];
+            }
+
+            return null;
         }
 
         private void HandleToolStart(GatewayEvent evt)
@@ -481,8 +598,37 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 status = status,
                 preview = payload.context ?? payload.preview,
                 inlineDiff = payload.inline_diff,
+                details = status == ToolCallStatus.Complete ? ExtractToolDetails(evt.Payload) : null,
                 emoji = payload.emoji
             });
+        }
+
+        private static string ExtractToolDetails(JToken token)
+        {
+            if (token == null || token.Type != JTokenType.Object)
+                return null;
+
+            string[] keys = { "result", "output", "content", "text", "rendered", "message", "response", "data" };
+            for (int i = 0; i < keys.Length; i++)
+            {
+                JToken child = token[keys[i]];
+                if (child == null)
+                    continue;
+
+                string text = ExtractText(child);
+                if (!string.IsNullOrWhiteSpace(text))
+                    return LimitToolDetails(text);
+            }
+
+            return null;
+        }
+
+        private static string LimitToolDetails(string text)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length <= 30000)
+                return text;
+
+            return text.Substring(0, 30000) + "\n... [tool output truncated]";
         }
 
         private void HandleClarifyRequest(GatewayEvent evt)
@@ -540,6 +686,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             var payload = evt.Payload.ToObject<ErrorPayload>();
             string message = payload?.message ?? "Unknown error";
+            Busy = false;
+            AwaitingResponse = false;
             OnError?.Invoke(message);
         }
 

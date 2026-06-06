@@ -72,7 +72,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _entries.Clear();
         }
 
-        internal static VisualElement CreateEntryElement(string tool, string label, string emoji, string status, string inlineDiff = null)
+        internal static VisualElement CreateEntryElement(string tool, string label, string emoji, string status, string inlineDiff = null, string detailsText = null)
         {
             string cleanLabel = SelectableMarkdownElement.StripAnsi(label);
             string truncated = cleanLabel != null && cleanLabel.Length > 60
@@ -125,6 +125,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 diffView.style.flexGrow = 1;
                 diffView.style.minHeight = 20;
                 details.Add(diffView);
+            }
+            else if (!string.IsNullOrWhiteSpace(detailsText))
+            {
+                var detailsView = new SelectableMarkdownElement();
+                detailsView.SetMarkdown(detailsText);
+                detailsView.AddToClassList("tool-entry__args");
+                detailsView.style.flexGrow = 1;
+                detailsView.style.minWidth = 0;
+                detailsView.style.width = Length.Percent(100);
+                detailsView.style.minHeight = 20;
+                details.Add(detailsView);
             }
             else
             {

@@ -41,6 +41,7 @@ namespace NeonCompanion.Runtime.Core
         // === State ===
 
         public BackendMode CurrentMode { get; private set; } = BackendMode.OpenAI;
+        public string LastConnectionError { get; private set; }
 
         // === Events ===
 
@@ -205,6 +206,7 @@ namespace NeonCompanion.Runtime.Core
             }
             else
             {
+                LastConnectionError = null;
                 NeonLogger.Log("[Backend] No active Hermes provider — connect skipped.");
                 return;
             }
@@ -214,12 +216,14 @@ namespace NeonCompanion.Runtime.Core
             try
             {
                 await SessionManager.Connect(HermesWsUrl, HermesToken);
+                LastConnectionError = null;
                 _reconnectAttempt = 0;
                 _reconnectDelay = 1f;
                 NeonLogger.Log("[Backend] Hermes connected");
             }
             catch (Exception ex)
             {
+                LastConnectionError = ex.Message;
                 Debug.LogError("[Backend] Hermes connect failed: " + ex.Message);
                 OnError?.Invoke("Hermes connection failed: " + ex.Message);
                 ScheduleReconnect();

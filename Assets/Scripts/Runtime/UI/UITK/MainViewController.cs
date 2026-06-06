@@ -1122,6 +1122,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 var chat = await GetChatServiceAsync();
                 if (!_isBound || chat == null) return;
+                await chat.GetOrCreateChatAsync();
                 await EnsureVoicePipelineAsync(chat);
 
                 _providersController.SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);

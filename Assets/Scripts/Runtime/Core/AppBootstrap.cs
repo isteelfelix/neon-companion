@@ -22,8 +22,16 @@ namespace NeonCompanion.Runtime.Core
 
         public CompanionApp App { get; private set; }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ConfigureRuntime()
+        {
+            Application.runInBackground = true;
+        }
+
         private void Awake()
         {
+            Application.runInBackground = true;
+
             if (_instance != null && _instance != this)
             {
                 Destroy(gameObject);
