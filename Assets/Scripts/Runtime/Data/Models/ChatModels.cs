@@ -46,6 +46,9 @@ namespace NeonCompanion.Runtime.Data.Models
         public float responseTimeSeconds;
         // Model reasoning/thinking text (expandable in UI)
         public string reasoning;
+        // Voice: local file path to recorded/synthesised audio (null = text-only message)
+        public string audioPath;
+        public float audioDurationSecs;
     }
 
     [Serializable]

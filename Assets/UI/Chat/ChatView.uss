@@ -367,7 +367,7 @@
     left: 100%;
     top: 0;
     flex-direction: column;
-    padding-left: 8px;
+    padding-left: 4px;
     flex-shrink: 0;
     opacity: 0;
     visibility: hidden;
@@ -384,21 +384,25 @@
 }
 
 .transcript__bubble-actions > Button {
-    width: 28px;
-    height: 28px;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
     margin: 1px 0;
-    padding: 0;
-    font-size: 14px;
-    border-radius: 6px;
+    padding: 3px;
+    font-size: 0;
+    border-radius: 4px;
     background-color: rgba(0, 0, 0, 0.5);
     color: var(--text-2);
     justify-content: center;
     align-items: center;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
 .transcript__bubble-actions > Button:hover {
     background-color: rgba(0, 0, 0, 0.8);
     color: var(--text-0);
+    -unity-background-image-tint-color: var(--text-0);
 }
 
 .transcript__meta {
@@ -1977,4 +1981,149 @@
     background-color: var(--bg-2);
     color: var(--text-3);
     opacity: 0.6;
+}
+
+/* ============================================================
+   Voice preview bar (composer, shown after recording stops)
+   ============================================================ */
+
+.voice-preview {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background-color: rgba(124, 122, 237, 0.10);
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(124, 122, 237, 0.30);
+    margin-bottom: 6px;
+}
+
+.voice-preview__play {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 14px;
+    background-color: var(--accent);
+    border-width: 0;
+    color: #fff;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.voice-preview__mic-icon {
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    min-height: 14px;
+    -unity-background-image-tint-color: var(--text-2);
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+.voice-preview__duration {
+    font-size: 12px;
+    color: var(--text-2);
+    min-width: 32px;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.voice-preview__text {
+    font-size: 12px;
+    color: var(--text-1);
+    flex-shrink: 1;
+    overflow: hidden;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.voice-preview__cancel {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 12px;
+    background-color: transparent;
+    border-width: 0;
+    color: var(--text-3);
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-left: 6px;
+    flex-shrink: 0;
+}
+
+.voice-preview__cancel:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-0);
+}
+
+.voice-preview__send {
+    flex-shrink: 0;
+    margin-left: 6px;
+    height: 28px;
+    padding-top: 0;
+    padding-bottom: 0;
+    font-size: 12px;
+}
+
+/* ============================================================
+   Voice bubble — appears inside user message bubbles
+   ============================================================ */
+
+.voice-bubble {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top-width: 1px;
+    border-top-color: rgba(124, 122, 237, 0.20);
+}
+
+.voice-bubble__play {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 12px;
+    background-color: var(--accent);
+    border-width: 0;
+    color: #fff;
+    font-size: 10px;
+    -unity-text-align: middle-center;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.voice-bubble__mic {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
+    -unity-background-image-tint-color: rgba(255, 255, 255, 0.55);
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+.voice-bubble__duration {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
 }

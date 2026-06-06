@@ -1,5 +1,4 @@
 using System;
-using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Localization;
 using UnityEngine;
@@ -15,31 +14,40 @@ namespace NeonCompanion.Runtime.Voice
         private IVoiceService _voiceService;
         private Button _micButton;
         private Func<bool> _isVoiceEnabled;
-        private Func<string, Task> _sendRecognizedMessageAsync;
         private Action _onRecordingStarted;
         private bool _pulseGrowing = true;
         private float _pulseOpacity = 1f;
+
+        // Set by OnRecordingComplete so HandleSpeechRecognized can attach it to the outgoing message.
+        private string _pendingVoicePath = "";
 
         public bool IsRecording => _voiceService?.IsRecording ?? false;
 
         public event Action OnRecordingStarted;
         public event Action OnRecordingStopped;
 
+        /// <summary>
+        /// Fires when STT is done. (transcribedText, wavFilePath) — wavFilePath may be "" for
+        /// WebSpeechBridge / platforms that don't capture a WAV file.
+        /// </summary>
+        public event Action<string, string> OnVoiceMessage;
+
         public void Initialize(
             IVoiceService voiceService,
             Button micButton,
             Func<bool> isVoiceEnabled,
-            Func<string, Task> sendRecognizedMessageAsync,
             Action onRecordingStarted)
         {
             _voiceService = voiceService;
             _micButton = micButton;
             _isVoiceEnabled = isVoiceEnabled;
-            _sendRecognizedMessageAsync = sendRecognizedMessageAsync;
             _onRecordingStarted = onRecordingStarted;
 
             if (_voiceService != null)
+            {
                 _voiceService.OnSpeechRecognized += HandleSpeechRecognized;
+                _voiceService.OnRecordingComplete += HandleRecordingComplete;
+            }
 
             if (_micButton != null)
                 _micButton.clicked += ToggleRecording;
@@ -50,7 +58,10 @@ namespace NeonCompanion.Runtime.Voice
         private void OnDestroy()
         {
             if (_voiceService != null)
+            {
                 _voiceService.OnSpeechRecognized -= HandleSpeechRecognized;
+                _voiceService.OnRecordingComplete -= HandleRecordingComplete;
+            }
 
             if (_micButton != null)
                 _micButton.clicked -= ToggleRecording;
@@ -134,17 +145,25 @@ namespace NeonCompanion.Runtime.Voice
 #endif
         }
 
+        private void HandleRecordingComplete(string wavPath, float durationSecs)
+        {
+            _pendingVoicePath = wavPath ?? "";
+        }
+
         private void HandleSpeechRecognized(string text)
         {
-            // VAD or manual stop has ended the recording — always reset the button visual
-            // here, because VAD calls StopRecording() internally without going through us.
+            // VAD or manual stop has ended the recording — reset button visual.
+            // (VAD calls StopRecording() internally without going through us.)
             UpdateMicVisual(false);
             OnRecordingStopped?.Invoke();
 
-            if (string.IsNullOrWhiteSpace(text) || _sendRecognizedMessageAsync == null)
-                return;
+            string path = _pendingVoicePath;
+            _pendingVoicePath = "";
 
-            _ = _sendRecognizedMessageAsync(text.Trim());
+            // Fire the voice message event. VoiceController decides whether to show
+            // a preview or send directly (based on whether path is non-empty).
+            if (!string.IsNullOrWhiteSpace(text))
+                OnVoiceMessage?.Invoke(text.Trim(), path);
         }
 
         private void UpdateMicButtonState()

@@ -66,6 +66,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<string> GetAvatarDisplayName;
             // Sounds (U-40)
             public Action PlayNotificationSound;
+            // Voice bubble replay
+            public Action<string> PlayAudioFile;
         }
 
         // QueuedMessage extracted to Models/Chat/QueuedMessage.cs
@@ -78,6 +80,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ChatStreamingCoordinator _streamingCoordinator;
         private ToolCallApprovalController _approvalController;
         private string _chatSubtitle = string.Empty;
+
+        // Voice: set before SendCurrentMessageAsync() to attach audio to the outgoing user message.
+        private string _pendingVoiceAudioPath = "";
+        private float _pendingVoiceDurationSecs;
 
         // Message queue (U-45)
         private readonly Queue<QueuedMessage> _messageQueue = new Queue<QueuedMessage>();
@@ -182,7 +188,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 () => _selectionManager != null && _selectionManager.IsSelecting,
                 i => _selectionManager != null && _selectionManager.IsIndexSelected(i),
                 i => _selectionManager?.ToggleSelection(i),
-                () => { _ = StartNewSessionAsync(); });
+                () => { _ = StartNewSessionAsync(); },
+                _d.PlayAudioFile);
             _editController.SetMessageListRenderer(_messageListRenderer);
         }
 
@@ -204,6 +211,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Wire up static bubble action events
             CopyRequested += OnCopyClicked;
+            CopyMessageRequested += OnCopyMessageClicked;
             RegenerateRequested += OnRegenerateClicked;
 
             _approvalController?.Subscribe();
@@ -280,6 +288,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             ChatMessageListRenderer.UnregisterClick(_d.ScrollBottomBtn, OnScrollBottomClicked);
 
             CopyRequested -= OnCopyClicked;
+            CopyMessageRequested -= OnCopyMessageClicked;
             RegenerateRequested -= OnRegenerateClicked;
             if (_approvalController != null)
                 _approvalController.OnStopRequested -= OnStopClicked;
@@ -542,6 +551,34 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _ = SendCurrentMessageAsync();
         }
 
+        /// <summary>
+        /// Send a voice-originated message bypassing the composer input field.
+        /// The <paramref name="audioPath"/> is stored in the resulting ChatMessage so the
+        /// chat bubble can render a playback button.
+        /// </summary>
+        public async Task SendDirectVoiceMessageAsync(string text, string audioPath)
+        {
+            if (string.IsNullOrWhiteSpace(text) || IsSending)
+                return;
+
+            _pendingVoiceAudioPath    = audioPath ?? "";
+            _pendingVoiceDurationSecs = 0f;
+            if (!string.IsNullOrEmpty(audioPath))
+            {
+                try
+                {
+                    long fileSize = new System.IO.FileInfo(audioPath).Length;
+                    _pendingVoiceDurationSecs = (fileSize - 44) / 2f / 16000f;
+                }
+                catch { }
+            }
+
+            if (_d.MessageInput != null)
+                _d.MessageInput.value = text;
+
+            await SendCurrentMessageAsync();
+        }
+
         private Task<bool> TryHandleCommandAsync(string message)
         {
             return _inputManager.TryHandleCommandAsync(message);
@@ -718,6 +755,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             GUIUtility.systemCopyBuffer = sb.ToString().TrimEnd();
             _d.ShowSystemMessage(LocalizationExtensions.Get("chat.copied", "Диалог скопирован в буфер обмена."));
+        }
+
+        private void OnCopyMessageClicked(string text)
+        {
+            GUIUtility.systemCopyBuffer = text ?? string.Empty;
+            _d.ShowSystemMessage(LocalizationExtensions.Get("msg.copied", "Copied"));
         }
 
         // ===== New Session =====
@@ -1052,7 +1095,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _messageListRenderer?.ScrollToBottom();
         }
 
-        private static IReadOnlyList<ChatMessage> BuildPendingMessages(IReadOnlyList<ChatMessage> existing, string userMessage, IReadOnlyList<ChatAttachment> attachments)
+        private IReadOnlyList<ChatMessage> BuildPendingMessages(IReadOnlyList<ChatMessage> existing, string userMessage, IReadOnlyList<ChatAttachment> attachments)
         {
             var list = new List<ChatMessage>();
             if (existing != null)
@@ -1060,6 +1103,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 for (int i = 0; i < existing.Count; i++)
                     list.Add(existing[i]);
             }
+            string pendingAudio    = _pendingVoiceAudioPath;
+            float  pendingDuration = _pendingVoiceDurationSecs;
+            _pendingVoiceAudioPath    = "";
+            _pendingVoiceDurationSecs = 0f;
+
             list.Add(new ChatMessage
             {
                 role = "user",
@@ -1067,7 +1115,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 attachments = attachments != null && attachments.Count > 0
                     ? new List<ChatAttachment>(attachments)
                     : null,
-                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                unixTimeSeconds  = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                audioPath        = string.IsNullOrEmpty(pendingAudio) ? null : pendingAudio,
+                audioDurationSecs = pendingDuration
             });
             return list;
         }
@@ -1445,10 +1495,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ===== Static events for bubble action buttons =====
 
         internal static event Action CopyRequested;
+        internal static event Action<string> CopyMessageRequested;
         internal static event Action RegenerateRequested;
         internal static event Action ListenRequested;
 
         internal static void OnCopyClickedStatic() => CopyRequested?.Invoke();
+        internal static void OnCopyMessageClickedStatic(string text) => CopyMessageRequested?.Invoke(text);
         internal static void OnRegenerateClickedStatic() => RegenerateRequested?.Invoke();
         internal static void OnListenClickedStatic() => ListenRequested?.Invoke();
     }

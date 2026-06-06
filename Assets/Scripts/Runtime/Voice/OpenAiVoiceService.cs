@@ -30,12 +30,16 @@ namespace NeonCompanion.Runtime.Voice
         private const int   VadWindowFrames  = 1600;   // 0.1 s at 16 kHz
         private const float IdleTimeoutSec   = 12f;
 
+        // Temp file tracking
+        private int _tempFileCounter;
+
         public bool IsRecording => _isRecording;
         public bool IsSpeaking  => _isSpeaking;
         public bool IsAvailable => !string.IsNullOrEmpty(_baseUrl) && !string.IsNullOrEmpty(_apiKey);
 
         public event Action<string> OnSpeechRecognized;
         public event Action OnPlaybackComplete;
+        public event Action<string, float> OnRecordingComplete;
 
         public void Initialize(
             string baseUrl,
@@ -168,6 +172,24 @@ namespace NeonCompanion.Runtime.Voice
             }
 
             byte[] wav = BuildWav(samples, 1, 16000, 16);
+
+            // Save to disk so the UI can play it back (composer preview + chat bubble).
+            float durationSecs = pos / 16000f;
+            string wavPath = "";
+            try
+            {
+                string fileName = "neon_voice_" + _tempFileCounter + ".wav";
+                _tempFileCounter++;
+                string filePath = System.IO.Path.Combine(Application.temporaryCachePath, fileName);
+                System.IO.File.WriteAllBytes(filePath, wav);
+                wavPath = filePath;
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("OpenAiVoiceService: failed to save voice WAV: " + ex.Message);
+            }
+
+            OnRecordingComplete?.Invoke(wavPath, durationSecs);
             StartCoroutine(TranscribeCoroutine(wav));
             return wav;
         }

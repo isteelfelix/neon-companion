@@ -179,7 +179,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             var messages = chat.CurrentChatViewModel.Messages;
             if (index >= 0 && index < messages.Count)
             {
-                GUIUtility.systemCopyBuffer = messages[index].content ?? string.Empty;
+                GUIUtility.systemCopyBuffer = ChatMessageListRenderer.BuildMessageCopyText(messages[index]);
                 _d.ShowSystemMessage(LocalizationExtensions.Get("msg.copied", "Copied"));
             }
         }

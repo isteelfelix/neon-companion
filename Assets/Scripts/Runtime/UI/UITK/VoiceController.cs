@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
+using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
+using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -14,8 +16,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             public GameObject gameObject;
             public Button MicButton;
+            public VisualElement ComposerPreviews;
             public Func<bool> IsVoiceEnabledBySettings;
-            public Func<string, Task> SendVoiceMessageAsync;
+            /// <summary>(transcribedText, wavFilePath) — sends the voice message to the chat.</summary>
+            public Func<string, string, Task> SendVoiceMessageAsync;
             public Action OnVoiceRecordingStarted;
             public Action RefreshAvatarMotionState;
             public Func<Task<ChatService>> GetChatServiceAsync;
@@ -28,11 +32,22 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IVoiceService _voiceService;
         private VoiceInputManager _voiceInputManager;
         private VoiceOutputManager _voiceOutputManager;
-        private LipsyncController _lipsyncController; // V-02 wiring
+        private VoicePreviewPlayer _previewPlayer;
+        private LipsyncController _lipsyncController;
         private bool _voiceBoundToChat;
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
         private string _lastConfigHash;
+
+        // Composer preview state
+        private VisualElement _previewBar;
+        private Label _previewDurationLabel;
+        private Label _previewTextLabel;
+        private Button _previewPlayBtn;
+        private string _previewWavPath;
+        private string _previewText;
+        private float _previewDurationSecs;
+        private bool _previewPlaying;
 
         public bool IsVoicePlaying => _isVoicePlaying;
         public bool IsVoiceRecording => _isVoiceRecording;
@@ -46,18 +61,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d = deps;
         }
 
-        internal void Init()
-        {
-            // No UI queries needed; _micButton comes from Deps.
-        }
+        internal void Init() { }
 
-        internal void RegisterCallbacks()
-        {
-        }
+        internal void RegisterCallbacks() { }
 
-        internal void UnregisterCallbacks()
-        {
-        }
+        internal void UnregisterCallbacks() { }
 
         internal void OnDisable()
         {
@@ -94,13 +102,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 IVoiceService created = VoiceServiceFactory.Create(provider, settings);
                 if (created != null)
-                {
                     _voiceService = created;
-                }
                 else
-                {
                     _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
-                }
             }
 
             if (_voiceOutputManager == null)
@@ -109,14 +113,20 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // old components with Object.Destroy (deferred), so GetComponent would still
                 // return the pending-destroy instance and wire a dead manager to the pipeline.
                 _voiceOutputManager = _d.gameObject.AddComponent<VoiceOutputManager>();
-                _voiceOutputManager.Initialize(_voiceService, _d.IsVoiceEnabledBySettings, () => _voiceInputManager != null && _voiceInputManager.IsRecording);
+                _voiceOutputManager.Initialize(_voiceService, _d.IsVoiceEnabledBySettings,
+                    () => _voiceInputManager != null && _voiceInputManager.IsRecording);
             }
 
             if (_voiceInputManager == null)
             {
                 _voiceInputManager = _d.gameObject.AddComponent<VoiceInputManager>();
-                _voiceInputManager.Initialize(_voiceService, _d.MicButton, _d.IsVoiceEnabledBySettings, _d.SendVoiceMessageAsync, _d.OnVoiceRecordingStarted);
+                _voiceInputManager.Initialize(_voiceService, _d.MicButton,
+                    _d.IsVoiceEnabledBySettings, _d.OnVoiceRecordingStarted);
+                _voiceInputManager.OnVoiceMessage += HandleVoiceMessage;
             }
+
+            if (_previewPlayer == null)
+                _previewPlayer = _d.gameObject.AddComponent<VoicePreviewPlayer>();
 
             if (_lipsyncController == null)
             {
@@ -149,6 +159,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void ReinitializeVoiceService(ProviderConfig provider, AppSettings settings, ChatService chat)
         {
             UnbindVoiceAnimationEvents();
+            HideVoicePreview();
 
             if (_voiceOutputManager != null)
             {
@@ -161,6 +172,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_voiceInputManager != null)
             {
+                _voiceInputManager.OnVoiceMessage -= HandleVoiceMessage;
                 UnityEngine.Object.Destroy(_voiceInputManager);
                 _voiceInputManager = null;
             }
@@ -186,15 +198,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             IVoiceService created = VoiceServiceFactory.Create(provider, settings);
             if (created != null)
-            {
                 _voiceService = created;
-            }
             else
-            {
-                // Old bridge was destroyed above (deferred). AddComponent always — GetComponent
-                // would return the pending-destroy instance during the same frame.
                 _voiceService = _d.gameObject.AddComponent<WebSpeechBridge>();
-            }
         }
 
         internal void OnVoiceRecordingStarted()
@@ -207,6 +213,198 @@ namespace NeonCompanion.Runtime.UI.UITK
             _voiceOutputManager?.EnqueueResponse(text);
         }
 
+        /// <summary>Play a WAV file (used by chat voice bubbles for replay).</summary>
+        internal void PlayAudioFile(string wavPath)
+        {
+            if (_previewPlayer != null && !string.IsNullOrEmpty(wavPath))
+                _previewPlayer.Play(wavPath);
+        }
+
+        // ============================================================
+        // Voice preview (composer)
+        // ============================================================
+
+        private void HandleVoiceMessage(string text, string wavPath)
+        {
+            if (string.IsNullOrEmpty(wavPath))
+            {
+                // WebSpeechBridge path — no WAV file, send directly.
+                if (_d.SendVoiceMessageAsync != null)
+                    _ = _d.SendVoiceMessageAsync(text, "");
+                return;
+            }
+
+            _previewText       = text;
+            _previewWavPath    = wavPath;
+            _previewDurationSecs = 0f;
+            // Try to read duration from file size (44-byte WAV header, 16-bit mono 16kHz).
+            try
+            {
+                long fileSize = new System.IO.FileInfo(wavPath).Length;
+                long dataSamples = (fileSize - 44) / 2;
+                _previewDurationSecs = dataSamples / 16000f;
+            }
+            catch { }
+
+            ShowVoicePreview();
+        }
+
+        private void ShowVoicePreview()
+        {
+            if (_d.ComposerPreviews == null)
+            {
+                // No UI parent — fall back to direct send.
+                if (_d.SendVoiceMessageAsync != null)
+                    _ = _d.SendVoiceMessageAsync(_previewText, _previewWavPath);
+                return;
+            }
+
+            HideVoicePreview();
+
+            _previewBar = new VisualElement();
+            _previewBar.name = "voice-preview-bar";
+            _previewBar.AddToClassList("voice-preview");
+
+            // ── Play / Pause toggle ──────────────────────────────────
+            _previewPlayBtn = new Button();
+            _previewPlayBtn.name = "voice-preview-play";
+            _previewPlayBtn.AddToClassList("voice-preview__play");
+            _previewPlaying = false;
+            UpdatePreviewPlayIcon();
+            _previewPlayBtn.clicked += OnPreviewPlayClicked;
+            _previewBar.Add(_previewPlayBtn);
+
+            // ── Mic icon ─────────────────────────────────────────────
+            var micIcon = new VisualElement();
+            micIcon.AddToClassList("icon");
+            micIcon.AddToClassList("icon--mic");
+            micIcon.AddToClassList("voice-preview__mic-icon");
+            _previewBar.Add(micIcon);
+
+            // ── Duration ─────────────────────────────────────────────
+            _previewDurationLabel = new Label(FormatDuration(_previewDurationSecs));
+            _previewDurationLabel.AddToClassList("voice-preview__duration");
+            _previewBar.Add(_previewDurationLabel);
+
+            // ── Transcribed text ─────────────────────────────────────
+            _previewTextLabel = new Label(_previewText);
+            _previewTextLabel.AddToClassList("voice-preview__text");
+            _previewBar.Add(_previewTextLabel);
+
+            // ── Spacer ───────────────────────────────────────────────
+            var spacer = new VisualElement();
+            spacer.style.flexGrow = 1;
+            _previewBar.Add(spacer);
+
+            // ── Cancel ───────────────────────────────────────────────
+            var cancelBtn = new Button();
+            cancelBtn.name = "voice-preview-cancel";
+            cancelBtn.AddToClassList("voice-preview__cancel");
+            cancelBtn.text = "✕";
+            cancelBtn.clicked += OnPreviewCancelClicked;
+            _previewBar.Add(cancelBtn);
+
+            // ── Send ─────────────────────────────────────────────────
+            var sendBtn = new Button();
+            sendBtn.name = "voice-preview-send";
+            sendBtn.AddToClassList("btn");
+            sendBtn.AddToClassList("btn--primary");
+            sendBtn.AddToClassList("voice-preview__send");
+            sendBtn.text = LocalizationExtensions.Get("voice.preview.send", "Отправить");
+            sendBtn.clicked += OnPreviewSendClicked;
+            _previewBar.Add(sendBtn);
+
+            _d.ComposerPreviews.Add(_previewBar);
+            _d.ComposerPreviews.style.display = DisplayStyle.Flex;
+
+            if (_previewPlayer != null)
+                _previewPlayer.OnPlaybackComplete += OnPreviewPlaybackComplete;
+        }
+
+        private void HideVoicePreview()
+        {
+            if (_previewPlayer != null)
+            {
+                _previewPlayer.Stop();
+                _previewPlayer.OnPlaybackComplete -= OnPreviewPlaybackComplete;
+            }
+
+            if (_previewBar != null)
+            {
+                _previewBar.RemoveFromHierarchy();
+                _previewBar = null;
+            }
+
+            if (_d.ComposerPreviews != null &&
+                _d.ComposerPreviews.childCount == 0)
+                _d.ComposerPreviews.style.display = DisplayStyle.None;
+
+            _previewPlaying      = false;
+            _previewWavPath      = "";
+            _previewText         = "";
+            _previewDurationSecs = 0f;
+        }
+
+        private void OnPreviewPlayClicked()
+        {
+            if (_previewPlayer == null || string.IsNullOrEmpty(_previewWavPath))
+                return;
+
+            if (_previewPlaying)
+            {
+                _previewPlayer.Stop();
+                _previewPlaying = false;
+            }
+            else
+            {
+                _previewPlayer.Play(_previewWavPath);
+                _previewPlaying = true;
+            }
+            UpdatePreviewPlayIcon();
+        }
+
+        private void OnPreviewPlaybackComplete()
+        {
+            _previewPlaying = false;
+            UpdatePreviewPlayIcon();
+        }
+
+        private void OnPreviewCancelClicked()
+        {
+            string pathToDelete = _previewWavPath;
+            HideVoicePreview();
+
+            if (!string.IsNullOrEmpty(pathToDelete))
+            {
+                try { System.IO.File.Delete(pathToDelete); }
+                catch { }
+            }
+        }
+
+        private void OnPreviewSendClicked()
+        {
+            string text = _previewText;
+            string path = _previewWavPath;
+            HideVoicePreview();
+
+            if (_d.SendVoiceMessageAsync != null)
+                _ = _d.SendVoiceMessageAsync(text, path);
+        }
+
+        private void UpdatePreviewPlayIcon()
+        {
+            if (_previewPlayBtn == null)
+                return;
+            _previewPlayBtn.text = _previewPlaying ? "⏸" : "▶";
+        }
+
+        private static string FormatDuration(float secs)
+        {
+            int m = (int)(secs / 60f);
+            int s = (int)(secs % 60f);
+            return m + ":" + s.ToString("D2");
+        }
+
         // ============================================================
         // Voice controls refresh
         // ============================================================
@@ -217,7 +415,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!(_d.IsVoiceEnabledBySettings != null && _d.IsVoiceEnabledBySettings()))
             {
                 _voiceOutputManager?.StopSpeakingAndClear();
-                _isVoicePlaying = false;
+                _isVoicePlaying   = false;
                 _isVoiceRecording = false;
                 _d.RefreshAvatarMotionState?.Invoke();
             }
@@ -231,9 +429,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_voiceOutputManager != null)
             {
-                _voiceOutputManager.OnPlaybackStarted -= HandleVoicePlaybackStarted;
+                _voiceOutputManager.OnPlaybackStarted   -= HandleVoicePlaybackStarted;
                 _voiceOutputManager.OnPlaybackCompleted -= HandleVoicePlaybackCompleted;
-                _voiceOutputManager.OnPlaybackStarted += HandleVoicePlaybackStarted;
+                _voiceOutputManager.OnPlaybackStarted   += HandleVoicePlaybackStarted;
                 _voiceOutputManager.OnPlaybackCompleted += HandleVoicePlaybackCompleted;
             }
 
@@ -250,7 +448,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_voiceOutputManager != null)
             {
-                _voiceOutputManager.OnPlaybackStarted -= HandleVoicePlaybackStarted;
+                _voiceOutputManager.OnPlaybackStarted   -= HandleVoicePlaybackStarted;
                 _voiceOutputManager.OnPlaybackCompleted -= HandleVoicePlaybackCompleted;
             }
 
@@ -260,7 +458,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _voiceInputManager.OnRecordingStopped -= HandleVoiceRecordingStopped;
             }
 
-            _isVoicePlaying = false;
+            _isVoicePlaying   = false;
             _isVoiceRecording = false;
         }
 

@@ -205,6 +205,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         // copy-btn, refresh-btn, listen-btn removed — now in bubble hover
         private Button _micButton;
         private Button _attachButton;
+        private VisualElement _composerPreviews;
         private Button _stopButton;
         private Button _avatarUploadBtn;
         private Button _avatarOpenFolderBtn;
@@ -472,6 +473,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // copy-btn, refresh-btn, listen-btn removed from UXML — now in bubble hover
             _micButton = root.Q<Button>("mic-button");
             _attachButton = root.Q<Button>("attach-btn");
+            _composerPreviews = root.Q<VisualElement>("composer-previews");
             _stopButton = root.Q<Button>("stop-button");
             _avatarUploadBtn      = root.Q<Button>("avatar-upload-btn");
             _avatarOpenFolderBtn  = root.Q<Button>("avatar-open-folder-btn");
@@ -681,7 +683,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ApplyModelSelectionAsync = (id, close) => _providersController.ApplyModelSelectionAsync(id, close),
                 OpenModelPickerAsync = () => _providersController.OpenModelPickerAsync(),
                 GetAvatarDisplayName = () => _avatarGalleryController.AvatarDisplayName(_avatarGalleryController.ActiveAvatarId),
-                PlayNotificationSound = PlayNotificationBeep
+                PlayNotificationSound = PlayNotificationBeep,
+                PlayAudioFile = path => _voiceController.PlayAudioFile(path)
             };
         }
 
@@ -825,6 +828,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 gameObject = gameObject,
                 MicButton = _micButton,
+                ComposerPreviews = _composerPreviews,
                 IsVoiceEnabledBySettings = IsVoiceEnabledBySettings,
                 SendVoiceMessageAsync = SendVoiceMessageAsync,
                 OnVoiceRecordingStarted = OnVoiceRecordingStarted,
@@ -1075,15 +1079,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnVoiceRecordingStarted() => _voiceController.OnVoiceRecordingStarted();
 
-        private async Task SendVoiceMessageAsync(string text)
+        private async Task SendVoiceMessageAsync(string text, string audioPath)
         {
             if (string.IsNullOrWhiteSpace(text) || _chatController.IsSending)
                 return;
 
-            if (_composerInput != null)
-                _composerInput.value = text.Trim();
-
-            await SendCurrentMessageAsync();
+            await _chatController.SendDirectVoiceMessageAsync(text.Trim(), audioPath ?? "");
         }
 
         private bool IsVoiceEnabledBySettings()

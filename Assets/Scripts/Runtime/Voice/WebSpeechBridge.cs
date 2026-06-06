@@ -45,6 +45,10 @@ namespace NeonCompanion.Runtime.Voice
 
         public event Action<string> OnSpeechRecognized;
         public event Action OnPlaybackComplete;
+        // WebSpeechBridge transcribes directly in the browser/OS — no WAV file is captured.
+#pragma warning disable 0067
+        public event Action<string, float> OnRecordingComplete;
+#pragma warning restore 0067
 
         private void Awake()
         {

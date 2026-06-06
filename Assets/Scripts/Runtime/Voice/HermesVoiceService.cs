@@ -39,6 +39,7 @@ namespace NeonCompanion.Runtime.Voice
 
         public event Action<string> OnSpeechRecognized;
         public event Action OnPlaybackComplete;
+        public event Action<string, float> OnRecordingComplete;
 
         public void Initialize(string hermesRestUrl, string apiKey, string inputDeviceName, float outputVolume)
         {
@@ -170,6 +171,26 @@ namespace NeonCompanion.Runtime.Voice
             }
 
             byte[] wav = BuildWav(samples, 1, 16000, 16);
+
+            // Save to disk so the UI can play it back (composer preview + chat bubble).
+            float durationSecs = pos / 16000f;
+            string wavPath = "";
+            try
+            {
+                string fileName = "neon_voice_" + _tempFileCounter + ".wav";
+                _tempFileCounter++;
+                string filePath = System.IO.Path.Combine(Application.temporaryCachePath, fileName);
+                System.IO.File.WriteAllBytes(filePath, wav);
+                wavPath = filePath;
+                _tempFiles.Add(filePath);
+                _tempFileTimes.Add(Time.realtimeSinceStartup);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("HermesVoiceService: failed to save voice WAV: " + ex.Message);
+            }
+
+            OnRecordingComplete?.Invoke(wavPath, durationSecs);
             StartCoroutine(TranscribeCoroutine(wav));
             return wav;
         }

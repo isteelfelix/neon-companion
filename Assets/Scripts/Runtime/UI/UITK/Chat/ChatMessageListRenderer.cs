@@ -28,6 +28,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Func<int, bool> _isIndexSelected;
         private readonly Action<int> _toggleSelection;
         private readonly Action _onNewSessionRequested;
+        private readonly Action<string> _playAudioFile;
 
         internal VisualElement _transcriptContextRoot;
         private readonly Dictionary<string, VisualElement> _messageRowCache = new Dictionary<string, VisualElement>();
@@ -53,7 +54,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Func<bool> isSelecting,
             Func<int, bool> isIndexSelected,
             Action<int> toggleSelection,
-            Action onNewSessionRequested)
+            Action onNewSessionRequested,
+            Action<string> playAudioFile = null)
         {
             _messagesList = messagesList;
             _messageEditController = messageEditController;
@@ -66,6 +68,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _isIndexSelected = isIndexSelected;
             _toggleSelection = toggleSelection;
             _onNewSessionRequested = onNewSessionRequested;
+            _playAudioFile = playAudioFile;
         }
 
         internal void Render(IReadOnlyList<ChatMessage> messages)
@@ -348,7 +351,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 if (!selecting)
                     _messageRowCache.TryGetValue(renderKey, out row);
                 if (row == null)
-                    row = CreateMessageElement(message, ShowImageLightbox, _scrollToBottomCallback);
+                    row = CreateMessageElement(message, ShowImageLightbox, _scrollToBottomCallback, _playAudioFile);
 
                 row.userData = i;
                 var bubbleForTag = row.Q<VisualElement>(className: "transcript__bubble");
@@ -410,6 +413,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     hash = AppendHash(hash, message.tool_call_id);
                     hash = AppendHash(hash, message.tokenCount);
                     hash = AppendHash(hash, message.responseTimeSeconds.GetHashCode());
+                    hash = AppendHash(hash, message.audioPath);
 
                     int attachmentCount = message.attachments != null ? message.attachments.Count : 0;
                     hash = AppendHash(hash, attachmentCount);
@@ -505,7 +509,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             return container;
         }
 
-        internal static VisualElement CreateMessageElement(ChatMessage message, Action<string> onImageClick = null, Action onImageLoaded = null)
+        internal static VisualElement CreateMessageElement(ChatMessage message, Action<string> onImageClick = null, Action onImageLoaded = null, Action<string> onAudioPlay = null)
         {
             if (message == null)
             {
@@ -664,26 +668,29 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 actions = new VisualElement();
                 actions.AddToClassList("transcript__bubble-actions");
+                actions.RegisterCallback<PointerDownEvent>(StopBubbleActionPointerDown);
+                actions.RegisterCallback<PointerUpEvent>(StopBubbleActionPointerUp);
 
                 var copyBtn = new Button();
                 copyBtn.AddToClassList("iconbtn");
                 copyBtn.AddToClassList("icon");
                 copyBtn.AddToClassList("icon--copy");
-                copyBtn.tooltip = "Копировать";
-                RegisterClick(copyBtn, () => ChatController.OnCopyClickedStatic());
+                copyBtn.tooltip = LocalizationExtensions.Get("tooltip.copy", "Copy");
+                string messageCopyText = BuildMessageCopyText(message);
+                RegisterClick(copyBtn, () => ChatController.OnCopyMessageClickedStatic(messageCopyText));
 
                 var refreshBtn = new Button();
                 refreshBtn.AddToClassList("iconbtn");
                 refreshBtn.AddToClassList("icon");
                 refreshBtn.AddToClassList("icon--refresh");
-                refreshBtn.tooltip = "Пересоздать";
+                refreshBtn.tooltip = LocalizationExtensions.Get("tooltip.regenerate", "Regenerate");
                 RegisterClick(refreshBtn, () => ChatController.OnRegenerateClickedStatic());
 
                 var listenBtn = new Button();
                 listenBtn.AddToClassList("iconbtn");
                 listenBtn.AddToClassList("icon");
                 listenBtn.AddToClassList("icon--headphones");
-                listenBtn.tooltip = "Озвучить";
+                listenBtn.tooltip = LocalizationExtensions.Get("tooltip.listen", "Speak last response");
                 RegisterClick(listenBtn, () => ChatController.OnListenClickedStatic());
 
                 actions.Add(copyBtn);
@@ -717,9 +724,74 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 }
             }
 
+            // Voice bubble — shown on user messages that have a recorded WAV file.
+            if (role == "user" && !string.IsNullOrEmpty(message.audioPath)
+                && System.IO.File.Exists(message.audioPath))
+            {
+                string capturedPath = message.audioPath;
+                float  capturedDuration = message.audioDurationSecs;
+
+                var voiceBubble = new VisualElement();
+                voiceBubble.AddToClassList("voice-bubble");
+
+                var playBtn = new Button();
+                playBtn.AddToClassList("voice-bubble__play");
+                playBtn.text = "▶";
+                RegisterClick(playBtn, () =>
+                {
+                    if (onAudioPlay != null)
+                        onAudioPlay(capturedPath);
+                });
+                voiceBubble.Add(playBtn);
+
+                var micIcon = new VisualElement();
+                micIcon.AddToClassList("icon");
+                micIcon.AddToClassList("icon--mic");
+                micIcon.AddToClassList("voice-bubble__mic");
+                voiceBubble.Add(micIcon);
+
+                string durationText = capturedDuration > 0f
+                    ? ((int)(capturedDuration / 60f)) + ":" + ((int)(capturedDuration % 60f)).ToString("D2")
+                    : "0:00";
+                var durLabel = new Label(durationText);
+                durLabel.AddToClassList("voice-bubble__duration");
+                voiceBubble.Add(durLabel);
+
+                bubble.Add(voiceBubble);
+            }
+
             row.Add(bubble);
 
             return row;
+        }
+
+        internal static string BuildMessageCopyText(ChatMessage message)
+        {
+            if (message == null)
+                return string.Empty;
+
+            if (message.segments != null && message.segments.Count > 0)
+            {
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < message.segments.Count; i++)
+                {
+                    var segment = message.segments[i];
+                    if (segment == null)
+                        continue;
+
+                    if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(segment.text))
+                    {
+                        sb.Append(segment.text);
+                    }
+                }
+
+                string segmentedText = sb.ToString().Trim();
+                if (!string.IsNullOrEmpty(segmentedText))
+                    return segmentedText;
+            }
+
+            return message.content ?? string.Empty;
         }
 
         private static bool AddMessageSegments(VisualElement bubble, ChatMessage message)
@@ -913,11 +985,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (_messagesList == null || evt == null)
                 return;
 
+            VisualElement target = evt.target as VisualElement;
+            if (IsInsideBubbleActions(target))
+                return;
+
             bool isContextButton = evt.button != 0 || (evt.pressedButtons & 2) != 0;
             if (!isContextButton)
                 return;
 
-            VisualElement target = evt.target as VisualElement;
             Vector2 pos = evt.mousePosition;
             bool insideByTarget = IsInsideMessagesList(target);
             bool insideByPos = _messagesList.worldBound.Contains(pos);
@@ -951,6 +1026,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private void OnTranscriptPointerDown(PointerDownEvent evt)
         {
             if (_messagesList == null)
+                return;
+
+            if (IsInsideBubbleActions(evt.target as VisualElement))
                 return;
 
             Vector2 pos = evt.position;
@@ -1031,6 +1109,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return;
 
             var target = evt.target as VisualElement;
+            if (IsInsideBubbleActions(target))
+                return;
+
             Vector2 triggerPos;
             bool hasTriggerPos = TryGetEventPosition(evt.triggerEvent, out triggerPos);
             bool insideByTarget = IsInsideMessagesList(target);
@@ -1120,6 +1201,36 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
 
             return false;
+        }
+
+        private static bool IsInsideBubbleActions(VisualElement el)
+        {
+            while (el != null)
+            {
+                if (el.ClassListContains("transcript__bubble-actions"))
+                    return true;
+                el = el.parent;
+            }
+            return false;
+        }
+
+        private static void StopBubbleActionPointerDown(PointerDownEvent evt)
+        {
+            StopBubbleActionEvent(evt);
+        }
+
+        private static void StopBubbleActionPointerUp(PointerUpEvent evt)
+        {
+            StopBubbleActionEvent(evt);
+        }
+
+        private static void StopBubbleActionEvent(EventBase evt)
+        {
+            if (evt == null)
+                return;
+
+            evt.StopImmediatePropagation();
+            evt.StopPropagation();
         }
 
         private static bool IsInsideSelectableTextField(VisualElement el)
