@@ -78,6 +78,13 @@
                 <ui:VisualElement name="settings-voice-section" style="display: none;">
                     <ui:VisualElement class="settings-row">
                         <ui:VisualElement class="settings-row__copy">
+                            <ui:Label text="Всегда озвучивать ответы" class="settings-row__name" />
+                            <ui:Label text="Озвучивать каждый ответ. Иначе — только ответы на голосовые сообщения." class="settings-row__sub" />
+                        </ui:VisualElement>
+                        <ui:Toggle name="settings-voice-always" class="settings-toggle" value="false" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="settings-row">
+                        <ui:VisualElement class="settings-row__copy">
                             <ui:Label text="Устройство записи" class="settings-row__name" />
                             <ui:Label text="Микрофон для голосового ввода." class="settings-row__sub" />
                         </ui:VisualElement>

@@ -265,8 +265,10 @@ namespace NeonCompanion.Runtime.Api.Tools
                 {
                     // Force UTF-8 out of PowerShell so non-ASCII output isn't mojibake.
                     string prelude = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[System.Text.Encoding]::UTF8; ";
-                    string escaped = (prelude + command).Replace("\"", "`\"");
-                    return ExecuteProcess("powershell.exe", "-NoProfile -NonInteractive -Command \"" + escaped + "\"", true, timeoutMs, true);
+                    // -EncodedCommand (base64 UTF-16LE) avoids all quoting/escaping issues:
+                    // backslash paths, embedded quotes, and Unicode pass through verbatim.
+                    string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(prelude + command));
+                    return ExecuteProcess("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + encoded, true, timeoutMs, true);
                 }
                 else
                 {

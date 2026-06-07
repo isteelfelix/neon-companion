@@ -17,6 +17,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public bool encryptKeys = false;
         public bool maskLogs = true;
         public bool voiceIOEnabled = true;
+        public bool voiceAlwaysReply = false;
         public string avatarShape = "round";
         public string avatarViewMode = "static";
         public bool showHalo = true;

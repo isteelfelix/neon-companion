@@ -56,6 +56,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Toggle _settingsEnterToSend;
         private Toggle _settingsSystemPrompt;
         private Toggle _settingsVoiceIo;
+        private Toggle _settingsVoiceAlways;
         private Toggle _settingsEncryptKeys;
         private Toggle _settingsMaskLogs;
         private Toggle _settingsShowHalo;
@@ -128,6 +129,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         internal bool UseStreaming => _settingsStreaming != null && _settingsStreaming.value;
         internal bool EnterToSend => _settingsEnterToSend == null || _settingsEnterToSend.value;
         internal bool VoiceIoEnabled => _settingsVoiceIo != null && _settingsVoiceIo.value;
+        internal bool VoiceAlwaysReply => _settingsVoiceAlways != null && _settingsVoiceAlways.value;
         internal string CurrentLanguage => _localizationService?.CurrentLanguage;
 
         // ============================================================
@@ -148,6 +150,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsEnterToSend  = root.Q<Toggle>("settings-enter-to-send");
             _settingsSystemPrompt = root.Q<Toggle>("settings-system-prompt");
             _settingsVoiceIo      = root.Q<Toggle>("settings-voice-io");
+            _settingsVoiceAlways  = root.Q<Toggle>("settings-voice-always");
             _settingsEncryptKeys  = root.Q<Toggle>("settings-encrypt-keys");
             _settingsMaskLogs     = root.Q<Toggle>("settings-mask-logs");
             _settingsShowHalo     = root.Q<Toggle>("settings-show-halo");
@@ -333,6 +336,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterToggleChanged(_settingsEnterToSend,   _ => SaveSettings());
             RegisterToggleChanged(_settingsSystemPrompt, _ => SaveSettings());
             RegisterToggleChanged(_settingsVoiceIo,      _ => { SaveSettings(); _deps.RefreshVoiceControls?.Invoke(); RefreshVoiceSection(); });
+            RegisterToggleChanged(_settingsVoiceAlways,  _ => SaveSettings());
             RegisterToggleChanged(_settingsEncryptKeys,  _ => SaveSettings());
             RegisterToggleChanged(_settingsMaskLogs,     _ => SaveSettings());
             RegisterToggleChanged(_settingsShowHalo,    v => { ApplyHaloVisibility(v); SaveSettings(); });
@@ -548,6 +552,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _settingsEnterToSend?.SetValueWithoutNotify(s.enterToSend);
                 _settingsSystemPrompt?.SetValueWithoutNotify(s.useSystemPrompt);
                 _settingsVoiceIo?.SetValueWithoutNotify(s.voiceIOEnabled);
+                _settingsVoiceAlways?.SetValueWithoutNotify(s.voiceAlwaysReply);
                 _settingsEncryptKeys?.SetValueWithoutNotify(s.encryptKeys);
                 _settingsMaskLogs?.SetValueWithoutNotify(s.maskLogs);
                 _settingsShowHalo?.SetValueWithoutNotify(s.showHalo);
@@ -639,6 +644,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsEnterToSend != null)   s.enterToSend       = _settingsEnterToSend.value;
                 if (_settingsSystemPrompt != null)  s.useSystemPrompt   = _settingsSystemPrompt.value;
                 if (_settingsVoiceIo != null)       s.voiceIOEnabled     = _settingsVoiceIo.value;
+                if (_settingsVoiceAlways != null)   s.voiceAlwaysReply   = _settingsVoiceAlways.value;
                 if (_settingsEncryptKeys != null)   s.encryptKeys        = _settingsEncryptKeys.value;
                 if (_settingsMaskLogs != null)      s.maskLogs           = _settingsMaskLogs.value;
                 if (_settingsShowHalo != null)      s.showHalo           = _settingsShowHalo.value;

@@ -1211,7 +1211,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         {
             while (el != null)
             {
-                if (el.ClassListContains("transcript__bubble-actions"))
+                if (el.ClassListContains("transcript__bubble-actions") || el.ClassListContains("voice-bubble"))
                     return true;
                 el = el.parent;
             }

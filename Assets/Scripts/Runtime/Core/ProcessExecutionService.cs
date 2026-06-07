@@ -32,9 +32,12 @@ namespace NeonCompanion.Runtime.Core
                     // Force PowerShell to emit UTF-8; otherwise it writes in the OEM code page
                     // and we (decoding as UTF-8) get mojibake on any non-ASCII output.
                     string prelude = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[System.Text.Encoding]::UTF8; ";
-                    // Use -NoProfile -NonInteractive for cleaner non-interactive run
-                    string escaped = (prelude + command).Replace("\"", "`\"");
-                    process.StartInfo.Arguments = "-NoProfile -NonInteractive -Command \"" + escaped + "\"";
+                    // Pass the command base64-encoded (UTF-16LE) via -EncodedCommand. This avoids
+                    // ALL quoting/escaping pitfalls — backslashes in paths (D:\foo), embedded
+                    // quotes, and Unicode all pass through verbatim, unlike -Command "..." which
+                    // breaks on the Windows argument layer.
+                    string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(prelude + command));
+                    process.StartInfo.Arguments = "-NoProfile -NonInteractive -EncodedCommand " + encoded;
                 }
                 else
                 {

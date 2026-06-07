@@ -15,6 +15,7 @@ namespace NeonCompanion.Runtime.Voice
         private IVoiceService _voiceService;
         private Func<bool> _isVoiceEnabled;
         private Func<bool> _isUserRecording;
+        private Func<bool> _shouldAutoVoice;
         private bool _isConsuming;
 
         public event Action<string> OnPlaybackStarted;
@@ -22,11 +23,13 @@ namespace NeonCompanion.Runtime.Voice
         /// <summary>(ttsAudioFilePath, durationSecs) — a synthesized response clip was saved to disk.</summary>
         public event Action<string, float> OnResponseAudioReady;
 
-        public void Initialize(IVoiceService voiceService, Func<bool> isVoiceEnabled, Func<bool> isUserRecording)
+        public void Initialize(IVoiceService voiceService, Func<bool> isVoiceEnabled, Func<bool> isUserRecording,
+            Func<bool> shouldAutoVoice = null)
         {
             _voiceService = voiceService;
             _isVoiceEnabled = isVoiceEnabled;
             _isUserRecording = isUserRecording;
+            _shouldAutoVoice = shouldAutoVoice;
 
             if (_voiceService != null)
                 _voiceService.OnSpeechAudioReady += HandleSpeechAudioReady;
@@ -46,13 +49,23 @@ namespace NeonCompanion.Runtime.Voice
         public void BindChat(ChatService chatService)
         {
             if (chatService != null)
-                chatService.OnAssistantResponse += EnqueueResponse;
+                chatService.OnAssistantResponse += HandleAssistantResponse;
         }
 
         public void UnbindChat(ChatService chatService)
         {
             if (chatService != null)
-                chatService.OnAssistantResponse -= EnqueueResponse;
+                chatService.OnAssistantResponse -= HandleAssistantResponse;
+        }
+
+        // Auto-TTS gate: only voice a response if always-on mode is set OR the user's last
+        // message was itself voice (reply in kind). Manual "listen" calls EnqueueResponse directly
+        // and is never gated.
+        private void HandleAssistantResponse(string response)
+        {
+            if (_shouldAutoVoice != null && !_shouldAutoVoice())
+                return;
+            EnqueueResponse(response);
         }
 
         public void StopSpeakingAndClear()

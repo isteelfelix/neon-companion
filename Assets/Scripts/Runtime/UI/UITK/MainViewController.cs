@@ -861,6 +861,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 MicButton = _micButton,
                 ComposerPreviews = _composerPreviews,
                 IsVoiceEnabledBySettings = IsVoiceEnabledBySettings,
+                ShouldAutoVoiceResponse = ShouldAutoVoiceResponse,
                 SendVoiceMessageAsync = SendVoiceMessageAsync,
                 OnVoiceRecordingStarted = OnVoiceRecordingStarted,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
@@ -1415,6 +1416,30 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool IsVoiceEnabledBySettings()
         {
             return _settingsController.VoiceIoEnabled;
+        }
+
+        // Auto-voice a response only when voice is enabled AND (always-voice mode is on OR the
+        // user's last message was itself a voice message — reply in kind, Telegram-style).
+        private bool ShouldAutoVoiceResponse()
+        {
+            if (!_settingsController.VoiceIoEnabled)
+                return false;
+            if (_settingsController.VoiceAlwaysReply)
+                return true;
+
+            var messages = _chatService?.CurrentChatViewModel?.Messages;
+            if (messages == null)
+                return false;
+
+            for (int i = messages.Count - 1; i >= 0; i--)
+            {
+                ChatMessage m = messages[i];
+                if (m == null)
+                    continue;
+                if (string.Equals(m.role, "user", StringComparison.OrdinalIgnoreCase))
+                    return !string.IsNullOrEmpty(m.audioPath);
+            }
+            return false;
         }
 
         private void RefreshVoiceControls() => _voiceController.RefreshVoiceControls();

@@ -18,6 +18,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Button MicButton;
             public VisualElement ComposerPreviews;
             public Func<bool> IsVoiceEnabledBySettings;
+            /// <summary>True if the next assistant response should be auto-voiced (always-mode or reply-in-kind).</summary>
+            public Func<bool> ShouldAutoVoiceResponse;
             /// <summary>(transcribedText, wavFilePath) — sends the voice message to the chat. Returns true if accepted.</summary>
             public Func<string, string, Task<bool>> SendVoiceMessageAsync;
             public Action OnVoiceRecordingStarted;
@@ -116,7 +118,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // return the pending-destroy instance and wire a dead manager to the pipeline.
                 _voiceOutputManager = _d.gameObject.AddComponent<VoiceOutputManager>();
                 _voiceOutputManager.Initialize(_voiceService, _d.IsVoiceEnabledBySettings,
-                    () => _voiceInputManager != null && _voiceInputManager.IsRecording);
+                    () => _voiceInputManager != null && _voiceInputManager.IsRecording,
+                    _d.ShouldAutoVoiceResponse);
                 _voiceOutputManager.OnResponseAudioReady += HandleResponseAudioReady;
             }
 
