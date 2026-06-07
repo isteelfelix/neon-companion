@@ -64,7 +64,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleGatewayReady(GatewayEvent evt)
         {
-            _ = Task.Run(RegisterClientAsync);
+            // BuildRegisterParams uses Unity APIs (PlayerPrefs/Application.platform),
+            // so registration must start on the Unity main thread. HermesGateway
+            // dispatches events on the captured SynchronizationContext.
+            _ = RegisterClientAsync();
         }
 
         private async Task RegisterClientAsync()
