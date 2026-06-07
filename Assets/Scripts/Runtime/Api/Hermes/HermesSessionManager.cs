@@ -124,6 +124,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string request_id;
         public string command;
         public int timeout_ms;
+        // Optional: when true, run on the persistent agent shell (state survives across
+        // commands). Absent/false -> one-shot execution. Default keeps old behavior.
+        public bool persistent;
     }
 
     [Serializable]
@@ -137,6 +140,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string RequestId;
         public string Command;
         public int TimeoutMs;
+        public bool Persistent;
     }
 
     // === HermesSessionManager ===
@@ -689,7 +693,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 RequestId = payload.request_id,
                 Command = payload.command ?? string.Empty,
-                TimeoutMs = payload.timeout_ms > 0 ? payload.timeout_ms : 30000
+                TimeoutMs = payload.timeout_ms > 0 ? payload.timeout_ms : 30000,
+                Persistent = payload.persistent
             });
         }
 

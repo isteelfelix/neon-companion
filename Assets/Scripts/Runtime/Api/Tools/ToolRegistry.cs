@@ -56,6 +56,16 @@ namespace NeonCompanion.Runtime.Api.Tools
             execCode.parameters.required = new List<string> { "code" };
             tools.Add(execCode);
 
+            var runCommand = new ToolDefinition();
+            runCommand.name = "run_command";
+            runCommand.description = "Run a shell command (PowerShell on Windows, bash on macOS/Linux) and return its combined output and exit code. Each call is a fresh shell, so state (cd, environment variables) does NOT persist between calls — chain steps in one command if needed.";
+            runCommand.parameters = new ToolParameterSchema();
+            runCommand.parameters.properties = new Dictionary<string, ToolParameterProperty>();
+            runCommand.parameters.properties["command"] = new ToolParameterProperty { type = "string", description = "The shell command to execute" };
+            runCommand.parameters.properties["timeout_ms"] = new ToolParameterProperty { type = "integer", description = "Optional timeout in milliseconds (default 60000)" };
+            runCommand.parameters.required = new List<string> { "command" };
+            tools.Add(runCommand);
+
             return tools;
         }
     }

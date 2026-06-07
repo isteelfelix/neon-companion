@@ -32,6 +32,8 @@ namespace NeonCompanion.Runtime.Api.Tools
                     return ExecuteSearchFiles(parameters);
                 case "execute_code":
                     return ExecuteCode(parameters);
+                case "run_command":
+                    return ExecuteRunCommand(parameters);
                 default:
                     return LocalizationExtensions.Get("tool.error.unknown", "Error: Unknown tool '") + toolName + "'";
             }
@@ -238,6 +240,46 @@ namespace NeonCompanion.Runtime.Api.Tools
             }
         }
 
+        private static string ExecuteRunCommand(Dictionary<string, string> parameters)
+        {
+            if (parameters == null || !parameters.ContainsKey("command"))
+                return LocalizationExtensions.Get("tool.error.command_required", "Error: 'command' parameter is required for run_command");
+
+            string command = parameters["command"] ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(command))
+                return LocalizationExtensions.Get("tool.error.command_empty", "Error: command is empty");
+
+            int timeoutMs = 60000;
+            string timeoutRaw;
+            if (parameters.TryGetValue("timeout_ms", out timeoutRaw) && !string.IsNullOrEmpty(timeoutRaw))
+            {
+                int parsed;
+                if (int.TryParse(timeoutRaw, out parsed) && parsed > 0)
+                    timeoutMs = parsed;
+            }
+
+            bool isWindows = Environment.OSVersion.Platform == PlatformID.Win32NT;
+            try
+            {
+                if (isWindows)
+                {
+                    // Force UTF-8 out of PowerShell so non-ASCII output isn't mojibake.
+                    string prelude = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[System.Text.Encoding]::UTF8; ";
+                    string escaped = (prelude + command).Replace("\"", "`\"");
+                    return ExecuteProcess("powershell.exe", "-NoProfile -NonInteractive -Command \"" + escaped + "\"", true, timeoutMs, true);
+                }
+                else
+                {
+                    string escaped = command.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    return ExecuteProcess("/bin/bash", "-c \"" + escaped + "\"", true, timeoutMs, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                return LocalizationExtensions.Get("tool.error.command_exec", "Error running command: ") + ex.Message;
+            }
+        }
+
         private static string ExecutePythonScript(string scriptPath)
         {
             string[] fileNames = new string[] { "python3", "python", "py" };
@@ -264,8 +306,9 @@ namespace NeonCompanion.Runtime.Api.Tools
             return string.IsNullOrEmpty(lastError) ? prefix : prefix + ": " + lastError;
         }
 
-        private static string ExecuteProcess(string fileName, string arguments)
+        private static string ExecuteProcess(string fileName, string arguments, bool utf8 = false, int timeoutMs = CodeTimeoutMs, bool includeExitCode = false)
         {
+            int exitCode = 0;
             var stdout = new StringBuilder();
             var stderr = new StringBuilder();
             object stdoutLock = new object();
@@ -280,6 +323,11 @@ namespace NeonCompanion.Runtime.Api.Tools
             psi.RedirectStandardError = true;
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
+            if (utf8)
+            {
+                psi.StandardOutputEncoding = new UTF8Encoding(false);
+                psi.StandardErrorEncoding = new UTF8Encoding(false);
+            }
 
             using (var process = new Process())
             {
@@ -317,16 +365,18 @@ namespace NeonCompanion.Runtime.Api.Tools
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                bool exited = process.WaitForExit(CodeTimeoutMs);
+                bool exited = process.WaitForExit(timeoutMs);
                 if (!exited)
                 {
                     try { process.Kill(); } catch { }
                     try { process.WaitForExit(1000); } catch { }
-                    return LocalizationExtensions.Get("tool.error.code_timeout", "Error: code execution timed out after 10 seconds");
+                    return LocalizationExtensions.Get("tool.error.code_timeout", "Error: execution timed out");
                 }
 
                 stdoutClosed.WaitOne(1000);
                 stderrClosed.WaitOne(1000);
+
+                try { exitCode = process.ExitCode; } catch { exitCode = 0; }
             }
 
             var output = new StringBuilder();
@@ -342,6 +392,13 @@ namespace NeonCompanion.Runtime.Api.Tools
                 if (output.Length > 0)
                     output.Append('\n');
                 output.Append("STDERR:\n").Append(stderrText);
+            }
+
+            if (includeExitCode)
+            {
+                if (output.Length > 0)
+                    output.Append('\n');
+                output.Append("[exit ").Append(exitCode).Append(']');
             }
 
             string result = output.ToString();

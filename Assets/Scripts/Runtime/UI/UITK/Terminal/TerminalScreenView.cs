@@ -33,6 +33,12 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         private int _viewportRows = 24;
         private int _scrollOffset;
 
+        private bool _focused;
+        private bool _blinkOn = true;
+        private bool _cursorWanted;
+        private float _cursorX;
+        private float _cursorY;
+
         /// <summary>Raised when the number of whole cells that fit changes (columns, rows).</summary>
         public event Action<int, int> ViewportChanged;
 
@@ -91,6 +97,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             _measure.RegisterCallback<GeometryChangedEvent>(OnMeasureGeometry);
             RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
             RegisterCallback<WheelEvent>(OnWheel);
+            RegisterCallback<FocusInEvent>(OnFocusIn);
+            RegisterCallback<FocusOutEvent>(OnFocusOut);
+
+            // Cursor blink (~530ms, the conventional terminal rate).
+            schedule.Execute(OnBlinkTick).Every(530);
 
             focusable = true;
             pickingMode = PickingMode.Position;
@@ -282,20 +293,79 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
 
         private void UpdateCursor(TerminalEmulator emulator)
         {
-            bool show = emulator.CursorVisible && _scrollOffset == 0 && _cellWidth > 0f && _cellHeight > 0f;
-            if (!show)
+            _cursorWanted = emulator.CursorVisible && _scrollOffset == 0 && _cellWidth > 0f && _cellHeight > 0f;
+            if (_cursorWanted)
+            {
+                _cursorX = resolvedStyle.paddingLeft + emulator.CursorCol * _cellWidth;
+                _cursorY = resolvedStyle.paddingTop + emulator.CursorRow * _cellHeight;
+            }
+            // Keep the cursor solid right after an update; blink resumes when idle.
+            _blinkOn = true;
+            ApplyCursorVisual();
+        }
+
+        private void ApplyCursorVisual()
+        {
+            if (!_cursorWanted)
             {
                 _cursor.style.display = DisplayStyle.None;
                 return;
             }
 
-            _cursor.style.display = DisplayStyle.Flex;
             _cursor.style.width = _cellWidth;
             _cursor.style.height = _cellHeight;
-            float x = resolvedStyle.paddingLeft + emulator.CursorCol * _cellWidth;
-            float y = resolvedStyle.paddingTop + emulator.CursorRow * _cellHeight;
-            _cursor.style.left = x;
-            _cursor.style.top = y;
+            _cursor.style.left = _cursorX;
+            _cursor.style.top = _cursorY;
+
+            if (_focused)
+            {
+                // Focused: filled block that blinks.
+                _cursor.style.display = _blinkOn ? DisplayStyle.Flex : DisplayStyle.None;
+                _cursor.style.backgroundColor = ToStyleColor(WithAlpha(_palette.DefaultForeground, 150));
+                SetCursorBorder(0f);
+            }
+            else
+            {
+                // Unfocused: steady hollow outline — makes focus state obvious.
+                _cursor.style.display = DisplayStyle.Flex;
+                _cursor.style.backgroundColor = ToStyleColor(new Color32(0, 0, 0, 0));
+                SetCursorBorder(1f);
+            }
+        }
+
+        private void SetCursorBorder(float width)
+        {
+            _cursor.style.borderTopWidth = width;
+            _cursor.style.borderRightWidth = width;
+            _cursor.style.borderBottomWidth = width;
+            _cursor.style.borderLeftWidth = width;
+
+            StyleColor c = ToStyleColor(_palette.DefaultForeground);
+            _cursor.style.borderTopColor = c;
+            _cursor.style.borderRightColor = c;
+            _cursor.style.borderBottomColor = c;
+            _cursor.style.borderLeftColor = c;
+        }
+
+        private void OnBlinkTick()
+        {
+            if (!_focused || !_cursorWanted)
+                return;
+            _blinkOn = !_blinkOn;
+            ApplyCursorVisual();
+        }
+
+        private void OnFocusIn(FocusInEvent evt)
+        {
+            _focused = true;
+            _blinkOn = true;
+            ApplyCursorVisual();
+        }
+
+        private void OnFocusOut(FocusOutEvent evt)
+        {
+            _focused = false;
+            ApplyCursorVisual();
         }
 
         // ---- Measurement / layout -------------------------------------------------

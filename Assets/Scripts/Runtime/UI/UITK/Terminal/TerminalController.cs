@@ -37,6 +37,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         private bool _dirty;
 
         private ProcessExecutionService _processService;
+        private PersistentShellService _persistentShell;
         private bool _isExecuting;
 
         // ---- Lifecycle ------------------------------------------------------------
@@ -70,6 +71,35 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         {
             if (_view != null)
                 _view.Focus();
+
+            // Right-click pastes, like a console. (No selection model yet, so no copy.)
+            if (evt.button == 1)
+            {
+                PasteFromClipboard();
+                evt.StopPropagation();
+            }
+        }
+
+        private void PasteFromClipboard()
+        {
+            if (_session == null)
+                return;
+
+            string clip = GUIUtility.systemCopyBuffer;
+            if (string.IsNullOrEmpty(clip))
+                return;
+
+            // Shells expect CR for line breaks; normalize CRLF/LF to CR.
+            clip = clip.Replace("\r\n", "\r").Replace("\n", "\r");
+
+            string payload = clip;
+            if (_emulator != null && _emulator.BracketedPasteEnabled)
+                payload = "\x1b[200~" + clip + "\x1b[201~";
+
+            if (_view != null && _view.ScrollOffset != 0)
+                _view.SetScrollOffset(0, _emulator);
+
+            _session.Write(Bytes(payload));
         }
 
         private void StartSessionIfNeeded(int columns, int rows)
@@ -177,6 +207,16 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             if (_session == null)
                 return;
 
+            // Paste shortcuts: Ctrl/Cmd+V and Shift+Insert.
+            bool ctrlOrCmd = evt.ctrlKey || evt.commandKey;
+            if ((ctrlOrCmd && evt.keyCode == KeyCode.V) ||
+                (evt.shiftKey && evt.keyCode == KeyCode.Insert))
+            {
+                PasteFromClipboard();
+                evt.StopPropagation();
+                return;
+            }
+
             byte[] bytes = EncodeKey(evt);
             if (bytes == null)
                 return;
@@ -259,11 +299,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
 
             if (ctrl)
             {
+                char lower = char.ToLowerInvariant(ch);
+
+                // Ctrl+V is paste (handled in OnKeyDown); swallow its control-code echo.
+                if (ch == '\x16' || lower == 'v')
+                    return null;
+
                 // Already a control code (e.g. Ctrl+C delivered as 0x03).
                 if (ch >= '\x01' && ch <= '\x1a')
                     return new byte[] { (byte)ch };
-
-                char lower = char.ToLowerInvariant(ch);
                 if (lower >= 'a' && lower <= 'z')
                     return new byte[] { (byte)(lower - 'a' + 1) };
                 if (ch == ' ')
@@ -325,27 +369,56 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
 
         private void ResolveService()
         {
-            if (_processService != null)
+            if (_processService != null && _persistentShell != null)
                 return;
 
             var bootstrap = FindAnyObjectByType<AppBootstrap>();
-            if (bootstrap != null && bootstrap.App != null && bootstrap.App.Services != null)
+            if (bootstrap == null || bootstrap.App == null || bootstrap.App.Services == null)
+                return;
+
+            try
             {
-                try
-                {
+                if (_processService == null)
                     _processService = bootstrap.App.Services.GetRequired<ProcessExecutionService>();
-                }
-                catch (Exception)
-                {
-                    _processService = null;
-                }
+            }
+            catch (Exception)
+            {
+                _processService = null;
+            }
+
+            try
+            {
+                if (_persistentShell == null)
+                    _persistentShell = bootstrap.App.Services.GetRequired<PersistentShellService>();
+            }
+            catch (Exception)
+            {
+                _persistentShell = null;
             }
         }
 
-        public async Task<ProcessResult> ExecuteRemoteCommand(string command, int timeoutMs = 30000)
+        /// <summary>
+        /// Runs a command for the Hermes <c>terminal.execute</c> bridge. When
+        /// <paramref name="persistent"/> is true it goes to the long-lived agent shell
+        /// (state survives across commands); otherwise it's a clean one-shot.
+        /// </summary>
+        public async Task<ProcessResult> ExecuteRemoteCommand(string command, int timeoutMs = 30000, bool persistent = false)
         {
-            if (_processService == null)
-                ResolveService();
+            ResolveService();
+
+            if (persistent)
+            {
+                if (_persistentShell == null)
+                {
+                    return new ProcessResult
+                    {
+                        exitCode = -1,
+                        stderr = "PersistentShellService not available"
+                    };
+                }
+                // The persistent shell serializes commands internally via its own gate.
+                return await _persistentShell.ExecuteAsync(command, timeoutMs);
+            }
 
             if (_processService == null)
             {

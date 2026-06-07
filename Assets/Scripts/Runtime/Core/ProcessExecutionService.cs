@@ -29,8 +29,11 @@ namespace NeonCompanion.Runtime.Core
                 if (isWindows)
                 {
                     process.StartInfo.FileName = "powershell.exe";
+                    // Force PowerShell to emit UTF-8; otherwise it writes in the OEM code page
+                    // and we (decoding as UTF-8) get mojibake on any non-ASCII output.
+                    string prelude = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[System.Text.Encoding]::UTF8; ";
                     // Use -NoProfile -NonInteractive for cleaner non-interactive run
-                    string escaped = command.Replace("\"", "`\"");
+                    string escaped = (prelude + command).Replace("\"", "`\"");
                     process.StartInfo.Arguments = "-NoProfile -NonInteractive -Command \"" + escaped + "\"";
                 }
                 else

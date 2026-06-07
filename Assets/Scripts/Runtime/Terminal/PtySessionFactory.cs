@@ -20,6 +20,8 @@ namespace NeonCompanion.Runtime.Terminal
             {
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
                 return true;
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX || UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+                return true;
 #else
                 return false;
 #endif
@@ -36,10 +38,13 @@ namespace NeonCompanion.Runtime.Terminal
             ConPtySession session = new ConPtySession();
             session.Start(ResolveWindowsShell(), workingDirectory, columns, rows);
             return session;
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX || UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+            UnixPtySession unix = new UnixPtySession();
+            unix.Start(ResolveUnixShell(), workingDirectory, columns, rows);
+            return unix;
 #else
-            // Phase 1b: UnixPtySession (forkpty/openpt) lands here.
             throw new PlatformNotSupportedException(
-                "Real PTY backend not yet available on platform: " + Application.platform);
+                "Real PTY backend not available on platform: " + Application.platform);
 #endif
         }
 
@@ -50,6 +55,16 @@ namespace NeonCompanion.Runtime.Terminal
             // always present; pwsh (PowerShell 7) is preferred when installed but is left
             // for a later refinement to keep startup dependency-free.
             return "powershell.exe";
+        }
+#endif
+
+#if UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX || UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+        private static string ResolveUnixShell()
+        {
+            string shell = Environment.GetEnvironmentVariable("SHELL");
+            if (string.IsNullOrEmpty(shell))
+                shell = "/bin/bash";
+            return shell;
         }
 #endif
     }

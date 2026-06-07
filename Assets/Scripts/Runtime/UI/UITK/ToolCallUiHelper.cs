@@ -29,6 +29,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             { "session_search", "🔍" },
             { "clarify", "❓" },
             { "execute_code", "🐍" },
+            { "run_command", "💻" },
             { "delegate_task", "🤖" },
             { "cronjob", "⏰" },
             { "send_message", "💬" },

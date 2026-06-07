@@ -1164,7 +1164,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             Core.ProcessResult result;
             try
             {
-                result = await _terminalController.ExecuteRemoteCommand(request.Command, request.TimeoutMs);
+                result = await _terminalController.ExecuteRemoteCommand(request.Command, request.TimeoutMs, request.Persistent);
             }
             catch (Exception ex)
             {

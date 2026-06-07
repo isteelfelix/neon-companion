@@ -20,12 +20,24 @@ namespace NeonCompanion.Runtime.Core
     {
         private static AppBootstrap _instance;
 
+        private PersistentShellService _persistentShell;
+
         public CompanionApp App { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void ConfigureRuntime()
         {
             Application.runInBackground = true;
+        }
+
+        private void OnApplicationQuit()
+        {
+            // Kill the long-lived agent shell so we don't leak a powershell/bash process.
+            if (_persistentShell != null)
+            {
+                _persistentShell.Dispose();
+                _persistentShell = null;
+            }
         }
 
         private void Awake()
@@ -71,6 +83,8 @@ namespace NeonCompanion.Runtime.Core
             var modelDiscoveryService = new ModelDiscoveryService(providers);
             var chatService = new ChatService(aiClient, providerManager, sessions);
             var processExecutionService = new ProcessExecutionService();
+            var persistentShellService = new PersistentShellService();
+            _persistentShell = persistentShellService;
 
             // Backend selector — global mode switch (Hermes vs OpenAI)
             var backendSelector = gameObject.AddComponent<GlobalBackendSelector>();
@@ -166,6 +180,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<ModelDiscoveryService>(modelDiscoveryService);
             services.Register<ChatService>(chatService);
             services.Register<ProcessExecutionService>(processExecutionService);
+            services.Register<PersistentShellService>(persistentShellService);
             services.Register<ILocalizationService>(localizationService);
             services.Register<GlobalBackendSelector>(backendSelector);
 
