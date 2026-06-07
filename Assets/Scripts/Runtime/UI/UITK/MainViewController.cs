@@ -1017,7 +1017,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarPanel.Add(_terminalHost);
 
             // Load TerminalView UXML into host if possible (editor), else controller will build fallback
-            bool loadedFromUxml = false;
 #if UNITY_EDITOR
             try
             {
@@ -1025,7 +1024,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (uxml != null)
                 {
                     uxml.CloneTree(_terminalHost);
-                    loadedFromUxml = true;
 
                     // Also load USS for styles in editor play mode
                     var uss = UnityEditor.AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/UI/Terminal/TerminalView.uss");

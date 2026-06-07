@@ -1,25 +1,45 @@
 using System;
+using System.Collections.Concurrent;
+using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
-using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Terminal;
+using NeonCompanion.Runtime.Terminal.Emulator;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK.Terminal
 {
+    /// <summary>
+    /// Drives the interactive terminal panel: a real shell over a pseudo terminal
+    /// (<see cref="IPtySession"/>), interpreted by a <see cref="TerminalEmulator"/> and drawn
+    /// by a <see cref="TerminalScreenView"/>. PTY output arrives on a background thread, is
+    /// queued, and is fed to the emulator on Unity's main thread in <see cref="Update"/>.
+    ///
+    /// Note: <see cref="ExecuteRemoteCommand"/> (the Hermes <c>terminal.execute</c> bridge)
+    /// deliberately stays on the one-shot <see cref="ProcessExecutionService"/> — it needs a
+    /// structured stdout/stderr/exit-code result, not an interactive stream.
+    /// </summary>
     public sealed class TerminalController : MonoBehaviour
     {
+        private const int FontSize = 12;
+
         private VisualElement _root;
-        private Label _statusLabel;
-        private Label _outputLabel;
-        private ScrollView _outputScroll;
-        private TextField _inputField;
-        private Button _submitButton;
+        private TerminalScreenView _view;
+        private TerminalEmulator _emulator;
+        private IPtySession _session;
+
+        private readonly ConcurrentQueue<byte[]> _pending = new ConcurrentQueue<byte[]>();
+        private volatile bool _exited;
+        private volatile int _exitCode;
+        private bool _exitReported;
+        private bool _sessionStarted;
+        private bool _dirty;
 
         private ProcessExecutionService _processService;
         private bool _isExecuting;
 
-        private string _emptyText;
+        // ---- Lifecycle ------------------------------------------------------------
 
         public void Initialize(VisualElement terminalRoot)
         {
@@ -27,164 +47,288 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             if (_root == null)
                 return;
 
-            // Try to find elements (from UXML clone if hosted). If not present, build fallback UI.
-            _statusLabel = _root.Q<Label>("terminal-status");
-            _outputLabel = _root.Q<Label>("terminal-output");
-            _outputScroll = _root.Q<ScrollView>("terminal-output-scroll");
-            _inputField = _root.Q<TextField>("terminal-input");
-            _submitButton = _root.Q<Button>("terminal-submit");
+            _root.Clear();
 
-            if (_outputLabel == null || _inputField == null || _submitButton == null)
-            {
-                BuildFallbackUI(_root);
-            }
+            _emulator = new TerminalEmulator(80, 24);
+            _emulator.Respond += OnEmulatorRespond;
 
-            // Re-query after possible build
-            _statusLabel = _root.Q<Label>("terminal-status");
-            _outputLabel = _root.Q<Label>("terminal-output");
-            _outputScroll = _root.Q<ScrollView>("terminal-output-scroll");
-            _inputField = _root.Q<TextField>("terminal-input");
-            _submitButton = _root.Q<Button>("terminal-submit");
+            _view = new TerminalScreenView(FontSize);
+            _view.style.flexGrow = 1;
+            _view.ViewportChanged += OnViewportChanged;
+            _view.ScrollRequested += OnScrollRequested;
+            _view.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+            _view.RegisterCallback<PointerDownEvent>(OnPointerDown);
+            _root.Add(_view);
 
-            _emptyText = LocalizationExtensions.Get("terminal.output.empty", "No output yet. Type a command above.");
+            _view.ShowMessage("Starting shell...");
+            _view.schedule.Execute(() => { if (_view != null) _view.Focus(); }).ExecuteLater(50);
 
-            if (_outputLabel != null)
-            {
-                _outputLabel.text = _emptyText;
-            }
-
-            SetStatus("idle");
-
-            if (_submitButton != null)
-            {
-                _submitButton.clicked += OnSubmitClicked;
-            }
-
-            if (_inputField != null)
-            {
-                _inputField.RegisterCallback<KeyDownEvent>(OnInputKeyDown);
-            }
-
-            // Resolve service (AppBootstrap is DontDestroy, Find works after bootstrap)
             ResolveService();
         }
 
-        private void BuildFallbackUI(VisualElement container)
+        private void OnPointerDown(PointerDownEvent evt)
         {
-            container.Clear();
-
-            var root = new VisualElement();
-            root.name = "terminal-root";
-            root.AddToClassList("terminal-root");
-            root.style.flexGrow = 1;
-            root.style.flexDirection = FlexDirection.Column;
-
-            var header = new VisualElement();
-            header.AddToClassList("terminal-header");
-            header.style.flexDirection = FlexDirection.Row;
-            header.style.alignItems = Align.Center;
-            header.style.justifyContent = Justify.SpaceBetween;
-            header.style.paddingTop = 6;
-            header.style.paddingBottom = 6;
-            header.style.paddingLeft = 8;
-            header.style.paddingRight = 8;
-            header.style.borderBottomWidth = 1;
-            header.style.borderBottomColor = new StyleColor(new Color(0.14f, 0.15f, 0.2f)); // approx --line-1
-
-            var title = new Label(LocalizationExtensions.Get("terminal.title", "Terminal"));
-            title.AddToClassList("terminal-title");
-            title.style.color = new StyleColor(new Color(0.95f, 0.96f, 0.98f));
-            title.style.fontSize = 12;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-
-            _statusLabel = new Label(LocalizationExtensions.Get("terminal.status.idle", "Ready"));
-            _statusLabel.name = "terminal-status";
-            _statusLabel.AddToClassList("terminal-status");
-            _statusLabel.style.color = new StyleColor(new Color(0.6f, 0.64f, 0.7f));
-            _statusLabel.style.fontSize = 10;
-            _statusLabel.style.unityFontDefinition = StyleKeyword.Null; // will inherit or default mono-ish
-
-            header.Add(title);
-            header.Add(_statusLabel);
-            root.Add(header);
-
-            _outputScroll = new ScrollView();
-            _outputScroll.name = "terminal-output-scroll";
-            _outputScroll.AddToClassList("terminal-output-scroll");
-            _outputScroll.style.flexGrow = 1;
-            _outputScroll.style.minHeight = 80;
-            _outputScroll.style.backgroundColor = new StyleColor(new Color(0.1f, 0.11f, 0.14f));
-            _outputScroll.style.borderBottomWidth = 1;
-            _outputScroll.style.borderBottomColor = new StyleColor(new Color(0.14f, 0.15f, 0.2f));
-            _outputScroll.style.paddingTop = 4;
-            _outputScroll.style.paddingBottom = 4;
-            _outputScroll.style.paddingLeft = 6;
-            _outputScroll.style.paddingRight = 6;
-
-            _outputLabel = new Label();
-            _outputLabel.name = "terminal-output";
-            _outputLabel.AddToClassList("terminal-output");
-            _outputLabel.style.color = new StyleColor(new Color(0.85f, 0.88f, 0.92f));
-            _outputLabel.style.fontSize = 11;
-            _outputLabel.style.whiteSpace = WhiteSpace.Normal;
-            _outputLabel.style.unityTextAlign = TextAnchor.UpperLeft;
-            _outputScroll.Add(_outputLabel);
-            root.Add(_outputScroll);
-
-            var inputRow = new VisualElement();
-            inputRow.AddToClassList("terminal-input-row");
-            inputRow.style.flexDirection = FlexDirection.Row;
-            inputRow.style.alignItems = Align.Center;
-            inputRow.style.paddingTop = 4;
-            inputRow.style.paddingBottom = 4;
-            inputRow.style.paddingLeft = 6;
-            inputRow.style.paddingRight = 6;
-
-            _inputField = new TextField();
-            _inputField.name = "terminal-input";
-            _inputField.AddToClassList("terminal-input");
-            _inputField.style.flexGrow = 1;
-            _inputField.style.marginRight = 6;
-            _inputField.style.backgroundColor = new StyleColor(new Color(0.07f, 0.08f, 0.1f));
-            _inputField.style.color = new StyleColor(new Color(0.95f, 0.96f, 0.98f));
-            _inputField.style.borderWidth = 1;
-            _inputField.style.borderColor = new StyleColor(new Color(0.18f, 0.19f, 0.23f));
-            _inputField.style.borderTopLeftRadius = 4;
-            _inputField.style.borderTopRightRadius = 4;
-            _inputField.style.borderBottomLeftRadius = 4;
-            _inputField.style.borderBottomRightRadius = 4;
-            _inputField.style.paddingTop = 3;
-            _inputField.style.paddingBottom = 3;
-            _inputField.style.paddingLeft = 5;
-            _inputField.style.paddingRight = 5;
-            _inputField.style.fontSize = 11;
-
-            _submitButton = new Button();
-            _submitButton.name = "terminal-submit";
-            _submitButton.AddToClassList("btn");
-            _submitButton.AddToClassList("btn--primary");
-            _submitButton.AddToClassList("terminal-submit-btn");
-            _submitButton.text = "Run";
-            _submitButton.style.flexShrink = 0;
-            _submitButton.style.paddingLeft = 10;
-            _submitButton.style.paddingRight = 10;
-            _submitButton.style.paddingTop = 3;
-            _submitButton.style.paddingBottom = 3;
-            _submitButton.style.fontSize = 11;
-
-            inputRow.Add(_inputField);
-            inputRow.Add(_submitButton);
-            root.Add(inputRow);
-
-            container.Add(root);
+            if (_view != null)
+                _view.Focus();
         }
+
+        private void StartSessionIfNeeded(int columns, int rows)
+        {
+            if (_sessionStarted)
+                return;
+            _sessionStarted = true;
+
+            if (!PtySessionFactory.IsSupported)
+            {
+                _view.ShowMessage("Terminal is not supported on this platform yet.");
+                return;
+            }
+
+            try
+            {
+                string cwd = System.IO.Directory.GetCurrentDirectory();
+                _session = PtySessionFactory.Create(cwd, columns, rows);
+                _session.OutputReceived += OnSessionOutput;
+                _session.Exited += OnSessionExited;
+                _view.HideMessage();
+                _dirty = true;
+            }
+            catch (Exception ex)
+            {
+                _view.ShowMessage("Failed to start shell:\n" + ex.Message);
+                Debug.LogWarning("[Terminal] PTY start failed: " + ex);
+            }
+        }
+
+        private void Update()
+        {
+            // Start the shell deterministically on the first frame rather than waiting for a
+            // viewport-size change (which may never fire if the measured size equals 80x24).
+            if (!_sessionStarted && _view != null)
+                StartSessionIfNeeded(_view.ViewportColumns, _view.ViewportRows);
+
+            bool fed = false;
+            byte[] chunk;
+            while (_pending.TryDequeue(out chunk))
+            {
+                if (_emulator != null)
+                    _emulator.Feed(chunk);
+                fed = true;
+            }
+
+            if (fed || _dirty)
+            {
+                if (_emulator != null && _view != null)
+                    _view.Render(_emulator);
+                _dirty = false;
+            }
+
+            if (_exited && !_exitReported)
+            {
+                _exitReported = true;
+                if (_view != null)
+                    _view.ShowMessage("[shell exited: " + _exitCode + "]");
+            }
+        }
+
+        // ---- PTY callbacks (background thread) ------------------------------------
+
+        private void OnSessionOutput(byte[] data)
+        {
+            if (data != null && data.Length > 0)
+                _pending.Enqueue(data);
+        }
+
+        private void OnSessionExited(int code)
+        {
+            _exitCode = code;
+            _exited = true;
+        }
+
+        private void OnEmulatorRespond(string reply)
+        {
+            if (_session != null && !string.IsNullOrEmpty(reply))
+                _session.Write(Encoding.UTF8.GetBytes(reply));
+        }
+
+        // ---- View callbacks (main thread) -----------------------------------------
+
+        private void OnViewportChanged(int columns, int rows)
+        {
+            StartSessionIfNeeded(columns, rows);
+
+            if (_emulator != null)
+                _emulator.Resize(columns, rows);
+            if (_session != null)
+                _session.Resize(columns, rows);
+
+            _dirty = true;
+        }
+
+        private void OnScrollRequested(int lines)
+        {
+            if (_view == null || _emulator == null)
+                return;
+            _view.SetScrollOffset(_view.ScrollOffset + lines, _emulator);
+        }
+
+        private void OnKeyDown(KeyDownEvent evt)
+        {
+            if (_session == null)
+                return;
+
+            byte[] bytes = EncodeKey(evt);
+            if (bytes == null)
+                return;
+
+            // Typing snaps the view back to the live bottom.
+            if (_view.ScrollOffset != 0)
+                _view.SetScrollOffset(0, _emulator);
+
+            _session.Write(bytes);
+            evt.StopPropagation();
+        }
+
+        // ---- Key encoding ---------------------------------------------------------
+
+        private byte[] EncodeKey(KeyDownEvent evt)
+        {
+            bool ctrl = evt.ctrlKey || evt.commandKey;
+            bool alt = evt.altKey;
+
+            switch (evt.keyCode)
+            {
+                case KeyCode.Return:
+                case KeyCode.KeypadEnter:
+                    return Bytes("\r");
+                case KeyCode.Backspace:
+                    return Bytes("\x7f");
+                case KeyCode.Tab:
+                    return Bytes("\t");
+                case KeyCode.Escape:
+                    return Bytes("\x1b");
+                case KeyCode.UpArrow:
+                    return CursorKey('A');
+                case KeyCode.DownArrow:
+                    return CursorKey('B');
+                case KeyCode.RightArrow:
+                    return CursorKey('C');
+                case KeyCode.LeftArrow:
+                    return CursorKey('D');
+                case KeyCode.Home:
+                    return _emulator != null && _emulator.ApplicationCursorKeys ? Bytes("\x1bOH") : Bytes("\x1b[H");
+                case KeyCode.End:
+                    return _emulator != null && _emulator.ApplicationCursorKeys ? Bytes("\x1bOF") : Bytes("\x1b[F");
+                case KeyCode.PageUp:
+                    return Bytes("\x1b[5~");
+                case KeyCode.PageDown:
+                    return Bytes("\x1b[6~");
+                case KeyCode.Insert:
+                    return Bytes("\x1b[2~");
+                case KeyCode.Delete:
+                    return Bytes("\x1b[3~");
+                case KeyCode.F1:
+                    return Bytes("\x1bOP");
+                case KeyCode.F2:
+                    return Bytes("\x1bOQ");
+                case KeyCode.F3:
+                    return Bytes("\x1bOR");
+                case KeyCode.F4:
+                    return Bytes("\x1bOS");
+                case KeyCode.F5:
+                    return Bytes("\x1b[15~");
+                case KeyCode.F6:
+                    return Bytes("\x1b[17~");
+                case KeyCode.F7:
+                    return Bytes("\x1b[18~");
+                case KeyCode.F8:
+                    return Bytes("\x1b[19~");
+                case KeyCode.F9:
+                    return Bytes("\x1b[20~");
+                case KeyCode.F10:
+                    return Bytes("\x1b[21~");
+                case KeyCode.F11:
+                    return Bytes("\x1b[23~");
+                case KeyCode.F12:
+                    return Bytes("\x1b[24~");
+            }
+
+            char ch = evt.character;
+            if (ch == '\0')
+                return null;
+
+            if (ctrl)
+            {
+                // Already a control code (e.g. Ctrl+C delivered as 0x03).
+                if (ch >= '\x01' && ch <= '\x1a')
+                    return new byte[] { (byte)ch };
+
+                char lower = char.ToLowerInvariant(ch);
+                if (lower >= 'a' && lower <= 'z')
+                    return new byte[] { (byte)(lower - 'a' + 1) };
+                if (ch == ' ')
+                    return new byte[] { 0 }; // Ctrl+Space -> NUL
+            }
+
+            // Control chars not handled above are owned by the keyCode switch — drop them
+            // here so we don't double-send (e.g. Enter arriving again as '\n').
+            if (ch < 0x20 || ch == 0x7f)
+                return null;
+
+            byte[] body = Bytes(ch.ToString());
+            if (alt)
+            {
+                byte[] withEsc = new byte[body.Length + 1];
+                withEsc[0] = 0x1b;
+                Array.Copy(body, 0, withEsc, 1, body.Length);
+                return withEsc;
+            }
+            return body;
+        }
+
+        private byte[] CursorKey(char final)
+        {
+            bool app = _emulator != null && _emulator.ApplicationCursorKeys;
+            return Bytes((app ? "\x1bO" : "\x1b[") + final);
+        }
+
+        private static byte[] Bytes(string s)
+        {
+            return Encoding.UTF8.GetBytes(s);
+        }
+
+        // ---- Visibility / teardown ------------------------------------------------
+
+        public void SetVisible(bool visible)
+        {
+            if (_root != null)
+                _root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (visible && _view != null)
+                _view.schedule.Execute(() => { if (_view != null) _view.Focus(); }).ExecuteLater(50);
+        }
+
+        private void OnDestroy()
+        {
+            if (_emulator != null)
+                _emulator.Respond -= OnEmulatorRespond;
+
+            if (_session != null)
+            {
+                _session.OutputReceived -= OnSessionOutput;
+                _session.Exited -= OnSessionExited;
+                try { _session.Dispose(); } catch (Exception) { }
+                _session = null;
+            }
+        }
+
+        // ---- Remote one-shot execution (Hermes terminal.execute) ------------------
 
         private void ResolveService()
         {
             if (_processService != null)
                 return;
 
-            var bootstrap = FindObjectOfType<AppBootstrap>();
+            var bootstrap = FindAnyObjectByType<AppBootstrap>();
             if (bootstrap != null && bootstrap.App != null && bootstrap.App.Services != null)
             {
                 try
@@ -222,9 +366,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             }
 
             _isExecuting = true;
-            SetStatus("executing");
-            SetInputEnabled(false);
-
             try
             {
                 return await _processService.ExecuteAsync(command, timeoutMs);
@@ -232,184 +373,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             finally
             {
                 _isExecuting = false;
-                SetStatus("idle");
-                SetInputEnabled(true);
             }
-        }
-
-        private void OnInputKeyDown(KeyDownEvent evt)
-        {
-            if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
-            {
-                if (!_isExecuting)
-                {
-                    evt.StopPropagation();
-                    SubmitCurrentCommand();
-                }
-            }
-        }
-
-        private void OnSubmitClicked()
-        {
-            if (!_isExecuting)
-                SubmitCurrentCommand();
-        }
-
-        private void SubmitCurrentCommand()
-        {
-            if (_inputField == null)
-                return;
-
-            string cmd = _inputField.value != null ? _inputField.value.Trim() : string.Empty;
-            if (string.IsNullOrEmpty(cmd))
-                return;
-
-            _inputField.value = string.Empty;
-            _ = ExecuteCommandAsync(cmd);
-        }
-
-        private async Task ExecuteCommandAsync(string command)
-        {
-            if (_isExecuting)
-                return;
-
-            _isExecuting = true;
-            SetStatus("executing");
-            SetInputEnabled(false);
-
-            AppendOutput("> " + command);
-
-            ResolveService();
-
-            if (_processService == null)
-            {
-                AppendOutput("Error: ProcessExecutionService not available.");
-                SetStatus("error");
-                _isExecuting = false;
-                SetInputEnabled(true);
-                return;
-            }
-
-            try
-            {
-                var res = await _processService.ExecuteAsync(command, 30000);
-
-                if (res.timedOut)
-                {
-                    if (!string.IsNullOrEmpty(res.stdout))
-                        AppendOutput(res.stdout);
-                    if (!string.IsNullOrEmpty(res.stderr))
-                        AppendOutput(res.stderr);
-                    SetStatus("timeout");
-                }
-                else
-                {
-                    if (!string.IsNullOrEmpty(res.stdout))
-                        AppendOutput(res.stdout);
-                    if (!string.IsNullOrEmpty(res.stderr))
-                        AppendOutput(res.stderr);
-
-                    if (res.exitCode != 0)
-                        AppendOutput("[exit " + res.exitCode + "]");
-                    SetStatus("idle");
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendOutput("Error: " + ex.Message);
-                SetStatus("error");
-            }
-            finally
-            {
-                _isExecuting = false;
-                SetInputEnabled(true);
-                if (_statusLabel != null && _statusLabel.text != null &&
-                    _statusLabel.text.IndexOf("execut", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    SetStatus("idle");
-                }
-            }
-        }
-
-        private void AppendOutput(string text)
-        {
-            if (_outputLabel == null)
-                return;
-
-            if (_outputLabel.text == _emptyText)
-                _outputLabel.text = string.Empty;
-
-            string current = _outputLabel.text ?? string.Empty;
-            if (!string.IsNullOrEmpty(current))
-                current += "\n";
-
-            current += text;
-            _outputLabel.text = current;
-
-            // Scroll to bottom after layout
-            if (_outputScroll != null)
-            {
-                _outputScroll.schedule.Execute(() =>
-                {
-                    if (_outputScroll != null)
-                    {
-                        _outputScroll.scrollOffset = new Vector2(0, float.MaxValue);
-                    }
-                }).StartingIn(10);
-            }
-        }
-
-        private void SetStatus(string state)
-        {
-            if (_statusLabel == null)
-                return;
-
-            string key;
-            string fallback;
-            switch (state)
-            {
-                case "executing":
-                    key = "terminal.status.executing";
-                    fallback = "Running...";
-                    break;
-                case "error":
-                    key = "terminal.status.error";
-                    fallback = "Error";
-                    break;
-                case "timeout":
-                    key = "terminal.status.timeout";
-                    fallback = "Timed out";
-                    break;
-                case "idle":
-                default:
-                    key = "terminal.status.idle";
-                    fallback = "Ready";
-                    break;
-            }
-
-            _statusLabel.text = LocalizationExtensions.Get(key, fallback);
-        }
-
-        private void SetInputEnabled(bool enabled)
-        {
-            if (_inputField != null)
-                _inputField.SetEnabled(enabled);
-            if (_submitButton != null)
-                _submitButton.SetEnabled(enabled);
-        }
-
-        public void SetVisible(bool visible)
-        {
-            if (_root != null)
-                _root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-        }
-
-        private void OnDestroy()
-        {
-            if (_submitButton != null)
-                _submitButton.clicked -= OnSubmitClicked;
-            if (_inputField != null)
-                _inputField.UnregisterCallback<KeyDownEvent>(OnInputKeyDown);
         }
     }
 }
