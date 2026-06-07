@@ -255,6 +255,53 @@ namespace NeonCompanion.Runtime.Api.Hermes
             AwaitingResponse = true;
         }
 
+        public async Task SendMessage(string text, System.Collections.Generic.List<ImageData> images)
+        {
+            if (string.IsNullOrEmpty(ActiveSessionId))
+                throw new InvalidOperationException("No active session");
+
+            if (Busy || AwaitingResponse)
+                throw new InvalidOperationException("Session is busy. Wait for the current response to finish.");
+
+            try
+            {
+                // Build images array for gateway: [{data: base64, media_type: "image/png"}]
+                var imagePayloads = new System.Collections.Generic.List<object>();
+                if (images != null)
+                {
+                    foreach (var img in images)
+                    {
+                        if (!string.IsNullOrEmpty(img.data))
+                        {
+                            imagePayloads.Add(new { data = img.data, media_type = img.mediaType ?? "image/png" });
+                        }
+                    }
+                }
+
+                if (imagePayloads.Count > 0)
+                {
+                    await _gateway.Request<object>(
+                        RpcMethods.PromptSubmit,
+                        new { session_id = ActiveSessionId, text, images = imagePayloads });
+                }
+                else
+                {
+                    await _gateway.Request<object>(
+                        RpcMethods.PromptSubmit,
+                        new { session_id = ActiveSessionId, text });
+                }
+            }
+            catch
+            {
+                Busy = false;
+                AwaitingResponse = false;
+                throw;
+            }
+
+            Busy = true;
+            AwaitingResponse = true;
+        }
+
         public async Task Interrupt()
         {
             if (string.IsNullOrEmpty(ActiveSessionId))
