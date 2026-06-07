@@ -82,6 +82,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SudoRequest = "sudo.request";
         public const string SecretRequest = "secret.request";
         public const string TerminalExecute = "terminal.execute";
+        public const string ClientPing = "client.ping";
+        public const string FileTransferStart = "file.transfer.start";
+        public const string FileTransferChunk = "file.transfer.chunk";
+        public const string FileTransferFinish = "file.transfer.finish";
         public const string Error = "error";
         public const string BackgroundComplete = "background.complete";
     }
@@ -100,6 +104,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string ClarifyRespond = "clarify.respond";
         public const string ApprovalRespond = "approval.respond";
         public const string TerminalRespond = "terminal.respond";
+        public const string ClientRegister = "client.register";
+        public const string ClientPong = "client.pong";
+        public const string FileTransferAck = "file.transfer.ack";
+        public const string FileTransferComplete = "file.transfer.complete";
+        public const string FileTransferStart = "file.transfer.start";
+        public const string FileTransferChunk = "file.transfer.chunk";
+        public const string FileTransferFinish = "file.transfer.finish";
         public const string ConfigGet = "config.get";
         public const string ImageAttach = "image.attach";
         public const string ImageDetach = "image.detach";
@@ -125,6 +136,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private CancellationTokenSource _receiveCts;
         private Task _receiveLoop;
         private bool _disposed;
+        private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
 
         // Config
         public int RequestTimeoutMs { get; set; } = 30000;
@@ -230,11 +242,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             try
             {
-                await _socket.SendAsync(
-                    new ArraySegment<byte>(bytes),
-                    WebSocketMessageType.Text,
-                    true,
-                    CancellationToken.None);
+                await SendRawAsync(bytes, CancellationToken.None);
             }
             catch (Exception)
             {
@@ -251,6 +259,27 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Fire-and-forget JSON-RPC notification (no id). Used for client.pong and similar responses.
+        /// </summary>
+        public async Task NotifyAsync(string method, object parameters = null)
+        {
+            if (_state != ConnectionState.Open || _socket == null)
+                throw new InvalidOperationException("Gateway not connected");
+
+            var frame = new JObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["method"] = method
+            };
+            if (parameters != null)
+                frame["params"] = JToken.FromObject(parameters);
+
+            var json = frame.ToString(Formatting.None);
+            var bytes = Encoding.UTF8.GetBytes(json);
+            await SendRawAsync(bytes, CancellationToken.None);
         }
 
         // === Event Subscriptions ===
@@ -421,6 +450,26 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         // === Internal ===
 
+        private async Task SendRawAsync(byte[] bytes, CancellationToken ct)
+        {
+            if (_socket == null)
+                throw new InvalidOperationException("Gateway socket not available");
+
+            await _sendLock.WaitAsync(ct);
+            try
+            {
+                await _socket.SendAsync(
+                    new ArraySegment<byte>(bytes),
+                    WebSocketMessageType.Text,
+                    true,
+                    ct);
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+        }
+
         private void SetState(ConnectionState newState)
         {
             if (_state == newState)
@@ -478,6 +527,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             catch { }
             _socket = null;
             SetState(ConnectionState.Closed);
+            _sendLock?.Dispose();
         }
     }
 }

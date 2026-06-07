@@ -1161,6 +1161,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 EnsureTerminalController();
             }
 
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             Core.ProcessResult result;
             try
             {
@@ -1174,13 +1175,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                     stderr = "Bridge error: " + ex.Message
                 };
             }
+            stopwatch.Stop();
 
             var selector = Core.GlobalBackendSelector.Instance;
             if (selector != null && selector.SessionManager != null)
             {
                 try
                 {
-                    await selector.SessionManager.RespondToTerminal(request.RequestId, result);
+                    await selector.SessionManager.RespondToTerminal(request.RequestId, result, stopwatch.ElapsedMilliseconds);
                 }
                 catch (Exception ex)
                 {

@@ -148,6 +148,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
     public class HermesSessionManager : IChatTransport
     {
         private readonly HermesGateway _gateway;
+        private readonly HermesClientBridge _clientBridge;
         private bool _disposed;
 
         // Active session state
@@ -178,6 +179,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public HermesSessionManager(HermesGateway gateway)
         {
             _gateway = gateway;
+            var rootResolver = new FilePathRootResolver();
+            var fileTransferReceiver = new FileTransferReceiver(gateway, rootResolver);
+            var fileTransferSender = new FileTransferSender(gateway, rootResolver);
+            _clientBridge = new HermesClientBridge(gateway, fileTransferReceiver, fileTransferSender);
             RegisterEventHandlers();
 
             _gateway.OnStateChange(HandleGatewayStateChange);
@@ -361,17 +366,20 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 new { request_id = requestId, answer });
         }
 
-        public async Task RespondToTerminal(string requestId, ProcessResult result)
+        public async Task RespondToTerminal(string requestId, ProcessResult result, long? durationMs = null)
         {
-            await _gateway.Request<object>(
-                RpcMethods.TerminalRespond,
-                new { 
-                    request_id = requestId,
-                    stdout = result.stdout,
-                    stderr = result.stderr,
-                    exit_code = result.exitCode,
-                    timed_out = result.timedOut
-                });
+            var payload = new Dictionary<string, object>
+            {
+                { "request_id", requestId },
+                { "stdout", result.stdout ?? string.Empty },
+                { "stderr", result.stderr ?? string.Empty },
+                { "exit_code", result.exitCode },
+                { "timed_out", result.timedOut }
+            };
+            if (durationMs.HasValue)
+                payload["duration_ms"] = durationMs.Value;
+
+            await _gateway.Request<object>(RpcMethods.TerminalRespond, payload);
         }
 
         public async Task RespondToApproval(bool approved)
@@ -442,6 +450,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (info == null) return;
 
             RuntimeInfo = info;
+            if (!string.IsNullOrEmpty(info.cwd))
+                _clientBridge.SetWorkspace(info.cwd);
             if (info.running.HasValue)
             {
                 Busy = info.running.Value;
@@ -781,6 +791,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         {
             if (_disposed) return;
             _disposed = true;
+            _clientBridge?.Dispose();
             _gateway?.Dispose();
         }
     }

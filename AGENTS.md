@@ -32,9 +32,12 @@ Assets/Scripts/Runtime/
   Avatar/           SpriteSheetAnimator, SpriteSheetAnimationLoader, AvatarMotionPack
   Avatar3D/         Avatar3DLoader, Avatar3DRenderer (GLB/GLTF)
   Voice/            VoiceInputManager, VoiceOutputManager, LipsyncController
+  Terminal/         IPtySession, PtySessionFactory, Emulator/ (VT parser, ScreenBuffer, TerminalEmulator),
+                    Windows/ (ConPtySession, NativePtyWindows), Unix/ (UnixPtySession, NativePtyUnix)
+  UI/UITK/Terminal/ TerminalController, TerminalScreenView
   Core/             CompanionApp (app root), ServiceRegistry (poor-man's DI),
                     AppBootstrap (MonoBehaviour singleton), ModelDiscoveryService,
-                    ProviderValidator, NeonLogger
+                    ProviderValidator, NeonLogger, PersistentShellService
   Data/Models/      ProviderConfig, ChatModels, AppSettings, AvatarProfile
   Data/Repositories/ JSON-file-backed repos (IProviderConfigRepository, etc.)
   Data/Storage/     JsonFileStorage (Application.persistentDataPath)

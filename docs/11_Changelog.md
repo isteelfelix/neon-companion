@@ -4,6 +4,11 @@
 
 ### Added
 - **Terminal remote execution for Hermes** — Phase 2 WS RPC: `terminal.execute` event handler + `terminal.respond` RPC. Client executes via ProcessExecutionService (local shell on user machine) and responds with stdout/stderr/exit/timed_out. Follows exact clarify/approval request-respond pattern (GatewayEvents, IsActiveEvent, Handle*, RespondTo*). Bridge in MainViewController subscribes OnTerminalExecute (Hermes-only), lazy-inits TerminalController, calls ExecuteRemoteCommand + RespondToTerminal. C# 9 compliant, no chat code changes beyond wiring.
+- **Terminal emulator** — VT100/ANSI-compatible terminal emulator: `VtParser` (CSI/OSC/DCS sequence parsing), `ScreenBuffer` (2D cell grid with scrollback), `TerminalEmulator` (state machine: cursor movement, colors, erase, scroll, modes), `TerminalCell`/`TerminalColor`/`TerminalPalette` data model. Full VT sequence support: cursor ops, erase, scroll, SGR attributes (256-color + 24-bit), mode set/reset (DECAWM, DECOM, DECTCEM, bracketed paste).
+- **PersistentShellService** — гибрид one-shot + persistent PTY для терминальных команд агента. Most commands: one-shot через ProcessExecutionService (надёжно, чистый exit code). Persistent PTY: через IPtySession когда нужна сессия (env/venv/cd persists). Маркер-based вывод изPTY. Зарегистрирован как инструмент в ToolRegistry.
+- **Unix PTY** — `UnixPtySession` (forkpty/posix_spawn, non-blocking read/write через async), `NativePtyUnix` P/Invoke (libutil/libc). Полная поддержка кроме Windows (у которого уже есть ConPtySession).
+- **TerminalScreenView** — UITK-based terminal renderer (`TerminalScreenView.uxml` + `.uss`). Character-grid rendering, selection, copy, scroll. Wired into `TerminalController` for local terminal mode.
+- **WS client bridge foundation** — single-writer WebSocket sends, `client.register` capability registration, `client.ping`/`client.pong`, terminal response duration, bidirectional file-transfer DTOs, safe roots (`downloads/workspace/temp/session`), strict path validation, receive-to-client `.part` → SHA-256 → atomic move, and send-from-client streaming path. Gateway has `client_terminal`, `client_file_push`, and `client_file_pull` tools. Awaiting Felix Unity/end-to-end verification.
 
 ## [0.3.1] - 2026-06-06
 

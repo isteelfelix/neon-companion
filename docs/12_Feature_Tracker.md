@@ -102,7 +102,12 @@
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 | U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
 | U-53 | IsImageFilePath crash on control characters | ✅ | M2 | Path.GetExtension throws ArgumentException on newlines/tabs in pasted multi-line markdown. Fixed: GetInvalidPathChars guard + try/catch. |
-| U-54 | Terminal remote exec (Hermes WS RPC) | ⏳ | M2 | Client-side: GatewayEvents.TerminalExecute, RpcMethods.TerminalRespond, TerminalExecutePayload/Request, HandleTerminalExecute, RespondToTerminal, TerminalController.ExecuteRemoteCommand, MainViewController bridge (OnTerminalExecute sub + respond). Matches clarify pattern exactly. Gateway-side blocking not yet upstream. |
+| U-54 | Terminal remote exec (Hermes WS RPC) | ⏳ | M2 | Client-side: GatewayEvents.TerminalExecute, RpcMethods.TerminalRespond, TerminalExecutePayload/Request, HandleTerminalExecute, RespondToTerminal, TerminalController.ExecuteRemoteCommand, MainViewController bridge (OnTerminalExecute sub + respond). Gateway-side bridge now has `_block_op`, `terminal.respond`, and `client_terminal` tool; awaiting Felix end-to-end test. |
+| U-55 | Terminal emulator (VT100/ANSI) | ⏳ | M2 | VtParser (CSI/OSC/DCS), ScreenBuffer (2D grid + scrollback), TerminalEmulator (cursor, colors, erase, scroll, SGR 256/24bit, modes DECAWM/DECOM/DECTCEM/bracketed paste). Code present; awaiting Felix Unity/runtime verification. |
+| U-56 | PTY sessions (IPtySession + ConPTY) | ⏳ | M2 | IPtySession interface, PtySessionFactory. Windows: ConPtySession (CreatePseudoConsole, ReadFile/WriteFile), NativePtyWindows P/Invoke. Unix: UnixPtySession (forkpty/posix_spawn), NativePtyUnix. Awaiting Felix Unity/runtime verification. |
+| U-57 | TerminalScreenView (UITK renderer) | ⏳ | M2 | Character-grid UITK rendering, selection, copy, scroll. TerminalScreenView.uxml + .uss. Wired into TerminalController for local terminal mode. Awaiting Felix Unity/runtime verification. |
+| U-58 | PersistentShellService (гибрид one-shot + PTY) | ⏳ | M2 | Гибрид: most commands one-shot через ProcessExecutionService, persistent PTY через IPtySession когда нужна сессия (env/venv/cd persists). Маркер-based вывод. Зарегистрирован в ToolRegistry. Awaiting Felix Unity/runtime verification. |
+| U-59 | WS client bridge capabilities + file transfer | ⏳ | M2 | Client-side: single-writer WS sends, `client.register`, `client.ping`/`client.pong`, bidirectional file transfer DTOs, safe roots (`downloads/workspace/temp/session`), strict path validation, receive-to-client `.part` → SHA256 → atomic move, send-from-client streaming. Gateway-side: `client_file_push`/`client_file_pull`. Awaiting Felix Unity/end-to-end verification. |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
@@ -111,6 +116,9 @@
 | V-02 | Lipsync | 📋 | M3 | Blocked on V-01 completion → ready to start. Depends on avatar motion system. |
 | V-03 | 3D аватары | 📋 | M3 | Deferred: 3D models not added to project yet |
 | V-04 | Desktop realtime avatar layer | 📋 | M2+ | |
+| V-05 | Проигрывание аудио из бабла | 📋 | M2+ | Сейчас при клике на бабл с аудио проигрывается TTS-озвучка, а не оригинальный звук. Нужно чтобы воспроизводился именно звук аудио-бабла |
+| V-06 | Персистентное хранение аудио бабла | 📋 | M2+ | Сейчас аудио-файлы хранятся в кеше (TTL ~5 мин). Нужно постоянное хранение аудио, привязанного к сообщению |
+| V-07 | Отложенная отправка аудио на STT | 📋 | M2+ | Сейчас после записи аудио бабл сразу отправляется на STT. Нужно: запись → превью в композере → отправка на STT по кнопке "Отправить" |
 
 ## Рефакторинг (M2)
 | # | Фича | Статус | Спринт | Заметки |
