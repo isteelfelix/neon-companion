@@ -656,7 +656,7 @@ namespace NeonCompanion.Runtime.Chat
             // Hermes backend: route through WebSocket transport
             if (_chatTransport != null)
             {
-                await SendViaTransport(message, onStreamToken, onToolProgress);
+                await SendViaTransport(message, attachments, onStreamToken, onToolProgress);
                 return;
             }
 
@@ -675,7 +675,7 @@ namespace NeonCompanion.Runtime.Chat
                 {
                     if (_currentSession == null)
                         await StartNewSessionAsync();
-                    await SendViaTransport(message, onStreamToken, onToolProgress);
+                    await SendViaTransport(message, attachments, onStreamToken, onToolProgress);
                     return;
                 }
 
@@ -727,7 +727,7 @@ namespace NeonCompanion.Runtime.Chat
         /// <summary>
         /// Send a message via Hermes WebSocket transport.
         /// </summary>
-        private async Task SendViaTransport(string message, Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
+        private async Task SendViaTransport(string message, IReadOnlyList<ChatAttachment> attachments = null, Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
         {
             if (_chatTransport == null)
                 return;
@@ -779,7 +779,32 @@ namespace NeonCompanion.Runtime.Chat
                 localUserMessageAdded = true;
 
                 // Send via WebSocket — this returns after RPC ack
-                await _chatTransport.SendMessage(message);
+                // Convert attachments to ImageData for WS transport
+                System.Collections.Generic.List<ImageData> images = null;
+                if (attachments != null && attachments.Count > 0)
+                {
+                    images = new System.Collections.Generic.List<ImageData>();
+                    foreach (var att in attachments)
+                    {
+                        if (att == null || string.IsNullOrEmpty(att.path))
+                            continue;
+                        try
+                        {
+                            byte[] fileBytes = System.IO.File.ReadAllBytes(att.path);
+                            string b64 = System.Convert.ToBase64String(fileBytes);
+                            string mime = att.mediaType ?? "image/png";
+                            images.Add(new ImageData { data = b64, mediaType = mime });
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning("[ChatService] Failed to read attachment: " + ex.Message);
+                        }
+                    }
+                }
+                if (images != null && images.Count > 0)
+                    await _chatTransport.SendMessage(message, images);
+                else
+                    await _chatTransport.SendMessage(message);
                 submitAcknowledged = true;
 
                 // Wait for generation to complete (message.complete or error/disconnect).
