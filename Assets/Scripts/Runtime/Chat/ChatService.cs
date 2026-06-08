@@ -1433,28 +1433,23 @@ namespace NeonCompanion.Runtime.Chat
             if (message == null || string.IsNullOrEmpty(finalText) || message.segments == null)
                 return;
 
-            bool appliedText = false;
+            int lastTextIndex = -1;
             for (int i = message.segments.Count - 1; i >= 0; i--)
             {
                 ChatMessageSegment segment = message.segments[i];
-                if (segment == null ||
-                    !string.Equals(segment.kind, ChatMessageSegment.TextKind, System.StringComparison.OrdinalIgnoreCase))
+                if (segment != null &&
+                    string.Equals(segment.kind, ChatMessageSegment.TextKind, System.StringComparison.OrdinalIgnoreCase))
                 {
-                    continue;
-                }
-
-                if (!appliedText)
-                {
-                    segment.text = finalText;
-                    appliedText = true;
-                }
-                else
-                {
-                    message.segments.RemoveAt(i);
+                    lastTextIndex = i;
+                    break;
                 }
             }
 
-            if (!appliedText)
+            if (lastTextIndex >= 0)
+            {
+                message.segments[lastTextIndex].text = finalText;
+            }
+            else
             {
                 message.segments.Insert(0, new ChatMessageSegment
                 {
