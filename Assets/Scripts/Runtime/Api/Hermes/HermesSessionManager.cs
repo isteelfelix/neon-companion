@@ -277,6 +277,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public event Action<string, ApprovalRequest> OnApprovalRequest;
         public event Action<string, string> OnError;
         public event Action<TransportState> OnStateChanged;
+        public event Action<string> OnRuntimeInfoChanged;
 
         public event Action<TerminalExecuteRequest> OnTerminalExecute;
 
@@ -518,14 +519,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
         /// </summary>
         public async Task<bool> SwitchModelAsync(string modelId, string providerSlug = null)
         {
+            string sessionId = ActiveSessionId;
             string cmd = $"/model {modelId}";
             if (!string.IsNullOrEmpty(providerSlug))
                 cmd += $" --provider {providerSlug}";
 
             var result = await _gateway.Request<object>(
                 "slash.exec",
-                new { session_id = RuntimeSessionIdFor(ActiveSessionId), command = cmd }
+                new { session_id = RuntimeSessionIdFor(sessionId), command = cmd }
             );
+            OnRuntimeInfoChanged?.Invoke(sessionId);
             return result != null;
         }
 
@@ -644,6 +647,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (info == null) return;
 
             _runtimeBySession[sid] = info;
+            OnRuntimeInfoChanged?.Invoke(sid);
             // cwd is a foreground/workspace concern — only the viewed session drives it.
             if (sid == ActiveSessionId && !string.IsNullOrEmpty(info.cwd))
                 _clientBridge.SetWorkspace(info.cwd);

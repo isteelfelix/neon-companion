@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Api.Tools;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Chat;
@@ -99,6 +100,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _contextBar;
         private VisualElement _contextBarFill;
         private Label _contextBarLabel;
+        private HermesSessionManager _contextSessionManager;
 
         // Message list rendering (U-29) — delegated to ChatMessageListRenderer
         private ChatMessageListRenderer _messageListRenderer;
@@ -226,6 +228,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_approvalController != null)
                 _approvalController.OnStopRequested += OnStopClicked;
 
+            var backendSelector = GlobalBackendSelector.Instance;
+            if (backendSelector != null)
+            {
+                backendSelector.OnModeChanged += OnBackendModeChanged;
+                SubscribeToContextUpdates(backendSelector.SessionManager);
+            }
+
             _editController?.RegisterCallbacks(OnSelectMessageRequested);
 
             // Context menu triggers on transcript (right-click + long-press) — delegated to renderer
@@ -301,6 +310,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_approvalController != null)
                 _approvalController.OnStopRequested -= OnStopClicked;
             _approvalController?.Unsubscribe();
+
+            var backendSelector = GlobalBackendSelector.Instance;
+            if (backendSelector != null)
+                backendSelector.OnModeChanged -= OnBackendModeChanged;
+            SubscribeToContextUpdates(null);
 
             _editController?.UnregisterCallbacks();
 
@@ -421,6 +435,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Show any approval/clarify that was deferred while this session was in the background.
             if (chat != null && chat.IsHermesActive)
                 _approvalController?.ShowPendingForSession(chat.CurrentSessionId);
+
+            UpdateContextBar();
         }
 
         private static IReadOnlyList<ChatMessage> BuildExcluding(IReadOnlyList<ChatMessage> messages, ChatMessage exclude)
@@ -1098,6 +1114,35 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ===== Context Window Indicator (U-36) =====
+
+        private void OnBackendModeChanged(BackendMode mode)
+        {
+            var sessionManager = mode == BackendMode.Hermes
+                ? GlobalBackendSelector.Instance?.SessionManager
+                : null;
+            SubscribeToContextUpdates(sessionManager);
+            UpdateContextBar();
+        }
+
+        private void SubscribeToContextUpdates(HermesSessionManager sessionManager)
+        {
+            if (_contextSessionManager != null)
+                _contextSessionManager.OnRuntimeInfoChanged -= OnRuntimeInfoChanged;
+
+            _contextSessionManager = sessionManager;
+
+            if (_contextSessionManager != null)
+                _contextSessionManager.OnRuntimeInfoChanged += OnRuntimeInfoChanged;
+        }
+
+        private void OnRuntimeInfoChanged(string sessionId)
+        {
+            if (_contextSessionManager == null ||
+                sessionId != _contextSessionManager.ActiveSessionId)
+                return;
+
+            UpdateContextBar();
+        }
 
         private void UpdateContextBar()
         {
