@@ -715,7 +715,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 OpenModelPickerAsync = () => _providersController.OpenModelPickerAsync(),
                 GetAvatarDisplayName = () => _avatarGalleryController.AvatarDisplayName(_avatarGalleryController.ActiveAvatarId),
                 PlayNotificationSound = PlayNotificationBeep,
-                PlayAudioFile = path => _voiceController.PlayAudioFile(path)
+                PlayAudioFile = path => _voiceController.PlayAudioFile(path),
+                SetCurrentSession = (id, title) => { _currentSessionId = id; _currentSessionTitle = title; }
             };
         }
 

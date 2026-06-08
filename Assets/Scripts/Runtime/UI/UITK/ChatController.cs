@@ -63,6 +63,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Action<IReadOnlyList<ChatSession>, List<ProviderConfig>> RenderSessionList;
             // Rendering
             public Action<IReadOnlyList<ChatMessage>> RenderMessages;
+            // Session identity
+            public Action<string, string> SetCurrentSession;
             // Model picker
             public Func<string, bool, Task> ApplyModelSelectionAsync;
             public Func<Task> OpenModelPickerAsync;
@@ -815,6 +817,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ClearPendingComposerAttachments();
                 _messageQueue.Clear();
                 RenderQueueIndicator();
+                // Update UI session identity so the session list highlights the new session
+                _d.SetCurrentSession?.Invoke(chat.CurrentSessionId, string.Empty);
                 if (_d.MessageInput != null)
                 {
                     _d.MessageInput.value = string.Empty;
