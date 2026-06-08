@@ -121,21 +121,25 @@ namespace NeonCompanion.Runtime.UI.Chat
             try
             {
                 var requestMessages = new List<AiChatMessage>();
-                foreach (var message in Messages)
+                int currentAttachmentMessageIndex = FindCurrentUserMessageAttachmentIndex();
+                for (int i = 0; i < Messages.Count; i++)
                 {
+                    var message = Messages[i];
                     bool hasText = !string.IsNullOrWhiteSpace(message?.content);
                     bool canSendAttachments = message != null && string.Equals(message.role, "user", StringComparison.OrdinalIgnoreCase);
-                    bool hasAttachments = canSendAttachments && message.attachments != null && message.attachments.Count > 0;
+                    bool shouldSendAttachments = canSendAttachments && i == currentAttachmentMessageIndex;
+                    bool hasAttachments = shouldSendAttachments && message.attachments != null && message.attachments.Count > 0;
+                    bool hasHistoricalAttachments = canSendAttachments && !shouldSendAttachments && message.attachments != null && message.attachments.Count > 0;
                     bool hasToolCalls = message != null && message.tool_calls != null && message.tool_calls.Count > 0;
                     bool hasToolCallRef = !string.IsNullOrEmpty(message?.tool_call_id);
-                    if (string.IsNullOrWhiteSpace(message?.role) || (!hasText && !hasAttachments && !hasToolCalls && !hasToolCallRef))
+                    if (string.IsNullOrWhiteSpace(message?.role) || (!hasText && !hasAttachments && !hasHistoricalAttachments && !hasToolCalls && !hasToolCallRef))
                         continue;
 
                     requestMessages.Add(new AiChatMessage
                     {
                         role = message.role,
-                        content = message.content,
-                        attachments = canSendAttachments ? ToAiAttachments(message.attachments) : new List<AiChatAttachment>(),
+                        content = hasText ? message.content : (hasHistoricalAttachments ? "[image]" : message.content),
+                        attachments = shouldSendAttachments ? ToAiAttachments(message.attachments) : new List<AiChatAttachment>(),
                         tool_call_id = message.tool_call_id,
                         tool_calls = CloneToolCalls(message.tool_calls)
                     });
@@ -222,6 +226,22 @@ namespace NeonCompanion.Runtime.UI.Chat
 
                 throw;
             }
+        }
+
+        private int FindCurrentUserMessageAttachmentIndex()
+        {
+            if (Messages == null || Messages.Count == 0)
+                return -1;
+
+            int index = Messages.Count - 1;
+            ChatMessage message = Messages[index];
+            if (message == null)
+                return -1;
+            if (!string.Equals(message.role, "user", StringComparison.OrdinalIgnoreCase))
+                return -1;
+            if (message.attachments != null && message.attachments.Count > 0)
+                return index;
+            return -1;
         }
 
         private static void AppendTextSegment(ChatMessage message, string text)
