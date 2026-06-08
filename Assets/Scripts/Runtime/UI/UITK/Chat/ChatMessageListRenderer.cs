@@ -615,10 +615,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
 
             bool hasTextSegment = AddMessageSegments(bubble, message);
-            if (!hasTextSegment && !string.IsNullOrWhiteSpace(message.content))
+            string renderableContent = StripDataUrlFromContent(message.content);
+            if (!hasTextSegment && !string.IsNullOrWhiteSpace(renderableContent))
             {
                 bool isAssistant = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase);
-                bubble.Add(CreateTranscriptBody(message.content, isAssistant));
+                bubble.Add(CreateTranscriptBody(renderableContent, isAssistant));
             }
 
             if (message.attachments != null && message.attachments.Count > 0)
@@ -934,6 +935,43 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return !string.IsNullOrWhiteSpace(segment.text);
 
             return false;
+        }
+
+        /// <summary>
+        /// Strip data:image/...;base64,... URLs from message content so they don't render as raw text.
+        /// Preserves any text before/after the data URL.
+        /// </summary>
+        private static string StripDataUrlFromContent(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+                return content;
+
+            const string marker = "data:image/";
+            int idx = content.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                return content;
+
+            // Find the start of the data URL (may be preceded by a space or newline)
+            int start = idx;
+            while (start > 0 && content[start - 1] == ' ')
+                start--;
+
+            // Find the end of the base64 payload (terminated by a space, newline, or end of string)
+            int end = content.IndexOf(",base64,", idx, StringComparison.OrdinalIgnoreCase);
+            if (end < 0)
+                end = idx;
+            else
+            {
+                // Skip past the base64 data until whitespace or end
+                end = content.IndexOf(',', end + 8); // skip ",base64,"
+                if (end < 0) end = content.Length;
+                end++; // include the comma
+                while (end < content.Length && content[end] != ' ' && content[end] != '\n' && content[end] != '\r')
+                    end++;
+            }
+
+            string cleaned = content.Remove(start, end - start).Trim();
+            return cleaned;
         }
 
         internal void RegisterCallbacks()
