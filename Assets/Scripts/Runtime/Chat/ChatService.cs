@@ -1334,12 +1334,12 @@ namespace NeonCompanion.Runtime.Chat
                 // Persist usage from gateway (per session) so stats footer survives re-render
                 try
                 {
+                    s.streamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - s.startTime).TotalSeconds;
                     var usage = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfoFor(sessionId)?.usage;
                     if (usage != null && usage.total > 0)
                     {
                         s.streamingMessage.tokenCount = usage.total - s.previousTotal;
                         s.previousTotal = usage.total;
-                        s.streamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - s.startTime).TotalSeconds;
                     }
                 }
                 catch { }
