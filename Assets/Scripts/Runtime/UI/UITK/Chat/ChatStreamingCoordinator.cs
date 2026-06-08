@@ -292,11 +292,21 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _label.style.minHeight = 20;
             _applyTextCursor?.Invoke(_label);
 
-            var statsFooter = _bubble.Q<VisualElement>(className: "transcript__stats");
-            if (statsFooter != null && statsFooter.parent == _bubble)
+            // Insert label before the stats footer. The footer may be a direct
+            // child or nested inside another container — walk direct children to
+            // find the first element bearing the stats class.
+            int insertIdx = -1;
+            for (int i = 0; i < _bubble.childCount; i++)
             {
-                int idx = _bubble.IndexOf(statsFooter);
-                _bubble.Insert(idx, _label);
+                if (_bubble[i].ClassListContains("transcript__stats"))
+                {
+                    insertIdx = i;
+                    break;
+                }
+            }
+            if (insertIdx >= 0)
+            {
+                _bubble.Insert(insertIdx, _label);
             }
             else
             {
