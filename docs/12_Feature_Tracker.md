@@ -42,7 +42,7 @@
 | A-01 | Статичные 2D аватары | ✅ | M0 | Verified: avatars display and selectable |
 | A-02 | Кастомные аватары (загрузка) | ✅ | M1 | Verified by Felix: загрузка аватара в настройках работает |
 | A-03 | Persona/инструкции аватара | ✅ | M1 | Verified: persona edit and save work |
-| A-04 | Scale-and-crop фон | ⏳ | M1 | Scale slider for custom avatars (0.5-3.0x). BackgroundSize transform applied to art/preview/tiles. Awaiting Felix build+test |
+| A-04 | Scale-and-crop фон | ✅ | M1 | Verified by Felix: scale slider works |
 | A-05 | Анимация спрайтшитами | ✅ | M1 | Verified: sprite animation works in chat @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Verified: idle and talking animations work @@
 | A-07 | 2D motion-pack MVP contract | ✅ | M1 | Verified: motion pack triggers correctly @@
@@ -101,18 +101,18 @@
 | U-45 | Очередь сообщений | ✅ | M2 | Verified: queue visible when sending while response in progress |
 | U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
 | U-47 | Система команд в чате | ✅ | M2 | Работает |
-| U-48 | Agent Approval System (Part B) | ⏳ | M2 | Implemented: local OpenAI tool-call approval blocks before ToolExecutor; Hermes SSE approval/request/progress statuses now surface an in-chat approval prompt. Awaiting Felix verification @@
+| U-48 | Agent Approval System (Part B) | ✅ | M2 | Verified by Felix: local OpenAI tool-call approval blocks before ToolExecutor; Hermes SSE approval/request/progress statuses surface in-chat approval prompt |
 | U-49 | Входящие вложения от AI | ⏳ | M2 | Client-side fixed in 7ce26be (MEDIA: parsing, path resolution, magic bytes). Blocked: gateway serves HTML instead of actual images — needs gateway-level image serving layer |
 | U-50 | Баг: анимированный аватар в вкладке Статика | ✅ | M2 | Verified by Felix: mode check before null guard + HideAllAvatarImageOverlays |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 | U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
 | U-53 | IsImageFilePath crash on control characters | ✅ | M2 | Path.GetExtension throws ArgumentException on newlines/tabs in pasted multi-line markdown. Fixed: GetInvalidPathChars guard + try/catch. |
-| U-54 | Terminal remote exec (Hermes WS RPC) | ⏳ | M2 | Client-side: GatewayEvents.TerminalExecute, RpcMethods.TerminalRespond, TerminalExecutePayload/Request, HandleTerminalExecute, RespondToTerminal, TerminalController.ExecuteRemoteCommand, MainViewController bridge (OnTerminalExecute sub + respond). Gateway-side bridge now has `_block_op`, `terminal.respond`, and `client_terminal` tool; awaiting Felix end-to-end test. |
-| U-55 | Terminal emulator (VT100/ANSI) | ⏳ | M2 | VtParser (CSI/OSC/DCS), ScreenBuffer (2D grid + scrollback), TerminalEmulator (cursor, colors, erase, scroll, SGR 256/24bit, modes DECAWM/DECOM/DECTCEM/bracketed paste). Code present; awaiting Felix Unity/runtime verification. |
-| U-56 | PTY sessions (IPtySession + ConPTY) | ⏳ | M2 | IPtySession interface, PtySessionFactory. Windows: ConPtySession (CreatePseudoConsole, ReadFile/WriteFile), NativePtyWindows P/Invoke. Unix: UnixPtySession (forkpty/posix_spawn), NativePtyUnix. Awaiting Felix Unity/runtime verification. |
-| U-57 | TerminalScreenView (UITK renderer) | ⏳ | M2 | Character-grid UITK rendering, selection, copy, scroll. TerminalScreenView.uxml + .uss. Wired into TerminalController for local terminal mode. Awaiting Felix Unity/runtime verification. |
-| U-58 | PersistentShellService (гибрид one-shot + PTY) | ⏳ | M2 | Гибрид: most commands one-shot через ProcessExecutionService, persistent PTY через IPtySession когда нужна сессия (env/venv/cd persists). Маркер-based вывод. Зарегистрирован в ToolRegistry. Awaiting Felix Unity/runtime verification. |
-| U-59 | WS client bridge capabilities + file transfer | ⏳ | M2 | Client-side: single-writer WS sends, `client.register`, `client.ping`/`client.pong`, bidirectional file transfer DTOs, safe roots (`downloads/workspace/temp/session`), strict path validation, receive-to-client `.part` → SHA256 → atomic move, send-from-client streaming. Gateway-side: `client_file_push`/`client_file_pull`. Awaiting Felix Unity/end-to-end verification. |
+| U-54 | Terminal remote exec (Hermes WS RPC) | ✅ | M2 | Verified by Felix: GatewayEvents.TerminalExecute, RpcMethods.TerminalRespond, TerminalExecutePayload/Request, HandleTerminalExecute, RespondToTerminal, TerminalController.ExecuteRemoteCommand, MainViewController bridge — end-to-end working |
+| U-55 | Terminal emulator (VT100/ANSI) | ✅ | M2 | Verified by Felix: VtParser (CSI/OSC/DCS), ScreenBuffer (2D grid + scrollback), TerminalEmulator (cursor, colors, erase, scroll, SGR 256/24bit, modes DECAWM/DECOM/DECTCEM/bracketed paste) — working |
+| U-56 | PTY sessions (IPtySession + ConPTY) | ✅ | M2 | Verified by Felix: IPtySession interface, PtySessionFactory. Windows: ConPtySession (CreatePseudoConsole, ReadFile/WriteFile), NativePtyWindows P/Invoke. Unix: UnixPtySession (forkpty/posix_spawn), NativePtyUnix — working |
+| U-57 | TerminalScreenView (UITK renderer) | ✅ | M2 | Verified by Felix: Character-grid UITK rendering, selection, copy, scroll. TerminalScreenView.uxml + .uss. Wired into TerminalController — working |
+| U-58 | PersistentShellService (гибрид one-shot + PTY) | ✅ | M2 | Verified by Felix: Гибрид one-shot + PTY, маркер-based вывод, зарегистрирован в ToolRegistry — working |
+| U-59 | WS client bridge capabilities + file transfer | ✅ | M2 | Verified by Felix: single-writer WS sends, client.register, client.ping/pong, bidirectional file transfer — end-to-end working |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
