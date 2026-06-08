@@ -779,6 +779,9 @@ namespace NeonCompanion.Runtime.Chat
                 }
                 _currentChatViewModel.Messages.Add(localUserMessage);
                 localUserMessageAdded = true;
+                // Sync session immediately so switching sessions mid-stream
+                // doesn't lose the user message (session carries stale data).
+                _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
 
                 // Attach images to the Hermes session first, then submit text normally.
                 if (attachments != null && attachments.Count > 0)
@@ -1095,6 +1098,9 @@ namespace NeonCompanion.Runtime.Chat
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             };
             _currentChatViewModel.Messages.Add(_hermesStreamingMessage);
+            // Sync so mid-stream session switch doesn't lose the assistant bubble
+            if (_currentSession != null)
+                _currentSession.messages = new System.Collections.Generic.List<ChatMessage>(_currentChatViewModel.Messages);
             return true;
         }
 
