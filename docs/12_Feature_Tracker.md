@@ -18,10 +18,11 @@
 | C-04 | Пресеты моделей | ✅ | M1 | Verified: model preset dropdown present |
 | C-05 | Локализация UI | ✅ | M1 | Verified: all UI elements in Russian, no raw keys |
 | C-06 | Авто-обнаружение моделей (ModelDiscoveryService) | ✅ | M1 | Verified: models discovered from /v1/models |
-| C-07 | Модель-пикер в чате | ⏳ | M1 | NeonDropdown в topbar + overlay — UI works, model list shows, switching works for OpenAI but not for Hermes (captured in C-10) |
+| C-07 | Модель-пикер в чате | ✅ | M1 | NeonDropdown в topbar + overlay — UI works, model list shows, switching works (OpenAI + Hermes tested) |
 | C-08 | Вложения в чате | ✅ | M1 | Verified by Felix (same fix as U-41) |
 | C-09 | Сессионная маршрутизация моделей | ✅ | M1 | Verified: Hermes knows current model per session |
-| C-10 | Provider Adapter архитектура | ❌ | M2 | Partially works: model switching OK for OpenAI but broken for Hermes — model list shows but switching has no effect, agent always uses default Hermes model |
+| C-10 | Provider Adapter архитектура | ✅ | M2 | Model switching works for OpenAI and Hermes (tested 2026-06-08). Context overflow on undersized models is expected behavior. |
+| C-11 | Gateway status + restart | ⏳ | M2 | Backend: gateway exposes status endpoint (running/stopped, uptime, model). Restart endpoint. Companion: displays status badge + restart button. Gateway-only, no client logic. |
 
 ## История и сессии
 | # | Фича | Статус | Спринт | Заметки |
@@ -86,7 +87,7 @@
 | U-30 | Удаление отдельных сообщений | ✅ | M2 | Felix fixed in 743d0a7: context-menu delete flow works |
 | U-31 | Выделение сообщений | ✅ | M2 | Felix fixed in 743d0a7: selection mode reachable from message context menu |
 | U-32 | Удаление выделенных | ✅ | M2 | Felix fixed in 743d0a7: selected-message delete flow restored |
-| U-33 | Пересылка выделенных в другой чат | ❌ | M2 | Не работает пересылка сообщений между чатами — broken after 743d0a7 |
+| U-33 | Пересылка выделенных в другой чат | ⏳ | M2 | UI-операция: пересланные сообщения отображаются в целевом чате, но агент их не видит — они не попадают в session history на gateway. Нужно при пересылке отправлять в backend сессии. |
 | U-34 | Выделение текста в сообщениях | ✅ | M2 | Verified by Felix: Label→TextField, I-beam cursor, long-press guard |
 | U-35 | Markdown разметка в сообщениях | ✅ | M2 | **Upgraded to SelectableMarkdownElement** — full native rendering engine: block model (paragraph/heading/quote/list/code/table/rule), inline tokenizer (bold/italic/strike/code/links), word-wrap, glyph-level selection, streaming block-level reconciliation. Syntax highlighting for 15+ languages. Diff-fenced code blocks with +/-/@@ coloring. Design tokens throughout. Previously: TextField-based with basic markdown parsing. |
 | U-36 | Индикатор контекстного окна | ✅ | M2 | Verified by Felix: real context_length from discovery API, fallback chain to heuristics |
@@ -103,6 +104,9 @@
 | U-47 | Система команд в чате | ✅ | M2 | Работает |
 | U-48 | Agent Approval System (Part B) | ✅ | M2 | Verified by Felix: local OpenAI tool-call approval blocks before ToolExecutor; Hermes SSE approval/request/progress statuses surface in-chat approval prompt |
 | U-49 | Входящие вложения от AI | ⏳ | M2 | Client-side fixed in 7ce26be (MEDIA: parsing, path resolution, magic bytes). Blocked: gateway serves HTML instead of actual images — needs gateway-level image serving layer |
+| U-60 | Tools UI в бабле — расположение | ✅ | M2 | Fixed 9db20fa: replaced two-pass render (all text then all tools) with single-pass over segments — tool calls now appear inline in streaming order |
+| U-61 | Время ответа + токены под каждым сообщением | ✅ | M2 | Fixed: responseTimeSeconds now always persisted (moved outside usage-check block) — every assistant message shows at least response time in footer |
+| U-62 | Контекст сессии (общие токены) | 🔧 | M2 | Считается некорректно. Должен обновляться при входе в чат и смене модели. Сравнить с расчётом Hermes Desktop | **BUG**: UpdateContextBar() только из RenderMessages(). Не обновляется при смене модели/чата. FIX: вызывать при смене ActiveSessionId, после SwitchModelAsync(), при session.info event. Контекст = бэкенд (context_max/context_used/context_percent), не клиент. |
 | U-50 | Баг: анимированный аватар в вкладке Статика | ✅ | M2 | Verified by Felix: mode check before null guard + HideAllAvatarImageOverlays |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 | U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
