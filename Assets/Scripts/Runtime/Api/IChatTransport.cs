@@ -25,8 +25,8 @@ namespace NeonCompanion.Runtime.Api
         /// <summary>Send a user message. Response arrives via events.</summary>
         Task SendMessage(string text);
 
-        /// <summary>Send a user message with inline images (base64-encoded).</summary>
-        Task SendMessage(string text, System.Collections.Generic.List<ImageData> images);
+        /// <summary>Attach an image to the current session before submitting a prompt.</summary>
+        Task AttachImageBytes(string contentBase64);
 
         /// <summary>Interrupt the current generation.</summary>
         Task Interrupt();
@@ -59,16 +59,6 @@ namespace NeonCompanion.Runtime.Api
 
         /// <summary>Connection state changed.</summary>
         event Action<TransportState> OnStateChanged;
-    }
-
-    [Serializable]
-    public class ImageData
-    {
-        /// <summary>Base64-encoded image data.</summary>
-        public string data;
-
-        /// <summary>MIME type (e.g. "image/png", "image/jpeg").</summary>
-        public string mediaType;
     }
 
     public enum TransportState

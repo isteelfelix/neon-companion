@@ -766,6 +766,7 @@ namespace NeonCompanion.Runtime.Chat
                 {
                     role = "user",
                     content = message,
+                    attachments = CloneChatAttachments(attachments),
                     unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
                 if (!string.IsNullOrEmpty(_pendingVoiceAudioPath))
@@ -778,33 +779,31 @@ namespace NeonCompanion.Runtime.Chat
                 _currentChatViewModel.Messages.Add(localUserMessage);
                 localUserMessageAdded = true;
 
-                // Send via WebSocket — this returns after RPC ack
-                // Convert attachments to ImageData for WS transport
-                System.Collections.Generic.List<ImageData> images = null;
+                // Attach images to the Hermes session first, then submit text normally.
                 if (attachments != null && attachments.Count > 0)
                 {
-                    images = new System.Collections.Generic.List<ImageData>();
                     foreach (var att in attachments)
                     {
                         if (att == null || string.IsNullOrEmpty(att.path))
                             continue;
+                        string b64 = null;
                         try
                         {
                             byte[] fileBytes = System.IO.File.ReadAllBytes(att.path);
-                            string b64 = System.Convert.ToBase64String(fileBytes);
-                            string mime = att.mediaType ?? "image/png";
-                            images.Add(new ImageData { data = b64, mediaType = mime });
+                            b64 = System.Convert.ToBase64String(fileBytes);
                         }
                         catch (Exception ex)
                         {
                             Debug.LogWarning("[ChatService] Failed to read attachment: " + ex.Message);
                         }
+
+                        if (!string.IsNullOrEmpty(b64))
+                            await _chatTransport.AttachImageBytes(b64);
                     }
                 }
-                if (images != null && images.Count > 0)
-                    await _chatTransport.SendMessage(message, images);
-                else
-                    await _chatTransport.SendMessage(message);
+
+                // Send via WebSocket — this returns after RPC ack
+                await _chatTransport.SendMessage(message);
                 submitAcknowledged = true;
 
                 // Wait for generation to complete (message.complete or error/disconnect).
@@ -1482,6 +1481,30 @@ namespace NeonCompanion.Runtime.Chat
 
             var title = firstUserMessage.content.Trim();
             return title.Length <= 48 ? title : title.Substring(0, 48) + "...";
+        }
+
+        private static List<ChatAttachment> CloneChatAttachments(IReadOnlyList<ChatAttachment> attachments)
+        {
+            if (attachments == null || attachments.Count == 0)
+                return null;
+
+            var clone = new List<ChatAttachment>(attachments.Count);
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                ChatAttachment attachment = attachments[i];
+                if (attachment == null)
+                    continue;
+
+                clone.Add(new ChatAttachment
+                {
+                    kind = attachment.kind,
+                    name = attachment.name,
+                    path = attachment.path,
+                    mediaType = attachment.mediaType
+                });
+            }
+
+            return clone.Count > 0 ? clone : null;
         }
 
         private void ResetRemoteSessionState()

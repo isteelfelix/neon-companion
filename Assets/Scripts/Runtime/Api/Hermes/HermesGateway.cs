@@ -112,8 +112,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string FileTransferChunk = "file.transfer.chunk";
         public const string FileTransferFinish = "file.transfer.finish";
         public const string ConfigGet = "config.get";
-        public const string ImageAttach = "image.attach";
-        public const string ImageDetach = "image.detach";
+        public const string ImageAttachBytes = "image.attach_bytes";
         public const string SlashExec = "slash.exec";
         public const string CommandDispatch = "command.dispatch";
         public const string CommandsCatalog = "commands.catalog";
