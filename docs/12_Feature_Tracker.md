@@ -25,11 +25,16 @@
 
 ## История и сессии
 | # | Фича | Статус | Спринт | Заметки |
-|---|------|--------|--------|---------|
+|---|------|--------|--------|---------| 
 | H-01 | Сохранение истории чата | ✅ | M0 | Verified |
 | H-02 | Экран истории | ✅ | M1 | Verified: delete sessions works |
-| H-03 | Удаление отдельных сессий | ✅ | M1 | Verified |
+| H-03 | Удаление отдельных сессий | ✅ | M1 | Verified. WS close + REST delete (FK-safe orphaning) |
 | H-04 | Папки для сессий (как проекты) | ✅ | M2 | Fixed in 477ab2a: inline styles + WorldToLocal positioning + anti-self-close guard + proper folder input popup |
+| H-05 | Multiplexed parallel sessions | ✅ | M3 | Per-session HermesStream, background generate, foreground re-attach. IChatTransport events carry sessionId |
+| H-06 | Session status indicators | ✅ | M3 | Sidebar pulsing dots: cyan=generating, orange=needs attention. RerenderStatus() refresh |
+| H-07 | Runtime vs display ID mapping | ✅ | M3 | session.create → stored_session_id (DB) + session_id (runtime). WS events route via _displayByRuntimeSession |
+| H-08 | Session listing via WS | ✅ | M3 | session.list RPC. Server DB = source of truth in Hermes mode |
+| H-09 | WS connection guard | ✅ | M3 | SwitchToHermesSessionAsync connects WS before ResumeSession (fix for silent failure) |
 
 ## Аватары
 | # | Фича | Статус | Спринт | Заметки |

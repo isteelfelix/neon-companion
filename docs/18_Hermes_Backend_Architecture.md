@@ -20,20 +20,6 @@ Hermes — это не провайдер, а **бэкенд**. Полность
 
 ## Архитектура
 
-### Текущее состояние (до изменений)
-
-```
-ProviderConfig { baseUrl, apiKey, backendType: "hermes"|"generic" }
-         ↓
-ProviderAdapterFactory → IProviderAdapter (HermesAdapter | GenericOpenAiAdapter)
-         ↓
-OpenAiCompatibleClient (HTTP REST + SSE)
-```
-
-Всё работает через HTTP. HermesAdapter — это просто HTTP + заголовки.
-
-### Целевое состояние
-
 ```
 ┌─────────────────────────────────────────────┐
 │           GlobalBackendSelector             │
@@ -61,7 +47,7 @@ OpenAiCompatibleClient (HTTP REST + SSE)
 
 ## Компоненты
 
-### 1. GlobalBackendSelector (новый)
+### 1. GlobalBackendSelector
 
 **Путь:** `Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs`
 
@@ -77,97 +63,174 @@ public enum BackendMode
 public class GlobalBackendSelector : MonoBehaviour
 {
     public BackendMode CurrentMode { get; }
-    
-    // Событие смены режима
+    public HermesSessionManager SessionManager { get; }
+    public HermesRestClient RestClient { get; }
+    public IChatTransport ActiveTransport { get; }
+
     public event Action<BackendMode> OnModeChanged;
-    
-    // Фичер-гейт
-    public bool IsHermesFeatureAvailable(string feature);
+    public bool IsFeatureAvailable(string feature);
 }
 ```
 
-**При смене режима:**
-- Отключает текущий транспорт
-- Подключает новый
-- Обновляет UI (скрытие/показ элементов)
-- Уведомляет все подписанные компоненты
+**Жизненный цикл:**
+1. `LoadFromSettings()` — загружает saved mode, создаёт транспорт если Hermes
+2. `SetMode(Hermes)` → `SetupHermes()` → создаёт Gateway + SessionManager + RestClient
+3. `ConnectHermes()` — подключает WS (нужен отдельный вызов!)
+4. `OnModeChanged` → `ChatService.SetTransport()` → подписка на события
 
-### 2. HermesGateway (новый, WebSocket)
+**Важно:** `SetMode()` создаёт транспорт, но НЕ подключает WS. `ConnectHermes()` — отдельный шаг. `StartNewSessionAsync` и `SwitchToHermesSessionAsync` вызывают его явно.
+
+### 2. HermesGateway
 
 **Путь:** `Assets/Scripts/Runtime/Api/Hermes/HermesGateway.cs`
 
-WebSocket JSON-RPC 2.0 клиент. Основа Hermes-режима.
-
-**Источник:** `/usr/local/lib/hermes-agent/neon-companion-csharp/JsonRpcClient.cs` (референс)
+WebSocket JSON-RPC 2.0 клиент.
 
 **Протокол:**
 ```
 → {"jsonrpc":"2.0","id":"r1","method":"session.create","params":{"cols":96}}
-← {"jsonrpc":"2.0","id":"r1","result":{"session_id":"..."}}
-← {"jsonrpc":"2.0","method":"event","params":{"type":"message.start"}}
-← {"jsonrpc":"2.0","method":"event","params":{"type":"message.delta","payload":{"text":"Привет"}}}
-← {"jsonrpc":"2.0","method":"event","params":{"type":"message.complete","payload":{"text":"Привет!"}}}
+← {"jsonrpc":"2.0","id":"r1","result":{"session_id":"...","stored_session_id":"..."}}
+← {"jsonrpc":"2.0","method":"event","params":{"type":"message.start","session_id":"..."}}
+← {"jsonrpc":"2.0","method":"event","params":{"type":"message.delta","session_id":"...","payload":{"text":"Привет"}}}
+← {"jsonrpc":"2.0","method":"event","params":{"type":"message.complete","session_id":"...","payload":{"text":"Привет!"}}}
 ```
 
 **Подключение:** `wss://example.com/api/ws?token=<session_token>`
 
 **Таймауты:**
 - Request timeout: 30s
-- Reconnect delay:ponential backoff (1s → 2s → 4s → max 30s)
-- Connection timeout: 10s
+- Reconnect: exponential backoff (1s → 2s → 4s → max 30s)
 
-**Обязательные методы:**
-- `Connect(wsUrl)` — подключение
-- `Request<T>(method, params)` — RPC запрос
-- `On(eventType, handler)` — подписка на событие
-- `OnStateChange(handler)` — отслеживание состояния
-- `Close()` — закрытие
+**RPC Methods:**
 
-**Обязательные события (server → client):**
-- `gateway.ready` — бэкенд готов
-- `session.info` — мета сессии
-- `message.start` — начало ответа
-- `message.delta` — токен стриминга
-- `message.complete` — ответ завершён
-- `reasoning.delta` — thinking-токены
-- `tool.start` / `tool.progress` / `tool.complete` — tool calls
-- `clarify.request` — агент спрашивает
-- `approval.request` / `sudo.request` — аппрувалы
-- `error` — ошибка
+| Метод | Назначение | Параметры |
+|-------|-----------|-----------|
+| `session.create` | Создать сессию | `{cols, cwd?, title?}` |
+| `session.resume` | Открыть существующую | `{session_id}` (DB id) |
+| `session.close` | Закрыть live-сессию | `{session_id}` (runtime id) |
+| `session.list` | Список сессий | `{limit, offset}` |
+| `session.interrupt` | Прервать генерацию | `{session_id}` (runtime id) |
+| `prompt.submit` | Отправить сообщение | `{session_id, text}` (runtime id) |
+| `clarify.respond` | Ответ на clarify | `{session_id, answer}` |
+| `approval.respond` | Ответ на approval | `{session_id, choice}` |
+| `slash.exec` | Выполнить slash-команду | `{session_id, command}` |
 
-### 3. HermesSessionManager (новый)
+**События (server → client):**
+
+| Событие | Payload | Описание |
+|---------|---------|----------|
+| `session.info` | `SessionRuntimeInfo` | Мета сессии (model, usage, cwd) |
+| `message.start` | — | Начало генерации |
+| `message.delta` | `{text}` | Токен стриминга |
+| `message.complete` | `{text, usage}` | Генерация завершена |
+| `reasoning.delta` | `{text}` | Thinking-токены |
+| `tool.start` / `tool.progress` / `tool.complete` | `ToolEventPayload` | Tool calls |
+| `clarify.request` | `{request_id, question}` | Агент спрашивает |
+| `approval.request` / `sudo.request` | `{request_id, question}` | Аппрувалы |
+| `error` | `{message}` | Ошибка |
+
+### 3. HermesSessionManager
 
 **Путь:** `Assets/Scripts/Runtime/Api/Hermes/HermesSessionManager.cs`
 
-Управление жизненным циклом сессий через WS.
+Управление жизненным циклом сессий через WS. Реализует `IChatTransport`.
 
-**Референс:** `/usr/local/lib/hermes-agent/neon-companion-csharp/SessionManager.cs`
+#### Runtime vs Display Session ID
 
-**Методы:**
-- `CreateSession(cwd, title)` → `session.create`
-- `ResumeSession(sessionId)` → `session.resume`
-- `CloseSession()` → `session.close`
-- `SubmitPrompt(text)` → `prompt.submit`
-- `Interrupt()` → `session.interrupt`
-- `RespondToClarify(requestId, answer)` → `clarify.respond`
-- `RespondToApproval(requestId, approved)` → `approval.respond`
+Hermes использует два типа ID:
 
-**Состояние:**
-- `ActiveSessionId` — текущая сессия
-- `Busy` — идёт генерация
-- `AwaitingResponse` — ждём ответ
-- `RuntimeInfo` — model, provider, usage
+| Тип | Источник | Назначение | Пример |
+|-----|----------|-----------|--------|
+| **Runtime ID** | `session.create` → `session_id` | WS RPC: `prompt.submit`, `session.interrupt`, события | `a1b2c3d4` (8 hex) |
+| **Display/DB ID** | `session.create` → `stored_session_id` | REST API, UI, история | `k7x9m2n5` (session_key) |
 
-**События (для UI):**
-- `OnStreamStarted` / `OnStreamComplete`
-- `OnAssistantDelta(text)` / `OnAssistantComplete(text)`
-- `OnReasoningDelta(text)`
-- `OnToolUpdate(toolPayload)`
-- `OnClarifyRequest(request)`
-- `OnApprovalRequest(request)`
-- `OnError(message)`
+**Правила:**
+- `session.create` возвращает оба: `{session_id: runtime, stored_session_id: db}`
+- `session.resume` принимает DB id → возвращает новый runtime id
+- WS события приходят с runtime id
+- Клиент транслирует runtime → display через `_displayByRuntimeSession` mapping
 
-### 4. HermesRestClient (новый)
+```csharp
+// Маппинг ID
+private readonly Dictionary<string, string> _runtimeByDisplaySession;
+private readonly Dictionary<string, string> _displayByRuntimeSession;
+
+public string RuntimeSessionIdFor(string displayId);
+public string DisplaySessionIdFor(string runtimeId);
+```
+
+#### Per-session состояние
+
+Было (старое):
+```csharp
+public string ActiveSessionId { get; }
+public bool Busy { get; }
+public bool AwaitingResponse { get; }
+public SessionRuntimeInfo RuntimeInfo { get; }
+```
+
+Стало (multiplexed):
+```csharp
+// Текущая foreground сессия (для UI и RuntimeInfo)
+public string ActiveSessionId { get; }
+
+// Per-session состояние (словари)
+private readonly Dictionary<string, bool> _busyBySession;
+private readonly Dictionary<string, bool> _awaitingBySession;
+private readonly Dictionary<string, SessionRuntimeInfo> _runtimeBySession;
+
+// Query methods
+public bool IsSessionBusy(string sessionId);
+public SessionRuntimeInfo RuntimeInfoFor(string sessionId);
+public void SetForegroundSession(string sessionId);
+```
+
+#### Методы
+
+| Метод | Назначение |
+|-------|-----------|
+| `CreateSession(cwd, title)` | Создать сессию (session.create) |
+| `ResumeSession(sessionId)` | Открыть сессию (session.resume) |
+| `CloseSession(sessionId)` | Закрыть live-сессию (session.close) |
+| `ListSessions(limit)` | Список сессий (session.list) |
+| `SendMessage(sessionId, text)` | Отправить сообщение (prompt.submit) |
+| `Interrupt(sessionId)` | Прервать генерацию (session.interrupt) |
+| `SetForegroundSession(sessionId)` | Установить foreground для UI |
+| `IsSessionBusy(sessionId)` | Проверить busy/awaiting |
+
+### 4. IChatTransport
+
+**Путь:** `Assets/Scripts/Runtime/Api/IChatTransport.cs`
+
+Абстракция транспорта для ChatService. **Session-aware** — все события несут `sessionId`.
+
+```csharp
+public interface IChatTransport : IDisposable
+{
+    bool IsConnected { get; }
+
+    Task Connect(string url, string token = null);
+    Task Disconnect();
+
+    // Session-aware messaging
+    Task SendMessage(string sessionId, string text);
+    Task AttachImageBytes(string sessionId, string contentBase64);
+    Task Interrupt(string sessionId);
+
+    // Events — all carry sessionId for multiplexed routing
+    event Action<string> OnStreamStarted;                    // sessionId
+    event Action<string, string> OnDelta;                    // sessionId, text
+    event Action<string, string> OnComplete;                 // sessionId, finalText
+    event Action<string, string> OnReasoningDelta;           // sessionId, text
+    event Action<string, ToolCallUpdate> OnToolUpdate;       // sessionId, update
+    event Action<string, ClarifyRequest> OnClarifyRequest;   // sessionId, request
+    event Action<string, ApprovalRequest> OnApprovalRequest; // sessionId, request
+    event Action<string, string> OnError;                    // sessionId (null = connection-level), message
+    event Action<TransportState> OnStateChanged;
+}
+```
+
+### 5. HermesRestClient
 
 **Путь:** `Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.cs`
 
@@ -177,9 +240,8 @@ REST management через HTTP. Использует `UnityWebRequest`.
 
 Сессии:
 - `GET /api/sessions` — список сессий
-- `GET /api/sessions/search?q=` — поиск
 - `GET /api/sessions/:id/messages` — сообщения сессии
-- `DELETE /api/sessions/:id` — удаление
+- `DELETE /api/sessions/:id` — физическое удаление из DB
 - `PATCH /api/sessions/:id` — переименование
 
 Модели:
@@ -198,111 +260,114 @@ REST management через HTTP. Использует `UnityWebRequest`.
 Инструменты:
 - `GET /api/tools/toolsets` — список toolset'ов
 
-Крон:
-- `GET /api/cron/jobs` — список задач
-- `POST /api/cron/jobs` — создание
-- `PUT /api/cron/jobs/:id` — обновление
-- `DELETE /api/cron/jobs/:id` — удаление
+### 6. ChatService
 
-Логи:
-- `GET /api/logs` — логи
+**Путь:** `Assets/Scripts/Runtime/Chat/ChatService.cs`
 
-Аналитика:
-- `GET /api/analytics/usage` — использование
+Единый сервис для обоих бэкендов. В Hermes-режиме работает через `IChatTransport` + `HermesSessionManager`.
 
-### 5. IChatTransport (новый, интерфейс)
+#### Multiplexed Streams
 
-**Путь:** `Assets/Scripts/Runtime/Api/IChatTransport.cs`
-
-Абстракция транспорта для ChatService.
+Для параллельных сессий используется `HermesStream` per display-session-id:
 
 ```csharp
-public interface IChatTransport
+private sealed class HermesStream
 {
-    bool IsConnected { get; }
-    
-    Task Connect(string url, string token);
-    Task Disconnect();
-    
-    Task SendMessage(string text);
-    Task Interrupt();
-    
-    // События
-    event Action OnStreamStarted;
-    event Action<string> OnDelta;
-    event Action<string> OnComplete;
-    event Action<string> OnReasoningDelta;
-    event Action<ToolCallPayload> OnToolUpdate;
-    event Action<ClarifyRequestPayload> OnClarifyRequest;
+    public string serverSessionId;
+    public ChatSession session;
+    public ChatViewModel viewModel;
+    public ChatMessage streamingMessage;
+    public StringBuilder buffer;
+    public StringBuilder reasoning;
+    public bool active;
+    public TaskCompletionSource<bool> complete;
+    public Action<string> tokenCb;        // UI callback, set only while foreground
+    public Action<string, string, string, string> toolCb;
 }
+
+private readonly Dictionary<string, HermesStream> _hermesStreams;
+private readonly HashSet<string> _attentionSessions; // pending approval/clarify
 ```
 
-**Реализации:**
-- `HermesWsTransport` — WebSocket JSON-RPC
-- `OpenAiHttpTransport` — HTTP REST + SSE (выносим из `OpenAiCompatibleClient`)
+**Ключевые методы:**
+- `GetOrCreateStream(sessionId)` — получить/создать поток для сессии
+- `DetachForegroundCallbacks()` — отвязать UI от текущего потока (при переключении)
+- `AttachForegroundStreamCallbacks(tokenCb, toolCb)` — повторно привязать UI
+- `SessionNeedsAttention(sessionId)` — есть ли pending approval/clarify
 
-### 6. Фичер-гейт
+#### Жизненный цикл сессии
 
-**Реализация:** `GlobalBackendSelector.IsHermesFeatureAvailable(feature)`
+```
+1. Select Provider
+   → SetMode(Hermes) → SetupHermes() → _chatTransport установлен
+   → НЕ подключён WS!
 
-**Фичи привязанные к Hermes:**
-- `sessions` — создание/восстановление сессий
-- `tools` — tool calls, clarify, approval
-- `kanban` — канбан-доска
-- `cron` — планировщик задач
-- `skills` — управление навыками
-- `reasoning` — thinking/reasoning стриминг
-- `approval` — ручной/approve/auto approve
-- `shell` — терминал/команды
+2. Load Sessions
+   → RestClient.ListSessions() → REST API, без WS
+   → Список отображается ✅
 
-**UI интеграция:**
-- Навигация: скрыть/показать вкладки
-- Кнопки: disable если фича недоступна
-- Настройки: показать/скрыть секции
+3. Click Session (Switch)
+   → SwitchToHermesSessionAsync()
+   → Если WS не подключён → ConnectHermes() → подключение
+   → ResumeHermesSessionAsync(dbId) → session.resume → WS RPC
+   → Загрузка истории из серверного ответа
+   → Переключение foreground
+
+4. Send Message
+   → EnsureForegroundSessionIdAsync()
+   → SendMessage(sessionId, text) → prompt.submit → WS RPC
+   → Streaming events → HermesStream → UI
+
+5. Delete Session
+   → CloseSession(runtimeId) → session.close → WS RPC (in-memory cleanup)
+   → RestClient.DeleteSession(dbId) → REST DELETE → DB cleanup
+```
 
 ---
 
-## Интеграция с существующим кодом
+## Сессии: ключевые сценарии
 
-### Что меняется
-
-1. **`ProviderConfig`** — добавить `BackendMode backendMode` (глобально, не per-provider)
-2. **`AppBootstrap`** — инициализация `GlobalBackendSelector` + выбор транспорта
-3. **`ChatService`** — работать через `IChatTransport` вместо прямого `OpenAiCompatibleClient`
-4. **`MainViewController`** — подписка на `GlobalBackendSelector.OnModeChanged` для UI обновлений
-
-### Что не меняется
-
-1. `OpenAiCompatibleClient` — остаётся для OpenAI режима
-2. `GenericOpenAiAdapter` — без изменений
-3. `HermesAdapter` — **замещается** `HermesGateway` + `HermesSessionManager` (новый WS-транспорт вместо HTTP-заголовков)
-4. Data layer — без изменений
-5. Avatar system — без изменений
-
-### Порядок интеграции
-
+### Создание
 ```
-Phase 1: Транспорт
-  ├── IChatTransport (интерфейс)
-  ├── HermesGateway (WS JSON-RPC)
-  ├── HermesSessionManager (сессии)
-  └── HermesRestClient (REST management)
+session.create → {session_id: runtime, stored_session_id: db}
+Клиент хранит: providerSessionId = db, providerRuntimeSessionId = runtime
+```
 
-Phase 2: Связывание
-  ├── GlobalBackendSelector
-  ├── ChatService → IChatTransport
-  └── AppBootstrap → выбор транспорта
+### Восстановление
+```
+session.resume(db_id) → {session_id: new_runtime, messages: [...]}
+Клиент загружает историю из ответа, хранит runtime id для RPC
+```
 
-Phase 3: UI
-  ├── Бэкенд-селектор в Providers экране
-  ├── Фичер-гейт (навигация, кнопки)
-  └── Hermes-специфичный UI (сессии, tools, clarify)
+### Закрытие
+```
+session.close(runtime_id) → убирает из in-memory dict
+Не удаляет из DB! Только снимает live-привязку.
+```
 
-Phase 4: Фичи
-  ├── Session history (список сессий)
-  ├── Tool calls display
-  ├── Clarify flow
-  └── Approval flow
+### Удаление
+```
+session.close(runtime_id) → in-memory cleanup
+DELETE /api/sessions/{db_id} → физическое удаление из SQLite
+  - DELETE FROM messages WHERE session_id = ?
+  - DELETE FROM sessions WHERE id = ?
+  - Орфанение дочерних сессий (parent_session_id → NULL)
+```
+
+### Параллельный стриминг
+```
+Сессия A: prompt.submit → message.start → message.delta* → message.complete
+Сессия B: prompt.submit → message.start → message.delta* → message.complete
+UI показывает foreground; background работает в HermesStream
+```
+
+### Переключение mid-stream
+```
+Foreground: A (стримится)
+User кликает B
+→ DetachForegroundCallbacks() — A продолжает в фоне
+→ ResumeHermesSessionAsync(B) или GetStream(B) — re-attach к B
+→ Если B тоже стримится → привязать UI callbacks к B
 ```
 
 ---
@@ -326,6 +391,22 @@ https://example.com/api/* → http://127.0.0.1:8642/api/*
 WebSocket: ws://localhost:8642/api/ws
 REST:      http://localhost:8642/api/*
 ```
+
+---
+
+## Фичер-гейт
+
+**Реализация:** `GlobalBackendSelector.IsFeatureAvailable(feature)`
+
+**Фичи привязанные к Hermes:**
+- `sessions` — создание/восстановление сессий
+- `tools` — tool calls, clarify, approval
+- `kanban` — канбан-доска
+- `cron` — планировщик задач
+- `skills` — управление навыками
+- `reasoning` — thinking/reasoning стриминг
+- `approval` — ручной/approve/auto approve
+- `shell` — терминал/команды
 
 ---
 
@@ -354,14 +435,16 @@ REST:      http://localhost:8642/api/*
 
 ## Питфоли
 
-1. **WebSocketSharp vs ClientWebSocket** — reference использует WebSocketSharp (внешняя библиотека). В neon-companion использовать `System.Net.WebSockets.ClientWebSocket` — он встроен в Unity и не требует дополнительных зависимостей.
+1. **SetMode() не подключает WS** — `SetupHermes()` только создаёт SessionManager. `ConnectHermes()` нужен отдельно. Без него WS RPC молча не работают.
 
-2. **Reconnect** — при разрыве WS нужно автоматически переподключаться с exponential backoff. Не переподключаться если пользователь сменил бэкенд на OpenAI.
+2. **Reconnect** — при разрыве WS автоматически переподключается с exponential backoff. Не переподключается если пользователь сменил бэкенд на OpenAI.
 
-3. **Thread safety** — WS callback'и приходят не в main thread. Для обновления UI нужно диспатчить в main thread через `await UniTask.SwitchToMainThread()` или `UnitySynchronizationContext`.
+3. **Thread safety** — WS callback'и приходят не в main thread. Для UI обновлений используется Unity main thread dispatch.
 
-4. **Event ordering** — message.start → message.delta*N → message.complete. Если пришёл delta без start — игнорировать или создать виртуальный start.
+4. **Event routing** — события приходят с `runtime session_id`. Клиент транслирует через `DisplaySessionIdFor()` → `ActiveSessionId` comparison. Stale events от закрытых сессий игнорируются.
 
-5. **Session mismatch** — events приходят с `session_id`. Если сессия уже закрыта/сменена — игнорировать stale events.
+5. **Session mismatch** — events приходят с `session_id` (runtime). Если сессия уже закрыта/сменена — игнорировать stale events.
 
 6. **REST через тот же URL** — HermesRestClient использует `https://example.com/api/*`. Это тот же домен что и WebSocket, nginx проксирует оба протокола.
+
+7. **Bulk delete** — `db.delete_sessions()` существует в DB-слое, но не экспортируется через REST/WS. Удаление по одной через `DELETE /api/sessions/{id}`.

@@ -14,7 +14,9 @@
 
 ### Поля ChatSession (расширенные)
 - `selectedModel` — выбранная модель для текущей сессии
-- `providerSessionId` — идентификатор сессии провайдера (`X-Hermes-Session-Id`)
+- `providerSessionId` — display/DB id сессии (Hermes: `stored_session_id` из `session.create`, используется для REST API и UI)
+- `providerRuntimeSessionId` — runtime id сессии (Hermes: `session_id` из `session.create`, используется для WS RPC: `prompt.submit`, `session.interrupt`)
+- `messageCount` — количество сообщений с сервера (для отображения в sidebar когда локальный `messages` пуст)
 
 ### Поля ChatMessage (расширенные)
 - `model` — модель, использовавшаяся для генерации сообщения

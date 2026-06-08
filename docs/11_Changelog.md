@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 ### Added
+- **Multiplexed session transport** — IChatTransport events now carry `sessionId` for parallel session streaming. Per-session busy/awaiting/runtime-info state in `HermesSessionManager`. `ChatService` owns `HermesStream` per display-session-id with independent buffers, callbacks, and TCS. Background sessions generate silently; foreground re-attach preserves partial replies.
+- **Session status indicators** — sidebar shows per-session pulsing dots: cyan = generating, orange = needs attention (pending approval/clarify). `SessionNeedsAttention()` / `IsSessionGenerating()` on ChatService.
+- **Session listing via WS** — `session.list` RPC in `HermesSessionManager.ListSessions()`. Server DB is source of truth for session history; local JSON repo ignored in Hermes mode.
+- **Session deletion** — `CloseSession()` (WS `session.close` for in-memory cleanup) + `RestClient.DeleteSession()` (REST `DELETE /api/sessions/{id}` for physical DB removal). Orphaning of child sessions, FK-safe.
+- **Runtime vs display ID mapping** — `session.create` returns both `session_id` (runtime) and `stored_session_id` (DB). Client translates via `_runtimeByDisplaySession` / `_displayByRuntimeSession`. WS events route correctly across session switches.
+- **WS connection guard** — `SwitchToHermesSessionAsync` ensures WS is connected before `ResumeSession` (fixes silent failure when switching sessions before first `StartNewSession`).
+
+### Changed
+- `IChatTransport` interface: `SendMessage(sessionId, text)`, `Interrupt(sessionId)` — session-aware. Events carry `Action<string, ...>` signatures.
+- `HermesSessionManager`: single `Busy`/`AwaitingResponse` → per-session dictionaries `IsSessionBusy(sessionId)`, `RuntimeInfoFor(sessionId)`.
+- `ChatService.SendViaTransport()`: pinned to foreground session's stream context; mid-send UI switch doesn't misroute tokens.
+- `ChatController`: `IsForegroundGenerating()` gates queue drain and send button per-session. `OnForegroundSessionChanged()` re-attach or abort streaming animation.
+- `SessionHistoryController`: `RerenderStatus()` for live status dot refresh without server round-trip.
+
+### Fixed
+- **Cannot open sessions after provider selection** — `SetMode(Hermes)` creates transport but doesn't connect WS. `SwitchToHermesSessionAsync` now calls `ConnectHermes()` when `IsConnected` is false.
+- **ResumeHermesSessionAsync silent failure** — added `IsConnected` guard to prevent RPC on closed socket.
+- **Foreground stream misroute** — send now pinned to `sendSid`; completion renders only if user still views the target session.
+- **Message queue cross-session drain** — queue only processes when foreground is idle.
+
 - **Terminal remote execution for Hermes** — Phase 2 WS RPC: `terminal.execute` event handler + `terminal.respond` RPC. Client executes via ProcessExecutionService (local shell on user machine) and responds with stdout/stderr/exit/timed_out. Follows exact clarify/approval request-respond pattern (GatewayEvents, IsActiveEvent, Handle*, RespondTo*). Bridge in MainViewController subscribes OnTerminalExecute (Hermes-only), lazy-inits TerminalController, calls ExecuteRemoteCommand + RespondToTerminal. C# 9 compliant, no chat code changes beyond wiring.
 - **Terminal emulator** — VT100/ANSI-compatible terminal emulator: `VtParser` (CSI/OSC/DCS sequence parsing), `ScreenBuffer` (2D cell grid with scrollback), `TerminalEmulator` (state machine: cursor movement, colors, erase, scroll, modes), `TerminalCell`/`TerminalColor`/`TerminalPalette` data model. Full VT sequence support: cursor ops, erase, scroll, SGR attributes (256-color + 24-bit), mode set/reset (DECAWM, DECOM, DECTCEM, bracketed paste).
 - **PersistentShellService** — гибрид one-shot + persistent PTY для терминальных команд агента. Most commands: one-shot через ProcessExecutionService (надёжно, чистый exit code). Persistent PTY: через IPtySession когда нужна сессия (env/venv/cd persists). Маркер-based вывод изPTY. Зарегистрирован как инструмент в ToolRegistry.
