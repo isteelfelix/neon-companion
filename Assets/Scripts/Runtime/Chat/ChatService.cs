@@ -182,6 +182,9 @@ namespace NeonCompanion.Runtime.Chat
             // Persist the current session before switching so mid-stream messages are not lost.
             SaveCurrentSession();
 
+            // Reset per-session token counter for the target session.
+            _previousSessionTotal = 0;
+
             // Re-read the target session from storage to get the latest messages
             // (the UI passes a potentially stale snapshot from the session list).
             var freshSessions = _sessionRepository.GetAll();
@@ -317,6 +320,9 @@ namespace NeonCompanion.Runtime.Chat
 
         public async Task StartNewSessionAsync()
         {
+            // Reset per-session token counter so first message stats are correct.
+            _previousSessionTotal = 0;
+
             // Hermes mode: create server-side session. Do not silently fall back to OpenAI/local mode.
             if (_chatTransport != null)
             {

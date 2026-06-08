@@ -711,13 +711,20 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 statsFooter.Add(statsLabel);
                 bubble.Add(statsFooter);
 
-                if (message.tokenCount > 0)
+                if (message.tokenCount > 0 || message.responseTimeSeconds > 0)
                 {
                     statsFooter.style.display = DisplayStyle.Flex;
                     double t = message.responseTimeSeconds > 0 ? message.responseTimeSeconds : 0.0;
                     string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
-                    string exact = template.Replace("~", string.Empty);
-                    statsLabel.text = string.Format(exact, message.tokenCount, t);
+                    if (message.tokenCount > 0)
+                    {
+                        string exact = template.Replace("~", string.Empty);
+                        statsLabel.text = string.Format(exact, message.tokenCount, t);
+                    }
+                    else
+                    {
+                        statsLabel.text = string.Format("{0:F1}s", t);
+                    }
                 }
                 else
                 {
