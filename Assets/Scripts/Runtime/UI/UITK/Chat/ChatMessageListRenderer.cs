@@ -811,7 +811,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (bubble == null || message == null || message.segments == null || message.segments.Count == 0)
                 return false;
 
-            var allText = new System.Text.StringBuilder();
             bool hasText = false;
 
             for (int i = 0; i < message.segments.Count; i++)
@@ -823,21 +822,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(segment.text))
                 {
-                    allText.Append(segment.text);
+                    bubble.Add(CreateTranscriptBody(segment.text, true));
                     hasText = true;
                 }
-            }
-
-            if (hasText)
-            {
-                bubble.Add(CreateTranscriptBody(allText.ToString(), true));
-            }
-
-            for (int i = 0; i < message.segments.Count; i++)
-            {
-                var segment = message.segments[i];
-                if (segment == null) continue;
-                if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
                 {
                     bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff, segment.details));
                 }
