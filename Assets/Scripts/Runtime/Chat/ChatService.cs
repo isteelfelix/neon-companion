@@ -32,6 +32,7 @@ namespace NeonCompanion.Runtime.Chat
         private bool _hermesStreamActive;
         private TaskCompletionSource<bool> _hermesGenerationComplete;
         private DateTime _hermesStreamStartTime;
+        private int _previousSessionTotal;
         private System.Text.StringBuilder _hermesReasoningBuffer;
         private string _hermesLastError;
 
@@ -986,7 +987,8 @@ namespace NeonCompanion.Runtime.Chat
                     var usage = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
                     if (usage != null && usage.total > 0)
                     {
-                        _hermesStreamingMessage.tokenCount = usage.total;
+                        _hermesStreamingMessage.tokenCount = usage.total - _previousSessionTotal;
+                        _previousSessionTotal = usage.total;
                         _hermesStreamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - _hermesStreamStartTime).TotalSeconds;
                     }
                 }
