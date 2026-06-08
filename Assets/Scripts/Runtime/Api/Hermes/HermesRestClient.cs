@@ -121,10 +121,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         // === Sessions ===
 
-        public async Task<PaginatedSessions> ListSessions(int limit = 40, int minMessages = 0)
+        public async Task<PaginatedSessions> ListSessions(int limit = 40, int minMessages = 0, int offset = 0)
         {
             return await Get<PaginatedSessions>(
-                "/api/sessions?limit=" + limit + "&offset=0&min_messages=" + minMessages);
+                "/api/sessions?limit=" + limit + "&offset=" + offset + "&min_messages=" + minMessages);
         }
 
         public async Task<JObject> SearchSessions(string query)

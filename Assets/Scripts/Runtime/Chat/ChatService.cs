@@ -24,17 +24,65 @@ namespace NeonCompanion.Runtime.Chat
         private ChatSession _currentSession;
         private ProviderConfig _currentProvider;
 
-        // Hermes streaming state
-        private Action<string> _hermesStreamTokenCallback;
-        private Action<string, string, string, string> _hermesToolProgressCallback;
-        private ChatMessage _hermesStreamingMessage;
-        private System.Text.StringBuilder _hermesStreamBuffer;
-        private bool _hermesStreamActive;
-        private TaskCompletionSource<bool> _hermesGenerationComplete;
-        private DateTime _hermesStreamStartTime;
-        private int _previousSessionTotal;
-        private System.Text.StringBuilder _hermesReasoningBuffer;
-        private string _hermesLastError;
+        // Hermes streaming state — multiplexed per display/persisted session id so several
+        // sessions can stream in parallel. Each session owns its ChatViewModel/messages and
+        // streaming buffers, independent of which session the UI currently views (the foreground).
+        private sealed class HermesStream
+        {
+            public string serverSessionId;
+            public ChatSession session;                 // in-memory foreground record (not persisted)
+            public ChatViewModel viewModel;             // owns Messages for this session
+            public ChatMessage streamingMessage;
+            public System.Text.StringBuilder buffer;
+            public System.Text.StringBuilder reasoning;
+            public bool active;
+            public DateTime startTime;
+            public int previousTotal;
+            public TaskCompletionSource<bool> complete;
+            public Action<string> tokenCb;                              // UI; set only while foreground
+            public Action<string, string, string, string> toolCb;      // UI; set only while foreground
+            public string lastError;
+        }
+
+        private readonly Dictionary<string, HermesStream> _hermesStreams =
+            new Dictionary<string, HermesStream>();
+
+        // Sessions with a pending approval/clarify request that hasn't been shown yet (because the
+        // session was in the background). Drives the sidebar "needs attention" badge.
+        private readonly HashSet<string> _attentionSessions = new HashSet<string>();
+
+        /// <summary>
+        /// Raised when a session's display state changes (generation started/finished, or a
+        /// pending approval/clarify appeared/cleared) so the sidebar can refresh its indicators.
+        /// </summary>
+        public event Action OnSessionStatesChanged;
+
+        private void RaiseSessionStatesChanged()
+        {
+            try { OnSessionStatesChanged?.Invoke(); } catch { }
+        }
+
+        /// <summary>True if the session has a pending approval/clarify awaiting the user.</summary>
+        public bool SessionNeedsAttention(string sessionId)
+        {
+            return !string.IsNullOrEmpty(sessionId) && _attentionSessions.Contains(sessionId);
+        }
+
+        /// <summary>Flag a background session as awaiting user input (approval/clarify).</summary>
+        public void MarkSessionAttention(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId)) return;
+            if (_attentionSessions.Add(sessionId))
+                RaiseSessionStatesChanged();
+        }
+
+        /// <summary>Clear the awaiting-input flag for a session (request shown or answered).</summary>
+        public void ClearSessionAttention(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId)) return;
+            if (_attentionSessions.Remove(sessionId))
+                RaiseSessionStatesChanged();
+        }
 
         public event Action<string> OnAssistantResponse;
 
@@ -55,9 +103,15 @@ namespace NeonCompanion.Runtime.Chat
                 _chatTransport.OnError -= HandleHermesError;
             }
 
+            // Per-session streams belong to the previous transport/connection — drop them so a
+            // mode change (or reconnect) starts clean.
+            foreach (var kv in _hermesStreams)
+                ClearStreamPendingState(kv.Value);
+            _hermesStreams.Clear();
+
             _chatTransport = transport;
 
-            // Wire new transport
+            // Wire new transport (session-aware multiplexed events)
             if (_chatTransport != null)
             {
                 _chatTransport.OnStreamStarted += HandleHermesStreamStarted;
@@ -124,15 +178,138 @@ namespace NeonCompanion.Runtime.Chat
             return _currentChatViewModel;
         }
 
+        /// <summary>True when the Hermes multiplexed transport is the active backend.</summary>
+        public bool IsHermesActive => _chatTransport != null;
+
+        /// <summary>
+        /// True if the given session currently has a generation in flight (Hermes parallel
+        /// sessions). Used by the UI to gate the send button / message queue per session.
+        /// </summary>
+        public bool IsSessionGenerating(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return false;
+            var mgr = GlobalBackendSelector.Instance?.SessionManager;
+            if (mgr != null && mgr.IsSessionBusy(sessionId))
+                return true;
+            HermesStream s = GetStream(sessionId);
+            return s != null && (s.active || s.complete != null);
+        }
+
+        /// <summary>
+        /// Ensure the foreground chat has a stable session id before streaming begins, and return
+        /// it. For Hermes this creates the server session up-front so the send is pinned to a known
+        /// id (and the view model is not swapped mid-send). Returns null if no session could be made.
+        /// </summary>
+        public async Task<string> EnsureForegroundSessionIdAsync()
+        {
+            if (_chatTransport != null)
+            {
+                await EnsureHermesSessionReadyAsync();
+                return _currentSession?.providerSessionId;
+            }
+            if (_currentSession == null)
+                await StartNewSessionAsync();
+            return _currentSession?.sessionId;
+        }
+
+        /// <summary>
+        /// Re-point the foreground session's live stream callbacks at the UI (used when switching
+        /// back to a session that is still generating). No-op if the session has no live stream.
+        /// Returns the partial assistant text accumulated so far, or null.
+        /// </summary>
+        public string AttachForegroundStreamCallbacks(Action<string> tokenCb, Action<string, string, string, string> toolCb)
+        {
+            string sid = _currentSession?.providerSessionId;
+            HermesStream s = GetStream(sid);
+            if (s == null || !s.active || s.streamingMessage == null)
+                return null;
+            s.tokenCb = tokenCb;
+            s.toolCb = toolCb;
+            return s.streamingMessage.content;
+        }
+
+        /// <summary>
+        /// The in-progress assistant message of the foreground session's live stream, or null.
+        /// Used by the UI to exclude it from a snapshot render and re-attach the streaming bubble.
+        /// </summary>
+        public ChatMessage GetForegroundStreamingMessage()
+        {
+            string sid = _currentSession?.providerSessionId;
+            HermesStream s = GetStream(sid);
+            return (s != null && s.active && s.streamingMessage != null) ? s.streamingMessage : null;
+        }
+
         public async Task<List<ChatSession>> GetAllSessionsAsync()
         {
+            // Hermes: the gateway DB is the source of truth — list server sessions.
+            if (_chatTransport != null)
+                return await GetHermesSessionsAsDisplayAsync();
+
             return await Task.FromResult(GetSortedSessions());
+        }
+
+        /// <summary>Map Hermes REST sessions into ChatSession display items (Hermes mode).</summary>
+        private async Task<List<ChatSession>> GetHermesSessionsAsDisplayAsync()
+        {
+            var list = new List<ChatSession>();
+            List<HermesSession> server;
+            try
+            {
+                server = await GetHermesSessionsAsync();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("[ChatService] Hermes sessions fetch failed: " + ex.Message);
+                return list;
+            }
+
+            string providerId = _currentProvider?.id;
+            for (int i = 0; i < server.Count; i++)
+            {
+                HermesSession hs = server[i];
+                if (hs == null || string.IsNullOrEmpty(hs.id))
+                    continue;
+
+                string title = !string.IsNullOrWhiteSpace(hs.title)
+                    ? hs.title
+                    : (!string.IsNullOrWhiteSpace(hs.preview) ? hs.preview : "Hermes session");
+
+                list.Add(new ChatSession
+                {
+                    sessionId = hs.id,
+                    providerId = providerId,
+                    providerSessionId = hs.id,
+                    providerRuntimeSessionId = null,
+                    selectedModel = hs.model,
+                    title = title,
+                    updatedAtUnix = hs.last_active > 0 ? hs.last_active : hs.started_at,
+                    messages = new List<ChatMessage>(),
+                    messageCount = hs.message_count,
+                    folder = string.Empty
+                });
+            }
+
+            return list;
         }
 
         public async Task DeleteSessionAsync(string sessionId)
         {
             if (string.IsNullOrWhiteSpace(sessionId))
                 return;
+
+            // Hermes: delete on the server (source of truth) and drop the in-memory stream.
+            if (_chatTransport != null)
+            {
+                await DeleteHermesSessionAsync(sessionId);
+                _hermesStreams.Remove(sessionId);
+                if (_currentSession != null &&
+                    string.Equals(_currentSession.providerSessionId, sessionId, StringComparison.Ordinal))
+                {
+                    ClearCurrentSessionWithoutSaving();
+                }
+                return;
+            }
 
             var sessions = _sessionRepository.GetAll();
             var index = sessions.FindIndex(s => s.sessionId == sessionId);
@@ -179,11 +356,16 @@ namespace NeonCompanion.Runtime.Chat
         {
             if (session == null) return;
 
+            // Hermes: server is the source of truth and sessions multiplex — switch foreground
+            // without disturbing any in-flight background stream.
+            if (_chatTransport != null)
+            {
+                await SwitchToHermesSessionAsync(session, preferredProviderId);
+                return;
+            }
+
             // Persist the current session before switching so mid-stream messages are not lost.
             SaveCurrentSession();
-
-            // Reset per-session token counter for the target session.
-            _previousSessionTotal = 0;
 
             // Re-read the target session from storage to get the latest messages
             // (the UI passes a potentially stale snapshot from the session list).
@@ -229,6 +411,59 @@ namespace NeonCompanion.Runtime.Chat
             NeonLogger.Log($"Switched to session {session.sessionId}");
         }
 
+        /// <summary>
+        /// Switch the foreground Hermes session. The server holds history; an in-flight background
+        /// stream for the target is re-attached in place (no resume) so its partial reply is kept.
+        /// </summary>
+        private async Task SwitchToHermesSessionAsync(ChatSession session, string preferredProviderId)
+        {
+            string serverId = !string.IsNullOrWhiteSpace(session.providerSessionId)
+                ? session.providerSessionId
+                : session.sessionId;
+
+            // Leave the previous foreground stream running silently in the background.
+            DetachForegroundCallbacks();
+
+            var sessionProvider = await TryGetProviderByIdAsync(session.providerId);
+            var fallbackCurrent = _currentProvider != null && _currentProvider.isEnabled ? _currentProvider : null;
+            _currentProvider = sessionProvider
+                ?? await TryGetProviderByIdAsync(preferredProviderId)
+                ?? fallbackCurrent
+                ?? await GetActiveProviderForCurrentBackendAsync();
+
+            if (_currentProvider == null || !_currentProvider.isEnabled)
+            {
+                ClearCurrentSessionWithoutSaving();
+                NeonLogger.LogWarning("[ChatService] Hermes provider is not available — session not opened.");
+                return;
+            }
+            SyncFromProvider(_currentProvider);
+
+            HermesStream existing = GetStream(serverId);
+            if (existing != null && existing.viewModel != null)
+            {
+                // Live re-attach: reuse the in-memory stream (it may still be generating).
+                _currentChatViewModel = existing.viewModel;
+                _currentSession = existing.session;
+                ApplyGenerationSettings();
+            }
+            else
+            {
+                // Load history from the server (source of truth) and register a stream for it.
+                await ResumeHermesSessionAsync(serverId);
+                HermesStream s = GetOrCreateStream(serverId);
+                s.viewModel = _currentChatViewModel;
+                s.session = _currentSession;
+            }
+
+            // Foreground hint drives RuntimeInfo (context bar) and foreground-only handlers.
+            var mgr = GlobalBackendSelector.Instance?.SessionManager;
+            if (mgr != null)
+                mgr.SetForegroundSession(serverId);
+
+            NeonLogger.Log($"Switched to Hermes session {serverId}");
+        }
+
         public async Task ClearCurrentSessionAsync()
         {
             if (_currentChatViewModel == null) return;
@@ -239,6 +474,7 @@ namespace NeonCompanion.Runtime.Chat
             {
                 _currentSession.messages.Clear();
                 _currentSession.providerSessionId = null;
+                _currentSession.providerRuntimeSessionId = null;
                 if (_currentChatViewModel != null)
                     _currentChatViewModel.ProviderSessionId = null;
                 SaveCurrentSession();
@@ -320,9 +556,6 @@ namespace NeonCompanion.Runtime.Chat
 
         public async Task StartNewSessionAsync()
         {
-            // Reset per-session token counter so first message stats are correct.
-            _previousSessionTotal = 0;
-
             // Hermes mode: create server-side session. Do not silently fall back to OpenAI/local mode.
             if (_chatTransport != null)
             {
@@ -445,9 +678,12 @@ namespace NeonCompanion.Runtime.Chat
 
                 _currentSession = new ChatSession
                 {
-                    sessionId = Guid.NewGuid().ToString(),
+                    // In Hermes mode the display id is the persisted DB id when Hermes provides
+                    // one; runtime RPC calls are routed through providerRuntimeSessionId mapping.
+                    sessionId = persistentSessionId,
                     providerId = _currentProvider?.id,
                     providerSessionId = persistentSessionId,
+                    providerRuntimeSessionId = response.session_id,
                     selectedModel = response.info?.model ?? _currentProvider?.defaultModel,
                     title = response.info?.title ?? "Hermes session",
                     updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
@@ -474,8 +710,10 @@ namespace NeonCompanion.Runtime.Chat
             _currentChatViewModel.SelectedModel = response.info?.model ?? _currentProvider?.defaultModel;
             ApplyGenerationSettings();
 
+            _currentSession.sessionId = persistentSessionId;
             _currentSession.providerId = _currentProvider?.id ?? _currentSession.providerId;
             _currentSession.providerSessionId = persistentSessionId;
+            _currentSession.providerRuntimeSessionId = response.session_id;
             _currentSession.selectedModel = _currentChatViewModel.SelectedModel;
             if (string.IsNullOrWhiteSpace(_currentSession.title) || _currentSession.title == "New chat")
                 _currentSession.title = response.info?.title ?? _currentSession.title;
@@ -495,7 +733,10 @@ namespace NeonCompanion.Runtime.Chat
         }
 
         /// <summary>
-        /// Resume an existing Hermes session via WebSocket.
+        /// Resume an existing Hermes session via WebSocket and load its history from the server.
+        /// In Hermes mode the server is the source of truth, so the local view model is rebuilt
+        /// entirely from the resume response. The display id remains the persisted DB id, while
+        /// providerRuntimeSessionId stores the live id used for prompt.submit.
         /// </summary>
         public async Task ResumeHermesSessionAsync(string hermesSessionId)
         {
@@ -504,16 +745,19 @@ namespace NeonCompanion.Runtime.Chat
                 return;
 
             var response = await selector.SessionManager.ResumeSession(hermesSessionId);
+            string displaySessionId = !string.IsNullOrWhiteSpace(response.stored_session_id)
+                ? response.stored_session_id
+                : hermesSessionId;
 
             if (_currentProvider == null)
                 _currentProvider = await ResolveProviderAsync();
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
-            _currentChatViewModel.ProviderSessionId = hermesSessionId;
+            _currentChatViewModel.ProviderSessionId = displaySessionId;
             _currentChatViewModel.SelectedModel = response.info?.model ?? _currentProvider?.defaultModel;
             ApplyGenerationSettings();
 
-            // Load messages from response
+            // Load messages from the server response (source of truth).
             _currentChatViewModel.Messages.Clear();
             if (response.messages != null)
             {
@@ -530,53 +774,20 @@ namespace NeonCompanion.Runtime.Chat
                 }
             }
 
-            // If we already have the local session for this provider session (e.g. the user opened
-            // it from history and we're only reconnecting the server side), update it in place.
-            // Minting a new sessionId here spawned a duplicate "new chat" every time an old chat
-            // was resumed after restart — which is exactly the reported bug.
-            bool reuseExisting = _currentSession != null &&
-                string.Equals(_currentSession.providerSessionId, hermesSessionId, StringComparison.Ordinal);
-
-            if (reuseExisting)
+            _currentSession = new ChatSession
             {
-                _currentSession.providerId = _currentProvider?.id;
-                _currentSession.providerSessionId = hermesSessionId;
-                _currentSession.selectedModel = response.info?.model ?? _currentSession.selectedModel ?? _currentProvider?.defaultModel;
-                if (string.IsNullOrWhiteSpace(_currentSession.title) || _currentSession.title == "New chat")
-                    _currentSession.title = response.info?.title ?? _currentSession.title;
+                sessionId = displaySessionId,
+                providerId = _currentProvider?.id,
+                providerSessionId = displaySessionId,
+                providerRuntimeSessionId = response.session_id,
+                selectedModel = response.info?.model ?? _currentProvider?.defaultModel,
+                title = response.info?.title ?? "Hermes session",
+                updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                messages = new List<ChatMessage>(_currentChatViewModel.Messages),
+                folder = string.Empty
+            };
 
-                // Trust server history only when it returned messages; otherwise keep the local copy
-                // so reopening a chat never wipes its contents.
-                if (_currentChatViewModel.Messages.Count > 0)
-                {
-                    _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
-                }
-                else if (_currentSession.messages != null)
-                {
-                    _currentChatViewModel.Messages.Clear();
-                    for (int i = 0; i < _currentSession.messages.Count; i++)
-                        _currentChatViewModel.Messages.Add(_currentSession.messages[i]);
-                }
-
-                _currentSession.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            }
-            else
-            {
-                _currentSession = new ChatSession
-                {
-                    sessionId = Guid.NewGuid().ToString(),
-                    providerId = _currentProvider?.id,
-                    providerSessionId = hermesSessionId,
-                    selectedModel = response.info?.model ?? _currentProvider?.defaultModel,
-                    title = response.info?.title ?? "Hermes session",
-                    updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                    messages = new List<ChatMessage>(_currentChatViewModel.Messages),
-                    folder = string.Empty
-                };
-            }
-
-            SaveCurrentSession();
-            NeonLogger.Log("Hermes session resumed: " + hermesSessionId);
+            NeonLogger.Log("Hermes session resumed: " + displaySessionId);
         }
 
         /// <summary>
@@ -590,10 +801,25 @@ namespace NeonCompanion.Runtime.Chat
 
             try
             {
-                var result = await selector.RestClient.ListSessions(40);
-                if (result?.sessions == null)
-                    return new List<HermesSession>();
-                return new List<HermesSession>(result.sessions);
+                var all = new List<HermesSession>();
+                int offset = 0;
+                const int pageSize = 100;
+
+                while (true)
+                {
+                    var result = await selector.RestClient.ListSessions(pageSize, 0, offset);
+                    if (result?.sessions == null || result.sessions.Length == 0)
+                        break;
+
+                    all.AddRange(result.sessions);
+
+                    int total = result.total > 0 ? result.total : all.Count;
+                    offset += result.sessions.Length;
+                    if (offset >= total || result.sessions.Length < pageSize)
+                        break;
+                }
+
+                return all;
             }
             catch (Exception ex)
             {
@@ -608,11 +834,14 @@ namespace NeonCompanion.Runtime.Chat
         public async Task DeleteHermesSessionAsync(string hermesSessionId)
         {
             var selector = GlobalBackendSelector.Instance;
-            if (selector?.RestClient == null)
+            if (selector == null || selector.RestClient == null)
                 return;
 
             try
             {
+                if (selector.SessionManager != null && selector.SessionManager.IsConnected)
+                    await selector.SessionManager.CloseSession(hermesSessionId);
+
                 await selector.RestClient.DeleteSession(hermesSessionId);
                 NeonLogger.Log("Hermes session deleted: " + hermesSessionId);
             }
@@ -626,7 +855,9 @@ namespace NeonCompanion.Runtime.Chat
         {
             if (_chatTransport != null && _chatTransport.IsConnected)
             {
-                _chatTransport.Interrupt();
+                string sid = _currentSession?.providerSessionId;
+                if (!string.IsNullOrEmpty(sid))
+                    _ = _chatTransport.Interrupt(sid);
                 return;
             }
             _currentChatViewModel?.CancelGeneration();
@@ -739,63 +970,56 @@ namespace NeonCompanion.Runtime.Chat
         }
 
         /// <summary>
-        /// Send a message via Hermes WebSocket transport.
+        /// Send a message via Hermes WebSocket transport. The send is pinned to the foreground
+        /// session's id and streams into that session's own context — switching the UI to another
+        /// session does not disturb or misroute this generation.
         /// </summary>
         private async Task SendViaTransport(string message, IReadOnlyList<ChatAttachment> attachments = null, Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
         {
             if (_chatTransport == null)
                 return;
 
-            // Store callbacks for streaming events
-            _hermesStreamTokenCallback = onStreamToken;
-            _hermesToolProgressCallback = onToolProgress;
-            _hermesStreamBuffer = new System.Text.StringBuilder();
-            _hermesStreamActive = false;
-            _hermesLastError = null;
+            // Ensure the foreground chat has a server session id (create if brand-new).
+            await EnsureHermesSessionReadyAsync();
+            if (_currentChatViewModel == null)
+                await GetOrCreateChatAsync();
 
-            // Create a TCS so we can wait for message.complete before returning.
-            // Without this, SendViaTransport returns after the RPC ack (prompt.submit)
-            // while WS streaming events arrive later — causing the streaming bubble
-            // to be destroyed before any tokens are received.
-            _hermesGenerationComplete = new TaskCompletionSource<bool>();
+            string sid = _currentSession != null ? _currentSession.providerSessionId : null;
+            if (string.IsNullOrWhiteSpace(sid))
+                throw new InvalidOperationException("Hermes session id is missing.");
 
-            ChatMessage localUserMessage = null;
-            bool localUserMessageAdded = false;
+            // Pin this generation to the session's stream context. The transport multiplexes by
+            // session_id, so events route here regardless of which session the UI later views.
+            HermesStream stream = GetOrCreateStream(sid);
+            stream.viewModel = _currentChatViewModel;
+            stream.session = _currentSession;
+            stream.tokenCb = onStreamToken;
+            stream.toolCb = onToolProgress;
+            stream.lastError = null;
+            var completion = new TaskCompletionSource<bool>();
+            stream.complete = completion;
+
+            // Optimistic user bubble — removed only if the submit itself fails (e.g. session busy),
+            // because then the server never saw the message.
+            ChatMessage localUserMessage = new ChatMessage
+            {
+                role = "user",
+                content = message,
+                attachments = CloneChatAttachments(attachments),
+                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            };
+            if (!string.IsNullOrEmpty(_pendingVoiceAudioPath))
+            {
+                localUserMessage.audioPath         = _pendingVoiceAudioPath;
+                localUserMessage.audioDurationSecs = _pendingVoiceDurationSecs;
+                _pendingVoiceAudioPath    = null;
+                _pendingVoiceDurationSecs = 0f;
+            }
+            stream.viewModel.Messages.Add(localUserMessage);
+
             bool submitAcknowledged = false;
-
             try
             {
-                await EnsureHermesSessionReadyAsync();
-
-                // Add user message to local history optimistically, but only keep it if
-                // prompt.submit succeeds. Hermes can reject the submit with "session busy";
-                // in that case the server never saw the message, so keeping a local bubble
-                // makes the transcript lie to the user.
-                if (_currentChatViewModel == null)
-                {
-                    await GetOrCreateChatAsync();
-                }
-
-                localUserMessage = new ChatMessage
-                {
-                    role = "user",
-                    content = message,
-                    attachments = CloneChatAttachments(attachments),
-                    unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                };
-                if (!string.IsNullOrEmpty(_pendingVoiceAudioPath))
-                {
-                    localUserMessage.audioPath         = _pendingVoiceAudioPath;
-                    localUserMessage.audioDurationSecs = _pendingVoiceDurationSecs;
-                    _pendingVoiceAudioPath    = null;
-                    _pendingVoiceDurationSecs = 0f;
-                }
-                _currentChatViewModel.Messages.Add(localUserMessage);
-                localUserMessageAdded = true;
-                // Sync session immediately so switching sessions mid-stream
-                // doesn't lose the user message (session carries stale data).
-                _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
-
                 // Attach images to the Hermes session first, then submit text normally.
                 if (attachments != null && attachments.Count > 0)
                 {
@@ -815,66 +1039,153 @@ namespace NeonCompanion.Runtime.Chat
                         }
 
                         if (!string.IsNullOrEmpty(b64))
-                            await _chatTransport.AttachImageBytes(b64);
+                            await _chatTransport.AttachImageBytes(sid, b64);
                     }
                 }
 
-                // Send via WebSocket — this returns after RPC ack
-                await _chatTransport.SendMessage(message);
+                // Send via WebSocket — this returns after RPC ack.
+                await _chatTransport.SendMessage(sid, message);
                 submitAcknowledged = true;
 
                 // Wait for generation to complete (message.complete or error/disconnect).
-                // Use a generous timeout so long-running generations don't hang forever.
                 var completedTask = await Task.WhenAny(
-                    _hermesGenerationComplete.Task,
+                    completion.Task,
                     Task.Delay(300000)); // 5 min safety timeout
 
-                if (completedTask != _hermesGenerationComplete.Task)
+                if (completedTask != completion.Task)
                 {
                     NeonLogger.LogWarning("[Hermes] Generation timed out after 5 minutes");
                 }
                 else
                 {
-                    bool completed = await _hermesGenerationComplete.Task;
+                    bool completed = await completion.Task;
                     if (!completed)
                     {
-                        string error = string.IsNullOrWhiteSpace(_hermesLastError)
+                        string error = string.IsNullOrWhiteSpace(stream.lastError)
                             ? "Hermes generation failed."
-                            : _hermesLastError;
+                            : stream.lastError;
                         throw new InvalidOperationException(error);
                     }
                 }
-
-                _hermesGenerationComplete = null;
-                SaveCurrentSession();
             }
             catch
             {
-                if (!submitAcknowledged && localUserMessageAdded && _currentChatViewModel?.Messages != null)
-                {
-                    _currentChatViewModel.Messages.Remove(localUserMessage);
-                    SaveCurrentSession();
-                }
-
-                ClearHermesPendingGenerationState();
+                if (!submitAcknowledged && stream.viewModel != null && stream.viewModel.Messages != null)
+                    stream.viewModel.Messages.Remove(localUserMessage);
+                ClearStreamPendingState(stream);
                 throw;
+            }
+            finally
+            {
+                if (stream.complete == completion)
+                    stream.complete = null;
             }
         }
 
-        private void ClearHermesPendingGenerationState()
+        private HermesStream GetStream(string sessionId)
         {
-            _hermesGenerationComplete?.TrySetResult(false);
-            _hermesGenerationComplete = null;
-            _hermesStreamActive = false;
-            _hermesStreamingMessage = null;
-            _hermesStreamBuffer = null;
-            _hermesStreamTokenCallback = null;
-            _hermesToolProgressCallback = null;
-            _hermesLastError = null;
+            if (string.IsNullOrEmpty(sessionId))
+                return null;
+            HermesStream s;
+            return _hermesStreams.TryGetValue(sessionId, out s) ? s : null;
+        }
+
+        private HermesStream GetOrCreateStream(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return null;
+            HermesStream s;
+            if (_hermesStreams.TryGetValue(sessionId, out s))
+                return s;
+
+            s = new HermesStream();
+            s.serverSessionId = sessionId;
+            bool isForeground = _currentSession != null &&
+                string.Equals(_currentSession.providerSessionId, sessionId, StringComparison.Ordinal) &&
+                _currentChatViewModel != null;
+            if (isForeground)
+            {
+                s.viewModel = _currentChatViewModel;
+                s.session = _currentSession;
+            }
+            else
+            {
+                s.viewModel = new ChatViewModel(_aiClient, _currentProvider);
+                s.viewModel.ProviderSessionId = sessionId;
+                s.session = new ChatSession
+                {
+                    sessionId = sessionId,
+                    providerId = _currentProvider != null ? _currentProvider.id : null,
+                    providerSessionId = sessionId,
+                    providerRuntimeSessionId = null,
+                    messages = new List<ChatMessage>(),
+                    folder = string.Empty
+                };
+            }
+            _hermesStreams[sessionId] = s;
+            return s;
+        }
+
+        /// <summary>Begin (or reuse) the streaming assistant message for a session's stream.</summary>
+        private bool EnsureStreamingMessage(string sessionId)
+        {
+            HermesStream s = GetOrCreateStream(sessionId);
+            if (s == null || s.viewModel == null)
+                return false;
+
+            if (s.streamingMessage != null)
+            {
+                s.active = true;
+                if (s.buffer == null) s.buffer = new System.Text.StringBuilder();
+                if (s.reasoning == null) s.reasoning = new System.Text.StringBuilder();
+                return true;
+            }
+
+            s.active = true;
+            s.buffer = new System.Text.StringBuilder();
+            s.reasoning = new System.Text.StringBuilder();
+            s.startTime = DateTime.UtcNow;
+            s.streamingMessage = new ChatMessage
+            {
+                role = "assistant",
+                content = string.Empty,
+                model = string.Empty,
+                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            };
+            s.viewModel.Messages.Add(s.streamingMessage);
+            return true;
+        }
+
+        private static void ClearStreamPendingState(HermesStream stream)
+        {
+            if (stream == null)
+                return;
+            stream.complete?.TrySetResult(false);
+            stream.complete = null;
+            stream.active = false;
+            stream.streamingMessage = null;
+            stream.buffer = null;
+            stream.tokenCb = null;
+            stream.toolCb = null;
+            stream.lastError = null;
+        }
+
+        /// <summary>Detach the foreground UI callbacks so a stream keeps running silently in background.</summary>
+        private void DetachForegroundCallbacks()
+        {
+            string sid = _currentSession != null ? _currentSession.providerSessionId : null;
+            HermesStream s = GetStream(sid);
+            if (s != null)
+            {
+                s.tokenCb = null;
+                s.toolCb = null;
+            }
         }
 
         /// <summary>
-        /// Ensure the Hermes WebSocket transport has an active server-side session before sending.
+        /// Ensure the Hermes transport is connected and the foreground chat has a display id that
+        /// is mapped to a live runtime session id. After reconnects the mapping is gone, so resume
+        /// the persisted session before sending.
         /// </summary>
         private async Task EnsureHermesSessionReadyAsync()
         {
@@ -887,65 +1198,60 @@ namespace NeonCompanion.Runtime.Chat
                 await selector.ConnectHermes();
 
             string desired = _currentSession != null ? _currentSession.providerSessionId : null;
-
-            // The selected chat's server session takes priority over whatever the transport
-            // currently has active. After a restart (or after switching chats) the manager may
-            // hold a different/fresh ActiveSessionId; sending without re-pointing it would leak
-            // the old chat's message into a brand-new session (the reported bug).
             if (!string.IsNullOrWhiteSpace(desired))
             {
-                bool alreadyOnSelected =
-                    string.Equals(sessionManager.ActiveSessionId, desired, StringComparison.Ordinal) ||
-                    string.Equals(sessionManager.StoredSessionId, desired, StringComparison.Ordinal);
-                if (alreadyOnSelected)
-                    return;
-
-                // Resume can fail if the server-side session was cleaned up (e.g. WebSocket
-                // dropped on a previous app kill). Fall back to a fresh session in that case.
-                try
+                if (!sessionManager.HasRuntimeSessionFor(desired))
                 {
-                    await ResumeHermesSessionAsync(desired);
+                    try
+                    {
+                        await ResumeHermesSessionAsync(desired);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        NeonLogger.LogWarning("[Hermes] Session resume failed (" + ex.Message + "), binding a new remote session to the current chat.");
+                        _currentSession.providerSessionId = null;
+                        _currentSession.providerRuntimeSessionId = null;
+                        if (_currentChatViewModel != null)
+                            _currentChatViewModel.ProviderSessionId = null;
+                    }
+                }
+                else
+                {
+                    sessionManager.SetForegroundSession(desired);
                     return;
                 }
-                catch (Exception ex)
-                {
-                    NeonLogger.LogWarning("[Hermes] Session resume failed (" + ex.Message + "), binding a new remote session to the current chat.");
-                    _currentSession.providerSessionId = null;
-                    if (_currentChatViewModel != null)
-                        _currentChatViewModel.ProviderSessionId = null;
-                }
-
-                await StartHermesSessionAsync(false);
-                return;
             }
 
-            // The selected chat has no server session yet (older local history, imported chat,
-            // or a previous failed resume). Never adopt whatever ActiveSessionId happens to be
-            // in the transport: after restart or switching chats that can point at another chat.
-            // Instead create a fresh remote Hermes session and bind it to the current local chat.
             await StartHermesSessionAsync(_currentSession == null);
         }
 
-        // === Hermes Transport Event Handlers ===
+        // === Hermes Transport Event Handlers (multiplexed by display/persisted session id) ===
 
-        private void HandleHermesStreamStarted()
+        private void HandleHermesStreamStarted(string sessionId)
         {
-            BeginHermesStreamingMessage(true);
+            EnsureStreamingMessage(sessionId);
+            // A session began producing output — refresh the sidebar "working" indicator.
+            RaiseSessionStatesChanged();
         }
 
-        private void HandleHermesDelta(string text)
+        private void HandleHermesDelta(string sessionId, string text)
         {
-            if (string.IsNullOrEmpty(text) || !BeginHermesStreamingMessage(false))
+            if (string.IsNullOrEmpty(text) || !EnsureStreamingMessage(sessionId))
                 return;
 
-            _hermesStreamBuffer.Append(text);
-            _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
+            HermesStream s = GetStream(sessionId);
+            if (s == null || s.streamingMessage == null)
+                return;
+
+            s.buffer.Append(text);
+            s.streamingMessage.content = s.buffer.ToString();
 
             // Also add as text segment for interleaved rendering with tool segments
-            if (_hermesStreamingMessage.segments == null)
-                _hermesStreamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
-            ChatMessageSegment last = _hermesStreamingMessage.segments.Count > 0
-                ? _hermesStreamingMessage.segments[_hermesStreamingMessage.segments.Count - 1]
+            if (s.streamingMessage.segments == null)
+                s.streamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
+            ChatMessageSegment last = s.streamingMessage.segments.Count > 0
+                ? s.streamingMessage.segments[s.streamingMessage.segments.Count - 1]
                 : null;
             if (last != null && string.Equals(last.kind, ChatMessageSegment.TextKind, System.StringComparison.OrdinalIgnoreCase))
             {
@@ -953,86 +1259,101 @@ namespace NeonCompanion.Runtime.Chat
             }
             else
             {
-                _hermesStreamingMessage.segments.Add(new ChatMessageSegment
+                s.streamingMessage.segments.Add(new ChatMessageSegment
                 {
                     kind = ChatMessageSegment.TextKind,
                     text = text
                 });
             }
 
-            // Notify UI
-            _hermesStreamTokenCallback?.Invoke(text);
+            // Notify UI only if this session is the foreground (its callback is set).
+            s.tokenCb?.Invoke(text);
         }
 
-        private void HandleHermesComplete(string finalText)
+        private void HandleHermesComplete(string sessionId, string finalText)
         {
-            bool hadStreamingMessage = _hermesStreamingMessage != null;
+            HermesStream s = GetStream(sessionId);
+            bool hadStreamingMessage = s != null && s.streamingMessage != null;
             if (!hadStreamingMessage && !string.IsNullOrWhiteSpace(finalText))
-                BeginHermesStreamingMessage(false);
+            {
+                EnsureStreamingMessage(sessionId);
+                s = GetStream(sessionId);
+            }
 
-            if (_hermesStreamingMessage != null)
+            if (s != null && s.streamingMessage != null)
             {
                 string normalizedFinalText = null;
 
                 // Apply final text if we got one
                 if (!string.IsNullOrEmpty(finalText))
                 {
-                    _hermesStreamingMessage.content = finalText;
+                    s.streamingMessage.content = finalText;
                     normalizedFinalText = finalText;
                 }
-                else if (_hermesStreamBuffer != null && _hermesStreamBuffer.Length > 0)
+                else if (s.buffer != null && s.buffer.Length > 0)
                 {
-                    _hermesStreamingMessage.content = _hermesStreamBuffer.ToString();
-                    normalizedFinalText = _hermesStreamingMessage.content;
+                    s.streamingMessage.content = s.buffer.ToString();
+                    normalizedFinalText = s.streamingMessage.content;
                 }
 
-                NormalizeHermesFinalTextSegments(_hermesStreamingMessage, normalizedFinalText);
+                NormalizeHermesFinalTextSegments(s.streamingMessage, normalizedFinalText);
 
                 if (!hadStreamingMessage && !string.IsNullOrEmpty(normalizedFinalText))
-                    _hermesStreamTokenCallback?.Invoke(normalizedFinalText);
+                    s.tokenCb?.Invoke(normalizedFinalText);
 
                 // Store reasoning text for expandable display
-                if (_hermesReasoningBuffer != null && _hermesReasoningBuffer.Length > 0)
+                if (s.reasoning != null && s.reasoning.Length > 0)
                 {
-                    _hermesStreamingMessage.reasoning = _hermesReasoningBuffer.ToString();
+                    s.streamingMessage.reasoning = s.reasoning.ToString();
                 }
 
-                // Persist usage from gateway so stats footer survives re-render
+                // Persist usage from gateway (per session) so stats footer survives re-render
                 try
                 {
-                    var usage = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
+                    var usage = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfoFor(sessionId)?.usage;
                     if (usage != null && usage.total > 0)
                     {
-                        _hermesStreamingMessage.tokenCount = usage.total - _previousSessionTotal;
-                        _previousSessionTotal = usage.total;
-                        _hermesStreamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - _hermesStreamStartTime).TotalSeconds;
+                        s.streamingMessage.tokenCount = usage.total - s.previousTotal;
+                        s.previousTotal = usage.total;
+                        s.streamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - s.startTime).TotalSeconds;
                     }
                 }
                 catch { }
             }
 
-            _hermesStreamActive = false;
-            _hermesStreamingMessage = null;
-            _hermesStreamBuffer = null;
-            _hermesStreamTokenCallback = null;
-            _hermesToolProgressCallback = null;
-            _hermesLastError = null;
+            if (s != null)
+            {
+                bool isForeground = s.viewModel == _currentChatViewModel;
+                s.active = false;
+                s.streamingMessage = null;
+                s.buffer = null;
+                s.reasoning = null;
+                s.lastError = null;
 
-            // Signal SendViaTransport that generation is done
-            _hermesGenerationComplete?.TrySetResult(true);
+                // Signal the waiting SendViaTransport that generation is done.
+                s.complete?.TrySetResult(true);
 
-            EmitLatestAssistantResponse();
-            SaveCurrentSession();
+                // Emit only for the foreground session (drives avatar/TTS for what the user sees).
+                if (isForeground)
+                    EmitLatestAssistantResponse();
+            }
+            // Generation finished — refresh the sidebar "working" indicator.
+            RaiseSessionStatesChanged();
+            // Server is the source of truth in Hermes mode — no local persistence.
         }
 
-        private void HandleHermesToolUpdate(ToolCallUpdate update)
+        private void HandleHermesToolUpdate(string sessionId, ToolCallUpdate update)
         {
-            if (update == null || !BeginHermesStreamingMessage(false))
+            if (update == null || !EnsureStreamingMessage(sessionId))
+                return;
+
+            HermesStream s = GetStream(sessionId);
+            if (s == null || s.streamingMessage == null)
                 return;
 
             // Add tool segment to streaming message
-            if (_hermesStreamingMessage.segments == null)
-                _hermesStreamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
+            if (s.streamingMessage.segments == null)
+                s.streamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
 
             string status = update.status == ToolCallStatus.Running ? "running" : "complete";
             // The TUI/stdio gateway doesn't include an emoji in the payload, so leave it empty there
@@ -1043,9 +1364,9 @@ namespace NeonCompanion.Runtime.Chat
             string key = (update.name ?? "") + "\x01" + (update.toolId ?? "");
             string label = !string.IsNullOrEmpty(update.preview) ? update.preview : (update.name ?? "");
 
-            for (int i = 0; i < _hermesStreamingMessage.segments.Count; i++)
+            for (int i = 0; i < s.streamingMessage.segments.Count; i++)
             {
-                ChatMessageSegment existing = _hermesStreamingMessage.segments[i];
+                ChatMessageSegment existing = s.streamingMessage.segments[i];
                 if (existing == null ||
                     !string.Equals(existing.kind, ChatMessageSegment.ToolKind, System.StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(existing.key, key, System.StringComparison.Ordinal))
@@ -1064,11 +1385,11 @@ namespace NeonCompanion.Runtime.Chat
                 if (!string.IsNullOrEmpty(update.details))
                     existing.details = update.details;
 
-                _hermesToolProgressCallback?.Invoke(update.name, existing.label ?? "", existing.emoji ?? "", status);
+                s.toolCb?.Invoke(update.name, existing.label ?? "", existing.emoji ?? "", status);
                 return;
             }
 
-            _hermesStreamingMessage.segments.Add(new ChatMessageSegment
+            s.streamingMessage.segments.Add(new ChatMessageSegment
             {
                 kind = ChatMessageSegment.ToolKind,
                 key = key,
@@ -1080,41 +1401,7 @@ namespace NeonCompanion.Runtime.Chat
                 details = update.details
             });
 
-            _hermesToolProgressCallback?.Invoke(update.name, label, emoji, status);
-        }
-
-        private bool BeginHermesStreamingMessage(bool reset)
-        {
-            if (_currentChatViewModel == null)
-                return false;
-
-            if (_hermesStreamingMessage != null)
-            {
-                _hermesStreamActive = true;
-                if (_hermesStreamBuffer == null)
-                    _hermesStreamBuffer = new System.Text.StringBuilder();
-                if (_hermesReasoningBuffer == null)
-                    _hermesReasoningBuffer = new System.Text.StringBuilder();
-                return true;
-            }
-
-            _hermesStreamActive = true;
-            _hermesStreamBuffer = new System.Text.StringBuilder();
-            _hermesReasoningBuffer = new System.Text.StringBuilder();
-            _hermesStreamStartTime = DateTime.UtcNow;
-
-            _hermesStreamingMessage = new ChatMessage
-            {
-                role = "assistant",
-                content = string.Empty,
-                model = string.Empty,
-                unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-            };
-            _currentChatViewModel.Messages.Add(_hermesStreamingMessage);
-            // Sync so mid-stream session switch doesn't lose the assistant bubble
-            if (_currentSession != null)
-                _currentSession.messages = new System.Collections.Generic.List<ChatMessage>(_currentChatViewModel.Messages);
-            return true;
+            s.toolCb?.Invoke(update.name, label, emoji, status);
         }
 
         private static void NormalizeHermesFinalTextSegments(ChatMessage message, string finalText)
@@ -1153,25 +1440,46 @@ namespace NeonCompanion.Runtime.Chat
             }
         }
 
-        private void HandleHermesReasoningDelta(string text)
+        private void HandleHermesReasoningDelta(string sessionId, string text)
         {
-            if (!_hermesStreamActive || _hermesStreamingMessage == null)
+            HermesStream s = GetStream(sessionId);
+            if (s == null || !s.active || s.streamingMessage == null)
                 return;
-            _hermesReasoningBuffer?.Append(text);
+            s.reasoning?.Append(text);
         }
 
-        private void HandleHermesError(string error)
+        private void HandleHermesError(string sessionId, string error)
         {
             NeonLogger.Log("[Hermes] Error: " + error);
-            _hermesLastError = error;
-            _hermesStreamActive = false;
-            _hermesStreamingMessage = null;
-            _hermesStreamBuffer = null;
-            _hermesStreamTokenCallback = null;
-            _hermesToolProgressCallback = null;
 
-            // Unblock SendViaTransport so it doesn't hang on error
-            _hermesGenerationComplete?.TrySetResult(false);
+            // Connection-level error (null session id): fail every in-flight stream so no
+            // SendViaTransport hangs on its completion TCS.
+            if (string.IsNullOrEmpty(sessionId))
+            {
+                foreach (var kv in _hermesStreams)
+                {
+                    HermesStream st = kv.Value;
+                    if (st == null)
+                        continue;
+                    st.lastError = error;
+                    st.active = false;
+                    st.streamingMessage = null;
+                    st.buffer = null;
+                    st.complete?.TrySetResult(false);
+                }
+                RaiseSessionStatesChanged();
+                return;
+            }
+
+            HermesStream s = GetStream(sessionId);
+            if (s == null)
+                return;
+            s.lastError = error;
+            s.active = false;
+            s.streamingMessage = null;
+            s.buffer = null;
+            s.complete?.TrySetResult(false);
+            RaiseSessionStatesChanged();
         }
 
         public async Task<ModelSwitchResult> SetCurrentSessionModelAsync(string modelId)
@@ -1392,6 +1700,10 @@ namespace NeonCompanion.Runtime.Chat
             if (!SaveChatHistory)
                 return;
 
+            // Hermes mode: the gateway DB is the source of truth — never write local JSON.
+            if (IsHermesProvider(_currentProvider))
+                return;
+
             _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
             _currentSession.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             _currentSession.providerId = _currentProvider?.id ?? _currentSession.providerId;
@@ -1531,7 +1843,10 @@ namespace NeonCompanion.Runtime.Chat
         private void ResetRemoteSessionState()
         {
             if (_currentSession != null)
+            {
                 _currentSession.providerSessionId = null;
+                _currentSession.providerRuntimeSessionId = null;
+            }
 
             if (_currentChatViewModel != null)
                 _currentChatViewModel.ProviderSessionId = null;

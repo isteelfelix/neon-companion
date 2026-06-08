@@ -18,12 +18,23 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Func<bool> _getIsSending;
         private readonly Func<bool> _getIsStreamingResponse;
         private readonly Func<ChatService> _getCurrentChatService;
+        private readonly Action _playAttentionSound;
 
         private readonly NeonCompanion.Runtime.UI.UITK.ToolCallUiHelper _toolCallUiHelper = new NeonCompanion.Runtime.UI.UITK.ToolCallUiHelper();
         private NeonCompanion.Runtime.UI.UITK.ApprovalPrompt _currentApprovalPrompt;
         private VisualElement _currentApprovalElement;
         private TaskCompletionSource<bool> _pendingApprovalTcs;
         private IChatTransport _hermesTransport;
+
+        // A background session's approval/clarify request, deferred until the user opens it.
+        private sealed class PendingRequest
+        {
+            public string sessionId;
+            public bool isClarify;
+            public ClarifyRequest clarify;
+            public ApprovalRequest approval;
+        }
+        private readonly Dictionary<string, PendingRequest> _pendingBySession = new Dictionary<string, PendingRequest>();
 
         internal event Action OnStopRequested;
         internal event Action<string> OnApproved;
@@ -36,7 +47,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Action<string> showSystemMessage,
             Func<bool> getIsSending,
             Func<bool> getIsStreamingResponse,
-            Func<ChatService> getCurrentChatService)
+            Func<ChatService> getCurrentChatService,
+            Action playAttentionSound)
         {
             _messagesList = messagesList;
             _scrollToBottom = scrollToBottom;
@@ -45,6 +57,59 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _getIsSending = getIsSending;
             _getIsStreamingResponse = getIsStreamingResponse;
             _getCurrentChatService = getCurrentChatService;
+            _playAttentionSound = playAttentionSound;
+        }
+
+        private string ForegroundSessionId()
+        {
+            var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
+            return chat != null ? chat.CurrentSessionId : null;
+        }
+
+        private bool IsForeground(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return true; // unknown origin — treat as foreground
+            string fg = ForegroundSessionId();
+            return string.IsNullOrEmpty(fg) || string.Equals(fg, sessionId, StringComparison.Ordinal);
+        }
+
+        // Defer a background session's request: badge it in the sidebar + play a sound.
+        private void StorePending(string sessionId, ClarifyRequest clarify, ApprovalRequest approval)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return;
+            _pendingBySession[sessionId] = new PendingRequest
+            {
+                sessionId = sessionId,
+                isClarify = clarify != null,
+                clarify = clarify,
+                approval = approval
+            };
+            var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
+            chat?.MarkSessionAttention(sessionId);
+            try { _playAttentionSound?.Invoke(); } catch { }
+        }
+
+        /// <summary>
+        /// Show any deferred approval/clarify for the session the user just opened. Called when the
+        /// foreground session changes.
+        /// </summary>
+        public void ShowPendingForSession(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return;
+            PendingRequest p;
+            if (!_pendingBySession.TryGetValue(sessionId, out p))
+                return;
+            _pendingBySession.Remove(sessionId);
+            var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
+            chat?.ClearSessionAttention(sessionId);
+
+            if (p.isClarify)
+                ShowClarifyNow(p.clarify);
+            else
+                _ = HandleHermesApprovalRequestAsync(p.sessionId, p.approval);
         }
 
         internal void SetBubble(VisualElement bubble)
@@ -194,6 +259,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
                 _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
+                _pendingBySession.Clear();
             }
 
             if (mode == BackendMode.Hermes)
@@ -212,14 +278,31 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
         }
 
-        private void OnHermesClarifyRequest(ClarifyRequest request)
+        private void OnHermesClarifyRequest(string sessionId, ClarifyRequest request)
         {
             if (request == null)
                 return;
 
-            string question = request.question ?? "Clarify?";
-            _showSystemMessage?.Invoke("[Hermes] " + question);
+            bool hasChoices = request.choices != null && request.choices.Length > 0;
+            // A clarify with no choices is auto-answered — no user input needed, so handle it
+            // regardless of which session it belongs to.
+            if (!hasChoices)
+            {
+                _ = AutoRespondToClarify(request, "ok");
+                return;
+            }
 
+            if (IsForeground(sessionId))
+                ShowClarifyNow(request);
+            else
+                StorePending(sessionId, request, null);
+        }
+
+        private void ShowClarifyNow(ClarifyRequest request)
+        {
+            if (request == null)
+                return;
+            _showSystemMessage?.Invoke("[Hermes] " + (request.question ?? "Clarify?"));
             if (request.choices != null && request.choices.Length > 0)
                 ShowClarifyChoices(request);
             else
@@ -294,14 +377,17 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
         }
 
-        private void OnHermesApprovalRequest(ApprovalRequest request)
+        private void OnHermesApprovalRequest(string sessionId, ApprovalRequest request)
         {
             if (request == null)
                 return;
-            _ = HandleHermesApprovalRequestAsync(request);
+            if (IsForeground(sessionId))
+                _ = HandleHermesApprovalRequestAsync(sessionId, request);
+            else
+                StorePending(sessionId, null, request);
         }
 
-        private async Task HandleHermesApprovalRequestAsync(ApprovalRequest request)
+        private async Task HandleHermesApprovalRequestAsync(string sessionId, ApprovalRequest request)
         {
             if (request == null || _currentApprovalPrompt != null)
                 return;
@@ -320,7 +406,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 var selector = GlobalBackendSelector.Instance;
                 if (selector?.SessionManager != null)
-                    await selector.SessionManager.RespondToApproval(approved);
+                    await selector.SessionManager.RespondToApproval(sessionId, approved);
             }
             catch (Exception ex)
             {

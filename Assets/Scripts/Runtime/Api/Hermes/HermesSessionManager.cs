@@ -26,6 +26,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
     public class SessionResumeResponse
     {
         public string session_id;
+        public string stored_session_id;
         public string resumed;
         public SessionMessage[] messages;
         public int message_count;
@@ -151,25 +152,130 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private readonly HermesClientBridge _clientBridge;
         private bool _disposed;
 
-        // Active session state
+        // Foreground/last-resumed session hints. These no longer filter events — the transport
+        // multiplexes every session. ActiveSessionId is the session the UI currently views; it
+        // only drives RuntimeInfo and the foreground-only handlers (clarify/approval/terminal).
         public string ActiveSessionId { get; private set; }
         public string StoredSessionId { get; private set; }
-        public bool Busy { get; private set; }
-        public bool AwaitingResponse { get; private set; }
-        public SessionRuntimeInfo RuntimeInfo { get; private set; }
+
+        // Per-session generation state, keyed by the display/persisted session id. Runtime ids
+        // from Hermes are translated at the transport boundary.
+        private readonly Dictionary<string, bool> _busyBySession = new Dictionary<string, bool>();
+        private readonly Dictionary<string, bool> _awaitingBySession = new Dictionary<string, bool>();
+        private readonly Dictionary<string, SessionRuntimeInfo> _runtimeBySession = new Dictionary<string, SessionRuntimeInfo>();
+        private readonly Dictionary<string, string> _runtimeByDisplaySession = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> _displayByRuntimeSession = new Dictionary<string, string>();
+
+        /// <summary>True if the given session currently has a generation in flight.</summary>
+        public bool IsSessionBusy(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return false;
+            sessionId = DisplaySessionIdFor(sessionId);
+            bool busy;
+            if (_busyBySession.TryGetValue(sessionId, out busy) && busy)
+                return true;
+            bool awaiting;
+            if (_awaitingBySession.TryGetValue(sessionId, out awaiting) && awaiting)
+                return true;
+            return false;
+        }
+
+        /// <summary>Runtime info (model/usage/context) for a specific session, or null.</summary>
+        public SessionRuntimeInfo RuntimeInfoFor(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return null;
+            sessionId = DisplaySessionIdFor(sessionId);
+            SessionRuntimeInfo info;
+            return _runtimeBySession.TryGetValue(sessionId, out info) ? info : null;
+        }
+
+        /// <summary>Runtime info for the foreground (currently viewed) session.</summary>
+        public SessionRuntimeInfo RuntimeInfo => RuntimeInfoFor(ActiveSessionId);
+
+        /// <summary>
+        /// Mark which session the UI currently views (drives RuntimeInfo and the foreground-only
+        /// clarify/approval/terminal handlers). Does not resume or touch the server.
+        /// </summary>
+        public void SetForegroundSession(string sessionId)
+        {
+            ActiveSessionId = DisplaySessionIdFor(sessionId);
+        }
+
+        public string RuntimeSessionIdFor(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return sessionId;
+            string runtime;
+            return _runtimeByDisplaySession.TryGetValue(sessionId, out runtime) ? runtime : sessionId;
+        }
+
+        public bool HasRuntimeSessionFor(string sessionId)
+        {
+            return !string.IsNullOrEmpty(sessionId) && _runtimeByDisplaySession.ContainsKey(sessionId);
+        }
+
+        public string DisplaySessionIdFor(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return sessionId;
+            string display;
+            return _displayByRuntimeSession.TryGetValue(sessionId, out display) ? display : sessionId;
+        }
+
+        private void RememberSessionIds(string runtimeSessionId, string displaySessionId)
+        {
+            if (string.IsNullOrEmpty(runtimeSessionId))
+                return;
+            if (string.IsNullOrEmpty(displaySessionId))
+                displaySessionId = runtimeSessionId;
+
+            _runtimeByDisplaySession[displaySessionId] = runtimeSessionId;
+            _displayByRuntimeSession[runtimeSessionId] = displaySessionId;
+
+            // Also make direct lookups harmless when the runtime id is already the display id.
+            if (!_runtimeByDisplaySession.ContainsKey(runtimeSessionId))
+                _runtimeByDisplaySession[runtimeSessionId] = runtimeSessionId;
+        }
+
+        private void ForgetSessionIds(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return;
+
+            string display = DisplaySessionIdFor(sessionId);
+            string runtime = RuntimeSessionIdFor(sessionId);
+            _runtimeByDisplaySession.Remove(display);
+            _runtimeByDisplaySession.Remove(runtime);
+            _displayByRuntimeSession.Remove(runtime);
+            _displayByRuntimeSession.Remove(display);
+        }
+
+        private void SetBusy(string sessionId, bool value)
+        {
+            if (!string.IsNullOrEmpty(sessionId))
+                _busyBySession[sessionId] = value;
+        }
+
+        private void SetAwaiting(string sessionId, bool value)
+        {
+            if (!string.IsNullOrEmpty(sessionId))
+                _awaitingBySession[sessionId] = value;
+        }
 
         // === IChatTransport ===
 
         public bool IsConnected => _gateway.State == ConnectionState.Open;
 
-        public event Action OnStreamStarted;
-        public event Action<string> OnDelta;
-        public event Action<string> OnComplete;
-        public event Action<string> OnReasoningDelta;
-        public event Action<ToolCallUpdate> OnToolUpdate;
-        public event Action<ClarifyRequest> OnClarifyRequest;
-        public event Action<ApprovalRequest> OnApprovalRequest;
-        public event Action<string> OnError;
+        public event Action<string> OnStreamStarted;
+        public event Action<string, string> OnDelta;
+        public event Action<string, string> OnComplete;
+        public event Action<string, string> OnReasoningDelta;
+        public event Action<string, ToolCallUpdate> OnToolUpdate;
+        public event Action<string, ClarifyRequest> OnClarifyRequest;
+        public event Action<string, ApprovalRequest> OnApprovalRequest;
+        public event Action<string, string> OnError;
         public event Action<TransportState> OnStateChanged;
 
         public event Action<TerminalExecuteRequest> OnTerminalExecute;
@@ -230,37 +336,41 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         // === IChatTransport: Messaging ===
 
-        public async Task SendMessage(string text)
+        public async Task SendMessage(string sessionId, string text)
         {
-            if (string.IsNullOrEmpty(ActiveSessionId))
-                throw new InvalidOperationException("No active session");
+            if (string.IsNullOrEmpty(sessionId))
+                throw new InvalidOperationException("No session id");
 
-            if (Busy || AwaitingResponse)
+            string displaySessionId = DisplaySessionIdFor(sessionId);
+            string runtimeSessionId = RuntimeSessionIdFor(sessionId);
+
+            if (IsSessionBusy(displaySessionId))
                 throw new InvalidOperationException("Session is busy. Wait for the current response to finish.");
 
             try
             {
                 await _gateway.Request<object>(
                     RpcMethods.PromptSubmit,
-                    new { session_id = ActiveSessionId, text });
+                    new { session_id = runtimeSessionId, text });
             }
             catch
             {
-                Busy = false;
-                AwaitingResponse = false;
+                SetBusy(displaySessionId, false);
+                SetAwaiting(displaySessionId, false);
                 throw;
             }
 
-            Busy = true;
-            AwaitingResponse = true;
+            SetBusy(displaySessionId, true);
+            SetAwaiting(displaySessionId, true);
         }
 
-        public async Task AttachImageBytes(string contentBase64)
+        public async Task AttachImageBytes(string sessionId, string contentBase64)
         {
-            if (string.IsNullOrEmpty(ActiveSessionId))
-                throw new InvalidOperationException("No active session");
+            if (string.IsNullOrEmpty(sessionId))
+                throw new InvalidOperationException("No session id");
 
-            if (Busy || AwaitingResponse)
+            string runtimeSessionId = RuntimeSessionIdFor(sessionId);
+            if (IsSessionBusy(DisplaySessionIdFor(sessionId)))
                 throw new InvalidOperationException("Session is busy. Wait for the current response to finish.");
 
             if (string.IsNullOrEmpty(contentBase64))
@@ -268,19 +378,19 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             await _gateway.Request<object>(
                 RpcMethods.ImageAttachBytes,
-                new { session_id = ActiveSessionId, content_base64 = contentBase64 });
+                new { session_id = runtimeSessionId, content_base64 = contentBase64 });
         }
 
-        public async Task Interrupt()
+        public async Task Interrupt(string sessionId)
         {
-            if (string.IsNullOrEmpty(ActiveSessionId))
+            if (string.IsNullOrEmpty(sessionId))
                 return;
 
             try
             {
                 await _gateway.Request<object>(
                     RpcMethods.SessionInterrupt,
-                    new { session_id = ActiveSessionId });
+                    new { session_id = RuntimeSessionIdFor(sessionId) });
             }
             catch (Exception ex)
             {
@@ -296,8 +406,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 RpcMethods.SessionCreate,
                 new { cols = 96, cwd, title });
 
-            ActiveSessionId = result.session_id;
-            StoredSessionId = result.stored_session_id;
+            string displaySessionId = !string.IsNullOrEmpty(result.stored_session_id)
+                ? result.stored_session_id
+                : result.session_id;
+            RememberSessionIds(result.session_id, displaySessionId);
+
+            ActiveSessionId = displaySessionId;
+            StoredSessionId = displaySessionId;
 
             if (result.info != null)
                 ApplySessionInfo(result.info);
@@ -312,8 +427,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 RpcMethods.SessionResume,
                 new { session_id = sessionId });
 
-            ActiveSessionId = result.session_id;
-            StoredSessionId = sessionId;
+            string displaySessionId = !string.IsNullOrEmpty(result.stored_session_id)
+                ? result.stored_session_id
+                : sessionId;
+            RememberSessionIds(result.session_id, displaySessionId);
+
+            ActiveSessionId = displaySessionId;
+            StoredSessionId = displaySessionId;
 
             if (result.info != null)
                 ApplySessionInfo(result.info);
@@ -328,21 +448,69 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrEmpty(sid))
                 return;
 
+            string displaySid = DisplaySessionIdFor(sid);
+            string runtimeSid = RuntimeSessionIdFor(sid);
+
             try
             {
-                await _gateway.Request<object>(RpcMethods.SessionClose, new { session_id = sid });
+                await _gateway.Request<object>(RpcMethods.SessionClose, new { session_id = runtimeSid });
             }
             catch (Exception ex)
             {
                 Debug.LogWarning("[Hermes] Close session failed: " + ex.Message);
             }
 
-            if (sid == ActiveSessionId)
+            _busyBySession.Remove(displaySid);
+            _awaitingBySession.Remove(displaySid);
+            _runtimeBySession.Remove(displaySid);
+            ForgetSessionIds(displaySid);
+
+            if (displaySid == ActiveSessionId)
             {
                 ActiveSessionId = null;
                 StoredSessionId = null;
-                RuntimeInfo = null;
             }
+        }
+
+        /// <summary>
+        /// List all sessions known to the gateway (server is the source of truth in Hermes mode).
+        /// </summary>
+        public async Task<List<HermesSession>> ListSessions(int limit = 40)
+        {
+            var token = await _gateway.Request<JToken>(RpcMethods.SessionList, new { limit, offset = 0 });
+            var list = ParseSessionList(token);
+            return list;
+        }
+
+        private static List<HermesSession> ParseSessionList(JToken token)
+        {
+            var list = new List<HermesSession>();
+            if (token == null)
+                return list;
+
+            JToken arr = token;
+            if (token.Type == JTokenType.Object)
+            {
+                JToken nested = token["sessions"] ?? token["items"] ?? token["data"];
+                if (nested != null)
+                    arr = nested;
+            }
+
+            if (arr.Type == JTokenType.Array)
+            {
+                foreach (JToken child in arr.Children())
+                {
+                    try
+                    {
+                        var hs = child.ToObject<HermesSession>();
+                        if (hs != null && !string.IsNullOrEmpty(hs.id))
+                            list.Add(hs);
+                    }
+                    catch { }
+                }
+            }
+
+            return list;
         }
 
         /// <summary>
@@ -356,7 +524,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             var result = await _gateway.Request<object>(
                 "slash.exec",
-                new { session_id = ActiveSessionId, command = cmd }
+                new { session_id = RuntimeSessionIdFor(ActiveSessionId), command = cmd }
             );
             return result != null;
         }
@@ -368,7 +536,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         {
             var result = await _gateway.Request<ModelOptionsResponse>(
                 "model.options",
-                new { session_id = ActiveSessionId }
+                new { session_id = RuntimeSessionIdFor(ActiveSessionId) }
             );
             return result;
         }
@@ -398,12 +566,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
             await _gateway.Request<object>(RpcMethods.TerminalRespond, payload);
         }
 
-        public async Task RespondToApproval(bool approved)
+        public async Task RespondToApproval(string sessionId, bool approved)
         {
             string choice = approved ? "once" : "deny";
+            string sid = string.IsNullOrEmpty(sessionId) ? ActiveSessionId : sessionId;
             await _gateway.Request<object>(
                 RpcMethods.ApprovalRespond,
-                new { session_id = ActiveSessionId, choice });
+                new { session_id = RuntimeSessionIdFor(sid), choice });
         }
 
         // === Event Handlers ===
@@ -434,16 +603,24 @@ namespace NeonCompanion.Runtime.Api.Hermes
         {
             if (evt == null)
                 return false;
-            var sessionId = evt.SessionId ?? ActiveSessionId;
+            var sessionId = DisplaySessionIdFor(evt.SessionId ?? ActiveSessionId);
             return sessionId == ActiveSessionId;
+        }
+
+        /// <summary>Resolve the session id an event belongs to, falling back to the foreground.</summary>
+        private string EventSessionId(GatewayEvent evt)
+        {
+            if (evt != null && !string.IsNullOrEmpty(evt.SessionId))
+                return DisplaySessionIdFor(evt.SessionId);
+            return ActiveSessionId;
         }
 
         private void ApplySessionInfo(SessionInfo info)
         {
-            if (info == null)
+            if (info == null || string.IsNullOrEmpty(ActiveSessionId))
                 return;
 
-            RuntimeInfo = new SessionRuntimeInfo
+            _runtimeBySession[ActiveSessionId] = new SessionRuntimeInfo
             {
                 model = info.model,
                 running = info.is_active,
@@ -459,44 +636,49 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleSessionInfo(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
 
             var info = evt.Payload.ToObject<SessionRuntimeInfo>();
             if (info == null) return;
 
-            RuntimeInfo = info;
-            if (!string.IsNullOrEmpty(info.cwd))
+            _runtimeBySession[sid] = info;
+            // cwd is a foreground/workspace concern — only the viewed session drives it.
+            if (sid == ActiveSessionId && !string.IsNullOrEmpty(info.cwd))
                 _clientBridge.SetWorkspace(info.cwd);
             if (info.running.HasValue)
             {
-                Busy = info.running.Value;
-                if (!Busy && AwaitingResponse)
-                    AwaitingResponse = false;
+                SetBusy(sid, info.running.Value);
+                if (!info.running.Value)
+                    SetAwaiting(sid, false);
             }
         }
 
         private void HandleMessageStart(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
-            Busy = true;
-            AwaitingResponse = true;
-            OnStreamStarted?.Invoke();
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
+            SetBusy(sid, true);
+            SetAwaiting(sid, true);
+            OnStreamStarted?.Invoke(sid);
         }
 
         private void HandleMessageDelta(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
 
             string text = ExtractText(evt.Payload);
             if (!string.IsNullOrEmpty(text))
-                OnDelta?.Invoke(text);
+                OnDelta?.Invoke(sid, text);
         }
 
         private void HandleMessageComplete(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
 
             string finalText = "";
             if (evt.Payload != null)
@@ -507,26 +689,28 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrWhiteSpace(finalText) && evt.Payload != null)
                 NeonLogger.LogWarning("[Hermes] message.complete had no text payload: " + evt.Payload.ToString(Formatting.None));
 
-            OnComplete?.Invoke(finalText);
-            Busy = false;
-            AwaitingResponse = false;
+            OnComplete?.Invoke(sid, finalText);
+            SetBusy(sid, false);
+            SetAwaiting(sid, false);
 
             if (evt.Payload != null)
             {
                 UsageStats usage = ExtractUsage(evt.Payload);
-                if (usage != null && RuntimeInfo != null)
-                    RuntimeInfo.usage = usage;
+                SessionRuntimeInfo rt = RuntimeInfoFor(sid);
+                if (usage != null && rt != null)
+                    rt.usage = usage;
             }
         }
 
         private void HandleReasoningDelta(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
 
             string text = ExtractText(evt.Payload);
             if (!string.IsNullOrEmpty(text))
-                OnReasoningDelta?.Invoke(text);
+                OnReasoningDelta?.Invoke(sid, text);
         }
 
         private static UsageStats ExtractUsage(JToken token)
@@ -629,30 +813,29 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleToolStart(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             HandleToolEvent(evt, ToolCallStatus.Running);
         }
 
         private void HandleToolProgress(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             HandleToolEvent(evt, ToolCallStatus.Running);
         }
 
         private void HandleToolComplete(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             HandleToolEvent(evt, ToolCallStatus.Complete);
         }
 
         private void HandleToolEvent(GatewayEvent evt, ToolCallStatus status)
         {
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
 
             var payload = evt.Payload.ToObject<ToolEventPayload>();
             if (payload == null) return;
 
-            OnToolUpdate?.Invoke(new ToolCallUpdate
+            OnToolUpdate?.Invoke(sid, new ToolCallUpdate
             {
                 name = payload.name,
                 toolId = payload.tool_id,
@@ -694,13 +877,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleClarifyRequest(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
 
             var payload = evt.Payload.ToObject<ClarifyEventPayload>();
             if (payload == null) return;
 
-            OnClarifyRequest?.Invoke(new ClarifyRequest
+            OnClarifyRequest?.Invoke(sid, new ClarifyRequest
             {
                 requestId = payload.request_id,
                 question = payload.question,
@@ -726,13 +909,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleApprovalRequest(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
 
             var payload = evt.Payload.ToObject<ClarifyEventPayload>();
             if (payload == null) return;
 
-            OnApprovalRequest?.Invoke(new ApprovalRequest
+            OnApprovalRequest?.Invoke(sid, new ApprovalRequest
             {
                 requestId = payload.request_id,
                 description = payload.question,
@@ -742,13 +925,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleSudoRequest(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
 
             var payload = evt.Payload.ToObject<ClarifyEventPayload>();
             if (payload == null) return;
 
-            OnApprovalRequest?.Invoke(new ApprovalRequest
+            OnApprovalRequest?.Invoke(sid, new ApprovalRequest
             {
                 requestId = payload.request_id,
                 description = payload.question,
@@ -758,14 +941,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleError(GatewayEvent evt)
         {
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
 
             var payload = evt.Payload.ToObject<ErrorPayload>();
             string message = payload?.message ?? "Unknown error";
-            Busy = false;
-            AwaitingResponse = false;
-            OnError?.Invoke(message);
+            if (!string.IsNullOrEmpty(sid))
+            {
+                SetBusy(sid, false);
+                SetAwaiting(sid, false);
+            }
+            OnError?.Invoke(sid, message);
         }
 
         private void HandleGatewayStateChange(ConnectionState state)
@@ -797,7 +983,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
             // 5-minute safety timeout. TrySetResult is safe even when no generation is active.
             if (ts == TransportState.Disconnected || ts == TransportState.Error)
             {
-                OnError?.Invoke("Hermes connection lost (" + state + ")");
+                // Connection-level error: null session id signals "fail every in-flight stream"
+                // so ChatService unblocks all pending generations, not just the foreground one.
+                _busyBySession.Clear();
+                _awaitingBySession.Clear();
+                OnError?.Invoke(null, "Hermes connection lost (" + state + ")");
             }
         }
 

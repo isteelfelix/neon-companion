@@ -22,40 +22,42 @@ namespace NeonCompanion.Runtime.Api
         /// <summary>Disconnect from the backend.</summary>
         Task Disconnect();
 
-        /// <summary>Send a user message. Response arrives via events.</summary>
-        Task SendMessage(string text);
+        /// <summary>Send a user message to a specific session. Response arrives via events.</summary>
+        Task SendMessage(string sessionId, string text);
 
-        /// <summary>Attach an image to the current session before submitting a prompt.</summary>
-        Task AttachImageBytes(string contentBase64);
+        /// <summary>Attach an image to the given session before submitting a prompt.</summary>
+        Task AttachImageBytes(string sessionId, string contentBase64);
 
-        /// <summary>Interrupt the current generation.</summary>
-        Task Interrupt();
+        /// <summary>Interrupt the generation of a specific session.</summary>
+        Task Interrupt(string sessionId);
 
         // --- Events ---
+        // All streaming events carry the originating session_id so a single transport
+        // can multiplex several concurrent sessions (Hermes parallel sessions).
 
-        /// <summary>Generation started (message.start).</summary>
-        event Action OnStreamStarted;
+        /// <summary>Generation started (message.start). Arg: sessionId.</summary>
+        event Action<string> OnStreamStarted;
 
-        /// <summary>Streaming text delta (message.delta).</summary>
-        event Action<string> OnDelta;
+        /// <summary>Streaming text delta (message.delta). Args: sessionId, text.</summary>
+        event Action<string, string> OnDelta;
 
-        /// <summary>Generation complete (message.complete).</summary>
-        event Action<string> OnComplete;
+        /// <summary>Generation complete (message.complete). Args: sessionId, finalText.</summary>
+        event Action<string, string> OnComplete;
 
-        /// <summary>Reasoning/thinking delta (reasoning.delta).</summary>
-        event Action<string> OnReasoningDelta;
+        /// <summary>Reasoning/thinking delta (reasoning.delta). Args: sessionId, text.</summary>
+        event Action<string, string> OnReasoningDelta;
 
-        /// <summary>Tool call update (tool.start / tool.progress / tool.complete).</summary>
-        event Action<ToolCallUpdate> OnToolUpdate;
+        /// <summary>Tool call update (tool.start / tool.progress / tool.complete). Args: sessionId, update.</summary>
+        event Action<string, ToolCallUpdate> OnToolUpdate;
 
-        /// <summary>Clarify request from agent (clarify.request).</summary>
-        event Action<ClarifyRequest> OnClarifyRequest;
+        /// <summary>Clarify request from agent (clarify.request). Args: sessionId, request.</summary>
+        event Action<string, ClarifyRequest> OnClarifyRequest;
 
-        /// <summary>Approval request from agent (approval.request).</summary>
-        event Action<ApprovalRequest> OnApprovalRequest;
+        /// <summary>Approval request from agent (approval.request). Args: sessionId, request.</summary>
+        event Action<string, ApprovalRequest> OnApprovalRequest;
 
-        /// <summary>Error from backend.</summary>
-        event Action<string> OnError;
+        /// <summary>Error from backend. Args: sessionId (may be null for connection-level), message.</summary>
+        event Action<string, string> OnError;
 
         /// <summary>Connection state changed.</summary>
         event Action<TransportState> OnStateChanged;

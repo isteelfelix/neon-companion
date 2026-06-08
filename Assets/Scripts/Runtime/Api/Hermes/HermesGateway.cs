@@ -97,6 +97,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SessionCreate = "session.create";
         public const string SessionResume = "session.resume";
         public const string SessionClose = "session.close";
+        public const string SessionList = "session.list";
         public const string SessionInterrupt = "session.interrupt";
         public const string SessionUsage = "session.usage";
         public const string SessionCwdSet = "session.cwd.set";

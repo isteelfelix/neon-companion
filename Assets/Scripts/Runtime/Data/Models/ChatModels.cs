@@ -57,10 +57,14 @@ namespace NeonCompanion.Runtime.Data.Models
         public string sessionId;
         public string providerId;
         public string providerSessionId;
+        public string providerRuntimeSessionId;
         public string selectedModel;
         public string title;
         public List<ChatMessage> messages = new List<ChatMessage>();
         public long updatedAtUnix;
         public string folder;
+        // Server-provided message count (Hermes server-truth mode), where `messages` is not
+        // populated for list display. 0 means "use messages.Count instead".
+        public int messageCount;
     }
 }

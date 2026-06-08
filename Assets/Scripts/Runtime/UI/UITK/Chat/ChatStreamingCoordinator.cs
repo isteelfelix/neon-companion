@@ -182,6 +182,36 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _scrollToBottom?.Invoke();
         }
 
+        /// <summary>
+        /// Seed a freshly-Begun streaming bubble with already-accumulated partial text, so that
+        /// returning to a session still generating in the background shows its current text and then
+        /// continues live (subsequent OnToken appends). Switches the bubble from typing dots to text.
+        /// </summary>
+        internal void Seed(string partialText)
+        {
+            if (_typingDots != null)
+            {
+                StopTypingAnimation();
+                _typingDots.RemoveFromHierarchy();
+                _typingDots = null;
+                IsStreaming = true;
+            }
+
+            EnsureLabel();
+            if (_label != null)
+            {
+                string text = partialText ?? string.Empty;
+                _textBuffer.Length = 0;
+                _textBuffer.Append(text);
+                _segmentBuffer.Length = 0;
+                _segmentBuffer.Append(text);
+                _label.SetMarkdown(_segmentBuffer.ToString());
+            }
+
+            UpdateStats();
+            _scrollToBottom?.Invoke();
+        }
+
         internal void OnToken(string token)
         {
             if (_typingDots != null)

@@ -405,7 +405,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (backendSelector != null)
                 backendSelector.OnModeChanged -= OnBackendModeChangedForNav;
 
+            if (_chatService != null && _sessionStatesSubscribed)
+            {
+                _chatService.OnSessionStatesChanged -= OnSessionStatesChanged;
+                _sessionStatesSubscribed = false;
+            }
+
             TeardownTerminalRemoteBridge();
+        }
+
+        private bool _sessionStatesSubscribed;
+
+        private void OnSessionStatesChanged()
+        {
+            if (!_isBound) return;
+            _sessionHistoryController.RerenderStatus();
         }
 
         private void OnBackendModeChangedForNav(Core.BackendMode mode)
@@ -746,6 +760,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetCurrentSession = (id, title) => { _currentSessionId = id; _currentSessionTitle = title; },
                 SetTopbar = (title, sub) => SetTopbar(title, sub),
                 RenderMessages = () => RenderMessages(_chatService?.CurrentChatViewModel?.Messages),
+                OnSessionSwitched = () => _chatController.OnForegroundSessionChanged(),
                 ShowSystemMessage = AddSystemMessage,
                 ShowHistoryState = ShowHistoryState,
                 ShowChat = _navigationController.ShowChat,
@@ -1526,6 +1541,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return null;
 
             _chatService = app.ChatService;
+
+            if (!_sessionStatesSubscribed)
+            {
+                _chatService.OnSessionStatesChanged += OnSessionStatesChanged;
+                _sessionStatesSubscribed = true;
+            }
 
             var settingsSnap = app.Settings.Load();
             if (settingsSnap != null)

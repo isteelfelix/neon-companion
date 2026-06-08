@@ -166,7 +166,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.ShowSystemMessage,
                 () => IsSending,
                 () => _streamingCoordinator != null && _streamingCoordinator.IsStreaming,
-                () => _currentChatService);
+                // Live chat service (not the per-send field) so approval routing works between sends.
+                () => _d.GetChatServiceAsync().Result,
+                _d.PlayNotificationSound);
 
             _streamingCoordinator = new ChatStreamingCoordinator(
                 _d.MessagesList,
@@ -368,7 +370,71 @@ namespace NeonCompanion.Runtime.UI.UITK
             _approvalController?.Dismiss();
             DismissSessionPicker();
             _editController?.Hide();
-            _currentChatService?.CancelCurrentGeneration();
+            // Cancel the foreground session's generation. Use the live service (not the per-send
+            // _currentChatService, which races to null when parallel sends overlap).
+            var chat = _d.GetChatServiceAsync().Result;
+            chat?.CancelCurrentGeneration();
+        }
+
+        /// <summary>True if the session the UI is currently viewing has a generation in flight.</summary>
+        private bool IsForegroundGenerating()
+        {
+            var chat = _d.GetChatServiceAsync().Result;
+            if (chat == null)
+                return false;
+            if (chat.IsHermesActive)
+                return chat.IsSessionGenerating(chat.CurrentSessionId);
+            return IsSending;
+        }
+
+        /// <summary>
+        /// Called when the foreground (viewed) session changes. Stops the foreground streaming
+        /// animation tied to the previous session (its generation continues in the background and
+        /// is persisted server-side) and refreshes the send/stop button for the new session.
+        /// </summary>
+        public void OnForegroundSessionChanged()
+        {
+            _streamingCoordinator?.Abort();
+            _approvalController?.ClearToolProgress();
+            _approvalController?.Dismiss();
+
+            var chat = _d.GetChatServiceAsync().Result;
+            bool generating = chat != null && chat.IsHermesActive && chat.IsSessionGenerating(chat.CurrentSessionId);
+
+            if (generating)
+            {
+                // The session is still streaming in the background. Re-attach the coordinator so the
+                // user sees live tokens + tool activity instead of a frozen snapshot. Render the
+                // transcript WITHOUT the in-progress assistant bubble, then begin+seed a live one.
+                var streamingMsg = chat.GetForegroundStreamingMessage();
+                if (streamingMsg != null)
+                {
+                    _d.RenderMessages(BuildExcluding(chat.CurrentChatViewModel?.Messages, streamingMsg));
+                    _streamingCoordinator.Begin();
+                    string partial = chat.AttachForegroundStreamCallbacks(_streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
+                    _streamingCoordinator.Seed(partial ?? streamingMsg.content);
+                }
+            }
+
+            _streamingCoordinator?.SetSending(generating);
+
+            // Show any approval/clarify that was deferred while this session was in the background.
+            if (chat != null && chat.IsHermesActive)
+                _approvalController?.ShowPendingForSession(chat.CurrentSessionId);
+        }
+
+        private static IReadOnlyList<ChatMessage> BuildExcluding(IReadOnlyList<ChatMessage> messages, ChatMessage exclude)
+        {
+            var list = new List<ChatMessage>();
+            if (messages != null)
+            {
+                for (int i = 0; i < messages.Count; i++)
+                {
+                    if (!ReferenceEquals(messages[i], exclude))
+                        list.Add(messages[i]);
+                }
+            }
+            return list;
         }
 
         public async Task SendCurrentMessageAsync()
@@ -397,8 +463,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            // If currently sending, queue the message instead (commands already handled above and execute immediately)
-            if (IsSending)
+            // Queue only if the session the user is currently viewing is already generating.
+            // With Hermes parallel sessions, sending in a different (idle) session starts a new
+            // generation instead of queuing behind an unrelated one.
+            if (IsForegroundGenerating())
             {
                 var qAttach = _attachmentManager.CloneCurrent();
                 string qMsg = ChatAttachmentManager.StripAttachmentTokens(composerText, qAttach);
@@ -420,6 +488,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             ChatService chat = null;
             QueuedMessage nextQueuedMessage = null;
+            string sendSid = null;
             try
             {
                 chat = await _d.GetChatServiceAsync();
@@ -445,6 +514,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 bool streaming = _d.UseStreaming();
                 chat.UseStreaming = streaming;
 
+                // Pin this send to a stable session id. For Hermes this creates the server session
+                // up-front so that, if the user switches away mid-stream, the background completion
+                // never renders into or clears the session they switched to.
+                sendSid = chat.IsHermesActive
+                    ? await chat.EnsureForegroundSessionIdAsync()
+                    : chat.CurrentSessionId;
+
                 _d.RenderMessages(BuildPendingMessages(chat.CurrentChatViewModel?.Messages, message, pendingAttachments));
 
                 if (streaming)
@@ -456,12 +532,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _approvalController?.Dismiss();
                     DismissSessionPicker();
 
-                    // Finalize stats with real usage from client
+                    // Finalize stats with real usage from client.
+                    // Hermes persists per-session usage server-side in ChatService (and reading the
+                    // shared OpenAI client here could write a stale figure onto another session's
+                    // last message after a mid-stream switch), so only do this for the OpenAI path.
                     _streamingCoordinator.PauseStatsSchedule();
                     try
                     {
                         var app = _d.GetAppAsync().Result;
-                        var client = app?.AiClient as OpenAiCompatibleClient;
+                        var client = chat.IsHermesActive ? null : app?.AiClient as OpenAiCompatibleClient;
                         if (client != null)
                         {
                             var usage = client.LastStreamUsage;
@@ -501,13 +580,22 @@ namespace NeonCompanion.Runtime.UI.UITK
                     await chat.SendMessageAsync(message, pendingAttachments);
                 }
 
-                _d.PlayNotificationSound?.Invoke();
-                _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
-                await _d.LoadSessionsAsync();
-                _d.TriggerAvatarSmile();
+                // Only touch the foreground UI if the user is still viewing the session we sent to.
+                // If they switched away, this generation finished in the background; its content is
+                // already in its own (server-persisted) session and must not render over the new one.
+                bool stillForeground = !chat.IsHermesActive ||
+                    string.Equals(chat.CurrentSessionId, sendSid, StringComparison.Ordinal);
 
-                // Agent tool execution loop: handles tool_calls returned by model, shows approvals, executes locally, continues until text response
-                await ProcessAgentToolLoopAsync(chat, streaming);
+                if (stillForeground)
+                {
+                    _d.PlayNotificationSound?.Invoke();
+                    _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
+                    _d.TriggerAvatarSmile();
+
+                    // Agent tool execution loop: handles tool_calls returned by model, shows approvals, executes locally, continues until text response
+                    await ProcessAgentToolLoopAsync(chat, streaming);
+                }
+                await _d.LoadSessionsAsync();
             }
             catch (OperationCanceledException)
             {
@@ -516,28 +604,37 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _approvalController?.ClearToolProgress();
                 _approvalController?.Dismiss();
                 DismissSessionPicker();
-                _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
+                bool stillForeground = chat == null || !chat.IsHermesActive ||
+                    string.Equals(chat.CurrentSessionId, sendSid, StringComparison.Ordinal);
+                if (stillForeground)
+                    _d.RenderMessages(chat?.CurrentChatViewModel?.Messages);
             }
             catch (Exception ex)
             {
                 _streamingCoordinator?.Abort();
                 _approvalController?.Dismiss();
                 DismissSessionPicker();
-                _d.MessageInput.value = composerText;
-                _inputManager.QueueComposerHeightUpdate();
-                RestorePendingComposerAttachments(pendingAttachments);
-                if (chat == null || chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled)
-                    _d.RenderMessages(null);
-                else
-                    _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
+                bool stillForeground = chat == null || !chat.IsHermesActive ||
+                    string.Equals(chat.CurrentSessionId, sendSid, StringComparison.Ordinal);
+                if (stillForeground)
+                {
+                    _d.MessageInput.value = composerText;
+                    _inputManager.QueueComposerHeightUpdate();
+                    RestorePendingComposerAttachments(pendingAttachments);
+                    if (chat == null || chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled)
+                        _d.RenderMessages(null);
+                    else
+                        _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
+                }
                 _d.ShowSystemMessage(GetSendFailureMessage(ex));
                 NeonLogger.LogError(ex.ToString());
                 _d.TriggerAvatarConfused();
             }
             finally
             {
-                _currentChatService = null;
-                _streamingCoordinator?.SetSending(false);
+                // Refresh the send/stop button for whatever session is now in the foreground
+                // (it may differ from the one this send targeted).
+                _streamingCoordinator?.SetSending(IsForegroundGenerating());
 
                 // Show notification badge if window not focused
                 if (!Application.isFocused)
@@ -545,8 +642,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _notifications.NotifyNewMessage();
                 }
 
-                // Process queued messages
-                if (_messageQueue.Count > 0)
+                // Process queued messages only when the foreground is idle (the queue is the
+                // current session's backlog; don't drain it into a different session).
+                if (_messageQueue.Count > 0 && !IsForegroundGenerating())
                 {
                     nextQueuedMessage = _messageQueue.Dequeue();
                     RenderQueueIndicator();
@@ -806,6 +904,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return false;
                 }
 
+                // A previous session may still be streaming in the background — stop its foreground
+                // animation so the new empty chat renders clean (it keeps running, server-persisted).
+                _streamingCoordinator?.Abort();
+
                 await chat.StartNewSessionAsync();
                 if (string.IsNullOrEmpty(chat.CurrentSessionId) || chat.CurrentChatViewModel == null)
                 {
@@ -825,6 +927,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _inputManager.QueueComposerHeightUpdate();
                 }
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
+                // New session is idle — reflect that on the send button (another session may still
+                // be generating in the background, but this foreground one is not).
+                _streamingCoordinator?.SetSending(false);
                 await _d.LoadSessionsAsync();
                 _d.ShowChat();
                 return true;

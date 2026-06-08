@@ -41,6 +41,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Action<string, string> SetTopbar;
             // Rendering
             public Action RenderMessages;
+            // Notify the chat controller that the foreground session changed (abort stale stream UI,
+            // refresh send button, re-attach if the target is still generating).
+            public Action OnSessionSwitched;
             public Action<string> ShowSystemMessage;
             public Action<string, bool> ShowHistoryState;
             // Navigation
@@ -63,6 +66,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _folderInputPopup;
         private EventCallback<PointerDownEvent> _folderInputOutsideHandler;
         private VisualElement _folderInputRoot;
+
+        // Last rendered inputs, so status indicators can be refreshed without a server round-trip.
+        private List<ChatSession> _lastRenderedSessions;
+        private List<ProviderConfig> _lastRenderedProviders;
 
         public void SetDeps(Deps deps) { _d = deps; }
 
@@ -118,9 +125,23 @@ namespace NeonCompanion.Runtime.UI.UITK
             RenderSessionList(visibleSessions, providers);
         }
 
+        /// <summary>
+        /// Re-render the session list from the last data (no server fetch) to refresh per-session
+        /// status indicators (working / needs-attention). Cheap; called on session state changes.
+        /// </summary>
+        public void RerenderStatus()
+        {
+            if (_lastRenderedSessions == null) return;
+            if (!_d.IsBound()) return;
+            RenderSessionList(_lastRenderedSessions, _lastRenderedProviders);
+        }
+
         public void RenderSessionList(List<ChatSession> allSessions, List<ProviderConfig> providers)
         {
             if (_d.SessionsList == null && _d.HistorySessionsList == null) return;
+
+            _lastRenderedSessions = allSessions;
+            _lastRenderedProviders = providers;
 
             allSessions = FilterSessionsForCurrentBackend(allSessions, providers);
             if (_d.NavChatCount != null)
@@ -251,6 +272,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     msgInput.value = string.Empty;
                 _d.SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 _d.RenderMessages();
+                _d.OnSessionSwitched?.Invoke();
                 await LoadSessionsAsync(chat);
                 _d.ShowChat();
             }
@@ -321,7 +343,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             var providerLabel = new Label(BuildSessionProviderLabel(session, providers));
             providerLabel.AddToClassList("history__provider");
 
-            int count = session.messages?.Count ?? 0;
+            // Hermes server sessions don't carry their messages in the list payload — fall back to
+            // the server-provided messageCount when the local message list is empty.
+            int localCount = session.messages?.Count ?? 0;
+            int count = localCount > 0 ? localCount : session.messageCount;
             var metaLabel = new Label(ChatAttachmentManager.MessageCountText(count));
             metaLabel.AddToClassList("history__meta");
 
@@ -346,6 +371,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             headerRow.Add(providerLabel);
             headerRow.Add(deleteBtn);
 
+            // Per-session status indicator (Hermes only): red pulsing dot = waiting for an
+            // approval/clarify answer; cyan pulsing dot = currently generating.
+            var chatForStatus = _d.GetChatServiceAsync().Result;
+            if (chatForStatus != null && chatForStatus.IsHermesActive)
+            {
+                if (chatForStatus.SessionNeedsAttention(session.sessionId))
+                    headerRow.Insert(0, CreateStatusDot(new Color(0.95f, 0.45f, 0.25f, 1f)));
+                else if (chatForStatus.IsSessionGenerating(session.sessionId))
+                    headerRow.Insert(0, CreateStatusDot(new Color(0.31f, 0.78f, 0.95f, 1f)));
+            }
+
             container.Add(headerRow);
             container.Add(metaLabel);
 
@@ -364,6 +400,29 @@ namespace NeonCompanion.Runtime.UI.UITK
             });
 
             return container;
+        }
+
+        private static VisualElement CreateStatusDot(Color color)
+        {
+            var dot = new VisualElement();
+            dot.style.width = 8;
+            dot.style.height = 8;
+            dot.style.borderTopLeftRadius = 4;
+            dot.style.borderTopRightRadius = 4;
+            dot.style.borderBottomLeftRadius = 4;
+            dot.style.borderBottomRightRadius = 4;
+            dot.style.backgroundColor = color;
+            dot.style.marginRight = 6;
+            dot.style.alignSelf = Align.Center;
+            dot.style.flexShrink = 0;
+            // USS has no @keyframes — pulse via the scheduler (like the streaming typing dots).
+            bool on = true;
+            dot.schedule.Execute(() =>
+            {
+                on = !on;
+                dot.style.opacity = on ? 1f : 0.3f;
+            }).Every(450);
+            return dot;
         }
 
         private static string BuildSessionProviderLabel(ChatSession session, List<ProviderConfig> providers)
