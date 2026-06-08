@@ -75,10 +75,12 @@
     flex-direction: column;
     padding: 10px 12px;
     overflow: hidden;
+    min-height: 0;
 }
 
 .rail__brand {
     height: 36px;
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
     padding: 0 10px 8px;
@@ -90,6 +92,7 @@
 .brand__mark {
     width: 26px;
     height: 26px;
+    flex-shrink: 0;
     border-radius: 8px;
     background-image: url("project://database/Assets/UI/Branding/app-icon-1024.png");
     -unity-background-scale-mode: stretch-to-fill;
@@ -101,6 +104,10 @@
     font-size: 15px;
     -unity-font-style: bold;
     flex-grow: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .brand__tag {
@@ -112,6 +119,7 @@
     padding: 2px 6px;
     font-size: 10px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    flex-shrink: 0;
 }
 
 .nav__group {
@@ -121,10 +129,12 @@
     letter-spacing: 1px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     -unity-font-style: bold;
+    flex-shrink: 0;
 }
 
 .nav__item {
     height: 30px;
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
     padding: 6px 10px;
@@ -180,6 +190,7 @@
 
 .rail__footer {
     height: 38px;
+    flex-shrink: 0;
     border-top-width: 1px;
     border-top-color: var(--line-1);
     padding-top: 8px;
@@ -197,17 +208,25 @@
 
 .rail__footer-text {
     flex-direction: column;
+    flex-grow: 1;
+    min-width: 0;
 }
 
 .rail__footer-provider {
     font-size: 12px;
     color: var(--text-1);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .rail__footer-model {
     font-size: 10px;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 /* ============== Main shell ============== */
@@ -388,8 +407,9 @@
 
 .rail__sessions-list {
     flex-grow: 1;
+    flex-shrink: 1;
     min-height: 0;
-    padding: 2px 4px;
+    padding: 1px 2px;
 }
 
 /* ---- Placeholder page ---- */
@@ -849,19 +869,29 @@
 
 /* Плитки сессий в рейле: одна строка-заголовок, плотный ритм (как в Claude Code). */
 .rail__sessions-list .history__item {
-    padding: 3px 8px;
-    margin-bottom: 1px;
-    border-radius: 6px;
+    padding: 1px 6px;
+    margin-bottom: 0;
+    border-radius: 5px;
 }
 
 .rail__sessions-list .history__row {
     margin-bottom: 0;
+    min-height: 18px;
 }
 
 .rail__sessions-list .history__title {
-    font-size: 12px;
+    font-size: 11px;
     -unity-font-style: normal;
     color: var(--text-2);
+}
+
+.rail__sessions-list .history__delete-btn {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    font-size: 12px;
+    border-radius: 5px;
 }
 
 .rail__sessions-list .history__item:hover .history__title,
