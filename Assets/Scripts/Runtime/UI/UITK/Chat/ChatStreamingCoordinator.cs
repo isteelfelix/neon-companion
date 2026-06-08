@@ -83,7 +83,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _thinkingBubble.style.display = DisplayStyle.Flex;
             }
 
-            bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(tool, label, emoji, status);
+            bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(tool, label, emoji, status, _label);
             if (insertedNewEntry)
                 ResetStreamingSegment();
             _scrollToBottom?.Invoke();

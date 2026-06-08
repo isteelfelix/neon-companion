@@ -165,7 +165,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return root;
         }
 
-        public bool OnToolProgress(string tool, string label, string emoji, string status)
+        public bool OnToolProgress(string tool, string label, string emoji, string status, VisualElement insertAfterElement = null)
         {
             if (_bubble == null)
                 return false;
@@ -183,15 +183,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             var entry = CreateEntryElement(tool, label, emoji, status);
-            _bubble.Insert(GetInsertIndex(), entry);
+            _bubble.Insert(GetInsertIndex(insertAfterElement), entry);
             _entries[key] = entry;
             return true;
         }
 
-        private int GetInsertIndex()
+        private int GetInsertIndex(VisualElement insertAfterElement = null)
         {
             if (_bubble == null)
                 return 0;
+
+            if (insertAfterElement != null && insertAfterElement.parent == _bubble)
+                return _bubble.IndexOf(insertAfterElement) + 1;
 
             int insertIndex = _bubble.childCount;
             if (insertIndex > 0 && _bubble[insertIndex - 1].ClassListContains("typing--inline"))

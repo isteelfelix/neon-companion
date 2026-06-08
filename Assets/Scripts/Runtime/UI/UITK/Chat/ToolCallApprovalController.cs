@@ -117,9 +117,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _toolCallUiHelper.SetBubble(bubble);
         }
 
-        internal bool OnToolProgress(string tool, string label, string emoji, string status)
+        internal bool OnToolProgress(string tool, string label, string emoji, string status, VisualElement insertAfterElement = null)
         {
-            return _toolCallUiHelper.OnToolProgress(tool, label, emoji, status);
+            return _toolCallUiHelper.OnToolProgress(tool, label, emoji, status, insertAfterElement);
         }
 
         internal void ClearToolProgress()
