@@ -179,9 +179,16 @@ namespace NeonCompanion.Runtime.Chat
         {
             if (session == null) return;
 
-            _currentSession = session;
+            // Persist the current session before switching so mid-stream messages are not lost.
+            SaveCurrentSession();
 
-            var sessionProvider = await TryGetProviderByIdAsync(session.providerId);
+            // Re-read the target session from storage to get the latest messages
+            // (the UI passes a potentially stale snapshot from the session list).
+            var freshSessions = _sessionRepository.GetAll();
+            var fresh = freshSessions.Find(s => s.sessionId == session.sessionId);
+            _currentSession = fresh ?? session;
+
+            var sessionProvider = await TryGetProviderByIdAsync(_currentSession.providerId);
             var preferredProvider = sessionProvider == null
                 ? await TryGetProviderByIdAsync(preferredProviderId)
                 : null;
@@ -204,14 +211,14 @@ namespace NeonCompanion.Runtime.Chat
             SyncFromProvider(_currentProvider);
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
-            _currentChatViewModel.ProviderSessionId = session.providerSessionId;
-            _currentChatViewModel.SelectedModel = string.IsNullOrWhiteSpace(session.selectedModel)
+            _currentChatViewModel.ProviderSessionId = _currentSession.providerSessionId;
+            _currentChatViewModel.SelectedModel = string.IsNullOrWhiteSpace(_currentSession.selectedModel)
                 ? _currentProvider?.defaultModel
-                : session.selectedModel;
+                : _currentSession.selectedModel;
             ApplyGenerationSettings();
 
             _currentChatViewModel.Messages.Clear();
-            foreach (var msg in session.messages ?? new List<ChatMessage>())
+            foreach (var msg in _currentSession.messages ?? new List<ChatMessage>())
             {
                 _currentChatViewModel.Messages.Add(msg);
             }
