@@ -421,6 +421,25 @@ namespace NeonCompanion.Runtime.Chat
                 ? session.providerSessionId
                 : session.sessionId;
 
+            // Ensure the WS transport is connected — switching sessions is the first
+            // user action after selecting a provider, and SetMode(Hermes) only creates
+            // the transport without connecting it. Without this, ResumeSession silently
+            // fails on a closed socket (the user can delete but not open sessions).
+            var selector = GlobalBackendSelector.Instance;
+            if (selector != null && _chatTransport != null && !_chatTransport.IsConnected)
+            {
+                var provider = _currentProvider;
+                if (provider != null && IsHermesProvider(provider))
+                    selector.ConfigureHermesEndpoint(provider.baseUrl, provider.apiKey);
+                if (!selector.SessionManager.IsConnected)
+                    await selector.ConnectHermes();
+                if (!_chatTransport.IsConnected)
+                {
+                    NeonLogger.LogWarning("[ChatService] Hermes backend not connected — session not resumed.");
+                    return;
+                }
+            }
+
             // Leave the previous foreground stream running silently in the background.
             DetachForegroundCallbacks();
 
@@ -743,6 +762,11 @@ namespace NeonCompanion.Runtime.Chat
             var selector = GlobalBackendSelector.Instance;
             if (selector?.SessionManager == null)
                 return;
+            if (!selector.SessionManager.IsConnected)
+            {
+                NeonLogger.LogWarning("[ChatService] Cannot resume Hermes session — WS not connected.");
+                return;
+            }
 
             var response = await selector.SessionManager.ResumeSession(hermesSessionId);
             string displaySessionId = !string.IsNullOrWhiteSpace(response.stored_session_id)
