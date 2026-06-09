@@ -914,3 +914,18 @@
 .rail__sessions-list .history__item .history__meta {
     display: none;
 }
+
+/* ============================================================
+   MOBILE FIX — hide rail, full-width content
+   ============================================================ */
+.app.platform-mobile .rail {
+    display: none;
+}
+.app.platform-mobile .rail-resize-handle {
+    display: none;
+}
+.app.platform-mobile .app__content {
+    margin-left: 0;
+    width: 100%;
+    flex-grow: 1;
+}
