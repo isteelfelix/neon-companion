@@ -51,6 +51,7 @@
 .icon--history    { background-image: url("project://database/Assets/UI/Icons/history.svg"); }
 .icon--palette      { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }
 .icon--panel-left   { background-image: url("project://database/Assets/UI/Icons/panel-left.svg"); }
+.icon--hamburger  { background-image: url("project://database/Assets/UI/Icons/hamburger.svg"); }
 .icon--panel-right  { background-image: url("project://database/Assets/UI/Icons/panel-right.svg"); }
 .icon--plus         { background-image: url("project://database/Assets/UI/Icons/plus.svg"); }
 .icon--refresh    { background-image: url("project://database/Assets/UI/Icons/refresh.svg"); }
@@ -929,3 +930,7 @@
     width: 100%;
     flex-grow: 1;
 }
+
+/* Mobile-only visibility */
+.mobile-only { display: none; }
+.app.platform-mobile .mobile-only { display: flex; }

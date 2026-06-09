@@ -82,6 +82,7 @@
         <ui:VisualElement name="main" class="main">
             <ui:VisualElement class="topbar">
                 <ui:VisualElement class="topbar__left">
+                    <ui:Button name="mobile-menu-btn" class="iconbtn icon icon--hamburger mobile-only" tooltip="Меню" />
                     <ui:Label name="topbar-title" text="Новый чат" class="topbar__title" />
                     <ui:VisualElement name="topbar-sep" class="topbar__sep" />
                     <ui:Label name="topbar-subtitle" text="" class="topbar__subtitle" />

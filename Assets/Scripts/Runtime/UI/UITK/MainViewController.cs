@@ -198,6 +198,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _summarizeButton;
         private Button _searchButton;
         private Button _moreButton;
+        private Button _mobileMenuButton;
         private Button _newSessionButton;
         private Button _exportButton;
         private Button _scrollBottomBtn;
@@ -492,6 +493,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _summarizeButton = root.Q<Button>("summarize-btn");
             _searchButton = root.Q<Button>("search-btn");
             _moreButton = root.Q<Button>("more-btn");
+            _mobileMenuButton = root.Q<Button>("mobile-menu-btn");
             _newSessionButton = root.Q<Button>("new-session-btn");
             _exportButton = root.Q<Button>("export-btn");
             _messagesList = root.Q<ScrollView>("messages-list");
@@ -912,6 +914,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void RegisterCallbacks()
         {
             RegisterClick(_moreButton, OnMoreClicked);
+            RegisterClick(_mobileMenuButton, OnMobileMenuClicked);
             RegisterClick(_historyPanelNewSessionButton, OnHistoryPanelNewSessionClicked);
             RegisterClick(_historySearchBtn, OnHistorySearchToggled);
             RegisterClick(_historySearchClear, OnHistorySearchCleared);
@@ -942,6 +945,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarGalleryController.UnregisterCallbacks();
 
             UnregisterClick(_moreButton, OnMoreClicked);
+            UnregisterClick(_mobileMenuButton, OnMobileMenuClicked);
             UnregisterClick(_historyPanelNewSessionButton, OnHistoryPanelNewSessionClicked);
             UnregisterClick(_historySearchBtn, OnHistorySearchToggled);
             UnregisterClick(_historySearchClear, OnHistorySearchCleared);
@@ -1287,6 +1291,27 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (element != null)
                 element.style.display = display;
         }
+
+        private void OnMobileMenuClicked()
+        {
+            if (_railElement == null) return;
+            var display = _railElement.style.display;
+            if (display.keyword == StyleKeyword.None || display.keyword == StyleKeyword.Initial)
+            {
+                _railElement.style.display = DisplayStyle.Flex;
+                _railElement.style.position = Position.Absolute;
+                _railElement.style.left = 0;
+                _railElement.style.top = 0;
+                _railElement.style.bottom = 0;
+                _railElement.style.width = 260;
+            }
+            else
+            {
+                _railElement.style.display = DisplayStyle.None;
+                _railElement.style.position = StyleKeyword.Initial;
+            }
+        }
+
 
         private void OnMoreClicked()
         {
