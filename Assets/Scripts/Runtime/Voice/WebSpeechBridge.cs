@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using NeonCompanion.Runtime.Core;
+using NeonCompanion.Runtime.Platform;
 using UnityEngine;
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
