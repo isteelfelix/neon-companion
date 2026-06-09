@@ -295,6 +295,28 @@
     min-height: 0;
 }
 
+/* Phone: the preview card is fixed 320px / no-shrink on desktop — make it fluid
+   so it never forces a horizontal scroll on a narrow screen. */
+.ff-phone .avatars-page {
+    padding-left: 14px;
+    padding-right: 14px;
+}
+
+.ff-phone .previewcard {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-shrink: 1;
+}
+
+.ff-phone .gallery {
+    flex-wrap: wrap;
+}
+
+.ff-phone .preview-row {
+    flex-wrap: wrap;
+}
+
 .preview-scroll {
     flex-grow: 1;
     min-height: 0;

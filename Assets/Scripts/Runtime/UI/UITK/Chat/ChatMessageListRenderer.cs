@@ -1014,6 +1014,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
             _messagesList.RegisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
             _messagesList.RegisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
+            _messagesList.RegisterCallback<PointerMoveEvent>(OnTranscriptPointerMove);
             _messagesList.RegisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
             _messagesList.RegisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
 
@@ -1032,6 +1033,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 _messagesList.UnregisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
                 _messagesList.UnregisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
+                _messagesList.UnregisterCallback<PointerMoveEvent>(OnTranscriptPointerMove);
                 _messagesList.UnregisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
                 _messagesList.UnregisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
             }
@@ -1199,6 +1201,17 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 #pragma warning disable CS0618
             evt.PreventDefault();
 #pragma warning restore CS0618
+        }
+
+        // Cancel a pending long-press once the finger moves — that's a scroll gesture,
+        // not a hold. Without this, dragging to scroll over a bubble for >480ms popped
+        // the context menu and blocked scrolling (worse with many tools / long messages).
+        private void OnTranscriptPointerMove(PointerMoveEvent evt)
+        {
+            if (_longPressSchedule == null)
+                return;
+            if (Vector2.Distance((Vector2)evt.position, _longPressPos) > 12f)
+                CancelLongPress();
         }
 
         private void OnTranscriptPointerUp(PointerUpEvent evt)

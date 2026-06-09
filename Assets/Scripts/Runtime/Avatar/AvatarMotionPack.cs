@@ -175,7 +175,19 @@ namespace NeonCompanion.Runtime.Avatar
 
             string baseDir = string.Empty;
             if (!string.IsNullOrWhiteSpace(manifestPath))
-                baseDir = Path.GetDirectoryName(manifestPath) ?? string.Empty;
+            {
+                // "res://Avatars/{id}/motion_pack" → base "res://Avatars/{id}" (string slice,
+                // not Path.GetDirectoryName, which mangles the scheme separators).
+                if (manifestPath.StartsWith("res://", StringComparison.Ordinal))
+                {
+                    int slash = manifestPath.LastIndexOf('/');
+                    baseDir = slash > "res://".Length ? manifestPath.Substring(0, slash) : manifestPath;
+                }
+                else
+                {
+                    baseDir = Path.GetDirectoryName(manifestPath) ?? string.Empty;
+                }
+            }
 
             for (int i = 0; i < manifest.clips.Count; i++)
             {
@@ -213,31 +225,23 @@ namespace NeonCompanion.Runtime.Avatar
                 NeonLogger.LogWarning("Motion pack manifest rejected for avatar '" + profile.id + "': " + (load.error ?? "unknown error"));
             }
 
-            // Fallback: try built-in motion pack at StreamingAssets/Avatars/{id}/motion_pack.json
-            // Use Application.streamingAssetsPath directly instead of ResolvePath to avoid
-            // any path-separator or candidate-ordering issues on Windows.
+            // Fallback: built-in motion pack at Resources/Avatars/{id}/motion_pack(.json).
+            // Loaded from Resources (not StreamingAssets) so it works inside the APK on
+            // Android — File.* can't read StreamingAssets there. The "res://" base dir tells
+            // the sprite loader to fetch sheets from Resources too.
             if (!string.IsNullOrWhiteSpace(profile.id) &&
                 (profile.animationClips == null || profile.animationClips.Count == 0))
             {
-                string directPath = Path.Combine(
-                    Application.streamingAssetsPath, "Avatars", profile.id, "motion_pack.json");
-
-                NeonLogger.Log("[MotionPack] Built-in lookup for '" + profile.id +
-                    "' at '" + directPath + "' exists=" + File.Exists(directPath));
-
-                if (File.Exists(directPath))
+                var manifestAsset = Resources.Load<TextAsset>("Avatars/" + profile.id + "/motion_pack");
+                if (manifestAsset != null)
                 {
                     try
                     {
-                        string json = File.ReadAllText(directPath);
-                        var manifest = JsonUtility.FromJson<AvatarMotionPackManifest>(json);
+                        var manifest = JsonUtility.FromJson<AvatarMotionPackManifest>(manifestAsset.text);
                         string validationError = null;
                         if (manifest != null && ValidateManifest(manifest, out validationError))
-                        {
-                            NeonLogger.Log("[MotionPack] Loaded built-in pack for '" + profile.id +
-                                "' clips=" + manifest.clips.Count);
-                            return BuildRuntimeClips(manifest, directPath);
-                        }
+                            return BuildRuntimeClips(manifest, "res://Avatars/" + profile.id + "/motion_pack");
+
                         NeonLogger.LogWarning("[MotionPack] Manifest validation failed for '" +
                             profile.id + "': " + (validationError ?? "manifest was null"));
                     }
@@ -245,6 +249,10 @@ namespace NeonCompanion.Runtime.Avatar
                     {
                         NeonLogger.LogWarning("[MotionPack] Failed to read manifest for '" +
                             profile.id + "': " + ex.Message);
+                    }
+                    finally
+                    {
+                        Resources.UnloadAsset(manifestAsset);
                     }
                 }
             }
@@ -332,6 +340,17 @@ namespace NeonCompanion.Runtime.Avatar
 
             if (Path.IsPathRooted(rawPath))
                 return rawPath;
+
+            // Resources-backed built-in pack: build a Resources key (no extension), e.g.
+            // base "res://Avatars/neon" + "idle_sheet.png" → "res://Avatars/neon/idle_sheet".
+            if (!string.IsNullOrWhiteSpace(baseDir) && baseDir.StartsWith("res://", StringComparison.Ordinal))
+            {
+                string noExt = rawPath;
+                int dot = noExt.LastIndexOf('.');
+                if (dot > 0)
+                    noExt = noExt.Substring(0, dot);
+                return baseDir + "/" + noExt;
+            }
 
             if (!string.IsNullOrWhiteSpace(baseDir))
                 return Path.Combine(baseDir, rawPath);

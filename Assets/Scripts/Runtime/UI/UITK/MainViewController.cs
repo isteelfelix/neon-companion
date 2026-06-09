@@ -503,6 +503,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _sessionsList = root.Q<ScrollView>("sessions-list");
             _historySessionsList = root.Q<ScrollView>("history-panel-sessions-list");
 
+            // Transcript scrolls vertically only — never show a horizontal scrollbar
+            // (long code lines wrap; on phone a stray h-scroll was appearing).
+            if (_messagesList != null)
+                _messagesList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             if (_sessionsList != null)
                 _sessionsList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             if (_historySessionsList != null)

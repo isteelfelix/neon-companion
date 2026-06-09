@@ -70,6 +70,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private FormFactor _formFactor = FormFactor.Unknown;
         private int _railSiblingIndex = -1;
+        private IVisualElementScheduledItem _safeAreaPoll;
+        private Rect _lastSafeArea = new Rect(-1f, -1f, -1f, -1f);
 
         private bool _leftPanelVisible = true;   // десктоп: рейл показан
         private bool _rightPanelVisible = true;  // десктоп: аватар-панель показана
@@ -121,6 +123,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (GeometryHost != null)
                 GeometryHost.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 
+            // Screen.safeArea can lag a frame behind an orientation change, so the value
+            // read in GeometryChangedEvent is sometimes stale (e.g. a landscape notch inset
+            // sticking after rotating back to portrait). Poll and reconcile to be safe.
+            if (_d.AppRoot != null)
+                _safeAreaPoll = _d.AppRoot.schedule.Execute(ReconcileSafeArea).Every(400);
+
             if (_d.PanelResizeHandler != null)
                 _d.PanelResizeHandler.RegisterCallbacks();
         }
@@ -133,8 +141,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (GeometryHost != null)
                 GeometryHost.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 
+            _safeAreaPoll?.Pause();
+            _safeAreaPoll = null;
+
             if (_d.PanelResizeHandler != null)
                 _d.PanelResizeHandler.UnregisterCallbacks();
+        }
+
+        private void ReconcileSafeArea()
+        {
+            if (_d.PlatformInfo == null)
+                return;
+            Rect sa = _d.PlatformInfo.SafeArea;
+            if (sa == _lastSafeArea)
+                return;
+            _lastSafeArea = sa;
+            ApplySafeAreaPadding();
         }
 
         public void OnDisable()
@@ -169,11 +191,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             // here too — otherwise the top inset goes stale and the topbar drifts.
             ApplySafeAreaPadding();
 
+            // app--compact / app--narrow track width on EVERY form factor (phone too):
+            // the per-view USS already ships narrow reflow rules keyed on these classes,
+            // and a phone is narrower than both thresholds — so reuse them instead of
+            // duplicating. (Previously gated behind multiPane, which left phone unstyled.)
             bool multiPane = next != FormFactor.Phone;
             if (_d.AppRoot != null)
             {
-                _d.AppRoot.EnableInClassList("app--compact", multiPane && width < CompactWidth);
-                _d.AppRoot.EnableInClassList("app--narrow", multiPane && width < NarrowWidth);
+                _d.AppRoot.EnableInClassList("app--compact", width < CompactWidth);
+                _d.AppRoot.EnableInClassList("app--narrow", width < NarrowWidth);
             }
 
             if (multiPane)
@@ -522,10 +548,20 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             var safeArea = _d.PlatformInfo.SafeArea;
-            target.style.paddingLeft = Mathf.Max(0f, safeArea.xMin);
-            target.style.paddingRight = Mathf.Max(0f, Screen.width - safeArea.xMax);
-            target.style.paddingTop = Mathf.Max(0f, Screen.height - safeArea.yMax);
-            target.style.paddingBottom = Mathf.Max(0f, safeArea.yMin);
+
+            // Safe-area insets are in physical pixels, but UITK padding is in logical
+            // (panel) units. Under ConstantPhysicalSize the panel is scaled
+            // (logical = physical · refDpi/dpi), so a raw px inset would render ~dpi/refDpi
+            // times too large (huge empty strips top/bottom). Convert via the measured
+            // logical/physical ratio of the root.
+            float screenW = Screen.width;
+            float logicalW = target.resolvedStyle.width;
+            float ratio = (screenW > 1f && logicalW > 1f) ? (logicalW / screenW) : 1f;
+
+            target.style.paddingLeft = Mathf.Max(0f, safeArea.xMin) * ratio;
+            target.style.paddingRight = Mathf.Max(0f, Screen.width - safeArea.xMax) * ratio;
+            target.style.paddingTop = Mathf.Max(0f, Screen.height - safeArea.yMax) * ratio;
+            target.style.paddingBottom = Mathf.Max(0f, safeArea.yMin) * ratio;
         }
 
         public void ApplyPlatformLayout(IPlatformInfoService info)

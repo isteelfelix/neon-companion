@@ -12,16 +12,52 @@ namespace NeonCompanion.Runtime.Avatar
         private static readonly Dictionary<string, Texture2D> TextureCache = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, Sprite[]> SpriteCache = new Dictionary<string, Sprite[]>(StringComparer.OrdinalIgnoreCase);
 
+        // Built-in packs use "res://<ResourcesKey>" so they load from Resources (works
+        // inside the APK on Android, unlike StreamingAssets+File). Sheets are stored as
+        // TextAsset (.bytes) and decoded via LoadImage → readable RGBA32, which the
+        // blank-frame trim (GetPixel) below needs.
+        private const string ResourcesScheme = "res://";
+
         public static Texture2D LoadTexture(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return null;
+
+            if (path.StartsWith(ResourcesScheme, StringComparison.Ordinal))
+                return LoadTextureFromResources(path);
 
             string resolvedPath = ResolvePath(path);
             if (string.IsNullOrWhiteSpace(resolvedPath))
                 return null;
 
             return LoadTextureResolved(resolvedPath);
+        }
+
+        private static Texture2D LoadTextureFromResources(string path)
+        {
+            if (TextureCache.TryGetValue(path, out var cached))
+            {
+                if (cached != null)
+                    return cached;
+                TextureCache.Remove(path);
+            }
+
+            string key = path.Substring(ResourcesScheme.Length);
+            var asset = Resources.Load<TextAsset>(key);
+            if (asset == null)
+                return null;
+
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+            bool ok = texture.LoadImage(asset.bytes);
+            Resources.UnloadAsset(asset);
+            if (!ok)
+            {
+                UnityEngine.Object.Destroy(texture);
+                return null;
+            }
+
+            TextureCache[path] = texture;
+            return texture;
         }
 
         private static Texture2D LoadTextureResolved(string resolvedPath)
@@ -57,7 +93,8 @@ namespace NeonCompanion.Runtime.Avatar
             if (string.IsNullOrWhiteSpace(path) || columns <= 0 || rows <= 0)
                 return Array.Empty<Sprite>();
 
-            string resolvedPath = ResolvePath(path);
+            bool isResources = path.StartsWith(ResourcesScheme, StringComparison.Ordinal);
+            string resolvedPath = isResources ? path : ResolvePath(path);
             if (string.IsNullOrWhiteSpace(resolvedPath))
                 return Array.Empty<Sprite>();
 
@@ -70,7 +107,7 @@ namespace NeonCompanion.Runtime.Avatar
                 SpriteCache.Remove(cacheKey);
             }
 
-            var texture = LoadTextureResolved(resolvedPath);
+            var texture = isResources ? LoadTextureFromResources(resolvedPath) : LoadTextureResolved(resolvedPath);
             if (texture == null)
                 return Array.Empty<Sprite>();
 

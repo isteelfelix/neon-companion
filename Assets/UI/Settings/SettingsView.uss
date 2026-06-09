@@ -324,3 +324,29 @@
 .icon--external { background-image: url("project://database/Assets/UI/Icons/external.svg"); }
 .icon--download { background-image: url("project://database/Assets/UI/Icons/download.svg"); }
 .icon--heart    { background-image: url("project://database/Assets/UI/Icons/heart.svg"); }
+
+/* ============================================================
+   Phone reflow (Settings has no app--compact rules of its own)
+   ============================================================ */
+
+/* Footer actions (Документация / Поддержать / Выход) wrap instead of
+   running off the right edge and forcing a horizontal scroll. */
+.ff-phone .settings-actions-row {
+    flex-wrap: wrap;
+}
+
+.ff-phone .settings-actions-row > Button {
+    margin-bottom: 6px;
+}
+
+/* A setting row whose control is too wide lets the control wrap below the label
+   rather than overflowing the viewport. */
+.ff-phone .settings-row {
+    flex-wrap: wrap;
+}
+
+/* Sliders are narrower on phone so the label + control fit one row. */
+.ff-phone .slider-input {
+    min-width: 120px;
+    max-width: 150px;
+}

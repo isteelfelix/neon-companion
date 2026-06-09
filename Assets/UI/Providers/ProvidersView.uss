@@ -427,3 +427,31 @@
 .app--compact .provider__meta {
     display: none;
 }
+
+/* ============================================================
+   Phone — stack the backend selector so its fixed 220px dropdown
+   doesn't push the row off-screen (horizontal scroll).
+   ============================================================ */
+.ff-phone .backend-selector {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.ff-phone .backend-selector > .label {
+    margin-right: 0;
+    margin-bottom: 8px;
+}
+
+.ff-phone .backend-selector > .input {
+    width: 100%;
+}
+
+.ff-phone .backend-selector__hint {
+    margin-left: 0;
+    margin-top: 6px;
+}
+
+/* Provider edit action buttons wrap instead of overflowing. */
+.ff-phone .provider-edit-actions {
+    flex-wrap: wrap;
+}

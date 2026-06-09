@@ -1867,6 +1867,12 @@
     display: flex;
 }
 
+/* Terminal isn't useful on a phone — hide the Avatar/Terminal tab bar so the
+   avatar overlay just shows the avatar. (#right-panel-tabs is built in C#.) */
+.ff-phone #right-panel-tabs {
+    display: none;
+}
+
 /* Roomier composer + larger input text for touch. padding-bottom is left to
    the base/.platform-android rule so it can absorb the gesture-nav inset. */
 .ff-phone .composer {
@@ -1915,6 +1921,32 @@
 /* Bubbles use more of the narrow width. */
 .ff-phone .transcript__bubble {
     max-width: 88%;
+}
+
+/* Bubble actions (copy / regenerate / listen): on desktop they float at left:100%
+   and reveal on hover. Touch has no hover and that off-bubble strip is unreachable,
+   so on phone drop them into the flow under the bubble, always visible, big enough
+   to tap. */
+.ff-phone .transcript__bubble-actions {
+    position: relative;
+    left: auto;
+    top: auto;
+    flex-direction: row;
+    padding-left: 0;
+    margin-top: 8px;
+    opacity: 1;
+    visibility: visible;
+}
+
+.ff-phone .transcript__bubble-actions > Button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 8px;
+    margin-right: 8px;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 /* ============== Image Lightbox (click-to-preview) ============== */

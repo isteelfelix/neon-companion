@@ -184,30 +184,24 @@ namespace NeonCompanion.Runtime.Platform
 
             _androidPickCompletion = new TaskCompletionSource<string>();
 
-            AndroidPermissionHelper.RequestPermission(
-                AndroidPermissionHelper.READ_EXTERNAL_STORAGE,
-                onGranted: () =>
-                {
-                    var bridge = AndroidFilePickerBridge.GetOrCreate(OnAndroidImagePicked);
-
-                    try
-                    {
-                        var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                        var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                        var picker = new AndroidJavaClass("com.neoncompanion.filepicker.NeonFilePickerActivity");
-                        picker.CallStatic("pick", activity, bridge.gameObject.name);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning($"[NeonCompanion] Android file picker failed: {ex.Message}");
-                        _androidPickCompletion.TrySetResult(null);
-                    }
-                },
-                onDenied: () =>
-                {
-                    Debug.LogWarning("[NeonCompanion] Storage permission denied for file picker");
-                    _androidPickCompletion.TrySetResult(null);
-                });
+            // NeonFilePickerActivity uses ACTION_GET_CONTENT (Storage Access Framework),
+            // which grants per-file access via the system picker and needs NO storage
+            // permission. Requesting READ_EXTERNAL_STORAGE first was actively breaking
+            // this on Android 13+ (that permission isn't granted there → the old onGranted
+            // never fired → the picker never opened). Open the picker directly.
+            try
+            {
+                var bridge = AndroidFilePickerBridge.GetOrCreate(OnAndroidImagePicked);
+                var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+                var picker = new AndroidJavaClass("com.neoncompanion.filepicker.NeonFilePickerActivity");
+                picker.CallStatic("pick", activity, bridge.gameObject.name);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[NeonCompanion] Android file picker failed: {ex.Message}");
+                _androidPickCompletion.TrySetResult(null);
+            }
 
             return _androidPickCompletion.Task;
         }
