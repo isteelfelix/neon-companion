@@ -10,12 +10,17 @@ using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.UI.Chat;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Chat
 {
     public sealed class ChatService
     {
+        private const int RichHermesHistoryMessageThreshold = 120;
+        private const int HermesCompletionPollMs = 2000;
+        private const int HermesCompletionMaxWaitMs = 30 * 60 * 1000;
+
         private readonly IAiClient _aiClient;
         private readonly ProviderManager _providerManager;
         private readonly IChatSessionRepository _sessionRepository;
@@ -37,7 +42,9 @@ namespace NeonCompanion.Runtime.Chat
             public System.Text.StringBuilder reasoning;
             public bool active;
             public DateTime startTime;
-            public int previousTotal;
+            public bool usageBaselineKnown;
+            public int baselineOutput;
+            public int baselineTotal;
             public TaskCompletionSource<bool> complete;
             public Action<string> tokenCb;                              // UI; set only while foreground
             public Action<string, string, string, string> toolCb;      // UI; set only while foreground
@@ -459,7 +466,7 @@ namespace NeonCompanion.Runtime.Chat
             SyncFromProvider(_currentProvider);
 
             HermesStream existing = GetStream(serverId);
-            if (existing != null && existing.viewModel != null)
+            if (existing != null && existing.viewModel != null && (existing.active || existing.complete != null))
             {
                 // Live re-attach: reuse the in-memory stream (it may still be generating).
                 _currentChatViewModel = existing.viewModel;
@@ -468,7 +475,9 @@ namespace NeonCompanion.Runtime.Chat
             }
             else
             {
-                // Load history from the server (source of truth) and register a stream for it.
+                // Load history from the server (source of truth) and refresh the display->runtime
+                // mapping. Idle in-memory snapshots may point at a runtime id that the gateway has
+                // already closed; using them directly causes "session not found" on prompt.submit.
                 await ResumeHermesSessionAsync(serverId);
                 HermesStream s = GetOrCreateStream(serverId);
                 s.viewModel = _currentChatViewModel;
@@ -781,9 +790,34 @@ namespace NeonCompanion.Runtime.Chat
             _currentChatViewModel.SelectedModel = response.info?.model ?? _currentProvider?.defaultModel;
             ApplyGenerationSettings();
 
-            // Load messages from the server response (source of truth).
+            // Load messages from the server (source of truth). Prefer the REST history endpoint,
+            // which returns structured messages incl. tool_calls, so tool blocks survive a reload
+            // (the WS resume payload is text-only). Fall back to the WS text messages on failure.
             _currentChatViewModel.Messages.Clear();
-            if (response.messages != null)
+            List<ChatMessage> richHistory = null;
+            if (ShouldFetchRichHermesHistory(response))
+            {
+                try
+                {
+                    var rest = selector.RestClient;
+                    if (rest != null)
+                    {
+                        JToken historyJson = await rest.GetSessionMessages(displaySessionId);
+                        richHistory = BuildMessagesFromServerHistory(historyJson);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    NeonLogger.LogWarning("[ChatService] Rich Hermes history fetch failed: " + ex.Message);
+                }
+            }
+
+            if (richHistory != null && richHistory.Count > 0)
+            {
+                for (int i = 0; i < richHistory.Count; i++)
+                    _currentChatViewModel.Messages.Add(richHistory[i]);
+            }
+            else if (response.messages != null)
             {
                 for (int i = 0; i < response.messages.Length; i++)
                 {
@@ -812,6 +846,200 @@ namespace NeonCompanion.Runtime.Chat
             };
 
             NeonLogger.Log("Hermes session resumed: " + displaySessionId);
+        }
+
+        private static bool ShouldFetchRichHermesHistory(SessionResumeResponse response)
+        {
+            if (response == null || response.messages == null || response.messages.Length == 0)
+                return true;
+
+            return response.messages.Length <= RichHermesHistoryMessageThreshold;
+        }
+
+        /// <summary>
+        /// Reconstruct the transcript from the gateway's structured message history. Tool calls are
+        /// stored server-side as separate assistant messages (empty content + tool_calls[]); we group
+        /// consecutive non-user messages into one assistant bubble with interleaved text + tool
+        /// segments, matching how a streamed turn looks. Tool results (role="tool") fill each tool's
+        /// expandable details. Returns null if the payload isn't a recognizable message array.
+        /// </summary>
+        private static List<ChatMessage> BuildMessagesFromServerHistory(JToken json)
+        {
+            if (json == null)
+                return null;
+
+            JToken arr = json;
+            if (json.Type == JTokenType.Object)
+            {
+                JToken nested = json["messages"] ?? json["items"] ?? json["data"];
+                if (nested != null)
+                    arr = nested;
+            }
+            if (arr == null || arr.Type != JTokenType.Array)
+                return null;
+
+            var result = new List<ChatMessage>();
+            ChatMessage turn = null;
+            var toolByCallId = new Dictionary<string, ChatMessageSegment>();
+
+            foreach (JToken m in arr.Children())
+            {
+                if (m == null || m.Type != JTokenType.Object)
+                    continue;
+
+                string role = (string)m["role"];
+                if (string.IsNullOrEmpty(role))
+                    role = "assistant";
+                string content = (string)m["content"] ?? string.Empty;
+                long ts = ReadUnixSeconds(m["timestamp"]);
+
+                if (string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
+                {
+                    turn = null;
+                    toolByCallId.Clear();
+                    result.Add(new ChatMessage { role = "user", content = content, unixTimeSeconds = ts });
+                    continue;
+                }
+                if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
+                    continue; // system prompts aren't shown in the transcript
+                if (string.Equals(role, "tool", StringComparison.OrdinalIgnoreCase))
+                {
+                    string tcId = (string)m["tool_call_id"];
+                    ChatMessageSegment seg;
+                    if (!string.IsNullOrEmpty(tcId) && toolByCallId.TryGetValue(tcId, out seg) &&
+                        !string.IsNullOrWhiteSpace(content))
+                    {
+                        seg.details = TruncateToolDetails(content);
+                    }
+                    continue;
+                }
+
+                // assistant turn (accumulate until the next user message)
+                if (turn == null)
+                {
+                    turn = new ChatMessage
+                    {
+                        role = "assistant",
+                        content = string.Empty,
+                        unixTimeSeconds = ts,
+                        segments = new List<ChatMessageSegment>()
+                    };
+                    result.Add(turn);
+                }
+                if (turn.segments == null)
+                    turn.segments = new List<ChatMessageSegment>();
+
+                JToken toolCalls = m["tool_calls"];
+                if (toolCalls != null && toolCalls.Type == JTokenType.Array)
+                {
+                    foreach (JToken tc in toolCalls.Children())
+                    {
+                        if (tc == null || tc.Type != JTokenType.Object)
+                            continue;
+                        JToken fn = tc["function"];
+                        string name = (fn != null ? (string)fn["name"] : null) ?? (string)tc["name"] ?? "tool";
+                        string args = fn != null ? (string)fn["arguments"] : null;
+                        string callId = (string)tc["call_id"] ?? (string)tc["id"];
+                        if (string.IsNullOrEmpty(callId))
+                            callId = Guid.NewGuid().ToString("N");
+
+                        var seg = new ChatMessageSegment
+                        {
+                            kind = ChatMessageSegment.ToolKind,
+                            key = name + "\x01" + callId,
+                            tool = name,
+                            label = BuildToolLabel(name, args),
+                            emoji = string.Empty,
+                            status = "complete"
+                        };
+                        turn.segments.Add(seg);
+                        toolByCallId[callId] = seg;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    turn.segments.Add(new ChatMessageSegment { kind = ChatMessageSegment.TextKind, text = content });
+                    turn.content = string.IsNullOrEmpty(turn.content) ? content : (turn.content + "\n" + content);
+                    turn.unixTimeSeconds = ts;
+                }
+            }
+
+            return result;
+        }
+
+        private static long ReadUnixSeconds(JToken token)
+        {
+            if (token != null)
+            {
+                try
+                {
+                    if (token.Type == JTokenType.Integer)
+                        return (long)token;
+                    if (token.Type == JTokenType.Float)
+                        return (long)(double)token;
+                    if (token.Type == JTokenType.String)
+                    {
+                        double d;
+                        if (double.TryParse((string)token, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out d))
+                            return (long)d;
+                    }
+                }
+                catch { }
+            }
+            return DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
+
+        private static string TruncateToolDetails(string text)
+        {
+            if (string.IsNullOrEmpty(text) || text.Length <= 10000)
+                return text;
+            return text.Substring(0, 10000) + "\n... [truncated]";
+        }
+
+        /// <summary>Derive a short tool label from its JSON arguments (e.g. the command/query).</summary>
+        private static string BuildToolLabel(string name, string argsJson)
+        {
+            if (string.IsNullOrWhiteSpace(argsJson))
+                return name ?? string.Empty;
+            try
+            {
+                JToken parsed = JToken.Parse(argsJson);
+                if (parsed != null && parsed.Type == JTokenType.Object)
+                {
+                    JObject obj = (JObject)parsed;
+                    string[] preferred = { "command", "cmd", "query", "q", "pattern", "path", "file", "filename", "url", "text", "name" };
+                    for (int i = 0; i < preferred.Length; i++)
+                    {
+                        JToken v = obj[preferred[i]];
+                        if (v != null && v.Type == JTokenType.String)
+                        {
+                            string s = (string)v;
+                            if (!string.IsNullOrWhiteSpace(s))
+                                return ShortenLabel(s);
+                        }
+                    }
+                    foreach (JProperty p in obj.Properties())
+                    {
+                        if (p.Value != null && p.Value.Type == JTokenType.String)
+                        {
+                            string s = (string)p.Value;
+                            if (!string.IsNullOrWhiteSpace(s))
+                                return ShortenLabel(s);
+                        }
+                    }
+                }
+            }
+            catch { }
+            return name ?? string.Empty;
+        }
+
+        private static string ShortenLabel(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return string.Empty;
+            s = s.Replace("\r", " ").Replace("\n", " ").Trim();
+            return s.Length > 80 ? s.Substring(0, 80) + "..." : s;
         }
 
         /// <summary>
@@ -1020,7 +1248,7 @@ namespace NeonCompanion.Runtime.Chat
             stream.tokenCb = onStreamToken;
             stream.toolCb = onToolProgress;
             stream.lastError = null;
-            var completion = new TaskCompletionSource<bool>();
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             stream.complete = completion;
 
             // Optimistic user bubble — removed only if the submit itself fails (e.g. session busy),
@@ -1068,29 +1296,40 @@ namespace NeonCompanion.Runtime.Chat
                 }
 
                 // Send via WebSocket — this returns after RPC ack.
-                await _chatTransport.SendMessage(sid, message);
+                try
+                {
+                    await _chatTransport.SendMessage(sid, message);
+                }
+                catch (Exception ex)
+                {
+                    if (!IsSessionNotFoundError(ex))
+                        throw;
+
+                    NeonLogger.LogWarning("[Hermes] Session id was stale; resuming and retrying prompt.submit once.");
+                    await EnsureHermesSessionReadyAsync(true);
+                    sid = _currentSession != null ? _currentSession.providerSessionId : sid;
+                    if (string.IsNullOrWhiteSpace(sid))
+                        throw;
+
+                    stream = GetOrCreateStream(sid);
+                    stream.viewModel = _currentChatViewModel;
+                    stream.session = _currentSession;
+                    stream.tokenCb = onStreamToken;
+                    stream.toolCb = onToolProgress;
+                    stream.lastError = null;
+                    stream.complete = completion;
+
+                    if (stream.viewModel != null && stream.viewModel.Messages != null &&
+                        !ContainsMessageReference(stream.viewModel.Messages, localUserMessage))
+                    {
+                        stream.viewModel.Messages.Add(localUserMessage);
+                    }
+
+                    await _chatTransport.SendMessage(sid, message);
+                }
                 submitAcknowledged = true;
 
-                // Wait for generation to complete (message.complete or error/disconnect).
-                var completedTask = await Task.WhenAny(
-                    completion.Task,
-                    Task.Delay(300000)); // 5 min safety timeout
-
-                if (completedTask != completion.Task)
-                {
-                    NeonLogger.LogWarning("[Hermes] Generation timed out after 5 minutes");
-                }
-                else
-                {
-                    bool completed = await completion.Task;
-                    if (!completed)
-                    {
-                        string error = string.IsNullOrWhiteSpace(stream.lastError)
-                            ? "Hermes generation failed."
-                            : stream.lastError;
-                        throw new InvalidOperationException(error);
-                    }
-                }
+                await WaitForHermesCompletionAsync(sid, stream, completion);
             }
             catch
             {
@@ -1103,6 +1342,105 @@ namespace NeonCompanion.Runtime.Chat
             {
                 if (stream.complete == completion)
                     stream.complete = null;
+            }
+        }
+
+        private async Task WaitForHermesCompletionAsync(string sessionId, HermesStream stream, TaskCompletionSource<bool> completion)
+        {
+            DateTime deadline = DateTime.UtcNow.AddMilliseconds(HermesCompletionMaxWaitMs);
+
+            while (true)
+            {
+                int delayMs = HermesCompletionPollMs;
+                double remainingMs = (deadline - DateTime.UtcNow).TotalMilliseconds;
+                if (remainingMs <= 0)
+                {
+                    NeonLogger.LogWarning("[Hermes] Generation timed out after " + (HermesCompletionMaxWaitMs / 60000) + " minutes");
+                    if (await TryReconcileCompletedHermesSessionAsync(sessionId, stream))
+                        return;
+                    throw new TimeoutException("Hermes generation timed out.");
+                }
+                if (remainingMs < delayMs)
+                    delayMs = (int)remainingMs;
+
+                Task completedTask = await Task.WhenAny(completion.Task, Task.Delay(delayMs));
+                if (completedTask == completion.Task)
+                {
+                    bool completed = await completion.Task;
+                    if (!completed)
+                    {
+                        string error = stream == null || string.IsNullOrWhiteSpace(stream.lastError)
+                            ? "Hermes generation failed."
+                            : stream.lastError;
+                        throw new InvalidOperationException(error);
+                    }
+                    return;
+                }
+
+                if (IsHermesRuntimeFinished(sessionId) &&
+                    await TryReconcileCompletedHermesSessionAsync(sessionId, stream))
+                {
+                    return;
+                }
+            }
+        }
+
+        private static bool IsHermesRuntimeFinished(string sessionId)
+        {
+            var manager = GlobalBackendSelector.Instance?.SessionManager;
+            var runtime = manager != null ? manager.RuntimeInfoFor(sessionId) : null;
+            return runtime != null && runtime.running.HasValue && !runtime.running.Value;
+        }
+
+        private async Task<bool> TryReconcileCompletedHermesSessionAsync(string sessionId, HermesStream stream)
+        {
+            if (stream == null || string.IsNullOrEmpty(sessionId))
+                return false;
+
+            var selector = GlobalBackendSelector.Instance;
+            var rest = selector != null ? selector.RestClient : null;
+            if (rest == null)
+                return false;
+
+            try
+            {
+                JToken historyJson = await rest.GetSessionMessages(sessionId);
+                List<ChatMessage> history = BuildMessagesFromServerHistory(historyJson);
+                if (history == null || history.Count == 0)
+                    return false;
+
+                if (stream.viewModel != null)
+                {
+                    stream.viewModel.Messages.Clear();
+                    for (int i = 0; i < history.Count; i++)
+                        stream.viewModel.Messages.Add(history[i]);
+                }
+
+                if (stream.session != null)
+                {
+                    stream.session.messages = new List<ChatMessage>(history);
+                    stream.session.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                }
+
+                bool isForeground = stream.viewModel == _currentChatViewModel;
+                stream.active = false;
+                stream.streamingMessage = null;
+                stream.buffer = null;
+                stream.reasoning = null;
+                stream.lastError = null;
+                stream.complete?.TrySetResult(true);
+
+                if (isForeground)
+                    EmitLatestAssistantResponse();
+
+                RaiseSessionStatesChanged();
+                NeonLogger.Log("[Hermes] Reconciled completed session from REST history: " + sessionId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("[Hermes] Completion reconcile failed: " + ex.Message);
+                return false;
             }
         }
 
@@ -1169,6 +1507,7 @@ namespace NeonCompanion.Runtime.Chat
             s.buffer = new System.Text.StringBuilder();
             s.reasoning = new System.Text.StringBuilder();
             s.startTime = DateTime.UtcNow;
+            CaptureHermesUsageBaseline(sessionId, s);
             s.streamingMessage = new ChatMessage
             {
                 role = "assistant",
@@ -1180,6 +1519,24 @@ namespace NeonCompanion.Runtime.Chat
             return true;
         }
 
+        private static void CaptureHermesUsageBaseline(string sessionId, HermesStream stream)
+        {
+            if (stream == null)
+                return;
+
+            stream.usageBaselineKnown = false;
+            stream.baselineOutput = 0;
+            stream.baselineTotal = 0;
+
+            var usage = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfoFor(sessionId)?.usage;
+            if (usage == null)
+                return;
+
+            stream.usageBaselineKnown = true;
+            stream.baselineOutput = usage.output;
+            stream.baselineTotal = usage.total;
+        }
+
         private static void ClearStreamPendingState(HermesStream stream)
         {
             if (stream == null)
@@ -1189,6 +1546,10 @@ namespace NeonCompanion.Runtime.Chat
             stream.active = false;
             stream.streamingMessage = null;
             stream.buffer = null;
+            stream.reasoning = null;
+            stream.usageBaselineKnown = false;
+            stream.baselineOutput = 0;
+            stream.baselineTotal = 0;
             stream.tokenCb = null;
             stream.toolCb = null;
             stream.lastError = null;
@@ -1211,7 +1572,7 @@ namespace NeonCompanion.Runtime.Chat
         /// is mapped to a live runtime session id. After reconnects the mapping is gone, so resume
         /// the persisted session before sending.
         /// </summary>
-        private async Task EnsureHermesSessionReadyAsync()
+        private async Task EnsureHermesSessionReadyAsync(bool forceResume = false)
         {
             var selector = GlobalBackendSelector.Instance;
             var sessionManager = selector?.SessionManager;
@@ -1224,7 +1585,7 @@ namespace NeonCompanion.Runtime.Chat
             string desired = _currentSession != null ? _currentSession.providerSessionId : null;
             if (!string.IsNullOrWhiteSpace(desired))
             {
-                if (!sessionManager.HasRuntimeSessionFor(desired))
+                if (forceResume || !sessionManager.HasRuntimeSessionFor(desired))
                 {
                     try
                     {
@@ -1248,6 +1609,27 @@ namespace NeonCompanion.Runtime.Chat
             }
 
             await StartHermesSessionAsync(_currentSession == null);
+        }
+
+        private static bool IsSessionNotFoundError(Exception ex)
+        {
+            string message = ex != null ? ex.Message : null;
+            return !string.IsNullOrWhiteSpace(message) &&
+                message.IndexOf("session not found", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool ContainsMessageReference(List<ChatMessage> messages, ChatMessage target)
+        {
+            if (messages == null || target == null)
+                return false;
+
+            for (int i = 0; i < messages.Count; i++)
+            {
+                if (ReferenceEquals(messages[i], target))
+                    return true;
+            }
+
+            return false;
         }
 
         // === Hermes Transport Event Handlers (multiplexed by display/persisted session id) ===
@@ -1336,11 +1718,9 @@ namespace NeonCompanion.Runtime.Chat
                 {
                     s.streamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - s.startTime).TotalSeconds;
                     var usage = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfoFor(sessionId)?.usage;
-                    if (usage != null && usage.total > 0)
-                    {
-                        s.streamingMessage.tokenCount = usage.total - s.previousTotal;
-                        s.previousTotal = usage.total;
-                    }
+                    int tokenCount = MessageOutputTokenCount(usage, s, normalizedFinalText);
+                    if (tokenCount > 0)
+                        s.streamingMessage.tokenCount = tokenCount;
                 }
                 catch { }
             }
@@ -1364,6 +1744,27 @@ namespace NeonCompanion.Runtime.Chat
             // Generation finished — refresh the sidebar "working" indicator.
             RaiseSessionStatesChanged();
             // Server is the source of truth in Hermes mode — no local persistence.
+        }
+
+        private static int MessageOutputTokenCount(UsageStats usage, HermesStream stream, string text)
+        {
+            if (usage != null && stream != null && stream.usageBaselineKnown)
+            {
+                if (usage.output > stream.baselineOutput)
+                    return usage.output - stream.baselineOutput;
+                if (usage.total > stream.baselineTotal)
+                    return usage.total - stream.baselineTotal;
+            }
+
+            return EstimateTokenCount(text);
+        }
+
+        private static int EstimateTokenCount(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return 0;
+
+            return Math.Max(1, (text.Length + 3) / 4);
         }
 
         private void HandleHermesToolUpdate(string sessionId, ToolCallUpdate update)
@@ -1513,6 +1914,9 @@ namespace NeonCompanion.Runtime.Chat
 
             if (_currentProvider == null || _currentChatViewModel == null || _currentSession == null)
                 throw new InvalidOperationException("Chat session is not ready.");
+
+            if (_chatTransport != null)
+                await EnsureHermesSessionReadyAsync(true);
 
             string requestedModel = modelId.Trim();
             string previousModel = CurrentSessionModel;

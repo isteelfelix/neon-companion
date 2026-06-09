@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -165,6 +166,92 @@ namespace NeonCompanion.Runtime.UI.UITK
             return root;
         }
 
+        private static bool IsDoneStatus(string status)
+        {
+            return string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(status, "done", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Render a run of consecutive same-tool calls as one collapsed chip ("tool ×N"). Expanding
+        /// reveals the individual calls (each its own command line, expandable to its output).
+        /// </summary>
+        internal static VisualElement CreateGroupedEntryElement(string tool, List<ChatMessageSegment> group)
+        {
+            int count = group != null ? group.Count : 0;
+            bool allDone = true;
+            if (group != null)
+            {
+                for (int i = 0; i < group.Count; i++)
+                {
+                    if (group[i] == null || !IsDoneStatus(group[i].status))
+                    {
+                        allDone = false;
+                        break;
+                    }
+                }
+            }
+            string icon = GetToolEmoji(tool);
+
+            var header = new VisualElement();
+            header.AddToClassList("tool-entry");
+            header.AddToClassList("tool-entry--header");
+            header.AddToClassList(allDone ? "tool-entry--done" : "tool-entry--running");
+
+            var toggleLabel = new Label("▶");
+            toggleLabel.AddToClassList("tool-entry__toggle");
+
+            var iconLabel = new Label(icon);
+            iconLabel.AddToClassList("tool-entry__icon");
+
+            var nameLabel = new Label(tool ?? string.Empty);
+            nameLabel.AddToClassList("tool-entry__name");
+
+            var detailLabel = new Label("×" + count);
+            detailLabel.AddToClassList("tool-entry__label");
+
+            var statusLabel = new Label(allDone ? "✓" : "●");
+            statusLabel.AddToClassList("tool-entry__status");
+            statusLabel.AddToClassList(allDone ? "tool-entry__status--done" : "tool-entry__status--running");
+
+            header.Add(toggleLabel);
+            header.Add(iconLabel);
+            header.Add(nameLabel);
+            header.Add(detailLabel);
+            header.Add(statusLabel);
+
+            var details = new VisualElement();
+            details.AddToClassList("tool-entry__details");
+            details.style.display = DisplayStyle.None;
+            if (group != null)
+            {
+                for (int i = 0; i < group.Count; i++)
+                {
+                    var seg = group[i];
+                    if (seg == null)
+                        continue;
+                    details.Add(CreateEntryElement(seg.tool, seg.label, seg.emoji, seg.status, seg.inlineDiff, seg.details));
+                }
+            }
+
+            var root = new VisualElement();
+            root.AddToClassList("tool-entry-root");
+            root.Add(header);
+            root.Add(details);
+
+            bool expanded = false;
+            header.RegisterCallback<ClickEvent>(evt =>
+            {
+                expanded = !expanded;
+                toggleLabel.text = expanded ? "▼" : "▶";
+                details.style.display = expanded ? DisplayStyle.Flex : DisplayStyle.None;
+                evt.StopPropagation();
+            });
+
+            return root;
+        }
+
         public bool OnToolProgress(string tool, string label, string emoji, string status, VisualElement insertAfterElement = null)
         {
             if (_bubble == null)
@@ -196,11 +283,23 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (insertAfterElement != null && insertAfterElement.parent == _bubble)
                 return _bubble.IndexOf(insertAfterElement) + 1;
 
+            // Insert before the contiguous "bottom" block (stats footer, action buttons, typing
+            // dots, voice bubble) so tool chips never land below the stats footer.
             int insertIndex = _bubble.childCount;
-            if (insertIndex > 0 && _bubble[insertIndex - 1].ClassListContains("typing--inline"))
+            while (insertIndex > 0 && IsTrailingFooterElement(_bubble[insertIndex - 1]))
                 insertIndex--;
 
             return insertIndex;
+        }
+
+        private static bool IsTrailingFooterElement(VisualElement el)
+        {
+            if (el == null)
+                return false;
+            return el.ClassListContains("typing--inline")
+                || el.ClassListContains("transcript__stats")
+                || el.ClassListContains("transcript__bubble-actions")
+                || el.ClassListContains("voice-bubble");
         }
 
         private static void MarkEntryDone(VisualElement entry)

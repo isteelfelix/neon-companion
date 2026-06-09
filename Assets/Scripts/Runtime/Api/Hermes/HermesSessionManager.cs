@@ -693,10 +693,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrWhiteSpace(finalText) && evt.Payload != null)
                 NeonLogger.LogWarning("[Hermes] message.complete had no text payload: " + evt.Payload.ToString(Formatting.None));
 
-            OnComplete?.Invoke(sid, finalText);
-            SetBusy(sid, false);
-            SetAwaiting(sid, false);
-
             if (evt.Payload != null)
             {
                 UsageStats usage = ExtractUsage(evt.Payload);
@@ -704,6 +700,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 if (usage != null && rt != null)
                     rt.usage = usage;
             }
+
+            OnComplete?.Invoke(sid, finalText);
+            SetBusy(sid, false);
+            SetAwaiting(sid, false);
         }
 
         private void HandleReasoningDelta(GatewayEvent evt)

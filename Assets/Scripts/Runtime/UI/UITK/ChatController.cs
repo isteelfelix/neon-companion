@@ -425,8 +425,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     _d.RenderMessages(BuildExcluding(chat.CurrentChatViewModel?.Messages, streamingMsg));
                     _streamingCoordinator.Begin();
-                    string partial = chat.AttachForegroundStreamCallbacks(_streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
-                    _streamingCoordinator.Seed(partial ?? streamingMsg.content);
+                    chat.AttachForegroundStreamCallbacks(_streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
+                    // Rebuild the bubble from everything streamed so far (text + tool chips, in order)
+                    // so returning mid-stream shows the earlier tools too — not just the new ones.
+                    if (streamingMsg.segments != null && streamingMsg.segments.Count > 0)
+                        _streamingCoordinator.Replay(streamingMsg.segments);
+                    else
+                        _streamingCoordinator.Seed(streamingMsg.content);
                 }
             }
 
@@ -560,12 +565,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                         if (client != null)
                         {
                             var usage = client.LastStreamUsage;
-                            if (usage.total_tokens > 0)
+                            int completionTokens = MessageCompletionTokenCount(usage);
+                            if (completionTokens > 0)
                             {
                                 double elapsed = (DateTime.UtcNow - _streamingCoordinator.StartTime).TotalSeconds;
                                 if (elapsed < 0)
                                     elapsed = 0;
-                                _streamingCoordinator.SetFinalStats(usage.total_tokens, elapsed);
+                                _streamingCoordinator.SetFinalStats(completionTokens, elapsed);
                                 // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
                                 try
                                 {
@@ -946,8 +952,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 // New session is idle — reflect that on the send button (another session may still
                 // be generating in the background, but this foreground one is not).
                 _streamingCoordinator?.SetSending(false);
-                await _d.LoadSessionsAsync();
                 _d.ShowChat();
+                _ = LoadSessionsSafelyAsync();
                 return true;
             }
             catch (Exception ex)
@@ -955,6 +961,19 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.ShowSystemMessage(GetCreateChatFailureMessage(chat, ex));
                 NeonLogger.LogError(ex.ToString());
                 return false;
+            }
+        }
+
+        private async Task LoadSessionsSafelyAsync()
+        {
+            try
+            {
+                if (_d.LoadSessionsAsync != null)
+                    await _d.LoadSessionsAsync();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
             }
         }
 
@@ -1053,12 +1072,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                             if (client != null)
                             {
                                 var usage = client.LastStreamUsage;
-                                if (usage.total_tokens > 0)
+                                int completionTokens = MessageCompletionTokenCount(usage);
+                                if (completionTokens > 0)
                                 {
                                     double elapsed = (DateTime.UtcNow - _streamingCoordinator.StartTime).TotalSeconds;
                                     if (elapsed < 0)
                                         elapsed = 0;
-                                    _streamingCoordinator.SetFinalStats(usage.total_tokens, elapsed);
+                                    _streamingCoordinator.SetFinalStats(completionTokens, elapsed);
                                     // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
                                     try
                                     {
@@ -1114,6 +1134,15 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ===== Context Window Indicator (U-36) =====
+
+        private static int MessageCompletionTokenCount(UsageData usage)
+        {
+            if (usage.completion_tokens > 0)
+                return usage.completion_tokens;
+            if (usage.total_tokens > 0 && usage.prompt_tokens > 0 && usage.total_tokens > usage.prompt_tokens)
+                return usage.total_tokens - usage.prompt_tokens;
+            return 0;
+        }
 
         private void OnBackendModeChanged(BackendMode mode)
         {

@@ -66,6 +66,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _folderInputPopup;
         private EventCallback<PointerDownEvent> _folderInputOutsideHandler;
         private VisualElement _folderInputRoot;
+        private ChatService _statusChat;
+        private string _loadingSessionId;
 
         // Last rendered inputs, so status indicators can be refreshed without a server round-trip.
         private List<ChatSession> _lastRenderedSessions;
@@ -78,6 +80,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.SessionsList == null && _d.HistorySessionsList == null)
                 return;
 
+            _statusChat = chat;
             _d.ShowHistoryState(LocalizationExtensions.Get("history.loading", "Загрузка истории…"), false);
             var allSessions = await chat.GetAllSessionsAsync();
             var providers = new List<ProviderConfig>();
@@ -182,6 +185,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _d.ShowHistoryState(string.Empty, false);
             string currentSessionId = _d.GetCurrentSessionId();
+            ChatService chatForStatus = _statusChat;
 
             var groups = BuildFolderGroups(sessions);
             var sortedFolders = groups.Keys
@@ -190,8 +194,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 .ToList();
             bool hasUncat = groups.ContainsKey("");
 
-            RenderGroupsToList(_d.SessionsList, groups, sortedFolders, hasUncat, providers, currentSessionId);
-            RenderGroupsToList(_d.HistorySessionsList, groups, sortedFolders, hasUncat, providers, currentSessionId);
+            RenderGroupsToList(_d.SessionsList, groups, sortedFolders, hasUncat, providers, currentSessionId, chatForStatus);
+            RenderGroupsToList(_d.HistorySessionsList, groups, sortedFolders, hasUncat, providers, currentSessionId, chatForStatus);
         }
 
         // ---- History search ----
@@ -236,6 +240,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             var chat = await _d.GetChatServiceAsync();
             if (chat == null) return;
+            _statusChat = chat;
             try
             {
                 _d.ShowHistoryState(LocalizationExtensions.Get("history.loading", "Загрузка истории…"), false);
@@ -255,12 +260,19 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public async Task SwitchSessionAsync(ChatSession session)
         {
+            if (session == null)
+                return;
+
+            _loadingSessionId = session.sessionId;
+            RerenderStatus();
+
             try
             {
                 var chat = await _d.GetChatServiceAsync();
                 if (chat == null) return;
 
                 await chat.SwitchToSessionAsync(session);
+                _statusChat = chat;
                 _d.SetCurrentSession(
                     session.sessionId,
                     string.IsNullOrWhiteSpace(session.title) || session.title == "New chat"
@@ -273,8 +285,28 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.SetProviderHeader(chat.CurrentProvider, chat.CurrentSessionModel);
                 _d.RenderMessages();
                 _d.OnSessionSwitched?.Invoke();
-                await LoadSessionsAsync(chat);
                 _d.ShowChat();
+                _ = LoadSessionsSafelyAsync(chat);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError(ex.ToString());
+            }
+            finally
+            {
+                if (string.Equals(_loadingSessionId, session.sessionId, StringComparison.Ordinal))
+                {
+                    _loadingSessionId = null;
+                    RerenderStatus();
+                }
+            }
+        }
+
+        private async Task LoadSessionsSafelyAsync(ChatService chat)
+        {
+            try
+            {
+                await LoadSessionsAsync(chat);
             }
             catch (Exception ex)
             {
@@ -326,7 +358,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             target.Add(groupLabel);
         }
 
-        private VisualElement CreateSessionItem(ChatSession session, bool isActive, List<ProviderConfig> providers)
+        private VisualElement CreateSessionItem(ChatSession session, bool isActive, List<ProviderConfig> providers, ChatService chatForStatus)
         {
             var container = new VisualElement();
             container.AddToClassList("history__item");
@@ -373,8 +405,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Per-session status indicator (Hermes only): red pulsing dot = waiting for an
             // approval/clarify answer; cyan pulsing dot = currently generating.
-            var chatForStatus = _d.GetChatServiceAsync().Result;
-            if (chatForStatus != null && chatForStatus.IsHermesActive)
+            if (!string.IsNullOrEmpty(_loadingSessionId) &&
+                string.Equals(_loadingSessionId, session.sessionId, StringComparison.Ordinal))
+            {
+                headerRow.Insert(0, CreateLoadingRing());
+            }
+            else if (chatForStatus != null && chatForStatus.IsHermesActive)
             {
                 if (chatForStatus.SessionNeedsAttention(session.sessionId))
                     headerRow.Insert(0, CreateStatusDot(new Color(0.95f, 0.45f, 0.25f, 1f)));
@@ -400,6 +436,39 @@ namespace NeonCompanion.Runtime.UI.UITK
             });
 
             return container;
+        }
+
+        private static VisualElement CreateLoadingRing()
+        {
+            var ring = new VisualElement();
+            ring.style.width = 12;
+            ring.style.height = 12;
+            ring.style.borderTopLeftRadius = 6;
+            ring.style.borderTopRightRadius = 6;
+            ring.style.borderBottomLeftRadius = 6;
+            ring.style.borderBottomRightRadius = 6;
+            ring.style.borderTopWidth = 2;
+            ring.style.borderRightWidth = 2;
+            ring.style.borderBottomWidth = 2;
+            ring.style.borderLeftWidth = 2;
+            ring.style.borderTopColor = new Color(0.31f, 0.78f, 0.95f, 1f);
+            ring.style.borderRightColor = new Color(0.31f, 0.78f, 0.95f, 0.25f);
+            ring.style.borderBottomColor = new Color(0.31f, 0.78f, 0.95f, 0.25f);
+            ring.style.borderLeftColor = new Color(0.31f, 0.78f, 0.95f, 0.7f);
+            ring.style.marginRight = 6;
+            ring.style.alignSelf = Align.Center;
+            ring.style.flexShrink = 0;
+
+            float angle = 0f;
+            ring.schedule.Execute(() =>
+            {
+                angle += 30f;
+                if (angle >= 360f)
+                    angle -= 360f;
+                ring.style.rotate = new Rotate(new Angle(angle, AngleUnit.Degree));
+            }).Every(50);
+
+            return ring;
         }
 
         private static VisualElement CreateStatusDot(Color color)
@@ -526,7 +595,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             List<string> sortedFolders,
             bool hasUncat,
             List<ProviderConfig> providers,
-            string currentSessionId)
+            string currentSessionId,
+            ChatService chatForStatus)
         {
             if (target == null) return;
 
@@ -541,7 +611,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     foreach (var s in list)
                     {
                         bool isActive = !string.IsNullOrEmpty(currentSessionId) && s.sessionId == currentSessionId;
-                        var item = CreateSessionItem(s, isActive, providers);
+                        var item = CreateSessionItem(s, isActive, providers, chatForStatus);
                         target.Add(item);
                         _d.SessionItems.Add(item);
                     }
@@ -563,7 +633,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         foreach (var s in list)
                         {
                             bool isActive = !string.IsNullOrEmpty(currentSessionId) && s.sessionId == currentSessionId;
-                            var item = CreateSessionItem(s, isActive, providers);
+                            var item = CreateSessionItem(s, isActive, providers, chatForStatus);
                             target.Add(item);
                             _d.SessionItems.Add(item);
                         }
@@ -575,7 +645,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     foreach (var s in list)
                     {
                         bool isActive = !string.IsNullOrEmpty(currentSessionId) && s.sessionId == currentSessionId;
-                        var item = CreateSessionItem(s, isActive, providers);
+                        var item = CreateSessionItem(s, isActive, providers, chatForStatus);
                         target.Add(item);
                         _d.SessionItems.Add(item);
                     }

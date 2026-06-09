@@ -811,24 +811,62 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (bubble == null || message == null || message.segments == null || message.segments.Count == 0)
                 return false;
 
+            var segments = message.segments;
             bool hasText = false;
-
-            for (int i = 0; i < message.segments.Count; i++)
+            int i = 0;
+            while (i < segments.Count)
             {
-                var segment = message.segments[i];
+                var segment = segments[i];
                 if (segment == null)
+                {
+                    i++;
                     continue;
+                }
 
-                if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(segment.text))
+                if (string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
                 {
-                    bubble.Add(CreateTranscriptBody(segment.text, true));
-                    hasText = true;
+                    if (!string.IsNullOrWhiteSpace(segment.text))
+                    {
+                        bubble.Add(CreateTranscriptBody(segment.text, true));
+                        hasText = true;
+                    }
+                    i++;
+                    continue;
                 }
-                else if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+
+                if (string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
                 {
-                    bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff, segment.details));
+                    // Collect a run of consecutive tool calls with the same tool name and collapse
+                    // them into one grouped chip ("tool ×N") so long agent turns don't pile up.
+                    var run = new System.Collections.Generic.List<ChatMessageSegment>();
+                    run.Add(segment);
+                    int j = i + 1;
+                    while (j < segments.Count)
+                    {
+                        var next = segments[j];
+                        if (next == null)
+                        {
+                            j++;
+                            continue;
+                        }
+                        if (!string.Equals(next.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+                            break;
+                        if (!string.Equals(next.tool ?? string.Empty, segment.tool ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                            break;
+                        run.Add(next);
+                        j++;
+                    }
+
+                    if (run.Count == 1)
+                        bubble.Add(ToolCallUiHelper.CreateEntryElement(segment.tool, segment.label, segment.emoji, segment.status, segment.inlineDiff, segment.details));
+                    else
+                        bubble.Add(ToolCallUiHelper.CreateGroupedEntryElement(segment.tool, run));
+
+                    i = j;
+                    continue;
                 }
+
+                i++;
             }
 
             return hasText;

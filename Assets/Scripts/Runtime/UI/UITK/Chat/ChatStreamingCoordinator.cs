@@ -212,6 +212,33 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _scrollToBottom?.Invoke();
         }
 
+        /// <summary>
+        /// Replay already-accumulated segments (text + tools, in order) through the live append path
+        /// so re-attaching to a still-streaming session shows the earlier tool chips too — not just
+        /// new ones. Routing through OnToken/OnToolProgress also registers tool entries so subsequent
+        /// live updates for the same tool dedupe instead of duplicating.
+        /// </summary>
+        internal void Replay(IReadOnlyList<ChatMessageSegment> segments)
+        {
+            if (segments == null)
+                return;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                var seg = segments[i];
+                if (seg == null)
+                    continue;
+                if (string.Equals(seg.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!string.IsNullOrEmpty(seg.text))
+                        OnToken(seg.text);
+                }
+                else if (string.Equals(seg.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    OnToolProgress(seg.tool, seg.label, seg.emoji, seg.status);
+                }
+            }
+        }
+
         internal void OnToken(string token)
         {
             if (_typingDots != null)

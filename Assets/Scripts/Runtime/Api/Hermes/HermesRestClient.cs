@@ -133,9 +133,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 "/api/sessions/search?q=" + UnityWebRequest.EscapeURL(query));
         }
 
-        public async Task<JObject> GetSessionMessages(string sessionId)
+        public async Task<JToken> GetSessionMessages(string sessionId)
         {
-            return await Get<JObject>(
+            // Returns the full structured history (incl. tool_calls) — array or { messages: [...] }.
+            return await Get<JToken>(
                 "/api/sessions/" + UnityWebRequest.EscapeURL(sessionId) + "/messages");
         }
 
