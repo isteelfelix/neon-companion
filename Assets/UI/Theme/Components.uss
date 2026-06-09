@@ -230,16 +230,21 @@
 
 .neon-dropdown__arrow {
     flex-shrink: 0;
-    color: var(--text-3);
-    font-size: 14px;
+    width: 12px;
+    height: 12px;
     margin-left: 6px;
-    -unity-text-align: middle-center;
+    background-image: url("project://database/Assets/UI/Icons/arrow.svg");
+    -unity-background-image-tint-color: var(--text-3);
+    -unity-background-scale-mode: scale-to-fit;
+    background-repeat: no-repeat;
+    /* arrow.svg is a right chevron (>); 90° points it down (caret). */
+    rotate: 90deg;
     transition-property: rotate;
     transition-duration: 0.15s;
 }
 
 .neon-dropdown--open .neon-dropdown__arrow {
-    rotate: 180deg;
+    rotate: 270deg;
 }
 
 /* Popup overlay — added to panel.visualTree, always on top */

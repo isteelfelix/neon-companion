@@ -1268,7 +1268,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_topbarTitle != null)
                 _topbarTitle.text = title;
 
-            bool hasSubtitle = !string.IsNullOrWhiteSpace(subtitle);
+            // On phone the subtitle + separator are dropped to keep the topbar uncluttered
+            // (handled here, not in USS, because the display is set inline which beats USS).
+            bool hasSubtitle = !string.IsNullOrWhiteSpace(subtitle) && !_layoutController.IsPhone;
             if (_topbarSubtitle != null)
             {
                 _topbarSubtitle.text = subtitle ?? string.Empty;

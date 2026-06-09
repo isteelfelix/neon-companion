@@ -115,6 +115,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private int _downIndex = -1;
         private string _downLink;
         private bool _captureScheduled;
+        private Vector2 _downTouchPos;
 
         public string PlainText
         {
@@ -933,8 +934,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (evt.button != 0)
                 return;
 
-            Focus();
             _downIndex = HitTestPlainIndex(evt.localPosition, out _downLink);
+
+            // Touch: do NOT capture the pointer or start a selection drag — let the
+            // parent ScrollView own the gesture so the transcript scrolls. We keep the
+            // down spot/link to open a link on a tap (OnPointerUp). No StopPropagation.
+            if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
+            {
+                _downTouchPos = evt.position;
+                _isDragging = false;
+                _capturedPointerId = -1;
+                return;
+            }
+
+            Focus();
             _selectionAnchor = _downIndex;
             _selectionFocus = _downIndex;
             _isDragging = true;
@@ -956,6 +969,20 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnPointerUp(PointerUpEvent evt)
         {
+            // Touch: selection is disabled, but a tap (no real movement) on a link opens it.
+            if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
+            {
+                if (!string.IsNullOrEmpty(_downLink) && Vector2.Distance(evt.position, _downTouchPos) <= 12f)
+                {
+                    string upLinkTouch;
+                    int upIndexTouch = HitTestPlainIndex(evt.localPosition, out upLinkTouch);
+                    if (upIndexTouch == _downIndex)
+                        Application.OpenURL(_downLink);
+                }
+                _downLink = null;
+                return;
+            }
+
             if (!_isDragging || evt.pointerId != _capturedPointerId)
                 return;
 

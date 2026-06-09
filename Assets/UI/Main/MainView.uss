@@ -831,6 +831,59 @@
     display: none;
 }
 
+/* Model picker is set display:flex inline (C#), so we only constrain its width
+   here — keep it compact so the title keeps room on a narrow topbar. */
+.ff-phone .topbar__model-picker {
+    max-width: 108px;
+    margin-left: 8px;
+}
+
+/* Hamburger: ensure a comfortable, clearly-visible tap target on phone. */
+.ff-phone #mobile-menu-btn {
+    margin-right: 4px;
+}
+
+/* ============================================================
+   Phone — page reflow (Providers / Avatars / Settings / History)
+   These pages were laid out for a wide desktop column; on a narrow
+   phone the header action rows and dropdowns overflow off-screen.
+   ============================================================ */
+
+/* Stack the page header so action buttons wrap below the title/subtitle
+   instead of running off the right edge. */
+.ff-phone .page__head {
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 16px;
+}
+
+.ff-phone .page__actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-top: 10px;
+}
+
+.ff-phone .page__actions > Button {
+    margin-left: 0;
+    margin-right: 8px;
+    margin-bottom: 6px;
+}
+
+.ff-phone .page__title {
+    font-size: 20px;
+}
+
+/* Dropdowns must never force horizontal overflow on a narrow screen. */
+.ff-phone .neon-dropdown,
+.ff-phone .neon-dropdown__trigger {
+    max-width: 100%;
+}
+
+/* Avatar filter chips wrap onto multiple rows instead of clipping. */
+.ff-phone .filterrow {
+    flex-wrap: wrap;
+}
+
 /* ============================================================
    Android / iOS — system inset breathing room (added to safe-area padding)
    ============================================================ */

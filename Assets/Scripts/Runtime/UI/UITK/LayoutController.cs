@@ -79,6 +79,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public bool LeftPanelVisible => _leftPanelVisible;
         public bool RightPanelVisible => _rightPanelVisible;
+        public bool IsPhone => _formFactor == FormFactor.Phone;
 
         public void SetDeps(Deps deps)
         {
@@ -164,6 +165,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Десктопные/планшетные суб-брейкпоинты имеют смысл только когда есть
             // классическая многопанельная раскладка (не телефон).
+            // Safe area changes on rotation; geometry fires on rotation, so recompute
+            // here too — otherwise the top inset goes stale and the topbar drifts.
+            ApplySafeAreaPadding();
+
             bool multiPane = next != FormFactor.Phone;
             if (_d.AppRoot != null)
             {
@@ -500,17 +505,27 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (target == null || _d.PlatformInfo == null)
                 return;
 
-            var info = _d.PlatformInfo;
-            var safeArea = info.SafeArea;
+            ApplySafeAreaPadding();
 
-            // На десктопе SafeArea = полный экран → padding будет 0.
+            target.EnableInClassList("platform-android", Application.platform == RuntimePlatform.Android);
+            target.EnableInClassList("platform-ios", Application.platform == RuntimePlatform.IPhonePlayer);
+        }
+
+        /// <summary>
+        /// Safe Area → padding на app-root. На десктопе SafeArea = весь экран → 0.
+        /// Пересчитывается на каждом изменении геометрии (в т.ч. поворот экрана).
+        /// </summary>
+        private void ApplySafeAreaPadding()
+        {
+            var target = _d.AppRoot;
+            if (target == null || _d.PlatformInfo == null)
+                return;
+
+            var safeArea = _d.PlatformInfo.SafeArea;
             target.style.paddingLeft = Mathf.Max(0f, safeArea.xMin);
             target.style.paddingRight = Mathf.Max(0f, Screen.width - safeArea.xMax);
             target.style.paddingTop = Mathf.Max(0f, Screen.height - safeArea.yMax);
             target.style.paddingBottom = Mathf.Max(0f, safeArea.yMin);
-
-            target.EnableInClassList("platform-android", Application.platform == RuntimePlatform.Android);
-            target.EnableInClassList("platform-ios", Application.platform == RuntimePlatform.IPhonePlayer);
         }
 
         public void ApplyPlatformLayout(IPlatformInfoService info)

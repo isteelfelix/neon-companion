@@ -18,6 +18,11 @@ namespace NeonCompanion.Runtime.Localization
 
             string text = _service.Get(key);
 
+            // If the lookup failed (service echoes the key back, or empty), keep the
+            // element's existing text (its UXML default) instead of showing the raw key.
+            if (string.IsNullOrEmpty(text) || text == key)
+                return element;
+
             if (element is Button button)
             {
                 button.text = text;

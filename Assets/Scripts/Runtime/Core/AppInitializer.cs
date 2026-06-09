@@ -44,8 +44,18 @@ namespace NeonCompanion.Runtime.Core
                     preferredProviderId = settings.activeProviderId;
 
                 var provider = await app.ProviderManager.GetActiveProviderForBackendAsync(mode, preferredProviderId, true);
+                Debug.Log($"[NeonCompanion] Provider restore: mode={mode} preferredId='{preferredProviderId}' " +
+                          $"activeProviderId='{settings.activeProviderId}' resolved='{(provider != null ? provider.id : "<none>")}' " +
+                          $"enabled={(provider != null && provider.isEnabled)}");
                 if (provider != null)
+                {
                     chatService.SetActiveProviderWithoutSession(provider);
+
+                    // Если восстановили Hermes-провайдера — сразу поднимаем соединение,
+                    // чтобы после перезапуска не приходилось «включать» его вручную.
+                    if (mode == BackendMode.Hermes && backendSelector != null)
+                        await backendSelector.ConnectHermes();
+                }
             }
 
             Debug.Log("[NeonCompanion] Application initialized successfully.");

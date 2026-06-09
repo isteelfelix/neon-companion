@@ -1870,14 +1870,46 @@
 /* Roomier composer + larger input text for touch. padding-bottom is left to
    the base/.platform-android rule so it can absorb the gesture-nav inset. */
 .ff-phone .composer {
-    padding-top: 8px;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-top: 6px;
+    padding-left: 8px;
+    padding-right: 6px;
 }
 
 .ff-phone .composer__input {
     font-size: 15px;
-    min-height: 44px;
+    min-height: 40px;
+}
+
+/* The ⌘/↵ keyboard hint is meaningless on touch — reclaim that width. */
+.ff-phone .composer__hint {
+    display: none;
+}
+
+/* Shrink the left attach/mic buttons so the text input gets the room.
+   More specific than the generic ff-phone .iconbtn 44px rule, so it wins. */
+.ff-phone .composer__controls .iconbtn {
+    min-width: 38px;
+    min-height: 38px;
+    width: 38px;
+    height: 38px;
+    padding: 8px;
+}
+
+/* "Отправить" → compact arrow button: hide the label (transparent text) and
+   paint the send glyph as a centered background image. Keeps btn--primary bg. */
+.ff-phone .composer__send {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    padding-left: 0;
+    padding-right: 0;
+    color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/UI/Icons/send.svg");
+    -unity-background-image-tint-color: #ffffff;
+    background-repeat: no-repeat;
+    background-position-x: center;
+    background-position-y: center;
+    background-size: 18px 18px;
 }
 
 /* Bubbles use more of the narrow width. */

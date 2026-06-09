@@ -97,7 +97,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _valueLabel.AddToClassList("neon-dropdown__value");
             _valueLabel.pickingMode = PickingMode.Ignore;
 
-            var arrow = new Label("▾");
+            // Caret as an SVG chevron (rotated to point down), not a "▾" glyph —
+            // the UI font lacks U+25BE and rendered tofu (□) on device.
+            var arrow = new VisualElement();
             arrow.AddToClassList("neon-dropdown__arrow");
             arrow.pickingMode = PickingMode.Ignore;
 

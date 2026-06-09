@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Globalization;
 using UnityEngine;
 
@@ -41,18 +40,19 @@ namespace NeonCompanion.Runtime.Localization
 
         private void LoadLanguage(string languageCode, bool asFallback = false)
         {
-            string path = Path.Combine(Application.streamingAssetsPath, "Localization", $"{languageCode}.json");
-
-            if (!File.Exists(path))
+            // Loaded from Resources (not StreamingAssets): StreamingAssets live inside
+            // the APK on Android and can't be read with File.* — Resources.Load works
+            // synchronously on every platform. Files: Assets/Resources/Localization/*.json
+            var asset = Resources.Load<TextAsset>($"Localization/{languageCode}");
+            if (asset == null)
             {
-                Debug.LogWarning($"[Localization] Language file not found: {path}");
+                Debug.LogWarning($"[Localization] Language resource not found: Localization/{languageCode}");
                 return;
             }
 
             try
             {
-                string json = File.ReadAllText(path);
-                var data = ParseStringMap(json);
+                var data = ParseStringMap(asset.text);
 
                 foreach (var kvp in data)
                 {
@@ -64,7 +64,11 @@ namespace NeonCompanion.Runtime.Localization
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Localization] Failed to load {languageCode}.json: {ex.Message}");
+                Debug.LogError($"[Localization] Failed to parse {languageCode}.json: {ex.Message}");
+            }
+            finally
+            {
+                Resources.UnloadAsset(asset);
             }
         }
 
