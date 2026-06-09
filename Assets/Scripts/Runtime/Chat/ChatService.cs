@@ -49,6 +49,7 @@ namespace NeonCompanion.Runtime.Chat
             public Action<string> tokenCb;                              // UI; set only while foreground
             public Action<string, string, string, string> toolCb;      // UI; set only while foreground
             public string lastError;
+            public string pendingUserContent;
         }
 
         private readonly Dictionary<string, HermesStream> _hermesStreams =
@@ -1248,6 +1249,7 @@ namespace NeonCompanion.Runtime.Chat
             stream.tokenCb = onStreamToken;
             stream.toolCb = onToolProgress;
             stream.lastError = null;
+            stream.pendingUserContent = message;
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             stream.complete = completion;
 
@@ -1317,6 +1319,7 @@ namespace NeonCompanion.Runtime.Chat
                     stream.tokenCb = onStreamToken;
                     stream.toolCb = onToolProgress;
                     stream.lastError = null;
+                    stream.pendingUserContent = message;
                     stream.complete = completion;
 
                     if (stream.viewModel != null && stream.viewModel.Messages != null &&
@@ -1388,6 +1391,8 @@ namespace NeonCompanion.Runtime.Chat
         private static bool IsHermesRuntimeFinished(string sessionId)
         {
             var manager = GlobalBackendSelector.Instance?.SessionManager;
+            if (manager != null && manager.IsSessionBusy(sessionId))
+                return false;
             var runtime = manager != null ? manager.RuntimeInfoFor(sessionId) : null;
             return runtime != null && runtime.running.HasValue && !runtime.running.Value;
         }
@@ -1407,6 +1412,8 @@ namespace NeonCompanion.Runtime.Chat
                 JToken historyJson = await rest.GetSessionMessages(sessionId);
                 List<ChatMessage> history = BuildMessagesFromServerHistory(historyJson);
                 if (history == null || history.Count == 0)
+                    return false;
+                if (!HistoryContainsCompletedPendingTurn(history, stream.pendingUserContent))
                     return false;
 
                 if (stream.viewModel != null)
@@ -1428,6 +1435,7 @@ namespace NeonCompanion.Runtime.Chat
                 stream.buffer = null;
                 stream.reasoning = null;
                 stream.lastError = null;
+                stream.pendingUserContent = null;
                 stream.complete?.TrySetResult(true);
 
                 if (isForeground)
@@ -1442,6 +1450,71 @@ namespace NeonCompanion.Runtime.Chat
                 NeonLogger.LogWarning("[Hermes] Completion reconcile failed: " + ex.Message);
                 return false;
             }
+        }
+
+        private static bool HistoryContainsCompletedPendingTurn(List<ChatMessage> history, string pendingUserContent)
+        {
+            if (history == null || history.Count == 0)
+                return false;
+            if (string.IsNullOrWhiteSpace(pendingUserContent))
+                return true;
+
+            string pending = NormalizeForComparison(pendingUserContent);
+            int userIndex = -1;
+            for (int i = history.Count - 1; i >= 0; i--)
+            {
+                ChatMessage message = history[i];
+                if (message == null || !string.Equals(message.role, "user", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (string.Equals(NormalizeForComparison(message.content), pending, StringComparison.Ordinal))
+                {
+                    userIndex = i;
+                    break;
+                }
+            }
+
+            if (userIndex < 0)
+                return false;
+
+            for (int i = userIndex + 1; i < history.Count; i++)
+            {
+                ChatMessage message = history[i];
+                if (message != null &&
+                    string.Equals(message.role, "assistant", StringComparison.OrdinalIgnoreCase) &&
+                    MessageHasAssistantOutput(message))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool MessageHasAssistantOutput(ChatMessage message)
+        {
+            if (message == null)
+                return false;
+            if (!string.IsNullOrWhiteSpace(message.content))
+                return true;
+            if (message.segments == null)
+                return false;
+
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                ChatMessageSegment segment = message.segments[i];
+                if (segment != null && !string.IsNullOrWhiteSpace(segment.text))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string NormalizeForComparison(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+            return text.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
         }
 
         private HermesStream GetStream(string sessionId)
@@ -1553,6 +1626,7 @@ namespace NeonCompanion.Runtime.Chat
             stream.tokenCb = null;
             stream.toolCb = null;
             stream.lastError = null;
+            stream.pendingUserContent = null;
         }
 
         /// <summary>Detach the foreground UI callbacks so a stream keeps running silently in background.</summary>
@@ -1733,6 +1807,7 @@ namespace NeonCompanion.Runtime.Chat
                 s.buffer = null;
                 s.reasoning = null;
                 s.lastError = null;
+                s.pendingUserContent = null;
 
                 // Signal the waiting SendViaTransport that generation is done.
                 s.complete?.TrySetResult(true);
@@ -1885,6 +1960,7 @@ namespace NeonCompanion.Runtime.Chat
                     st.active = false;
                     st.streamingMessage = null;
                     st.buffer = null;
+                    st.pendingUserContent = null;
                     st.complete?.TrySetResult(false);
                 }
                 RaiseSessionStatesChanged();
@@ -1898,6 +1974,7 @@ namespace NeonCompanion.Runtime.Chat
             s.active = false;
             s.streamingMessage = null;
             s.buffer = null;
+            s.pendingUserContent = null;
             s.complete?.TrySetResult(false);
             RaiseSessionStatesChanged();
         }
