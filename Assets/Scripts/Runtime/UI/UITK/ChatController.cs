@@ -387,7 +387,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Cancel the foreground session's generation. Use the live service (not the per-send
             // _currentChatService, which races to null when parallel sends overlap).
             var chat = _d.GetChatServiceAsync().Result;
-            chat?.CancelCurrentGeneration();
+            bool stopped = chat != null && chat.CancelCurrentGeneration();
+            if (stopped)
+            {
+                _streamingCoordinator?.Abort();
+                _approvalController?.ClearToolProgress();
+                _streamingCoordinator?.SetSending(false);
+                _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
+            }
         }
 
         /// <summary>True if the session the UI is currently viewing has a generation in flight.</summary>

@@ -50,6 +50,7 @@ namespace NeonCompanion.Runtime.Chat
             public Action<string, string, string, string> toolCb;      // UI; set only while foreground
             public string lastError;
             public string pendingUserContent;
+            public bool interrupted;
         }
 
         private readonly Dictionary<string, HermesStream> _hermesStreams =
@@ -1104,16 +1105,26 @@ namespace NeonCompanion.Runtime.Chat
             }
         }
 
-        public void CancelCurrentGeneration()
+        public bool CancelCurrentGeneration()
         {
             if (_chatTransport != null && _chatTransport.IsConnected)
             {
                 string sid = _currentSession?.providerSessionId;
                 if (!string.IsNullOrEmpty(sid))
+                {
                     _ = _chatTransport.Interrupt(sid);
-                return;
+                    HermesStream stream = GetStream(sid);
+                    if (stream != null)
+                    {
+                        CompleteInterruptedHermesStream(stream);
+                        RaiseSessionStatesChanged();
+                        return true;
+                    }
+                }
+                return false;
             }
             _currentChatViewModel?.CancelGeneration();
+            return true;
         }
 
         public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
@@ -1250,6 +1261,7 @@ namespace NeonCompanion.Runtime.Chat
             stream.toolCb = onToolProgress;
             stream.lastError = null;
             stream.pendingUserContent = message;
+            stream.interrupted = false;
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             stream.complete = completion;
 
@@ -1320,6 +1332,7 @@ namespace NeonCompanion.Runtime.Chat
                     stream.toolCb = onToolProgress;
                     stream.lastError = null;
                     stream.pendingUserContent = message;
+                    stream.interrupted = false;
                     stream.complete = completion;
 
                     if (stream.viewModel != null && stream.viewModel.Messages != null &&
@@ -1377,6 +1390,8 @@ namespace NeonCompanion.Runtime.Chat
                             : stream.lastError;
                         throw new InvalidOperationException(error);
                     }
+                    if (stream != null && stream.interrupted)
+                        throw new OperationCanceledException();
                     return;
                 }
 
@@ -1436,6 +1451,7 @@ namespace NeonCompanion.Runtime.Chat
                 stream.reasoning = null;
                 stream.lastError = null;
                 stream.pendingUserContent = null;
+                stream.interrupted = false;
                 stream.complete?.TrySetResult(true);
 
                 if (isForeground)
@@ -1627,6 +1643,36 @@ namespace NeonCompanion.Runtime.Chat
             stream.toolCb = null;
             stream.lastError = null;
             stream.pendingUserContent = null;
+            stream.interrupted = false;
+        }
+
+        private static void CompleteInterruptedHermesStream(HermesStream stream)
+        {
+            if (stream == null)
+                return;
+
+            if (stream.streamingMessage != null)
+            {
+                string text = null;
+                if (stream.buffer != null && stream.buffer.Length > 0)
+                    text = stream.buffer.ToString();
+                if (!string.IsNullOrEmpty(text))
+                {
+                    stream.streamingMessage.content = text;
+                    NormalizeHermesFinalTextSegments(stream.streamingMessage, text);
+                }
+
+                stream.streamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - stream.startTime).TotalSeconds;
+            }
+
+            stream.active = false;
+            stream.streamingMessage = null;
+            stream.buffer = null;
+            stream.reasoning = null;
+            stream.lastError = null;
+            stream.pendingUserContent = null;
+            stream.interrupted = true;
+            stream.complete?.TrySetResult(true);
         }
 
         /// <summary>Detach the foreground UI callbacks so a stream keeps running silently in background.</summary>
@@ -1961,6 +2007,7 @@ namespace NeonCompanion.Runtime.Chat
                     st.streamingMessage = null;
                     st.buffer = null;
                     st.pendingUserContent = null;
+                    st.interrupted = false;
                     st.complete?.TrySetResult(false);
                 }
                 RaiseSessionStatesChanged();
@@ -1975,6 +2022,7 @@ namespace NeonCompanion.Runtime.Chat
             s.streamingMessage = null;
             s.buffer = null;
             s.pendingUserContent = null;
+            s.interrupted = false;
             s.complete?.TrySetResult(false);
             RaiseSessionStatesChanged();
         }
