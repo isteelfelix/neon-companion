@@ -1014,8 +1014,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
             _messagesList.RegisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
             _messagesList.RegisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
-            _messagesList.RegisterCallback<PointerMoveEvent>(OnTranscriptPointerMove);
+            // Capture phase (TrickleDown): the ScrollView/tool rows capture the pointer while
+            // scrolling, so a bubble-phase move handler may never fire. In capture phase the
+            // list sees every move first and can cancel the pending long-press.
+            _messagesList.RegisterCallback<PointerMoveEvent>(OnTranscriptPointerMove, TrickleDown.TrickleDown);
             _messagesList.RegisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
+            // Any actual scroll cancels a pending long-press — the most reliable signal,
+            // independent of pointer-capture quirks during touch scrolling.
+            if (_messagesList.verticalScroller != null)
+                _messagesList.verticalScroller.valueChanged += OnTranscriptScrolled;
             _messagesList.RegisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
 
             _transcriptContextRoot = ChatController.GetDocumentRoot(_messagesList);
@@ -1033,8 +1040,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 _messagesList.UnregisterCallback<PointerDownEvent>(OnTranscriptPointerDown, TrickleDown.TrickleDown);
                 _messagesList.UnregisterCallback<ContextualMenuPopulateEvent>(OnTranscriptContextMenuPopulate, TrickleDown.TrickleDown);
-                _messagesList.UnregisterCallback<PointerMoveEvent>(OnTranscriptPointerMove);
+                _messagesList.UnregisterCallback<PointerMoveEvent>(OnTranscriptPointerMove, TrickleDown.TrickleDown);
                 _messagesList.UnregisterCallback<PointerUpEvent>(OnTranscriptPointerUp);
+                if (_messagesList.verticalScroller != null)
+                    _messagesList.verticalScroller.valueChanged -= OnTranscriptScrolled;
                 _messagesList.UnregisterCallback<PointerCancelEvent>(OnTranscriptPointerCancel);
             }
 
@@ -1212,6 +1221,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return;
             if (Vector2.Distance((Vector2)evt.position, _longPressPos) > 12f)
                 CancelLongPress();
+        }
+
+        private void OnTranscriptScrolled(float _)
+        {
+            CancelLongPress();
         }
 
         private void OnTranscriptPointerUp(PointerUpEvent evt)

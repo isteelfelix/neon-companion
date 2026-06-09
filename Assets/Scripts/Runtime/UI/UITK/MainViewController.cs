@@ -1477,7 +1477,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             return false;
         }
 
-        private void RefreshVoiceControls() => _voiceController.RefreshVoiceControls();
+        private void RefreshVoiceControls()
+        {
+            _ = RefreshVoiceControlsAsync();
+        }
+
+        private async Task RefreshVoiceControlsAsync()
+        {
+            ChatService chat = _chatService;
+            if (chat == null)
+                chat = await GetChatServiceAsync();
+
+            if (chat != null)
+                await _voiceController.EnsureVoicePipelineAsync(chat);
+
+            _voiceController.RefreshVoiceControls();
+        }
 
         private void BindVoiceAnimationEvents() => _voiceController.BindVoiceAnimationEvents();
 

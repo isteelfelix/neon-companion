@@ -356,7 +356,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var toggle = new VisualElement();
             toggle.AddToClassList("toggle");
-            if (isActive) toggle.AddToClassList("toggle--on");
+            // Toggle reflects the PERSISTED enabled flag, not the live chat-current-provider.
+            // Otherwise, right after restart (before CurrentProvider is resolved) an enabled
+            // provider shows OFF and needs two taps to flip. The "активен" chip above still
+            // marks which one is the current chat provider.
+            if (provider.isEnabled) toggle.AddToClassList("toggle--on");
             var knob = new VisualElement();
             knob.AddToClassList("toggle__knob");
             toggle.Add(knob);
@@ -673,9 +677,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var settings = app.Settings.Load() ?? new AppSettings();
                 var activeChat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
                 string savedForMode = GetActiveProviderIdForMode(settings, providerMode);
-                bool isActive = string.Equals(savedForMode, provider.id, StringComparison.Ordinal)
-                    || string.Equals(activeChat?.CurrentProvider?.id, provider.id, StringComparison.Ordinal);
-                bool activateProvider = !provider.isEnabled || !isActive;
+                // Deterministic single-tap: just flip the persisted enabled flag. (Was
+                // "!isEnabled || !isActive", which on a restored-but-not-yet-active provider
+                // evaluated to "disable" on the first tap — hence the two-tap behaviour.)
+                bool activateProvider = !provider.isEnabled;
 
                 updated.isEnabled = activateProvider;
                 await app.ProviderManager.SaveProviderAsync(updated);

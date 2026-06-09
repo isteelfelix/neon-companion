@@ -28,6 +28,7 @@ namespace NeonCompanion.Runtime.Chat
         private ChatViewModel _currentChatViewModel;
         private ChatSession _currentSession;
         private ProviderConfig _currentProvider;
+        private string _lastProviderChangeHash;
 
         // Hermes streaming state — multiplexed per display/persisted session id so several
         // sessions can stream in parallel. Each session owns its ChatViewModel/messages and
@@ -94,6 +95,7 @@ namespace NeonCompanion.Runtime.Chat
         }
 
         public event Action<string> OnAssistantResponse;
+        public event Action<ProviderConfig> OnCurrentProviderChanged;
 
         /// <summary>Active chat transport for current backend mode (Hermes or null for OpenAI).</summary>
         public IChatTransport ChatTransport => _chatTransport;
@@ -176,6 +178,7 @@ namespace NeonCompanion.Runtime.Chat
                 NeonLogger.LogWarning("[ChatService] No provider configured — chat view model not created.");
                 return null;
             }
+            RaiseCurrentProviderChanged();
 
             SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
@@ -402,6 +405,7 @@ namespace NeonCompanion.Runtime.Chat
                 return;
             }
 
+            RaiseCurrentProviderChanged();
             SyncFromProvider(_currentProvider);
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
@@ -465,6 +469,7 @@ namespace NeonCompanion.Runtime.Chat
                 NeonLogger.LogWarning("[ChatService] Hermes provider is not available — session not opened.");
                 return;
             }
+            RaiseCurrentProviderChanged();
             SyncFromProvider(_currentProvider);
 
             HermesStream existing = GetStream(serverId);
@@ -520,6 +525,7 @@ namespace NeonCompanion.Runtime.Chat
                 return;
 
             _currentProvider = newProvider;
+            RaiseCurrentProviderChanged();
             SyncFromProvider(_currentProvider);
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             _currentChatViewModel.SelectedModel = _currentProvider?.defaultModel;
@@ -538,6 +544,7 @@ namespace NeonCompanion.Runtime.Chat
             }
 
             _currentProvider = provider;
+            RaiseCurrentProviderChanged();
             SyncFromProvider(_currentProvider);
             _currentSession = null;
             _currentChatViewModel = null;
@@ -556,12 +563,21 @@ namespace NeonCompanion.Runtime.Chat
             _currentProvider.defaultModel = updatedProvider.defaultModel;
             _currentProvider.temperature = updatedProvider.temperature;
             _currentProvider.maxTokens = updatedProvider.maxTokens;
+            _currentProvider.contextWindow = updatedProvider.contextWindow;
             _currentProvider.isEnabled = updatedProvider.isEnabled;
+            _currentProvider.backendType = updatedProvider.backendType;
+            _currentProvider.sttProvider = updatedProvider.sttProvider;
+            _currentProvider.ttsProvider = updatedProvider.ttsProvider;
+            _currentProvider.ttsVoice = updatedProvider.ttsVoice;
+            _currentProvider.ttsModel = updatedProvider.ttsModel;
+            _currentProvider.ttsSpeed = updatedProvider.ttsSpeed;
+            _currentProvider.sttLanguage = updatedProvider.sttLanguage;
 
             if (resetRemoteSession)
                 ResetRemoteSessionState();
 
             SyncFromProvider(_currentProvider);
+            RaiseCurrentProviderChanged();
             if (_currentChatViewModel != null)
             {
                 if (string.IsNullOrWhiteSpace(_currentChatViewModel.SelectedModel) ||
@@ -596,6 +612,7 @@ namespace NeonCompanion.Runtime.Chat
                     NeonLogger.LogWarning("[ChatService] No provider configured — Hermes session not created.");
                     return;
                 }
+                RaiseCurrentProviderChanged();
 
                 var selector = GlobalBackendSelector.Instance;
                 if (selector != null)
@@ -629,6 +646,7 @@ namespace NeonCompanion.Runtime.Chat
                 NeonLogger.LogWarning("[ChatService] No provider configured — session not created.");
                 return;
             }
+            RaiseCurrentProviderChanged();
 
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             _currentChatViewModel.ProviderSessionId = null;
@@ -787,6 +805,7 @@ namespace NeonCompanion.Runtime.Chat
             if (_currentProvider == null)
                 _currentProvider = await ResolveProviderAsync();
 
+            RaiseCurrentProviderChanged();
             _currentChatViewModel = new ChatViewModel(_aiClient, _currentProvider);
             _currentChatViewModel.ProviderSessionId = displaySessionId;
             _currentChatViewModel.SelectedModel = response.info?.model ?? _currentProvider?.defaultModel;
@@ -1359,6 +1378,32 @@ namespace NeonCompanion.Runtime.Chat
                 if (stream.complete == completion)
                     stream.complete = null;
             }
+        }
+
+        private void RaiseCurrentProviderChanged()
+        {
+            string hash = GetProviderChangeHash(_currentProvider);
+            if (string.Equals(hash, _lastProviderChangeHash, StringComparison.Ordinal))
+                return;
+
+            _lastProviderChangeHash = hash;
+            try { OnCurrentProviderChanged?.Invoke(_currentProvider); }
+            catch { }
+        }
+
+        private static string GetProviderChangeHash(ProviderConfig provider)
+        {
+            if (provider == null)
+                return "";
+
+            return (provider.id ?? "") + "|"
+                + (provider.backendType ?? "") + "|"
+                + (provider.baseUrl ?? "") + "|"
+                + (provider.apiKey ?? "") + "|"
+                + (provider.ttsVoice ?? "") + "|"
+                + (provider.ttsModel ?? "") + "|"
+                + provider.ttsSpeed.ToString() + "|"
+                + (provider.sttLanguage ?? "");
         }
 
         private async Task WaitForHermesCompletionAsync(string sessionId, HermesStream stream, TaskCompletionSource<bool> completion)
@@ -2402,9 +2447,12 @@ namespace NeonCompanion.Runtime.Chat
 
         public void ClearActiveProviderState()
         {
+            bool hadProvider = _currentProvider != null;
             _currentProvider = null;
             _currentSession = null;
             _currentChatViewModel = null;
+            if (hadProvider)
+                RaiseCurrentProviderChanged();
         }
 
         public bool CurrentProviderMatchesBackend(BackendMode mode)

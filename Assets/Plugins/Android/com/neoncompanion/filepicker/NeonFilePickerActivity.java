@@ -15,13 +15,24 @@ public class NeonFilePickerActivity extends Activity {
 
     public static void pick(Activity activity, String gameObjectName) {
         bridgeGameObjectName = gameObjectName;
+        // Launch OUR activity, not a chooser from the Unity activity — otherwise the result
+        // is delivered to UnityPlayerActivity (which ignores it) and onActivityResult below
+        // never runs, so the C# callback never fires (no attachment; second tap blocked).
+        Intent intent = new Intent(activity, NeonFilePickerActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        activity.startActivity(intent);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         // For images primarily, but allow all
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"image/*", "application/pdf", "text/*"});
 
-        activity.startActivityForResult(Intent.createChooser(intent, "Select file"), PICK_FILE_REQUEST);
+        startActivityForResult(Intent.createChooser(intent, "Select file"), PICK_FILE_REQUEST);
     }
 
     @Override

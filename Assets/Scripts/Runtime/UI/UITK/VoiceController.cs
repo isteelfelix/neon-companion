@@ -38,6 +38,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VoiceOutputManager _voiceOutputManager;
         private VoicePreviewPlayer _previewPlayer;
         private LipsyncController _lipsyncController;
+        private ChatService _providerEventsChat;
         private bool _voiceBoundToChat;
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
@@ -74,6 +75,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         internal void OnDisable()
         {
             UnbindVoiceAnimationEvents();
+            UnbindProviderChangeEvents();
             ChatService chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
             if (_voiceBoundToChat && chat != null && _voiceOutputManager != null)
                 _voiceOutputManager.UnbindChat(chat);
@@ -88,6 +90,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (chat == null)
                 return;
+
+            BindProviderChangeEvents(chat);
 
             if (_d.IsVoiceEnabledBySettings != null && !_d.IsVoiceEnabledBySettings())
                 return;
@@ -152,13 +156,39 @@ namespace NeonCompanion.Runtime.UI.UITK
             await Task.CompletedTask;
         }
 
+        private void BindProviderChangeEvents(ChatService chat)
+        {
+            if (chat == null || ReferenceEquals(_providerEventsChat, chat))
+                return;
+
+            UnbindProviderChangeEvents();
+            _providerEventsChat = chat;
+            _providerEventsChat.OnCurrentProviderChanged += HandleCurrentProviderChanged;
+        }
+
+        private void UnbindProviderChangeEvents()
+        {
+            if (_providerEventsChat == null)
+                return;
+
+            _providerEventsChat.OnCurrentProviderChanged -= HandleCurrentProviderChanged;
+            _providerEventsChat = null;
+        }
+
+        private void HandleCurrentProviderChanged(ProviderConfig provider)
+        {
+            ChatService chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+            if (chat != null)
+                _ = EnsureVoicePipelineAsync(chat);
+        }
+
         private string ComputeConfigHash(ProviderConfig provider, AppSettings settings)
         {
             if (provider == null || settings == null)
                 return "";
             return (provider.id ?? "") + "|" + (provider.baseUrl ?? "") + "|"
                 + (provider.ttsVoice ?? "") + "|" + (provider.ttsModel ?? "") + "|"
-                + provider.ttsSpeed.ToString() + "|"
+                + provider.ttsSpeed.ToString() + "|" + (provider.sttLanguage ?? "") + "|"
                 + (settings.inputDeviceName ?? "") + "|" + settings.outputVolume.ToString();
         }
 
