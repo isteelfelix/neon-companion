@@ -28,6 +28,18 @@ public static class AndroidHeadlessBuild
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
 
+        // Set Android launcher icon
+        var iconAsset = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/UI/Branding/app-icon-1024.png");
+        if (iconAsset != null)
+        {
+            PlayerSettings.SetIcons(NamedBuildTarget.Android, new[] { iconAsset }, IconKind.Application);
+            Debug.Log("[AndroidHeadlessBuild] Android icon set from app-icon-1024.png");
+        }
+        else
+        {
+            Debug.LogWarning("[AndroidHeadlessBuild] app-icon-1024.png not found, using default icon");
+        }
+
         BuildReport report = BuildPipeline.BuildPlayer(options);
         BuildSummary summary = report.summary;
 
