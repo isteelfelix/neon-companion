@@ -242,32 +242,10 @@ namespace NeonCompanion.Runtime.Voice
                 using var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
                 using var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
 
-                _androidTts = new AndroidJavaObject("android.speech.tts.TextToSpeech", activity, new AndroidJavaProxy("android.speech.tts.TextToSpeech$OnInitListener")
-                {
-                    public void onInit(int status)
-                    {
-                        if (status == 0) // TextToSpeech.SUCCESS
-                        {
-                            _androidTts.Call<int>("setLanguage", new AndroidJavaObject("java.util.Locale", "en", "US"));
-                        }
-                    }
-                });
+                _androidTts = new AndroidJavaObject("android.speech.tts.TextToSpeech", activity, new AndroidTtsInitListener(this));
 
                 // Proper completion listener instead of time estimate
-                _androidTts.Call("setOnUtteranceProgressListener", new AndroidJavaProxy("android.speech.tts.UtteranceProgressListener")
-                {
-                    public void onStart(string utteranceId) { }
-                    public void onDone(string utteranceId)
-                    {
-                        _isSpeaking = false;
-                        OnPlaybackComplete?.Invoke();
-                    }
-                    public void onError(string utteranceId)
-                    {
-                        _isSpeaking = false;
-                        OnPlaybackComplete?.Invoke();
-                    }
-                });
+                _androidTts.Call("setOnUtteranceProgressListener", new AndroidTtsProgressListener(this));
 
                 return _androidTts != null;
             }
@@ -275,6 +253,50 @@ namespace NeonCompanion.Runtime.Voice
             {
                 NeonLogger.LogError($"Failed to initialize Android TTS: {ex}");
                 return false;
+            }
+        }
+
+        private class AndroidTtsInitListener : AndroidJavaProxy
+        {
+            private readonly WebSpeechBridge _bridge;
+
+            public AndroidTtsInitListener(WebSpeechBridge bridge)
+                : base("android.speech.tts.TextToSpeech$OnInitListener")
+            {
+                _bridge = bridge;
+            }
+
+            public void onInit(int status)
+            {
+                if (status == 0) // TextToSpeech.SUCCESS
+                {
+                    _bridge._androidTts.Call<int>("setLanguage", new AndroidJavaObject("java.util.Locale", "en", "US"));
+                }
+            }
+        }
+
+        private class AndroidTtsProgressListener : AndroidJavaProxy
+        {
+            private readonly WebSpeechBridge _bridge;
+
+            public AndroidTtsProgressListener(WebSpeechBridge bridge)
+                : base("android.speech.tts.UtteranceProgressListener")
+            {
+                _bridge = bridge;
+            }
+
+            public void onStart(string utteranceId) { }
+
+            public void onDone(string utteranceId)
+            {
+                _bridge._isSpeaking = false;
+                _bridge.OnPlaybackComplete?.Invoke();
+            }
+
+            public void onError(string utteranceId)
+            {
+                _bridge._isSpeaking = false;
+                _bridge.OnPlaybackComplete?.Invoke();
             }
         }
 #endif
