@@ -174,7 +174,7 @@
 | IOS-04 | Расширение PlatformServiceFactory под iOS | 🔧 | M4 | iOS branches added for FilePicker and Voice (routes to WebSpeechBridge for now) |
 | IOS-05 | Голос на iOS (AVSpeechSynthesizer + SFSpeechRecognizer) | 🔧 | M4 | Complete: NeonSpeech.mm (AVSpeech + SFSpeech stubs + callbacks), iOSSpeechBridge, WebSpeechBridge iOS DllImport + routing + InitializeIOS. |
 | IOS-06 | Keyboard inset + улучшенная safe area для iPad / notch | 🔧 | M4 | DefaultPlatformInfoService updated for iOS safeArea. iOSKeyboardInset.cs present. |
-| IOS-07 | .platform-ios USS правила + унификация LayoutController / PlatformLayoutAdapter | 🔧 | M4 | .platform-ios rules added to MainView.uss. LayoutController + PlatformLayoutAdapter already handle platform-ios class + safe area. |
+| IOS-07 | .platform-ios USS правила + LayoutController (единый адаптивный контроллер) | 🔧 | M4 | .platform-ios rules added to MainView.uss. LayoutController handles platform-ios class + safe area. PlatformLayoutAdapter removed — logic consolidated. |
 | IOS-08 | Документация iOS в AGENTS.md + 17_iOS_Platform_Architecture.md | 🔧 | M4 | Full docs + tracker + AGENTS.md cross-refs. iOS sections added. |
 
 **Примечание:** iOS и Android делят общую мобильную логику через `IsMobile` + `.platform-mobile`. Специфика изолирована в Platform/iOS/ и Platform/Android/. См. docs/17_iOS_Platform_Architecture.md и docs/16_Platform_Architecture.md.

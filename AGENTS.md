@@ -47,7 +47,7 @@ Assets/Scripts/Runtime/
   UI/Avatars/       AvatarCustomizationPanel
   UI/Settings/      SettingsViewModel
   Plugins/          IPlugin, PluginManager (DLL-based extension system)
-  Localization/     JsonLocalizationService, en.json/ru.json in StreamingAssets
+  Localization/     JsonLocalizationService, en.json/ru.json in Resources/Localization
   Donation/         IDonationService
   Platform/         IFilePickerService
 

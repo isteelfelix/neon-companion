@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- **Adaptive form factor detection** — `LayoutController` rewrite (577 lines): resolves Phone/Tablet/Desktop from physical width via `ConstantPhysicalSize` breakpoints. Phone: off-canvas drawer (rail) + fullscreen avatar overlay with scrim. Tablet/Desktop: `app--compact` / `app--narrow` sub-breakpoints, auto-hide avatar panel. Safe-area padding recomputed on every geometry change (rotation). `ff-phone` / `ff-tablet` / `ff-desktop` classes on app-root.
+- **PlatformLayoutAdapter removed** — all platform-adaptive layout logic consolidated into `LayoutController`. No more split between two classes.
+- **Localization via Resources** — JSON localization files moved from `StreamingAssets/` to `Resources/Localization/`. Uses `Resources.Load<TextAsset>()` (works synchronously on every platform, including inside Android APK where StreamingAssets files can't be read with `File.*`).
+- **AndroidHeadlessBuild diagnostic** — `DiagEntry()` method for runtime `applicationEntry` enum inspection. Icon set from `Assets/UI/Branding/app-icon-1024.png` during headless build.
 - **Multiplexed session transport** — IChatTransport events now carry `sessionId` for parallel session streaming. Per-session busy/awaiting/runtime-info state in `HermesSessionManager`. `ChatService` owns `HermesStream` per display-session-id with independent buffers, callbacks, and TCS. Background sessions generate silently; foreground re-attach preserves partial replies.
 - **Session status indicators** — sidebar shows per-session pulsing dots: cyan = generating, orange = needs attention (pending approval/clarify). `SessionNeedsAttention()` / `IsSessionGenerating()` on ChatService.
 - **Session listing via WS** — `session.list` RPC in `HermesSessionManager.ListSessions()`. Server DB is source of truth for session history; local JSON repo ignored in Hermes mode.
