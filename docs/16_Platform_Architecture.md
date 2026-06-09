@@ -1,8 +1,8 @@
 # 16_Platform_Architecture.md
 
-**Версия:** 1.1  
-**Дата:** 2026-05-31  
-**Статус:** Частично реализовано (core platform layer + filepicker + voice + permissions + safe area + UI adaptation; Build Profile present (base for iOS) + device testing pending)  
+**Версия:** 1.2  
+**Дата:** 2026-06-09  
+**Статус:** Частично реализовано (core platform layer + filepicker + voice + permissions + safe area + UI adaptation + adaptive layout rewrite; Build Profile present (base for iOS) + device testing pending)  
 **Связанные задачи трекера:** PL-01 — PL-07 (см. актуальный статус в 12_Feature_Tracker.md)
 
 ## 1. Цели и ограничения
@@ -70,6 +70,12 @@ Platform/
             └── com/neoncompanion/...
 ```
 
+> **Примечание (v1.2):** Адаптивная раскладка (form factor detection, drawer/overlay
+> на телефоне, safe-area padding) **полностью** инкапсулирована в `LayoutController`
+> (`Assets/Scripts/Runtime/UI/UITK/LayoutController.cs`). Класс `PlatformLayoutAdapter`
+> удалён — его логика поглощена. Для работы UI с платформенными данными используйте
+> `IPlatformInfoService` через `LayoutController.ApplyPlatformLayout(info)`.
+
 ### 2.4 Регистрация сервисов
 **Текущая проблема:** В `AppBootstrap.cs` сервисы создаются жёстко (`new DefaultFilePickerService()`).
 
@@ -77,6 +83,8 @@ Platform/
 - Создать `PlatformServiceFactory` (или метод в `AppBootstrap`).
 - Выбор реализации происходит **один раз** при старте на основе `Application.platform` + define symbols из Build Profile.
 - Контроллеры получают сервисы только через `ServiceRegistry.GetRequired<T>()`.
+
+**Localization:** JSON-файлы лежат в `Assets/Resources/Localization/` (en.json, ru.json). Загружаются через `Resources.Load<TextAsset>()` — работает на всех платформах, включая Android APK (где StreamingAssets недоступны через `File.*`). Fallback: если ключ не найден в текущем языке, берётся `en`.
 
 Пример (целевая форма):
 
@@ -101,6 +109,27 @@ services.Register<IFilePickerService>(filePicker);
 var factory = new PlatformServiceFactory();
 services.Register<IFilePickerService>(factory.CreateFilePicker());
 ```
+
+### 2.5 Адаптивная раскладка (LayoutController)
+Единый контроллер, определяющий form factor и управляющий раскладкой.
+
+**Форм-факторы** (по физической ширине в `ConstantPhysicalSize` поинтах):
+- **Phone** (<520dp) — рейл превращается в off-canvas drawer со скримом, аватар-панель — fullscreen overlay
+- **Tablet** (520–900dp) — многопанельная раскладка, аватар может авто-скрываться
+- **Desktop** (>900dp) — полная раскладка
+
+**Классы на `.app`:**
+- `ff-phone` / `ff-tablet` / `ff-desktop` — текущий форм-фактор
+- `app--compact` (<1100dp) / `app--narrow` (<900dp) — под-брейкпоинты (только tablet/desktop)
+- `platform-android` / `platform-ios` — ОС (через `IPlatformInfoService`)
+
+**Safe Area:** применяется автоматически через `ApplySafeAreaPadding()` на каждом `GeometryChangedEvent`.
+
+**На мобильной платформе** (`UNITY_ANDROID || UNITY_IOS`) form factor определяется через `Screen.dpi`:
+- DPI 200–700 + minSideDp ≥600 → Tablet
+- Иначе → Phone
+
+На десктопе — по ширине окна.
 
 ## 3. Как обрабатывать различия в UI (UITK)
 

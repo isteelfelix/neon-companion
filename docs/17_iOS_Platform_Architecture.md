@@ -15,7 +15,7 @@
 - 3 общие сцены: `Boot.unity`, `Loading.unity`, `Main.unity`.
 - ServiceRegistry (простой in-memory DI).
 - C# 9 ограничения.
-- Уже существует частичная платформенная абстракция (IPlatformInfoService с IsMobile, PlatformLayoutAdapter с .platform-ios классом).
+- Уже существует частичная платформенная абстракция (IPlatformInfoService с IsMobile, LayoutController с .platform-ios классом).
 - iOS требует нативного кода (Objective-C / Swift) в `Assets/Plugins/iOS/`.
 - Подпись, capabilities (Microphone, Photos), Info.plist — через Build Profile + Player Settings.
 - "Наше приложение" — релизный процесс ведёт Neon, но реальные сборки и визуальный тест делает Felix на Windows + macOS (Xcode).
@@ -92,7 +92,7 @@ Platform/
    .app.platform-ios .composer { ... }
    .app.platform-mobile .nav__item { min-height: 44px; }
    ```
-2. `PlatformLayoutAdapter` / `LayoutController` (нужно унифицировать — текущий дубликат кода).
+2. `LayoutController` — единый адаптивный контроллер (PlatformLayoutAdapter удалён, логика поглощена).
 3. Safe Area: `Screen.safeArea` работает на iOS из коробки (уже используется в DefaultPlatformInfoService).
 4. Keyboard inset: на iOS более агрессивный (нужен расширенный `iOSKeyboardInset` или общий `MobileKeyboardInset`).
 
