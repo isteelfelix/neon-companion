@@ -20,6 +20,24 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (document == null)
                 document = gameObject.AddComponent<UIDocument>();
 
+            // Фундамент адаптива: ширина панели должна отражать физический размер
+            // экрана, иначе брейкпоинты не срабатывают. Выставляем в коде, а не
+            // полагаемся на сериализованное значение ассета — внешняя правка .asset
+            // ненадёжно переимпортируется, а на телефоне это критично.
+            //
+            // referenceDpi задаёт «во что» переводится физический размер:
+            //   mobile  → 160 ⇒ логическая единица = Android dp = iOS point
+            //             (телефон ≈ 360–430 «px», планшет ≥ 600 — стандарт sw600dp).
+            //   desktop → 96  ⇒ логическая единица = px при 96 dpi (как окно).
+            panelSettings.scaleMode = PanelScaleMode.ConstantPhysicalSize;
+#if UNITY_ANDROID || UNITY_IOS
+            panelSettings.referenceDpi = 160f;
+            panelSettings.fallbackDpi = 160f;
+#else
+            panelSettings.referenceDpi = 96f;
+            panelSettings.fallbackDpi = 96f;
+#endif
+
             document.panelSettings = panelSettings;
             document.visualTreeAsset = visualTreeAsset;
 

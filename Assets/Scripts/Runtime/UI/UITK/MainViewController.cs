@@ -12,7 +12,6 @@ using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Donation;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
-using NeonCompanion.Runtime.UI.Platform;
 using NeonCompanion.Runtime.UI.UITK.Chat;
 using NeonCompanion.Runtime.UI.Avatars;
 using NeonCompanion.Runtime.UI.UITK.Terminal;
@@ -62,6 +61,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _navChatCount;
 
         private VisualElement _root;
+        private VisualElement _appRoot;
 
         private VisualElement _chatPanel;
         private VisualElement _historyPanel;
@@ -442,6 +442,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void Bind(VisualElement root)
         {
             _root = root;
+            // app-root несёт класс .app — на нём живут форм-фактор/платформенные классы.
+            _appRoot = root.Q<VisualElement>("app-root") ?? root;
             _navItems.Clear();
 
             _navChat = root.Q<VisualElement>("nav-chat");
@@ -896,6 +898,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             return new LayoutController.Deps
             {
                 Root = _root,
+                AppRoot = _appRoot,
                 RailElement = _railElement,
                 RailResizeHandle = _railResizeHandle,
                 AvatarPanel = _avatarPanel,
@@ -1294,22 +1297,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnMobileMenuClicked()
         {
-            if (_railElement == null) return;
-            var display = _railElement.style.display;
-            if (display.keyword == StyleKeyword.None || display.keyword == StyleKeyword.Initial)
-            {
-                _railElement.style.display = DisplayStyle.Flex;
-                _railElement.style.position = Position.Absolute;
-                _railElement.style.left = 0;
-                _railElement.style.top = 0;
-                _railElement.style.bottom = 0;
-                _railElement.style.width = 260;
-            }
-            else
-            {
-                _railElement.style.display = DisplayStyle.None;
-                _railElement.style.position = StyleKeyword.Initial;
-            }
+            _layoutController.ToggleDrawer();
         }
 
 
@@ -1498,8 +1486,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 _avatarGalleryController.RefreshCustomAvatarGallery(app);
 
-                // Применяем Safe Area и платформенные классы (PL-04)
-                new PlatformLayoutAdapter().Apply(_root, app.Services.GetRequired<IPlatformInfoService>());
+                // Применяем Safe Area и платформенные классы к app-root (PL-04).
+                _layoutController.ApplyPlatformLayout(app.Services.GetRequired<IPlatformInfoService>());
                 await _settingsController.BindLocalizationEventsAsync();
                 IDonationService donationService = null;
                 app.Services.TryGet(out donationService);

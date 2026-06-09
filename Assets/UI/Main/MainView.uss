@@ -631,183 +631,8 @@
 }
 
 
-/* ============================================================
-   Platform & Mobile adaptations (Android support - PL-04)
-   .app gets .platform-mobile / .platform-android from PlatformLayoutAdapter
-   Safe Area padding is set in C# on the root
-   ============================================================ */
-
-.app.platform-mobile {
-    /* Base mobile adjustments */
-}
-
-.app.platform-mobile .rail {
-    width: 180px; /* more compact sidebar */
-    padding: 10px 8px;
-}
-
-.app.platform-mobile .nav__item {
-    height: 44px; /* improved touch targets */
-    padding: 6px 8px;
-}
-
-.app.platform-mobile .brand__name {
-    font-size: 13px;
-}
-
-.app.platform-android .composer {
-    /* extra breathing room for system navigation */
-    padding-bottom: 12px;
-}
-
-.app.platform-mobile .composer__send,
-.app.platform-mobile .iconbtn {
-    min-width: 44px;
-    min-height: 44px; /* larger tap areas */
-}
-
-
-/* ============================================================
-   Extended mobile / Android adaptations (full readiness)
-   Touch targets, panels, fonts, composer, history for small screens
-*/
-.app.platform-mobile {
-    /* General touch-friendly */
-    --touch-target: 44px;
-}
-
-.app.platform-mobile .nav__item,
-.app.platform-mobile .iconbtn,
-.app.platform-mobile .composer__send {
-    min-width: 44px;
-    min-height: 44px;
-}
-
-.app.platform-mobile .rail {
-    width: 160px;
-    padding: 8px 6px;
-}
-
-.app.platform-mobile .brand__name {
-    font-size: 12px;
-}
-
-.app.platform-mobile .history__item {
-    min-height: 42px;
-    font-size: 13px;
-}
-
-.app.platform-android .app__content,
-.app.platform-android .main-content {
-    /* extra bottom space if needed */
-    padding-bottom: 8px;
-}
-
-.app.platform-mobile .settings-panel,
-.app.platform-mobile .avatar-panel {
-    /* make side panels behave better on portrait */
-    max-width: 85%;
-}
-
-
-/* Additional mobile/Android polish for full readiness */
-.app.platform-mobile .settings-panel {
-    font-size: 14px;
-}
-
-.app.platform-mobile .history-list {
-    font-size: 13px;
-}
-
-.app.platform-android .topbar {
-    padding-top: 8px;
-}
-
-/* Full mobile readiness - additional panels and components */
-.app.platform-mobile .avatar-panel {
-    max-height: 45%;
-}
-
-.app.platform-mobile .settings-content {
-    padding: 8px;
-    font-size: 13px;
-}
-
-.app.platform-android .main-content {
-    padding-bottom: 24px; /* extra for gesture navigation */
-}
-
-.app.platform-mobile .panel-header {
-    min-height: 44px;
-}
-
-
-/* ============================================================
-   Android / Mobile enhancements (PL-04 continued)
-   - Better touch targets
-   - Composer & keyboard handling prep
-   - Gesture nav / notch compensation
-   ============================================================ */
-
-.app.platform-mobile .iconbtn,
-.app.platform-mobile .composer__send,
-.app.platform-mobile .nav__item {
-    min-height: 44px;
-    min-width: 44px;
-}
-
-.app.platform-android .composer {
-    padding-bottom: 24px;
-    padding-top: 8px;
-}
-
-.app.platform-android .composer__input {
-    min-height: 42px;
-    font-size: 15px;
-}
-
-/* Voice / mic button should be very tappable on Android */
-.app.platform-android .iconbtn--mic,
-.app.platform-android .icon--mic {
-    min-width: 48px;
-    min-height: 48px;
-    background-size: 24px 24px;
-}
-
-/* Extra bottom space for Android navigation bar / gesture area */
-.app.platform-android .app__content {
-    padding-bottom: 32px;
-}
-
-/* Smaller rail on very small Android screens (when rail is shown) */
-.app.platform-android .rail {
-    width: 200px;
-}
-
-/* History and settings list items - better tap area */
-.app.platform-mobile .history__item,
-.app.platform-mobile .settings-item {
-    min-height: 48px;
-    padding: 10px 12px;
-}
-
-/* ============================================================
-   iOS-specific adaptations (IOS-06)
-   Notch, home indicator, safe area tweaks beyond .platform-mobile
-   ============================================================ */
-.app.platform-ios {
-    /* iOS tends to have stronger safe area; extra breathing if needed */
-}
-
-.app.platform-ios .composer {
-    /* extra padding for home indicator / gesture bar */
-    padding-bottom: 22px;
-}
-
-.app.platform-ios .nav__item {
-    /* slightly different touch feel on iOS */
-    height: 46px;
-}
+/* Platform / mobile / form-factor responsive rules are consolidated at the
+   end of this file (see "Responsive — form factors"). */
 
 /* ============================================================
    Desktop responsive — borderless resizable window (min 760×560).
@@ -917,20 +742,102 @@
 }
 
 /* ============================================================
-   MOBILE FIX — hide rail, full-width content
+   Responsive — form factors
+   ResponsiveLayoutController (LayoutController) sets exactly one of
+   ff-phone / ff-tablet / ff-desktop on .app (#app-root) from the real
+   logical width (PanelSettings = ConstantPhysicalSize → physical points).
+   Drawer/overlay open-state is toggled via rail--open / avatar--open;
+   paint order is handled in C# with BringToFront() (USS has no z-index).
    ============================================================ */
-.app.platform-mobile .rail {
-    display: none;
-}
-.app.platform-mobile .rail-resize-handle {
-    display: none;
-}
-.app.platform-mobile .app__content {
-    margin-left: 0;
-    width: 100%;
-    flex-grow: 1;
+
+/* ---- Visibility helpers ---- */
+.mobile-only        { display: none; }
+.ff-phone .mobile-only  { display: flex; }
+.ff-phone .desktop-only { display: none; }
+
+/* ---- Touch targets (phone + tablet) ---- */
+.ff-phone .iconbtn,
+.ff-phone .nav__item,
+.ff-phone .composer__send,
+.ff-tablet .iconbtn {
+    min-width: 44px;
+    min-height: 44px;
 }
 
-/* Mobile-only visibility */
-.mobile-only { display: none; }
-.app.platform-mobile .mobile-only { display: flex; }
+/* ============================================================
+   Phone — single column, rail as off-canvas drawer
+   ============================================================ */
+
+/* Rail becomes an absolute drawer, sliding in from the left over a scrim.
+   position:absolute removes it from the flex row → main fills full width. */
+.ff-phone .rail {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 300px;
+    max-width: 86%;
+    translate: -100% 0;
+    transition: translate 180ms ease-out;
+    border-right-width: 1px;
+    border-right-color: var(--line-2);
+}
+
+.ff-phone .rail.rail--open {
+    translate: 0 0;
+}
+
+/* Larger nav rows inside the drawer. */
+.ff-phone .nav__item {
+    height: 46px;
+    padding: 8px 12px;
+}
+
+/* No drag-resize handles on phone (rail/avatar are overlays). */
+.ff-phone .resize-handle {
+    display: none;
+}
+
+/* Atmospheric backdrop is offset by the rail on desktop; full-bleed on phone. */
+.ff-phone .app__atmo {
+    left: 0;
+}
+
+/* Scrim behind the drawer. Created in C#; click closes the drawer. */
+.app-scrim {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* ---- Topbar density on phone ---- */
+.ff-phone .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.ff-phone .topbar__subtitle,
+.ff-phone .topbar__sep,
+.ff-phone .topbar__right > .btn--ghost {
+    display: none;
+}
+
+/* The left/right panel toggles are desktop affordances; phone uses the
+   hamburger (left) and re-purposes the right toggle for the avatar overlay. */
+.ff-phone #toggle-left-panel-btn {
+    display: none;
+}
+
+/* ============================================================
+   Android / iOS — system inset breathing room (added to safe-area padding)
+   ============================================================ */
+.platform-android .composer {
+    padding-bottom: 16px;
+}
+
+.platform-ios .composer {
+    padding-bottom: 22px;
+}

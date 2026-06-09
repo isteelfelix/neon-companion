@@ -6,11 +6,25 @@ using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK
 {
+    /// <summary>
+    /// Единый адаптивный контроллер раскладки. По реальной логической ширине
+    /// (PanelSettings = ConstantPhysicalSize → ширина в физических поинтах,
+    /// аналог CSS px / Android dp) выбирает форм-фактор и вешает РОВНО один класс
+    /// на app-root: ff-phone / ff-tablet / ff-desktop. Внутри desktop/tablet
+    /// дополнительно работают app--compact / app--narrow.
+    ///
+    /// Телефон: рейл превращается в off-canvas drawer со скримом, аватар-панель —
+    /// в полноэкранный оверлей. Никаких inline-костылей и z-index — порядок
+    /// отрисовки решается BringToFront(), состояние — классами с transition.
+    /// </summary>
     internal sealed class LayoutController
     {
         public struct Deps
         {
+            /// <summary>rootVisualElement документа (родитель app-root).</summary>
             public VisualElement Root;
+            /// <summary>Элемент с классом .app (несёт форм-фактор/платформенные классы и safe-area padding).</summary>
+            public VisualElement AppRoot;
             public VisualElement RailElement;
             public VisualElement RailResizeHandle;
             public VisualElement AvatarPanel;
@@ -30,17 +44,38 @@ namespace NeonCompanion.Runtime.UI.UITK
             public IPlatformInfoService PlatformInfo;
         }
 
-        // Брейкпоинты адаптива десктоп-окна (физические px ширины root).
-        private const float CompactWidth = 1000f;
-        private const float NarrowWidth = 820f;
+        private enum FormFactor
+        {
+            Unknown,
+            Phone,
+            Tablet,
+            Desktop
+        }
+
+        // Брейкпоинты формы (логические поинты ConstantPhysicalSize ≈ физический размер).
+        private const float PhoneMaxWidth = 520f;   // < — телефон (drawer + оверлеи)
+        private const float TabletMaxWidth = 900f;  // < — планшет/компактный десктоп
+
+        // Доп. брейкпоинты внутри desktop/tablet (декор топбара, авто-скрытие аватара).
+        private const float CompactWidth = 1100f;
+        private const float NarrowWidth = 900f;
         private const float AvatarHideWidth = 900f;
+
+        private const float PhoneDrawerWidth = 300f;
 
         private Deps _d;
         private Button _toggleLeftPanelBtn;
         private Button _toggleRightPanelBtn;
-        private bool _leftPanelVisible = true;
-        private bool _rightPanelVisible = true;
+        private VisualElement _scrim;
+
+        private FormFactor _formFactor = FormFactor.Unknown;
+        private int _railSiblingIndex = -1;
+
+        private bool _leftPanelVisible = true;   // десктоп: рейл показан
+        private bool _rightPanelVisible = true;  // десктоп: аватар-панель показана
         private bool _avatarAutoHidden;
+        private bool _drawerOpen;                 // телефон: drawer открыт
+        private bool _avatarOverlayOpen;          // телефон: аватар-оверлей открыт
 
         public bool LeftPanelVisible => _leftPanelVisible;
         public bool RightPanelVisible => _rightPanelVisible;
@@ -52,27 +87,38 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void Init()
         {
-            if (_d.Root == null)
+            if (_d.AppRoot == null && _d.Root == null)
                 return;
 
-            _toggleLeftPanelBtn = _d.Root.Q<Button>("toggle-left-panel-btn");
-            _toggleRightPanelBtn = _d.Root.Q<Button>("toggle-right-panel-btn");
+            _toggleLeftPanelBtn = (_d.Root ?? _d.AppRoot).Q<Button>("toggle-left-panel-btn");
+            _toggleRightPanelBtn = (_d.Root ?? _d.AppRoot).Q<Button>("toggle-right-panel-btn");
+
+            EnsureScrim();
+
+            if (_d.RailElement != null && _d.AppRoot != null)
+                _railSiblingIndex = _d.AppRoot.IndexOf(_d.RailElement);
 
             if (_d.PanelResizeHandler != null)
                 _d.PanelResizeHandler.Init(_d.ResizeHandle, _d.AvatarPanel, _d.RailResizeHandle, _d.RailElement);
 
             UpdatePanelToggleTooltips();
-
             ApplyPlatformLayout();
+
+            // Первичный расчёт формы, если геометрия уже доступна.
+            float w = GeometryHost != null ? GeometryHost.resolvedStyle.width : 0f;
+            if (w > 0f)
+                ApplyResponsive(w);
         }
+
+        private VisualElement GeometryHost => _d.AppRoot ?? _d.Root;
 
         public void RegisterCallbacks()
         {
             RegisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
             RegisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
 
-            if (_d.Root != null)
-                _d.Root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+            if (GeometryHost != null)
+                GeometryHost.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 
             if (_d.PanelResizeHandler != null)
                 _d.PanelResizeHandler.RegisterCallbacks();
@@ -83,33 +129,171 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_toggleLeftPanelBtn, OnToggleLeftPanel);
             UnregisterClick(_toggleRightPanelBtn, OnToggleRightPanel);
 
-            if (_d.Root != null)
-                _d.Root.UnregisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+            if (GeometryHost != null)
+                GeometryHost.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 
             if (_d.PanelResizeHandler != null)
                 _d.PanelResizeHandler.UnregisterCallbacks();
         }
 
-        /// <summary>
-        /// Адаптив десктоп-окна: при сужении переключаем CSS-классы брейкпоинтов
-        /// и авто-скрываем аватар-панель, освобождая место под чат. Ширину рейла/
-        /// панели не трогаем (её пишет PanelResizeHandler inline-стилем) — работаем
-        /// через display и классы, чтобы не конфликтовать.
-        /// </summary>
-        private void OnRootGeometryChanged(GeometryChangedEvent evt)
+        public void OnDisable()
         {
-            if (_d.Root == null)
+        }
+
+        // ============================================================
+        // Responsive core
+        // ============================================================
+
+        private void OnGeometryChanged(GeometryChangedEvent evt)
+        {
+            ApplyResponsive(evt.newRect.width);
+        }
+
+        private void ApplyResponsive(float width)
+        {
+            if (width <= 0f)
                 return;
 
-            float width = evt.newRect.width;
-            _d.Root.EnableInClassList("app--compact", width < CompactWidth);
-            _d.Root.EnableInClassList("app--narrow", width < NarrowWidth);
+            FormFactor next = ResolveFormFactor(width);
+            if (next != _formFactor)
+            {
+                FormFactor prev = _formFactor;
+                _formFactor = next;
+                EnterFormFactor(prev, next);
+            }
 
-            UpdateAvatarAutoHide(width);
+            // Десктопные/планшетные суб-брейкпоинты имеют смысл только когда есть
+            // классическая многопанельная раскладка (не телефон).
+            bool multiPane = next != FormFactor.Phone;
+            if (_d.AppRoot != null)
+            {
+                _d.AppRoot.EnableInClassList("app--compact", multiPane && width < CompactWidth);
+                _d.AppRoot.EnableInClassList("app--narrow", multiPane && width < NarrowWidth);
+            }
 
-            // Поджать рейл/аватар под новую ширину окна (если их растянули раньше).
-            if (_d.PanelResizeHandler != null)
-                _d.PanelResizeHandler.ClampToWindow(width);
+            if (multiPane)
+            {
+                UpdateAvatarAutoHide(width);
+                if (_d.PanelResizeHandler != null)
+                    _d.PanelResizeHandler.ClampToWindow(width);
+            }
+        }
+
+        /// <summary>
+        /// Форм-фактор НЕ полагается вслепую на логическую ширину: в редакторном
+        /// Device Simulator Screen.dpi отдаёт dpi монитора, а не устройства, из-за
+        /// чего ConstantPhysicalSize даёт «десктопную» ширину на телефоне. Поэтому
+        /// на мобильной платформе решаем явно (телефон по умолчанию, планшет —
+        /// только при заведомо устройственном dpi), а ширину окна используем как
+        /// источник правды лишь на десктопе, где dpi корректен.
+        /// </summary>
+        private FormFactor ResolveFormFactor(float width)
+        {
+            if (IsMobilePlatform())
+            {
+                float dpi = Screen.dpi;
+                // Доверяем dp-расчёту только в диапазоне реальных мобильных экранов
+                // (исключаем типичные десктопные 96/120/144, прилетающие в симуляторе).
+                if (dpi >= 200f && dpi <= 700f)
+                {
+                    float minSideDp = Mathf.Min(Screen.width, Screen.height) / (dpi / 160f);
+                    if (minSideDp >= 600f)
+                        return FormFactor.Tablet;
+                }
+                return FormFactor.Phone;
+            }
+
+            // Десктоп: ширина окна (ConstantPhysicalSize @96dpi = логические поинты) надёжна.
+            if (width < PhoneMaxWidth)
+                return FormFactor.Phone;
+            if (width < TabletMaxWidth)
+                return FormFactor.Tablet;
+            return FormFactor.Desktop;
+        }
+
+        private static bool IsMobilePlatform()
+        {
+#if UNITY_ANDROID || UNITY_IOS
+            // Сборка под мобильную платформу — считаем мобильным и в редакторе/симуляторе.
+            return true;
+#else
+            return Application.isMobilePlatform;
+#endif
+        }
+
+        private void EnterFormFactor(FormFactor prev, FormFactor next)
+        {
+            if (_d.AppRoot != null)
+            {
+                _d.AppRoot.EnableInClassList("ff-phone", next == FormFactor.Phone);
+                _d.AppRoot.EnableInClassList("ff-tablet", next == FormFactor.Tablet);
+                _d.AppRoot.EnableInClassList("ff-desktop", next == FormFactor.Desktop);
+            }
+
+            if (next == FormFactor.Phone)
+                EnterPhone();
+            else
+                EnterMultiPane(prev);
+        }
+
+        /// <summary>
+        /// Переход в телефонный режим: рейл и аватар-панель управляются классами
+        /// (.ff-phone), поэтому снимаем inline-стили, которые мог выставить ресайз
+        /// или ручное скрытие на десктопе.
+        /// </summary>
+        private void EnterPhone()
+        {
+            _drawerOpen = false;
+            _avatarOverlayOpen = false;
+
+            ClearLayoutInline(_d.RailElement);
+            if (_d.RailElement != null)
+                _d.RailElement.RemoveFromClassList("rail--open");
+
+            ClearLayoutInline(_d.AvatarPanel);
+            if (_d.AvatarPanel != null)
+                _d.AvatarPanel.RemoveFromClassList("avatar--open");
+
+            HideScrim();
+        }
+
+        /// <summary>
+        /// Возврат к многопанельной раскладке (планшет/десктоп): восстанавливаем
+        /// позицию рейла в потоке и видимость панелей по сохранённому состоянию.
+        /// </summary>
+        private void EnterMultiPane(FormFactor prev)
+        {
+            HideScrim();
+
+            if (_d.RailElement != null)
+            {
+                _d.RailElement.RemoveFromClassList("rail--open");
+                ClearLayoutInline(_d.RailElement);
+
+                // Если рейл был вынесен наверх (BringToFront в drawer) — вернуть на место.
+                if (prev == FormFactor.Phone && _railSiblingIndex >= 0 && _d.AppRoot != null
+                    && _d.AppRoot.IndexOf(_d.RailElement) != _railSiblingIndex)
+                {
+                    int clamped = Mathf.Min(_railSiblingIndex, _d.AppRoot.childCount - 1);
+                    _d.AppRoot.Insert(clamped, _d.RailElement);
+                }
+
+                SetDisplay(_d.RailElement, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+            }
+
+            SetDisplay(_d.RailResizeHandle, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+
+            if (_d.AvatarPanel != null)
+            {
+                _d.AvatarPanel.RemoveFromClassList("avatar--open");
+                ClearLayoutInline(_d.AvatarPanel);
+            }
+            _avatarOverlayOpen = false;
+
+            // Видимость аватара восстановит UpdateAvatarAutoHide на текущей ширине.
+            _avatarAutoHidden = false;
+            SetDisplay(_d.AvatarPanel, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_d.ResizeHandle, _rightPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
         private void UpdateAvatarAutoHide(float width)
@@ -133,12 +317,117 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        public void OnDisable()
+        // ============================================================
+        // Phone: drawer + avatar overlay
+        // ============================================================
+
+        public void ToggleDrawer()
         {
+            if (_formFactor != FormFactor.Phone)
+                return;
+            if (_drawerOpen)
+                CloseDrawer();
+            else
+                OpenDrawer();
         }
+
+        private void OpenDrawer()
+        {
+            if (_d.RailElement == null)
+                return;
+
+            // Аватар-оверлей и drawer взаимоисключающи.
+            if (_avatarOverlayOpen)
+                CloseAvatarOverlay();
+
+            _drawerOpen = true;
+
+            ShowScrim();
+            // Порядок отрисовки без z-index: скрим под рейлом, рейл — поверх всего.
+            _scrim?.BringToFront();
+            _d.RailElement.BringToFront();
+            _d.RailElement.AddToClassList("rail--open");
+        }
+
+        private void CloseDrawer()
+        {
+            _drawerOpen = false;
+            _d.RailElement?.RemoveFromClassList("rail--open");
+            HideScrim();
+        }
+
+        public void ToggleAvatarOverlay()
+        {
+            if (_formFactor != FormFactor.Phone)
+                return;
+            if (_avatarOverlayOpen)
+                CloseAvatarOverlay();
+            else
+                OpenAvatarOverlay();
+        }
+
+        private void OpenAvatarOverlay()
+        {
+            if (_d.AvatarPanel == null)
+                return;
+
+            if (_drawerOpen)
+                CloseDrawer();
+
+            _avatarOverlayOpen = true;
+            _d.AvatarPanel.BringToFront();
+            _d.AvatarPanel.AddToClassList("avatar--open");
+        }
+
+        private void CloseAvatarOverlay()
+        {
+            _avatarOverlayOpen = false;
+            _d.AvatarPanel?.RemoveFromClassList("avatar--open");
+        }
+
+        private void EnsureScrim()
+        {
+            if (_scrim != null || _d.AppRoot == null)
+                return;
+
+            _scrim = new VisualElement();
+            _scrim.name = "app-scrim";
+            _scrim.AddToClassList("app-scrim");
+            _scrim.style.display = DisplayStyle.None;
+            _scrim.RegisterCallback<PointerDownEvent>(OnScrimPointerDown);
+            _d.AppRoot.Add(_scrim);
+        }
+
+        private void OnScrimPointerDown(PointerDownEvent evt)
+        {
+            CloseDrawer();
+            evt.StopPropagation();
+        }
+
+        private void ShowScrim()
+        {
+            if (_scrim != null)
+                _scrim.style.display = DisplayStyle.Flex;
+        }
+
+        private void HideScrim()
+        {
+            if (_scrim != null)
+                _scrim.style.display = DisplayStyle.None;
+        }
+
+        // ============================================================
+        // Panel toggles (form-factor aware)
+        // ============================================================
 
         public void OnToggleLeftPanel()
         {
+            if (_formFactor == FormFactor.Phone)
+            {
+                ToggleDrawer();
+                return;
+            }
+
             _leftPanelVisible = !_leftPanelVisible;
             SetDisplay(_d.RailElement, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_d.RailResizeHandle, _leftPanelVisible ? DisplayStyle.Flex : DisplayStyle.None);
@@ -147,6 +436,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void OnToggleRightPanel()
         {
+            if (_formFactor == FormFactor.Phone)
+            {
+                ToggleAvatarOverlay();
+                return;
+            }
+
             _rightPanelVisible = !_rightPanelVisible;
             // Ручное переключение перехватывает контроль у авто-скрытия.
             _avatarAutoHidden = false;
@@ -174,6 +469,13 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void ShowArea(VisualElement visible)
         {
+            // На телефоне навигация закрывает открытые оверлеи.
+            if (_formFactor == FormFactor.Phone)
+            {
+                CloseDrawer();
+                CloseAvatarOverlay();
+            }
+
             SetDisplay(_d.ChatPanel, visible == _d.ChatPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_d.HistoryPanel, visible == _d.HistoryPanel ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_d.ProvidersPanel, visible == _d.ProvidersPanel ? DisplayStyle.Flex : DisplayStyle.None);
@@ -183,52 +485,60 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_d.SettingsPanel, visible == _d.SettingsPanel ? DisplayStyle.Flex : DisplayStyle.None);
         }
 
+        // ============================================================
+        // Platform: safe area + OS classes (on app-root)
+        // ============================================================
+
         /// <summary>
-        /// Применяет Safe Area и платформенные классы к root.
-        /// Вызывается автоматически в Init(), если PlatformInfo передан в Deps.
+        /// Применяет Safe Area (padding) и платформенные классы к app-root.
+        /// Вызывается в Init() (если PlatformInfo есть в Deps) и повторно из
+        /// MainViewController, когда сервис стал доступен после инициализации.
         /// </summary>
         public void ApplyPlatformLayout()
         {
-            if (_d.Root == null || _d.PlatformInfo == null)
+            var target = _d.AppRoot;
+            if (target == null || _d.PlatformInfo == null)
                 return;
 
             var info = _d.PlatformInfo;
             var safeArea = info.SafeArea;
 
-            // Применяем Safe Area как padding к корневому элементу
-            // На десктопе SafeArea = полный экран, padding будет 0
-            _d.Root.style.paddingLeft = safeArea.x;
-            _d.Root.style.paddingRight = Screen.width - safeArea.xMax;
-            _d.Root.style.paddingTop = Screen.height - safeArea.yMax;
-            _d.Root.style.paddingBottom = safeArea.y;
+            // На десктопе SafeArea = полный экран → padding будет 0.
+            target.style.paddingLeft = Mathf.Max(0f, safeArea.xMin);
+            target.style.paddingRight = Mathf.Max(0f, Screen.width - safeArea.xMax);
+            target.style.paddingTop = Mathf.Max(0f, Screen.height - safeArea.yMax);
+            target.style.paddingBottom = Mathf.Max(0f, safeArea.yMin);
 
-            // Добавляем полезные классы для USS-адаптации
-            if (info.IsMobile)
-            {
-                _d.Root.AddToClassList("platform-mobile");
-            }
-
-            if (Application.platform == RuntimePlatform.Android)
-            {
-                _d.Root.AddToClassList("platform-android");
-            }
-            else if (Application.platform == RuntimePlatform.IPhonePlayer)
-            {
-                _d.Root.AddToClassList("platform-ios");
-            }
+            target.EnableInClassList("platform-android", Application.platform == RuntimePlatform.Android);
+            target.EnableInClassList("platform-ios", Application.platform == RuntimePlatform.IPhonePlayer);
         }
 
-        /// <summary>
-        /// Применяет Safe Area и платформенные классы.
-        /// Можно вызывать повторно, если сервис стал доступен позже (после инициализации).
-        /// </summary>
         public void ApplyPlatformLayout(IPlatformInfoService info)
         {
-            if (_d.Root == null || info == null)
+            if (_d.AppRoot == null || info == null)
                 return;
 
             _d.PlatformInfo = info;
             ApplyPlatformLayout();
+        }
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        private static void ClearLayoutInline(VisualElement element)
+        {
+            if (element == null)
+                return;
+
+            element.style.width = StyleKeyword.Null;
+            element.style.position = StyleKeyword.Null;
+            element.style.left = StyleKeyword.Null;
+            element.style.top = StyleKeyword.Null;
+            element.style.right = StyleKeyword.Null;
+            element.style.bottom = StyleKeyword.Null;
+            element.style.translate = StyleKeyword.Null;
+            element.style.display = StyleKeyword.Null;
         }
 
         private static void SetDisplay(VisualElement element, DisplayStyle display)

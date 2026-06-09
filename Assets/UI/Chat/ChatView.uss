@@ -1844,62 +1844,45 @@
 }
 
 
-/* Platform mobile overrides for composer (Android support) */
-.app.platform-mobile .composer {
-    padding: 8px 10px;
-}
-
-.app.platform-mobile .composer__input {
-    font-size: 15px;
-    min-height: 44px;
-}
-
-.app.platform-android .composer {
-    padding-bottom: 16px; /* account for gesture nav */
-}
-
-
-/* Extended Android/mobile chat adaptations */
-.app.platform-mobile .message {
-    max-width: 85%;
-    font-size: 14px;
-    padding: 8px 12px;
-}
-
-.app.platform-mobile .message.user {
-    margin-left: 12%;
-}
-
-.app.platform-android .chat-scroll {
-    /* account for composer + nav */
-    padding-bottom: 60px;
-}
-
-.app.platform-mobile .composer__input {
-    font-size: 15px;
-    min-height: 44px;
-    padding: 8px 12px;
-}
-
-
-
 /* ============================================================
-   Android-specific chat enhancements (PL-04)
+   Phone (ff-phone) — chat reflows to a single column
+   Form-factor class is set in C# (LayoutController) on #app-root.
    ============================================================ */
 
-.app.platform-android .composer {
-    padding-bottom: 28px;
+/* Avatar panel becomes a full-screen overlay instead of a 3rd column.
+   Toggled via avatar--open (C#); paints on top via BringToFront(). */
+.ff-phone .avatar-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-left-width: 0;
+    background-color: var(--bg-0);
+    display: none;
 }
 
-.app.platform-android .message {
-    max-width: 85%;
-    font-size: 15px;
-    padding: 10px 14px;
+.ff-phone .avatar-panel.avatar--open {
+    display: flex;
 }
 
-.app.platform-mobile .composer__input {
+/* Roomier composer + larger input text for touch. padding-bottom is left to
+   the base/.platform-android rule so it can absorb the gesture-nav inset. */
+.ff-phone .composer {
+    padding-top: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.ff-phone .composer__input {
     font-size: 15px;
-    min-height: 40px;
+    min-height: 44px;
+}
+
+/* Bubbles use more of the narrow width. */
+.ff-phone .transcript__bubble {
+    max-width: 88%;
 }
 
 /* ============== Image Lightbox (click-to-preview) ============== */
