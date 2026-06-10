@@ -350,33 +350,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ── Helpers ───────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Builds rich-text string with per-character colour interpolated
-        /// linearly between <paramref name="from"/> and <paramref name="to"/>.
-        /// Spaces are emitted without a colour tag.
-        /// </summary>
-        private static string BuildGradientText(string text, Color from, Color to)
-        {
-            int nonSpaceCount = 0;
-            foreach (char c in text)
-                if (c != ' ') nonSpaceCount++;
-
-            var sb  = new StringBuilder(text.Length * 28);
-            int idx = 0;
-
-            foreach (char c in text)
-            {
-                if (c == ' ') { sb.Append(' '); continue; }
-
-                float t = nonSpaceCount > 1 ? (float)idx / (nonSpaceCount - 1) : 0f;
-                Color col = Color.Lerp(from, to, t);
-                sb.Append($"<color=#{ColorUtility.ToHtmlStringRGB(col)}>{c}</color>");
-                idx++;
-            }
-
-            return sb.ToString();
-        }
-
-        /// <summary>
         /// Three-stop gradient: per-character colour goes from <paramref name="a"/>
         /// through <paramref name="b"/> at the midpoint to <paramref name="c"/>.
         /// </summary>

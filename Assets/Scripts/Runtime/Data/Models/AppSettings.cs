@@ -34,7 +34,6 @@ namespace NeonCompanion.Runtime.Data.Models
 
         // Voice (universal)
         public string inputDeviceName = "";   // microphone device name (empty = system default)
-        public string outputDeviceName = "";  // reserved for future platform-specific output device selection
         public float outputVolume = 0.8f;     // 0.0-1.0
     }
 }

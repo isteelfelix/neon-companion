@@ -23,27 +23,6 @@ namespace NeonCompanion.Runtime.Core
             return providers.Find(provider => provider != null && provider.id == providerId);
         }
 
-        public async Task<ProviderConfig> GetActiveProviderAsync(string preferredProviderId = null)
-        {
-            if (!string.IsNullOrWhiteSpace(preferredProviderId))
-            {
-                var preferredProvider = await GetProviderByIdAsync(preferredProviderId);
-                if (preferredProvider != null && preferredProvider.isEnabled)
-                    return preferredProvider;
-            }
-
-            var providers = await _repository.GetAllAsync();
-
-            for (int i = 0; i < providers.Count; i++)
-            {
-                var provider = providers[i];
-                if (provider != null && provider.isEnabled)
-                    return provider;
-            }
-
-            return null;
-        }
-
         public async Task<ProviderConfig> GetActiveProviderForBackendAsync(BackendMode mode, string preferredProviderId = null, bool fallbackToFirst = true)
         {
             bool hermesMode = mode == BackendMode.Hermes;

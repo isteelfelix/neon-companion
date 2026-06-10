@@ -27,8 +27,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private Button _editingSaveBtn;
         private Button _editingCancelBtn;
 
-        internal bool IsEditing => _editingMessageIndex.HasValue;
-
         internal ChatMessageEditController(
             Func<Task<ChatService>> getChatServiceAsync,
             Action<IReadOnlyList<ChatMessage>> renderMessages,

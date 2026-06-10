@@ -220,7 +220,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             ChatMessageListRenderer.RegisterClick(_d.ScrollBottomBtn, OnScrollBottomClicked);
 
             // Wire up static bubble action events
-            CopyRequested += OnCopyClicked;
             CopyMessageRequested += OnCopyMessageClicked;
             RegenerateRequested += OnRegenerateClicked;
 
@@ -304,7 +303,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             ChatMessageListRenderer.UnregisterClick(_d.ExportButton, OnExportClicked);
             ChatMessageListRenderer.UnregisterClick(_d.ScrollBottomBtn, OnScrollBottomClicked);
 
-            CopyRequested -= OnCopyClicked;
             CopyMessageRequested -= OnCopyMessageClicked;
             RegenerateRequested -= OnRegenerateClicked;
             if (_approvalController != null)
@@ -876,28 +874,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ===== Copy =====
-
-        private void OnCopyClicked()
-        {
-            var chat = _d.GetChatServiceAsync().Result;
-            if (chat == null) return;
-            var messages = chat.CurrentChatViewModel?.Messages;
-            if (messages == null || messages.Count == 0) return;
-
-            var sb = new StringBuilder();
-            for (int i = 0; i < messages.Count; i++)
-            {
-                var msg = messages[i];
-                if (msg == null || string.IsNullOrWhiteSpace(msg.content)) continue;
-                string role = ChatMessageListRenderer.NormalizeRole(msg.role);
-                sb.AppendLine($"[{ChatMessageListRenderer.DisplayRole(role)}]");
-                sb.AppendLine(msg.content);
-                sb.AppendLine();
-            }
-
-            GUIUtility.systemCopyBuffer = sb.ToString().TrimEnd();
-            _d.ShowSystemMessage(LocalizationExtensions.Get("chat.copied", "Диалог скопирован в буфер обмена."));
-        }
 
         private void OnCopyMessageClicked(string text)
         {
@@ -1697,12 +1673,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Static events for bubble action buttons =====
 
-        internal static event Action CopyRequested;
         internal static event Action<string> CopyMessageRequested;
         internal static event Action RegenerateRequested;
         internal static event Action<ChatMessage> ListenMessageRequested;
 
-        internal static void OnCopyClickedStatic() => CopyRequested?.Invoke();
         internal static void OnCopyMessageClickedStatic(string text) => CopyMessageRequested?.Invoke(text);
         internal static void OnRegenerateClickedStatic() => RegenerateRequested?.Invoke();
         internal static void OnListenMessageClickedStatic(ChatMessage message) => ListenMessageRequested?.Invoke(message);

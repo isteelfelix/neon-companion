@@ -61,8 +61,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const float NarrowWidth = 900f;
         private const float AvatarHideWidth = 900f;
 
-        private const float PhoneDrawerWidth = 300f;
-
         private Deps _d;
         private Button _toggleLeftPanelBtn;
         private Button _toggleRightPanelBtn;
@@ -79,8 +77,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _drawerOpen;                 // телефон: drawer открыт
         private bool _avatarOverlayOpen;          // телефон: аватар-оверлей открыт
 
-        public bool LeftPanelVisible => _leftPanelVisible;
-        public bool RightPanelVisible => _rightPanelVisible;
         public bool IsPhone => _formFactor == FormFactor.Phone;
 
         public void SetDeps(Deps deps)

@@ -133,7 +133,6 @@ namespace NeonCompanion.Runtime.Avatar
 
         public bool HasAnyClips => _clips.Count > 0;
         public bool IsPlayingOneShot => _isPlayingOneShot || HasPendingOneShot();
-        public string ActiveClipName => _activeClip != null ? _activeClip.Config.clipName : null;
 
         /// <summary>
         /// Pauses playback and pins a specific frame from the named clip.

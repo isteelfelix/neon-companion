@@ -115,7 +115,5 @@ namespace NeonCompanion.Runtime.Avatar
                     return "idle";
             }
         }
-
-        public State CurrentState => _currentState;
     }
 }

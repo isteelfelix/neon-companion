@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using UnityEngine;
@@ -9,8 +8,6 @@ namespace NeonCompanion.Runtime.Voice
 {
     public sealed class VoiceOutputManager : MonoBehaviour
     {
-        private static readonly Regex SentenceRegex = new Regex(@"[^.!?]+[.!?]?", RegexOptions.Compiled);
-
         private readonly Queue<string> _queue = new Queue<string>();
         private IVoiceService _voiceService;
         private Func<bool> _isVoiceEnabled;
@@ -147,16 +144,6 @@ namespace NeonCompanion.Runtime.Voice
                 return false; // a UnityEngine.Object service that has been destroyed
 
             return _voiceService != null;
-        }
-
-        private static IEnumerable<string> SplitSentences(string text)
-        {
-            foreach (Match match in SentenceRegex.Matches(text))
-            {
-                var value = match.Value?.Trim();
-                if (!string.IsNullOrWhiteSpace(value))
-                    yield return value;
-            }
         }
     }
 }

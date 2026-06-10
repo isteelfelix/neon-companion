@@ -109,15 +109,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
 
         // ---- Public API -----------------------------------------------------------
 
-        public void SetTheme(Color32 foreground, Color32 background)
-        {
-            _palette.DefaultForeground = foreground;
-            _palette.DefaultBackground = background;
-            style.backgroundColor = ToStyleColor(background);
-            _cursor.style.backgroundColor = ToStyleColor(WithAlpha(foreground, 130));
-            _message.style.color = ToStyleColor(foreground);
-        }
-
         public void ShowMessage(string text)
         {
             _message.text = text ?? string.Empty;

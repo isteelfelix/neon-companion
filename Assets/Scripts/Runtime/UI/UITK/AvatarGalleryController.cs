@@ -150,8 +150,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             set { _activeAvatarId = value; }
         }
 
-        public VisualElement AvatarCircle { get { return _avatarCircle; } }
-
         public SpriteSheetAnimator GetAvatarAnimatorInstance() { return _avatarAnimator; }
 
         public string AvatarViewModeSetting

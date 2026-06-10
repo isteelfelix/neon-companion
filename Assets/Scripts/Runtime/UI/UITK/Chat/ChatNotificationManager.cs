@@ -18,8 +18,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Application.focusChanged += OnApplicationFocusChanged;
         }
 
-        public bool HasUnread => _hasUnread;
-
         public void NotifyNewMessage()
         {
             _hasUnread = true;

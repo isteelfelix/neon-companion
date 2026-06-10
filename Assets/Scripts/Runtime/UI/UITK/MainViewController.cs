@@ -34,7 +34,6 @@ namespace NeonCompanion.Runtime.UI.UITK
     public sealed class MainViewController : MonoBehaviour
     {
         private const string ActiveNavClass = "nav__item--active";
-        private const string ActiveSessionClass = "history__item--active";
         private const string ActiveProviderClass = "provider--active";
         private const string EditingProviderClass = "provider--editing";
         private const string ActiveAvatarFilterClass = "filterchip--active";
@@ -1255,15 +1254,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 : LocalizationExtensions.Get("chat.new", "Новый чат");
         }
 
-        private void SetPlaceholder(string title, string body)
-        {
-            SetTopbar(title, string.Empty);
-            if (_placeholderTitle != null)
-                _placeholderTitle.text = title;
-            if (_placeholderBody != null)
-                _placeholderBody.text = body;
-            ShowArea(_placeholderArea);
-        }
 
         private void ShowArea(VisualElement visible) => _layoutController.ShowArea(visible);
 

@@ -656,11 +656,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private void SwitchProvider(ProviderConfig provider)
-        {
-            _ = SwitchProviderAsync(provider);
-        }
-
         private async Task ToggleProviderEnabledAsync(ProviderConfig provider)
         {
             if (provider == null)
@@ -2159,48 +2154,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return "General";
 
             return modelId.Substring(0, slashIndex);
-        }
-
-        private static string GetProviderStatusText(ChatService chatService)
-        {
-            var provider = chatService?.CurrentProvider;
-            var currentModel = chatService?.CurrentSessionModel;
-            if (provider == null) return LocalizationExtensions.Get("provider.status.none", "нет провайдера");
-            if (!string.IsNullOrWhiteSpace(currentModel))
-                return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {currentModel}";
-            if (!string.IsNullOrWhiteSpace(provider.defaultModel))
-                return $"{provider.displayName ?? LocalizationExtensions.Get("provider.short.default", "API")} · {provider.defaultModel}";
-            return provider.displayName ?? LocalizationExtensions.Get("provider.status.configured", "настроен");
-        }
-
-        private readonly struct ModelPreset
-        {
-            public readonly string Label;
-            public readonly string ModelId;
-
-            public ModelPreset(string label, string modelId)
-            {
-                Label = label;
-                ModelId = modelId;
-            }
-        }
-
-        private static List<ModelPreset> BuildModelPresets(string nameHint, string baseUrlHint)
-        {
-            string hint = $"{nameHint} {baseUrlHint}".ToLowerInvariant();
-            if (hint.Contains("anthropic"))
-                return new List<ModelPreset> { new ModelPreset("Claude Sonnet 4.5", "claude-sonnet-4-5"), new ModelPreset("Claude 3.7 Sonnet", "claude-3-7-sonnet-latest"), new ModelPreset("Claude 3.5 Haiku", "claude-3-5-haiku-latest") };
-            if (hint.Contains("gemini") || hint.Contains("googleapis.com"))
-                return new List<ModelPreset> { new ModelPreset("Gemini 2.5 Pro", "gemini-2.5-pro"), new ModelPreset("Gemini 2.5 Flash", "gemini-2.5-flash"), new ModelPreset("Gemini 2.0 Flash", "gemini-2.0-flash") };
-            if (hint.Contains("x.ai") || hint.Contains("grok") || hint.Contains("xai"))
-                return new List<ModelPreset> { new ModelPreset("Grok 3", "grok-3"), new ModelPreset("Grok 3 Mini", "grok-3-mini"), new ModelPreset("Grok 2", "grok-2-latest") };
-            if (hint.Contains("openrouter"))
-                return new List<ModelPreset> { new ModelPreset("OpenAI GPT-4.1", "openai/gpt-4.1"), new ModelPreset("Anthropic Sonnet 4.5", "anthropic/claude-sonnet-4-5"), new ModelPreset("Google Gemini 2.5 Pro", "google/gemini-2.5-pro") };
-            if (hint.Contains("localhost") || hint.Contains("127.0.0.1") || hint.Contains("ollama"))
-                return new List<ModelPreset> { new ModelPreset("Llama 3.1 8B (Ollama)", "llama3.1:8b"), new ModelPreset("Qwen 2.5 7B (Ollama)", "qwen2.5:7b"), new ModelPreset("Mistral 7B (Ollama)", "mistral:7b") };
-            if (hint.Contains("openai"))
-                return new List<ModelPreset> { new ModelPreset("GPT-4.1", "gpt-4.1"), new ModelPreset("GPT-4o", "gpt-4o"), new ModelPreset("GPT-4o mini", "gpt-4o-mini") };
-            return new List<ModelPreset> { new ModelPreset("GPT-4.1", "gpt-4.1"), new ModelPreset("Claude Sonnet 4.5", "claude-sonnet-4-5"), new ModelPreset("Gemini 2.5 Flash", "gemini-2.5-flash") };
         }
 
         // ============================================================

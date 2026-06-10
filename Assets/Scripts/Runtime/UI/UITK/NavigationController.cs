@@ -265,67 +265,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _deps.ShowArea(_deps.SettingsPanel);
         }
 
-        public void ApplyLocalizedTexts()
-        {
-            _navChatLabel?.Localize("tab.chat");
-            _navAvatarsLabel?.Localize("tab.avatar");
-            _navProvidersLabel?.Localize("settings.providers");
-            _navHistoryLabel?.Localize("chat.history");
-            _navThemesLabel?.Localize("settings.themes");
-            _navSettingsLabel?.Localize("tab.settings");
-            _navCloseLabel?.Localize("nav.close");
-        }
-
-        public void SetChatCount(int count)
-        {
-            if (_navChatCount != null)
-                _navChatCount.text = count.ToString();
-        }
-
-        public void SetProvidersCount(int count)
-        {
-            if (_navProvidersCount != null)
-                _navProvidersCount.text = count.ToString();
-        }
-
-        public void SetAvatarsCount(int count)
-        {
-            if (_navAvatarsCount != null)
-                _navAvatarsCount.text = count.ToString();
-        }
-
-        public void ResetChatCount()
-        {
-            if (_navChatCount != null)
-                _navChatCount.text = "0";
-        }
-
-        public void ResetProvidersCount()
-        {
-            if (_navProvidersCount != null)
-                _navProvidersCount.text = "0";
-        }
-
-        /// <summary>
-        /// Hide specific nav items by name. Used for feature gating (e.g. hide kanban/cron in OpenAI mode).
-        /// </summary>
-        public void HideNavItems(params string[] itemNames)
-        {
-            if (itemNames == null || itemNames.Length == 0)
-                return;
-
-            var hidden = new HashSet<string>(itemNames);
-            for (int i = 0; i < _navItems.Count; i++)
-            {
-                var nav = _navItems[i];
-                if (nav == null) continue;
-
-                string name = nav.name ?? "";
-                if (hidden.Contains(name))
-                    nav.style.display = DisplayStyle.None;
-            }
-        }
-
         /// <summary>
         /// Show all nav items (reset visibility).
         /// </summary>

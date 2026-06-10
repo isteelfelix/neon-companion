@@ -24,11 +24,6 @@ namespace NeonCompanion.Runtime.Terminal.Emulator
         public byte G;
         public byte B;
 
-        public bool IsDefault
-        {
-            get { return Mode == TerminalColorMode.Default; }
-        }
-
         public static TerminalColor Default()
         {
             TerminalColor c = new TerminalColor();

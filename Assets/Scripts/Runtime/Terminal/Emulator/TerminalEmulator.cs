@@ -22,7 +22,6 @@ namespace NeonCompanion.Runtime.Terminal.Emulator
         private readonly ScreenBuffer _main;
         private readonly ScreenBuffer _alt;
         private ScreenBuffer _active;
-        private bool _usingAlt;
 
         private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
         private char[] _charBuf = new char[512];
@@ -86,7 +85,6 @@ namespace NeonCompanion.Runtime.Terminal.Emulator
         public int CursorRow { get { return _row; } }
         public int CursorCol { get { return _col; } }
         public bool CursorVisible { get { return _cursorVisible; } }
-        public bool UsingAlternateScreen { get { return _usingAlt; } }
         public bool ApplicationCursorKeys { get { return _applicationCursorKeys; } }
         public bool BracketedPasteEnabled { get { return _bracketedPaste; } }
         public ScreenBuffer ActiveBuffer { get { return _active; } }
@@ -649,7 +647,6 @@ namespace NeonCompanion.Runtime.Terminal.Emulator
             {
                 if (saveRestoreCursor)
                     SaveCursor();
-                _usingAlt = true;
                 _active = _alt;
                 _scrollTop = 0;
                 _scrollBottom = Rows - 1;
@@ -661,7 +658,6 @@ namespace NeonCompanion.Runtime.Terminal.Emulator
             }
             else
             {
-                _usingAlt = false;
                 _active = _main;
                 _scrollTop = 0;
                 _scrollBottom = Rows - 1;
@@ -696,7 +692,6 @@ namespace NeonCompanion.Runtime.Terminal.Emulator
 
         private void FullReset()
         {
-            _usingAlt = false;
             _active = _main;
             ResetPen();
             _row = 0;

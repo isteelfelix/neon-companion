@@ -30,7 +30,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
     [Serializable]
     public class RpcFrame
     {
-        [JsonProperty("jsonrpc")] public string JsonRpc;
         [JsonProperty("id")] public string Id;
         [JsonProperty("method")] public string Method;
         [JsonProperty("result")] public JToken Result;
@@ -73,21 +72,18 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string MessageDelta = "message.delta";
         public const string MessageComplete = "message.complete";
         public const string ReasoningDelta = "reasoning.delta";
-        public const string ReasoningAvailable = "reasoning.available";
         public const string ToolStart = "tool.start";
         public const string ToolProgress = "tool.progress";
         public const string ToolComplete = "tool.complete";
         public const string ClarifyRequest = "clarify.request";
         public const string ApprovalRequest = "approval.request";
         public const string SudoRequest = "sudo.request";
-        public const string SecretRequest = "secret.request";
         public const string TerminalExecute = "terminal.execute";
         public const string ClientPing = "client.ping";
         public const string FileTransferStart = "file.transfer.start";
         public const string FileTransferChunk = "file.transfer.chunk";
         public const string FileTransferFinish = "file.transfer.finish";
         public const string Error = "error";
-        public const string BackgroundComplete = "background.complete";
     }
 
     // === RPC Method Names ===
@@ -99,8 +95,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SessionClose = "session.close";
         public const string SessionList = "session.list";
         public const string SessionInterrupt = "session.interrupt";
-        public const string SessionUsage = "session.usage";
-        public const string SessionCwdSet = "session.cwd.set";
         public const string PromptSubmit = "prompt.submit";
         public const string ClarifyRespond = "clarify.respond";
         public const string ApprovalRespond = "approval.respond";
@@ -112,13 +106,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string FileTransferStart = "file.transfer.start";
         public const string FileTransferChunk = "file.transfer.chunk";
         public const string FileTransferFinish = "file.transfer.finish";
-        public const string ConfigGet = "config.get";
         public const string ImageAttachBytes = "image.attach_bytes";
-        public const string SlashExec = "slash.exec";
-        public const string CommandDispatch = "command.dispatch";
-        public const string CommandsCatalog = "commands.catalog";
-        public const string CompleteSlash = "complete.slash";
-        public const string CompletePath = "complete.path";
     }
 
     // === HermesGateway ===
@@ -141,8 +129,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
         // Config
         public int RequestTimeoutMs { get; set; } = 30000;
         public string RequestIdPrefix { get; set; } = "r";
-        public int ReconnectDelayMs { get; set; } = 1000;
-        public int MaxReconnectDelayMs { get; set; } = 30000;
 
         public ConnectionState State => _state;
         public event Action<GatewayEvent> OnEvent;
@@ -292,11 +278,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     _eventHandlers[eventType] = new List<Action<GatewayEvent>>();
                 _eventHandlers[eventType].Add(handler);
             }
-        }
-
-        public void OnAny(Action<GatewayEvent> handler)
-        {
-            On("*", handler);
         }
 
         public void OnStateChange(Action<ConnectionState> handler)

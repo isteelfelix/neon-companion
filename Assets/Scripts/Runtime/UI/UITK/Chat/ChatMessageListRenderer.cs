@@ -112,40 +112,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             content.RegisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
         }
 
-        internal void ScrollToMessage(int messageIndex)
-        {
-            if (_messagesList == null || messageIndex < 0)
-                return;
-
-            VisualElement targetRow = null;
-            foreach (var child in _messagesList.Children())
-            {
-                if (child.userData is int idx && idx == messageIndex)
-                {
-                    targetRow = child;
-                    break;
-                }
-            }
-
-            if (targetRow == null)
-                return;
-
-            try
-            {
-                _messagesList.ScrollTo(targetRow);
-            }
-            catch
-            {
-                var content = _messagesList.contentContainer;
-                if (content != null)
-                {
-                    float y = targetRow.layout.y - 60f;
-                    if (y < 0f) y = 0f;
-                    _messagesList.scrollOffset = new Vector2(0f, y);
-                }
-            }
-        }
-
         internal void ShowImageLightbox(string imagePath)
         {
             if (string.IsNullOrEmpty(imagePath))

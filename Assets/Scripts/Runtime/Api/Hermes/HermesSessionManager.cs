@@ -45,7 +45,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public int output_tokens;
         public int tool_call_count;
         public long started_at;
-        public long? ended_at;
         public long last_active;
         public string preview;
     }
@@ -65,9 +64,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string model;
         public string provider;
         public string cwd;
-        public string branch;
         public bool? running;
-        public string personality;
         public UsageStats usage;
     }
 
@@ -78,10 +75,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public int output;
         public int total;
         public int calls;
-        public double? cost_usd;
         public int context_max;
         public int context_used;
-        public int context_percent;
     }
 
     [Serializable]

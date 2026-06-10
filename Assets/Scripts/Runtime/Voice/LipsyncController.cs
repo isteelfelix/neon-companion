@@ -26,18 +26,6 @@ namespace NeonCompanion.Runtime.Voice
     /// </summary>
     public sealed class LipsyncController : MonoBehaviour
     {
-        // Blend-shape name convention (Ready Player Me / ARKit)
-        public static readonly IReadOnlyDictionary<Viseme, string> BlendShapeNames =
-            new Dictionary<Viseme, string>
-            {
-                [Viseme.Silence] = "viseme_sil",
-                [Viseme.A]       = "viseme_aa",
-                [Viseme.E]       = "viseme_E",
-                [Viseme.I]       = "viseme_I",
-                [Viseme.O]       = "viseme_O",
-                [Viseme.U]       = "viseme_U",
-            };
-
         // Maps individual characters to their dominant viseme
         private static readonly Dictionary<char, Viseme> CharToViseme = new Dictionary<char, Viseme>
         {
@@ -92,42 +80,6 @@ namespace NeonCompanion.Runtime.Voice
             {
                 _inputManager.OnRecordingStarted += HandleRecordingStarted;
                 _inputManager.OnRecordingStopped += HandleRecordingStopped;
-            }
-        }
-
-        /// <summary>
-        /// Binds the 2D animator. If the AvatarProfile has a lipsyncClip it is
-        /// registered with the animator so ShowFrame() can address it by name.
-        /// </summary>
-        public void SetSpriteAnimator(SpriteSheetAnimator animator, SpriteSheetAnimation lipsyncClip = null)
-        {
-            _spriteAnimator = animator;
-
-            if (animator != null && lipsyncClip != null)
-                animator.RegisterClip(lipsyncClip);
-
-            _hasLipsyncClip = animator != null && animator.HasClip(LipsyncClipName);
-            _hasTalkingClip = animator != null && animator.HasClip(TalkingClipName);
-        }
-
-        /// <summary>
-        /// Binds the 3D blend-shape target. Call this after the GLB model is loaded.
-        /// Caches blend-shape indices so Update() pays no allocation or string-lookup cost.
-        /// </summary>
-        public void SetBlendShapeTarget(SkinnedMeshRenderer target)
-        {
-            _blendShapeTarget = target;
-            for (int i = 0; i < _shapeIndices.Length; i++)
-                _shapeIndices[i] = -1;
-
-            if (target == null || target.sharedMesh == null)
-                return;
-
-            foreach (var kvp in BlendShapeNames)
-            {
-                int slot = (int)kvp.Key;
-                if (slot >= 0 && slot < _shapeIndices.Length)
-                    _shapeIndices[slot] = target.sharedMesh.GetBlendShapeIndex(kvp.Value);
             }
         }
 
@@ -261,15 +213,5 @@ namespace NeonCompanion.Runtime.Voice
             return CharToViseme.TryGetValue(c, out var viseme) ? viseme : Viseme.Silence;
         }
 
-        /// <summary>
-        /// Returns normalised blend-shape weights (0–1) for all six visemes.
-        /// Useful for driving custom rigs that don't use the standard shape names.
-        /// </summary>
-        public static float[] GetBlendWeights(Viseme viseme)
-        {
-            var weights = new float[6]; // all zero
-            weights[(int)viseme] = 1f;
-            return weights;
-        }
     }
 }

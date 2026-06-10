@@ -18,21 +18,6 @@ namespace NeonCompanion.Runtime.Avatar
         // blank-frame trim (GetPixel) below needs.
         private const string ResourcesScheme = "res://";
 
-        public static Texture2D LoadTexture(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return null;
-
-            if (path.StartsWith(ResourcesScheme, StringComparison.Ordinal))
-                return LoadTextureFromResources(path);
-
-            string resolvedPath = ResolvePath(path);
-            if (string.IsNullOrWhiteSpace(resolvedPath))
-                return null;
-
-            return LoadTextureResolved(resolvedPath);
-        }
-
         private static Texture2D LoadTextureFromResources(string path)
         {
             if (TextureCache.TryGetValue(path, out var cached))

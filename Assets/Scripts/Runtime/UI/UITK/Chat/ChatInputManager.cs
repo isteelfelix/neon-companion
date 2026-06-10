@@ -74,11 +74,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             QueueComposerHeightUpdate();
         }
 
-        public void SetFocus()
-        {
-            if (_messageInput != null)
-                _messageInput.Focus();
-        }
 
         public async Task<bool> TryHandleCommandAsync(string message)
         {

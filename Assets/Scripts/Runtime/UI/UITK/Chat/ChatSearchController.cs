@@ -45,8 +45,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         /// <summary>Sets the session search query (pass-through from ChatController).</summary>
         public void SetSessionSearchQuery(string value) { _sessionSearchQuery = value ?? string.Empty; }
 
-        /// <summary>Programmatically set the search query and trigger search.</summary>
-        public void SetQuery(string query) { _searchQuery = query ?? string.Empty; }
 
         /// <summary>Shows the search bar and focuses the input.</summary>
         public void Show()

@@ -15,6 +15,21 @@ namespace NeonCompanion.Runtime.Api.Tools
         private const int MaxSearchMatches = 100;
         private const int CodeTimeoutMs = 10000;
 
+        // Tools that can execute arbitrary code or mutate the filesystem. These must never be
+        // auto-approved or "always"-approved: every invocation requires explicit, per-call consent
+        // (see ToolCallApprovalController). A compromised/malicious server otherwise gains silent RCE.
+        private static readonly HashSet<string> DangerousTools = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "execute_code",
+            "run_command",
+            "write_file",
+        };
+
+        public static bool IsDangerousTool(string toolName)
+        {
+            return !string.IsNullOrWhiteSpace(toolName) && DangerousTools.Contains(toolName);
+        }
+
         public static string Execute(string toolName, Dictionary<string, string> parameters)
         {
             if (string.IsNullOrWhiteSpace(toolName))

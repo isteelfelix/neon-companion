@@ -13,15 +13,6 @@ namespace NeonCompanion.Runtime.Platform
     /// </summary>
     public static class AndroidPermissionHelper
     {
-        public static bool HasPermission(string permission)
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            return Permission.HasUserAuthorizedPermission(permission);
-#else
-            return true;
-#endif
-        }
-
         public static void RequestPermission(string permission, Action onGranted = null, Action onDenied = null)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR

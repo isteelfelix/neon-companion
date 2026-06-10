@@ -2455,15 +2455,6 @@ namespace NeonCompanion.Runtime.Chat
                 RaiseCurrentProviderChanged();
         }
 
-        public bool CurrentProviderMatchesBackend(BackendMode mode)
-        {
-            if (_currentProvider == null)
-                return true;
-
-            bool hermesMode = mode == BackendMode.Hermes;
-            return IsHermesProvider(_currentProvider) == hermesMode;
-        }
-
         public void ClearCurrentSessionState()
         {
             ClearCurrentSessionWithoutSaving();

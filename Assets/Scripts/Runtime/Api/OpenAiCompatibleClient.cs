@@ -2001,20 +2001,6 @@ namespace NeonCompanion.Runtime.Api
             return 0;
         }
 
-        private static bool ContainsModel(IReadOnlyList<string> models, string modelId)
-        {
-            if (models == null || string.IsNullOrWhiteSpace(modelId))
-                return false;
-
-            for (int i = 0; i < models.Count; i++)
-            {
-                if (string.Equals(models[i], modelId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            return false;
-        }
-
         private static string AppendStatusNote(string current, string note)
         {
             if (string.IsNullOrWhiteSpace(note))

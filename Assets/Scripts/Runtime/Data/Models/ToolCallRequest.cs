@@ -12,8 +12,6 @@ namespace NeonCompanion.Runtime.Data.Models
         public Dictionary<string, string> parameters; // tool parameters
 
         // Runtime state (not serialized)
-        [NonSerialized] public bool isApproved;
-        [NonSerialized] public bool isRejected;
         [NonSerialized] public bool alwaysApprove; // user chose "Always"
     }
 }

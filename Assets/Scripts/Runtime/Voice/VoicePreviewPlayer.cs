@@ -16,8 +16,6 @@ namespace NeonCompanion.Runtime.Voice
         private AudioClip _clip;
         private Coroutine _loadCoroutine;
 
-        public bool IsPlaying => _src != null && _src.isPlaying;
-
         public event Action OnPlaybackComplete;
 
         private void Awake()

@@ -49,26 +49,6 @@ namespace NeonCompanion.Runtime.Core
         public event Action<string> OnError;
         public event Action<TransportState> OnConnectionStateChanged;
 
-        // === Feature Gate ===
-
-        private static readonly HashSet<string> HermesOnlyFeatures = new HashSet<string>
-        {
-            "sessions", "tools", "kanban", "cron", "skills",
-            "reasoning", "approval", "shell",
-        };
-
-        public bool IsFeatureAvailable(string feature)
-        {
-            if (CurrentMode == BackendMode.Hermes)
-                return true;
-            return !HermesOnlyFeatures.Contains(feature);
-        }
-
-        public bool IsHermesOnly(string feature)
-        {
-            return HermesOnlyFeatures.Contains(feature);
-        }
-
         // === Transport Access ===
 
         public IChatTransport ActiveTransport { get; private set; }
