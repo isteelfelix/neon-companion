@@ -23,6 +23,7 @@
 | C-09 | Сессионная маршрутизация моделей | ✅ | M1 | Verified: Hermes knows current model per session |
 | C-10 | Provider Adapter архитектура | ✅ | M2 | Model switching works for OpenAI and Hermes (tested 2026-06-08). Context overflow on undersized models is expected behavior. |
 | C-11 | Gateway status + restart | ⏳ | M2 | Backend: gateway exposes status endpoint (running/stopped, uptime, model). Restart endpoint. Companion: displays status badge + restart button. Gateway-only, no client logic. |
+| C-12 | Восстановление провайдера после рестарта | ✅ | M3 | Startup restores last activeProviderId, derives backend, installs into ChatService. Main UI awaits init before opening sessions (61c12e1) |
 
 ## История и сессии
 | # | Фича | Статус | Спринт | Заметки |
@@ -48,7 +49,7 @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Verified: idle and talking animations work @@
 | A-07 | 2D motion-pack MVP contract | ✅ | M1 | Verified: motion pack triggers correctly @@
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | Research task — no user testing needed |
-| A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Verified by Felix: ApplyAvatarViewMode() called at startup. Avatar assets migrated PNG→.bytes in Resources (18d0e2b) — sync load on every platform including Android APK |
+| A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Verified by Felix: ApplyAvatarViewMode() called at startup. Avatars in Resources as imported Unity sprites (.png). frameCount field in motion_pack avoids pixel reads (61c12e1) |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Verified: avatar transitions idle→thinking→talking |
 
