@@ -78,15 +78,21 @@ namespace NeonCompanion.Runtime.UI.UITK
             rejectBtn.AddToClassList("approval-prompt__btn");
             rejectBtn.AddToClassList("approval-prompt__btn--reject");
 
-            string alwaysText = "\u26A1 " + LocalizationExtensions.Get("approval.always", "Always");
-            var alwaysBtn = new Button(() => FireDecision(true, true));
-            alwaysBtn.text = alwaysText;
-            alwaysBtn.AddToClassList("approval-prompt__btn");
-            alwaysBtn.AddToClassList("approval-prompt__btn--always");
-
             buttons.Add(approveBtn);
             buttons.Add(rejectBtn);
-            buttons.Add(alwaysBtn);
+
+            // "Always" is offered only for safe tools. Dangerous tools (code execution, shell,
+            // file writes) require explicit consent on every call, so a persistent grant is hidden.
+            if (!NeonCompanion.Runtime.Api.Tools.ToolExecutor.IsDangerousTool(toolName))
+            {
+                string alwaysText = "\u26A1 " + LocalizationExtensions.Get("approval.always", "Always");
+                var alwaysBtn = new Button(() => FireDecision(true, true));
+                alwaysBtn.text = alwaysText;
+                alwaysBtn.AddToClassList("approval-prompt__btn");
+                alwaysBtn.AddToClassList("approval-prompt__btn--always");
+                buttons.Add(alwaysBtn);
+            }
+
             _root.Add(buttons);
 
             return _root;

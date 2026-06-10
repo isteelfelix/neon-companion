@@ -10,8 +10,19 @@ namespace NeonCompanion.Runtime.Data.Secrets
 {
     public sealed class DeviceSecretStore : ISecretStore
     {
+        // Scheme of the obfuscation-only fallback. When this is the strongest available protector,
+        // stored secrets are NOT meaningfully encrypted (see DeviceXorSecretProtector).
+        private const string ObfuscationOnlyScheme = "device-xor-v1";
+
         private readonly IJsonStorage _storage;
         private readonly List<ISecretProtector> _protectors = new List<ISecretProtector>();
+
+        /// <summary>
+        /// True when the only available protector is device obfuscation (no OS-backed keystore).
+        /// On such platforms (e.g. iOS, macOS/Linux players, non-Windows editor) stored API keys
+        /// are recoverable by anyone with the secrets file — surface this to the user in the UI.
+        /// </summary>
+        public bool IsObfuscationOnly { get; private set; }
 
         public DeviceSecretStore(IJsonStorage storage)
         {
@@ -22,6 +33,18 @@ namespace NeonCompanion.Runtime.Data.Secrets
 #endif
             AddProtector(new WindowsDpapiSecretProtector());
             AddProtector(new DeviceXorSecretProtector());
+
+            // Protectors are added strongest-first and only when available, so the first entry is
+            // the one new secrets will use. If that is the obfuscation fallback, warn loudly: keys
+            // are stored without real encryption on this platform.
+            IsObfuscationOnly = _protectors.Count > 0 && _protectors[0].Scheme == ObfuscationOnlyScheme;
+            if (IsObfuscationOnly)
+            {
+                NeonLogger.LogWarning(
+                    "No OS-backed keystore available on this platform; API keys are stored with " +
+                    "device obfuscation only (not real encryption). Anyone with the secrets file " +
+                    "can recover them. Avoid storing high-value keys on this device.");
+            }
         }
 
         public string GetSecret(string id)
@@ -249,6 +272,11 @@ namespace NeonCompanion.Runtime.Data.Secrets
             }
         }
 
+        // WARNING: This is obfuscation, NOT encryption. The XOR key is derived entirely from the
+        // public device id + bundle identifier, and the algorithm is in this source file — anyone
+        // with the secrets file can trivially recover the plaintext. It exists only as a last-resort
+        // fallback for platforms without an OS-backed keystore (DPAPI / Android Keystore). Real
+        // protection on iOS/macOS/Linux requires native keystore integration (tracked separately).
         private sealed class DeviceXorSecretProtector : ISecretProtector
         {
             public string Scheme => "device-xor-v1";

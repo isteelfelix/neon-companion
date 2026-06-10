@@ -622,7 +622,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                                 {
                                     if (evt.button == 0)
                                     {
-                                        Application.OpenURL(capturedUrl);
+                                        NeonCompanion.Runtime.Core.SafeLinkOpener.Open(capturedUrl);
                                         evt.StopImmediatePropagation();
                                     }
                                 });

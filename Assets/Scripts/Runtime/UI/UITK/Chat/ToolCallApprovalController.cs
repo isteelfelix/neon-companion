@@ -160,11 +160,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (request == null)
                 return true;
 
+            // Dangerous tools (code execution, shell, file writes) can never be bypassed: neither
+            // "auto" permission mode nor a saved "always" entry applies. They always prompt.
+            bool dangerous = NeonCompanion.Runtime.Api.Tools.ToolExecutor.IsDangerousTool(request.toolName);
+
             var settings = await GetSettingsAsync();
-            if (settings != null && string.Equals(settings.toolPermissionMode, "auto", StringComparison.OrdinalIgnoreCase))
+            if (!dangerous && settings != null && string.Equals(settings.toolPermissionMode, "auto", StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            if (await IsToolAlwaysApprovedAsync(request.toolName))
+            if (!dangerous && await IsToolAlwaysApprovedAsync(request.toolName))
                 return true;
 
             var prompt = new NeonCompanion.Runtime.UI.UITK.ApprovalPrompt();
@@ -196,7 +200,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _currentApprovalElement = null;
             _pendingApprovalTcs = null;
 
-            if (always && approved)
+            if (always && approved && !dangerous)
                 await SaveAlwaysApprovedToolAsync(request.toolName);
 
             string toolId = request.id ?? string.Empty;

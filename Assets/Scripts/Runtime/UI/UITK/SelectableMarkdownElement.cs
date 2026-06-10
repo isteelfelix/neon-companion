@@ -977,7 +977,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     string upLinkTouch;
                     int upIndexTouch = HitTestPlainIndex(evt.localPosition, out upLinkTouch);
                     if (upIndexTouch == _downIndex)
-                        Application.OpenURL(_downLink);
+                        NeonCompanion.Runtime.Core.SafeLinkOpener.Open(_downLink);
                 }
                 _downLink = null;
                 return;
@@ -1000,7 +1000,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ClearSelection();
                 if (!string.IsNullOrEmpty(linkUrl) && upIndex == _downIndex &&
                     string.Equals(linkUrl, _downLink, StringComparison.Ordinal))
-                    Application.OpenURL(linkUrl);
+                    NeonCompanion.Runtime.Core.SafeLinkOpener.Open(linkUrl);
             }
             else
             {

@@ -555,6 +555,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _settingsVoiceAlways?.SetValueWithoutNotify(s.voiceAlwaysReply);
                 _settingsEncryptKeys?.SetValueWithoutNotify(s.encryptKeys);
                 _settingsMaskLogs?.SetValueWithoutNotify(s.maskLogs);
+                NeonLogger.MaskSecrets = s.maskLogs;
                 _settingsShowHalo?.SetValueWithoutNotify(s.showHalo);
                 _settingsBreathing?.SetValueWithoutNotify(s.breathingAnimation);
 
@@ -646,7 +647,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsVoiceIo != null)       s.voiceIOEnabled     = _settingsVoiceIo.value;
                 if (_settingsVoiceAlways != null)   s.voiceAlwaysReply   = _settingsVoiceAlways.value;
                 if (_settingsEncryptKeys != null)   s.encryptKeys        = _settingsEncryptKeys.value;
-                if (_settingsMaskLogs != null)      s.maskLogs           = _settingsMaskLogs.value;
+                if (_settingsMaskLogs != null)    { s.maskLogs           = _settingsMaskLogs.value; NeonLogger.MaskSecrets = s.maskLogs; }
                 if (_settingsShowHalo != null)      s.showHalo           = _settingsShowHalo.value;
                 if (_settingsBreathing != null)     s.breathingAnimation = _settingsBreathing.value;
                 if (_settingsLanguage != null)      s.language           = ResolveLanguageCode(_settingsLanguage.value);
