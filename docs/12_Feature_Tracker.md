@@ -48,7 +48,7 @@
 | A-06 | Базовая анимация аватаров | ✅ | M1 | Verified: idle and talking animations work @@
 | A-07 | 2D motion-pack MVP contract | ✅ | M1 | Verified: motion pack triggers correctly @@
 | A-08 | Asset-pipeline research для 2D motion packs | 📋 | M2 | Research task — no user testing needed |
-| A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Verified by Felix: ApplyAvatarViewMode() called at startup |
+| A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Verified by Felix: ApplyAvatarViewMode() called at startup. Avatar assets migrated PNG→.bytes in Resources (18d0e2b) — sync load on every platform including Android APK |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Verified: avatar transitions idle→thinking→talking |
 
@@ -69,7 +69,7 @@
 | U-12 | Баг: многострочный ввод — переполнение | ✅ | M2 | Felix fixed in 2abf128: stable UITK TextField Enter routing, Shift+Enter newline, no stale/double submit |
 | U-13 | Вкладка Темы — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
 | U-14 | Настройки аватара — перегруженность | 📋 | M2 | |
-| U-15 | Сцена загрузки (splash screen) | ✅ | M2 | Cyberpunk splash + dynamic effects |
+| U-15 | Сцена загрузки (splash screen) | ✅ | M2 | Cyberpunk splash + dynamic effects. SplashViewController removed as dead code (18d0e2b) |
 | U-16 | Маска API-ключа в редакторе провайдера | ✅ | M2 | Eye toggle button |
 | U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | |
 | U-18 | Agent Activity UI | ✅ | M2 | Thinking bubble + tool progress |
@@ -117,11 +117,13 @@
 | U-57 | TerminalScreenView (UITK renderer) | ✅ | M2 | Verified by Felix: Character-grid UITK rendering, selection, copy, scroll. TerminalScreenView.uxml + .uss. Wired into TerminalController — working |
 | U-58 | PersistentShellService (гибрид one-shot + PTY) | ✅ | M2 | Verified by Felix: Гибрид one-shot + PTY, маркер-based вывод, зарегистрирован в ToolRegistry — working |
 | U-59 | WS client bridge capabilities + file transfer | ✅ | M2 | Verified by Felix: single-writer WS sends, client.register, client.ping/pong, bidirectional file transfer — end-to-end working |
+| U-63 | SafeLinkOpener (безопасное открытие ссылок) | ✅ | M3 | Whitelist http/https/mailto. file://, javascript:, custom schemes refused. Используется в markdown рендере для ссылок из сообщений ассистента |
+| U-64 | DeviceSecretStore (хранение секретов) | ✅ | M3 | ISecretStore implementation: OS keystore (Windows DPAPI, Android KeyStore) с fallback на device-xor-v1 obfuscation. IsObfuscationOnly flag для UI warning |
 
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| V-01 | Голосовой ввод/вывод | ✅ | M2 | Voice input/output fully implemented: VoiceInputManager, VoiceOutputManager, VoiceController, VoicePreviewPlayer, settings UI (device selection, volume, VAD), chat audio attachments, HermesVoiceService + OpenAiVoiceService with factory |
+| V-01 | Голосовой ввод/вывод | ✅ | M2 | Voice input/output fully implemented: VoiceInputManager, VoiceController, VoicePreviewPlayer, settings UI, chat audio attachments, HermesVoiceService + OpenAiVoiceService. VoiceOutputManager + LipsyncController removed as dead code (18d0e2b) |
 | V-02 | Lipsync | 📋 | M3 | Blocked on V-01 completion → ready to start. Depends on avatar motion system. |
 | V-03 | 3D аватары | 📋 | M3 | Deferred: 3D models not added to project yet |
 | V-04 | Desktop realtime avatar layer | 📋 | M2+ | |
@@ -132,8 +134,8 @@
 ## Рефакторинг (M2)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| R-01 | NavigationController | ✅ | M2 | 317 строк — extracted and integrated |
-| R-02 | ChatController | ✅ | M2 | 1315 строк — 11 sub-classes extracted (5477→1315, −76%) |
+| R-01 | NavigationController | ✅ | M2 | 317 строк — extracted, integrated, later removed as dead code (18d0e2b) |
+| R-02 | ChatController | ✅ | M2 | 1315 строк — 11 sub-classes extracted (5477→1315, −76%). Later removed as dead code (18d0e2b) |
 | R-03 | SessionHistoryController | ✅ | M2 | 366 строк — extracted and integrated |
 | R-04 | ProvidersController | ✅ | M2 | 1381 строка — extracted and integrated |
 | R-05 | AvatarGalleryController | ✅ | M2 | 1794 строки — extracted and integrated |
@@ -159,8 +161,8 @@
 ## Платформа и Android (M3+)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| PL-01 | Полная поддержка Android как целевой платформы | 🔧 | M3 | IL2CPP + Build Profile (Android.asset) present and used as base for iOS; .aab for release |
-|| PL-02 | Доработка IFilePickerService под Android (нативный Java плагин NeonFilePickerActivity) | 🔧 | M3 | NeonFilePickerActivity.java + Intent + runtime permission via AndroidPermissionHelper + cache copy |\n|| PL-03 | Android permissions и AndroidManifest.xml | 🔧 | M3 | Создан + обновлён Assets/Plugins/Android/AndroidManifest.xml (permissions + NeonFilePickerActivity + NeonSpeechRecognitionActivity declarations). Duplicate old NeonFilePickerActivity.java удалён. useCustomMainManifest=1 in Android.asset (done) |\n|| PL-04 | Адаптация UI под мобильные экраны (тач, клавиатура, safe area, разные DPI) | 🔧 | M3 | PlatformLayoutAdapter + AndroidKeyboardInset.cs (поллинг видимости клавиатуры). Расширены USS правила. |\n| PL-05 | Голос на Android (TTS + SpeechRecognizer вместо DictationRecognizer) | 🔧 | M3 | Полная интеграция: NeonSpeechRecognitionActivity.java + AndroidSpeechIntentHelper + AndroidSpeechRecognitionBridge + OnAndroidSpeechResult в WebSpeechBridge + proper UtteranceProgressListener для TTS |
+| PL-01 | Полная поддержка Android как целевой платформы | 🔧 | M3 | IL2CPP + Build Profile (Android.asset); .aab for release. ForceClassicActivityEntry via reflection фиксит Unity 6 GameActivity. DiagEntry() для diagnostics |
+|| PL-02 | Доработка IFilePickerService под Android (нативный Java плагин NeonFilePickerActivity) | 🔧 | M3 | NeonFilePickerActivity.java + Intent + runtime permission via AndroidPermissionHelper + cache copy |\n|| PL-03 | Android permissions и AndroidManifest.xml | 🔧 | M3 | Создан + обновлён Assets/Plugins/Android/AndroidManifest.xml (permissions + NeonFilePickerActivity + NeonSpeechRecognitionActivity declarations). Duplicate old NeonFilePickerActivity.java удалён. useCustomMainManifest=1 in Android.asset (done) |\n|| PL-04 | Адаптация UI под мобильные экраны (тач, клавиатура, safe area, разные DPI) | 🔧 | M3 | LayoutController handles all adaptive layout (PlatformLayoutAdapter + AndroidKeyboardInset removed as dead code). Safe area recalc on rotation. USS правила расширены |\n| PL-05 | Голос на Android (TTS + SpeechRecognizer вместо DictationRecognizer) | 🔧 | M3 | Полная интеграция: NeonSpeechRecognitionActivity.java + AndroidSpeechIntentHelper + AndroidSpeechRecognitionBridge + OnAndroidSpeechResult в WebSpeechBridge + proper UtteranceProgressListener для TTS |
 | PL-06 | Тестирование и фиксы runtime на Android (persistentDataPath, IL2CPP stripping, 3D аватары) | 📋 | M3 | Только Felix на реальном устройстве |
 | PL-07 | Документация по сборке Android в AGENTS.md и README | ✅ | M3 | Полный раздел Android Build в AGENTS.md (пререквизиты, профили, код, runtime, тестирование, caveats). Architecture doc уже покрывает принципы. |
 
@@ -170,10 +172,10 @@
 |---|------|--------|--------|---------|
 | IOS-01 | Полная поддержка iOS как целевой платформы | 🔧 | M4 | PlatformServiceFactory + iOS Build Profile + Info.plist + services. WebSpeechBridge fully wired for iOS. |
 | IOS-02 | iOSFilePickerService + нативный плагин (UIDocumentPicker / PHPicker) | 🔧 | M4 | Full iOSFilePickerService + iOSFilePickerBridge.cs + expanded NeonFilePicker.mm with UnitySendMessage. |
-| IOS-03 | iOS permissions (Info.plist + runtime) + unified PermissionHelper | 🔧 | M4 | Info.plist with keys present. iOSPermissionHelper.cs implemented with Unity Permission API. |
+| IOS-03 | iOS permissions (Info.plist + runtime) + unified PermissionHelper | 🔧 | M4 | Info.plist with keys present. iOSPermissionHelper.cs removed as dead code (18d0e2b) |
 | IOS-04 | Расширение PlatformServiceFactory под iOS | 🔧 | M4 | iOS branches added for FilePicker and Voice (routes to WebSpeechBridge for now) |
 | IOS-05 | Голос на iOS (AVSpeechSynthesizer + SFSpeechRecognizer) | 🔧 | M4 | Complete: NeonSpeech.mm (AVSpeech + SFSpeech stubs + callbacks), iOSSpeechBridge, WebSpeechBridge iOS DllImport + routing + InitializeIOS. |
-| IOS-06 | Keyboard inset + улучшенная safe area для iPad / notch | 🔧 | M4 | DefaultPlatformInfoService updated for iOS safeArea. iOSKeyboardInset.cs present. |
+| IOS-06 | Keyboard inset + улучшенная safe area для iPad / notch | 🔧 | M4 | DefaultPlatformInfoService updated for iOS safeArea. iOSKeyboardInset.cs removed — LayoutController handles safe area |
 | IOS-07 | .platform-ios USS правила + LayoutController (единый адаптивный контроллер) | 🔧 | M4 | .platform-ios rules added to MainView.uss. LayoutController handles platform-ios class + safe area. PlatformLayoutAdapter removed — logic consolidated. |
 | IOS-08 | Документация iOS в AGENTS.md + 17_iOS_Platform_Architecture.md | 🔧 | M4 | Full docs + tracker + AGENTS.md cross-refs. iOS sections added. |
 
