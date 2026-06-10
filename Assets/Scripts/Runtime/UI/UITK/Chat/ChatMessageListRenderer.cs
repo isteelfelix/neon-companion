@@ -842,8 +842,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 bubble.Add(voiceBubble);
             }
 
-            // Keep hover actions as the last child so message content, stats, and the audio
-            // timeline cannot paint over the buttons or intercept their pointer events.
             if (actions != null)
                 bubble.Add(actions);
 

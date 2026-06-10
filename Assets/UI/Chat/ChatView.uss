@@ -364,18 +364,19 @@
 
 .transcript__bubble-actions {
     position: absolute;
-    right: 8px;
-    top: 7px;
-    flex-direction: row;
+    left: 100%;
+    top: 0;
+    flex-direction: column;
     padding-left: 4px;
-    padding-right: 2px;
     flex-shrink: 0;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.15s ease;
 }
 
-/* Reveal only when hovering the bubble itself or the buttons. */
+/* Reveal only when hovering the bubble itself (or the buttons), not the empty
+   space beside the bubble. padding-left bridges the gap so moving onto the
+   buttons keeps them visible. */
 .transcript__bubble--assistant:hover > .transcript__bubble-actions,
 .transcript__bubble-actions:hover {
     opacity: 1;
@@ -388,15 +389,15 @@
 }
 
 .transcript__bubble-actions > Button {
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-    min-height: 24px;
-    margin-left: 3px;
-    padding: 5px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    margin: 1px 0;
+    padding: 4px;
     font-size: 0;
-    border-radius: 7px;
-    background-color: rgba(8, 9, 14, 0.88);
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0.5);
     color: var(--text-2);
     justify-content: center;
     align-items: center;
@@ -421,10 +422,6 @@
     flex-direction: row;
     align-items: center;
     margin-bottom: 5px;
-}
-
-.transcript__bubble--assistant .transcript__meta {
-    padding-right: 80px;
 }
 
 .transcript__role {
@@ -1953,11 +1950,9 @@
 .ff-phone .transcript__bubble-actions {
     position: relative;
     left: auto;
-    right: auto;
     top: auto;
     flex-direction: row;
     padding-left: 0;
-    padding-right: 0;
     margin-top: 8px;
     opacity: 1;
     visibility: visible;
@@ -2119,10 +2114,6 @@
     -unity-text-overflow-position: end;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.ff-phone .transcript__bubble--assistant .transcript__meta {
-    padding-right: 0;
 }
 
 .voice-preview__text--loading {
