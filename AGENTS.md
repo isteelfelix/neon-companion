@@ -66,9 +66,12 @@ Assets/UI/          UXML templates + USS styles per screen
   Main/             MainView.uxml, MainView.uss, MainView.Tints.uss, SettingsView.*
   Theme/            Tokens.uss, Components.uss (global design tokens + shared components)
 
+Assets/Resources/
+  Avatars/<id>/     built-in motion_pack.json + imported sprite sheet PNGs
+  Localization/     en.json, ru.json (loaded through Resources.Load)
+
 Assets/StreamingAssets/
-  Avatars/neon/     motion_pack.json + sprite sheet PNGs (runtime-loaded)
-  Localization/     en.json, ru.json
+  Avatars/<id>/     optional legacy/custom filesystem-backed motion packs
 ```
 
 ## MainViewController
@@ -94,7 +97,7 @@ Hermes-specific: `X-Hermes-Session-Id` header, inventory endpoint, model switch 
 
 ## Localization
 
-All user-facing strings go through `LocalizationExtensions.Get("key", "fallback")`. Keys live in `Assets/StreamingAssets/Localization/{en,ru}.json`. When adding new UI text:
+All user-facing strings go through `LocalizationExtensions.Get("key", "fallback")`. Keys live in `Assets/Resources/Localization/{en,ru}.json` and are loaded with `Resources.Load<TextAsset>()` so localization works inside Android/iOS application packages. When adding new UI text:
 1. Add key to both en.json and ru.json
 2. Use `LocalizationExtensions.Get("your.key", "Fallback text")` in code
 3. Never hardcode display strings in C#
@@ -106,7 +109,7 @@ All user-facing strings go through `LocalizationExtensions.Get("key", "fallback"
 - **Repositories are JSON-file-backed.** Each entity type has its own `I*Repository` interface + `*Repository` implementation using `JsonFileStorage`.
 - **UnityWebRequest for all HTTP.** No `HttpClient`. Async pattern: `SendWebRequest()` + `await Task.Yield()` loop or callback.
 - **UI Toolkit (UITK).** UXML for templates, USS for styles. No legacy uGUI. `NeonDropdown` is a custom UITK element — use it instead of Unity's `DropdownField`.
-- **Spritesheets live in StreamingAssets.** `Assets/UI/Avatars/` has legacy descriptor JSONs. `Assets/StreamingAssets/Avatars/neon/` has the runtime-loaded motion pack.
+- **Built-in spritesheets live in Resources.** Each built-in animated avatar has `Assets/Resources/Avatars/<id>/motion_pack.json` plus imported PNG sprite sheets. `AvatarMotionPackLoader` resolves these through `Resources.Load`, which works inside Android APKs. `Assets/UI/Avatars/` contains static gallery previews and legacy descriptor JSONs. Filesystem-backed packs under `StreamingAssets/Avatars/` remain an optional fallback, not the canonical built-in location.
 
 ## Adding New Assets
 

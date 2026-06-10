@@ -1648,7 +1648,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             item.RegisterCallback<PointerEnterEvent>(_ =>
             {
                 item.AddToClassList("session-picker__item--hover");
-                item.style.backgroundColor = new Color(0.486f, 0.478f, 0.929f, 0.16f); // --accent-soft
+                item.style.backgroundColor = ThemeColors.AccentSoft;
             });
             item.RegisterCallback<PointerLeaveEvent>(_ =>
             {

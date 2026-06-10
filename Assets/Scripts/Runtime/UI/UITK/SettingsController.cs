@@ -104,6 +104,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private long _themesBreathStartMs;
         private IVisualElementScheduledItem _themesBreathSchedule;
 
+        // ===== UI theme (accent palette, U-13) =====
+        private VisualElement _appRoot;
+        private string _uiTheme = "indigo";
+        private readonly Dictionary<string, Button> _themeSwatchButtons = new Dictionary<string, Button>();
+
         // ===== Breathing animation (avatar circle) =====
         private IVisualElementScheduledItem _breathSchedule;
         private long _breathStartMs;
@@ -195,6 +200,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Themes preview
             _themesPreviewHalo   = root.Q<VisualElement>("themes-preview-halo");
             _themesPreviewAvatar = root.Q<VisualElement>("themes-preview-avatar");
+
+            // UI theme (accent palette)
+            _appRoot = root.Q<VisualElement>("app-root");
+            BuildThemePaletteCard(root);
+            SetUiTheme(_uiTheme, save: false);
 
             UpdateClearDataButtonState();
         }
@@ -588,6 +598,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 RefreshPluginStatus(app);
                 SetAvatarShape(s.avatarShape ?? "round", save: false);
+                SetUiTheme(s.uiTheme, save: false);
                 ApplyHaloVisibility(s.showHalo);
                 _deps.RefreshCustomAvatarGallery?.Invoke(app);
                 _deps.RefreshBuiltInAvatarTileLabels?.Invoke();
@@ -656,6 +667,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsOutputVolume != null)  s.outputVolume        = _settingsOutputVolume.value;
 
                 s.avatarShape      = _avatarShape;
+                s.uiTheme          = _uiTheme;
                 s.activeAvatarId   = _deps.GetActiveAvatarId?.Invoke() ?? "neon";
                 s.avatarViewMode   = _deps.GetAvatarViewMode?.Invoke() ?? "static";
                 s.closeHotkey      = _closeHotkey;
@@ -699,6 +711,88 @@ namespace NeonCompanion.Runtime.UI.UITK
             string activeId = _deps.GetActiveAvatarId?.Invoke() ?? "neon";
             string prompt = app.AvatarService.GetSystemPrompt(activeId, avatarProfiles);
             chatService.SystemPrompt = settings.useSystemPrompt ? prompt : null;
+        }
+
+        // ============================================================
+        // UI theme (accent palette, U-13)
+        // ============================================================
+
+        private void BuildThemePaletteCard(VisualElement root)
+        {
+            var scroll = root.Q<ScrollView>(className: "themes-scroll");
+            if (scroll == null)
+                return;
+
+            var existing = root.Q<VisualElement>("themes-palette-card");
+            if (existing != null)
+                existing.RemoveFromHierarchy();
+            _themeSwatchButtons.Clear();
+
+            var card = new VisualElement();
+            card.name = "themes-palette-card";
+            card.AddToClassList("themes-card");
+
+            var head = new VisualElement();
+            head.AddToClassList("themes-card__head");
+            var icon = new VisualElement();
+            icon.AddToClassList("icon");
+            icon.AddToClassList("icon--palette");
+            icon.AddToClassList("themes-card__icon");
+            head.Add(icon);
+            var title = new Label(LocalizationExtensions.Get("themes.section.palette", "Палитра"));
+            title.AddToClassList("themes-card__title");
+            head.Add(title);
+            card.Add(head);
+
+            var row = new VisualElement();
+            row.AddToClassList("themes-row");
+            row.AddToClassList("is-last");
+
+            var copy = new VisualElement();
+            copy.AddToClassList("themes-row__copy");
+            var rowName = new Label(LocalizationExtensions.Get("themes.palette.title", "Палитра акцента"));
+            rowName.AddToClassList("themes-row__name");
+            copy.Add(rowName);
+            var rowSub = new Label(LocalizationExtensions.Get("themes.palette.subtitle", "Меняет цвет подсветки кнопок, ссылок и активных элементов во всём интерфейсе."));
+            rowSub.AddToClassList("themes-row__sub");
+            copy.Add(rowSub);
+            row.Add(copy);
+
+            var swatches = new VisualElement();
+            swatches.AddToClassList("theme-swatches");
+            foreach (var themeId in ThemeColors.ThemeIds)
+            {
+                string id = themeId;
+                var btn = new Button(() => SetUiTheme(id));
+                btn.AddToClassList("theme-swatch");
+                btn.style.backgroundColor = new StyleColor(ThemeColors.GetAccent(id));
+                btn.tooltip = LocalizationExtensions.Get("themes.palette." + id, id);
+                swatches.Add(btn);
+                _themeSwatchButtons[id] = btn;
+            }
+            row.Add(swatches);
+            card.Add(row);
+
+            // Right after the hero card, before "Форма и анимация".
+            var content = scroll.contentContainer;
+            content.Insert(content.childCount > 0 ? 1 : 0, card);
+        }
+
+        private void SetUiTheme(string theme, bool save = true)
+        {
+            _uiTheme = ThemeColors.Normalize(theme);
+            ThemeColors.SetTheme(_uiTheme);
+
+            if (_appRoot != null)
+            {
+                foreach (var id in ThemeColors.ThemeIds)
+                    _appRoot.EnableInClassList("theme-" + id, id == _uiTheme && id != "indigo");
+            }
+
+            foreach (var kvp in _themeSwatchButtons)
+                kvp.Value.EnableInClassList("theme-swatch--active", kvp.Key == _uiTheme);
+
+            if (save) SaveSettings();
         }
 
         // ============================================================
@@ -1177,7 +1271,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ============================================================
 
         private static readonly string[] BuiltInAvatarIds =
-            { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
+            { "neon", "yorha-2b", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
 
         internal static string ResolveLanguageCode(string languageValue)
         {

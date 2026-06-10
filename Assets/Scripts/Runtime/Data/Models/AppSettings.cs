@@ -20,6 +20,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public bool voiceAlwaysReply = false;
         public string avatarShape = "round";
         public string avatarViewMode = "static";
+        public string uiTheme = "indigo";
         public bool showHalo = true;
         public bool breathingAnimation = true;
         public string language = "ru";

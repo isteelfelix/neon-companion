@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- **YoRHa 2B animated avatar** — added a built-in pixel-art avatar with GIF-derived motion clips for idle, thinking, talking, listening, smile, and confused states, plus static/animated gallery entries and localized persona metadata.
+- **Accent palette themes (U-13)** — the Themes tab now switches real UI color themes: 5 accent palettes (Indigo default, Rose, Cyan, Ember, Mono) defined as token overrides in `Tokens.uss`, applied via a `theme-*` class on `app-root`. New "Палитра" card with color swatches (built in C# by `SettingsController`), persisted as `uiTheme` in `AppSettings`. New static `ThemeColors` supplies the current accent to C#-styled popups (message context menu, session picker, history context menu); chat-stage halo and Themes preview follow the palette via `--accent-soft`/`--accent-glow`.
 - **Seekable voice bubbles** — cached user/assistant audio now has an animated playback timeline, elapsed/total time, drag/tap seeking, and a real play/pause toggle.
 - **Voice operation feedback** — recorded WAV previews now appear in the composer immediately while STT is still transcribing; assistant headphones actions animate while TTS audio is being prepared and return to normal when playback actually starts; Android recording start/stop uses light haptic feedback.
 - **Adaptive form factor detection** — `LayoutController` rewrite (577 lines): resolves Phone/Tablet/Desktop from physical width via `ConstantPhysicalSize` breakpoints. Phone: off-canvas drawer (rail) + fullscreen avatar overlay with scrim. Tablet/Desktop: `app--compact` / `app--narrow` sub-breakpoints, auto-hide avatar panel. Safe-area padding recomputed on every geometry change (rotation). `ff-phone` / `ff-tablet` / `ff-desktop` classes on app-root.
@@ -17,6 +19,7 @@
 - **WS connection guard** — `SwitchToHermesSessionAsync` ensures WS is connected before `ResumeSession` (fixes silent failure when switching sessions before first `StartNewSession`).
 
 ### Changed
+- **Avatars preview card decluttered (U-14)** — fake "Параметры" section (hardcoded values) removed; persona block collapsed into a "Персона" foldout with edit/reset buttons and the inline editor inside it; customization reduced to the emoji overlay only — color tint, accent border, halo color/intensity, saturation/brightness sliders, and frame styles removed end-to-end (UXML, `AvatarCustomizationPanel`, `AvatarCustomizationData`, both controller copies, USS). Action row now holds only Применить + Удалить (the latter still shown only for custom avatars).
 - `IChatTransport` interface: `SendMessage(sessionId, text)`, `Interrupt(sessionId)` — session-aware. Events carry `Action<string, ...>` signatures.
 - `HermesSessionManager`: single `Busy`/`AwaitingResponse` → per-session dictionaries `IsSessionBusy(sessionId)`, `RuntimeInfoFor(sessionId)`.
 - `ChatService.SendViaTransport()`: pinned to foreground session's stream context; mid-send UI switch doesn't misroute tokens.

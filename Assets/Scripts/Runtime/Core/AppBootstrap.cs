@@ -140,7 +140,7 @@ namespace NeonCompanion.Runtime.Core
                 var avatarProfiles = avatars.GetAll();
                 string activeAvatarId = settingsData.activeAvatarId;
                 bool knownAvatar = !string.IsNullOrWhiteSpace(activeAvatarId) &&
-                                   (System.Array.IndexOf(new[] { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" }, activeAvatarId) >= 0 ||
+                                   (System.Array.IndexOf(new[] { "neon", "yorha-2b", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" }, activeAvatarId) >= 0 ||
                                     avatarProfiles.Exists(a => a != null && a.id == activeAvatarId));
 
                 if (!knownAvatar)

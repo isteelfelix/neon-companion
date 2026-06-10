@@ -65,6 +65,14 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
+                <ui:VisualElement name="avtile-yorha-2b" class="avtile avtile--yorha-2b">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:Label text="YoRHa 2B" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
                 <ui:VisualElement name="avtile-aurora" class="avtile avtile--aurora">
                     <ui:VisualElement class="avtile__vignette" />
                     <ui:Label text="Аврора" class="avtile__name" />
@@ -142,6 +150,16 @@
                         <ui:VisualElement class="icon icon--check" />
                     </ui:VisualElement>
                 </ui:VisualElement>
+                <ui:VisualElement name="avtile-yorha-2b-animated" class="avtile avtile--yorha-2b-animated">
+                    <ui:VisualElement class="avtile__vignette" />
+                    <ui:VisualElement class="avtile__anim-badge">
+                        <ui:Label text="ANIM" />
+                    </ui:VisualElement>
+                    <ui:Label text="YoRHa 2B" class="avtile__name" />
+                    <ui:VisualElement class="avtile__badge">
+                        <ui:VisualElement class="icon icon--check" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- 3D gallery (future) -->
@@ -158,69 +176,41 @@
                         <ui:Label name="preview-tag" text="стандартный" class="preview-hero__tag" />
                     </ui:VisualElement>
 
-                    <ui:VisualElement class="preview-section">
-                        <ui:Label text="Параметры" class="label" />
-                        <ui:VisualElement class="preview-row"><ui:Label text="Анимация" /><ui:Label name="preview-animation-info" text="Статичное изображение" class="preview-row__value" /></ui:VisualElement>
-                        <ui:VisualElement class="preview-row"><ui:Label text="Ореол" /><ui:Label text="индиго · 40%" class="preview-row__value" /></ui:VisualElement>
-                        <ui:VisualElement class="preview-row"><ui:Label text="Пульс речи" /><ui:Label text="авто" class="preview-row__value" /></ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <ui:VisualElement class="preview-section">
+                    <ui:Foldout name="avatar-persona-foldout" text="Персона" class="customize" value="false">
                         <ui:VisualElement name="preview-persona-state-row" class="persona-state">
                             <ui:Label name="preview-persona-state-badge" text="Статус инструкций" class="persona-state__badge" />
                             <ui:Label name="preview-persona-state-help" text="Текст ниже попадёт в system prompt при применении аватара." class="persona-state__help" />
                         </ui:VisualElement>
                         <ui:Label name="preview-persona-label" text="Инструкции аватара" class="label preview-persona-label" />
                         <ui:Label name="preview-persona" text="Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу." class="persona-box" />
-                    </ui:VisualElement>
-
-                    <ui:VisualElement name="preview-actions-row" class="preview-actions">
-                        <ui:Button name="preview-edit-persona-btn" text="Изменить" class="btn preview-actions__btn" />
-                        <ui:Button name="preview-reset-persona-btn" text="Сбросить инструкции" class="btn preview-actions__btn" />
-                        <ui:Button name="preview-delete-avatar-btn" text="Удалить" class="btn btn--danger preview-actions__btn" />
-                        <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary preview-actions__btn is-last" />
-                    </ui:VisualElement>
-
-                    <ui:VisualElement name="persona-editor-panel" class="persona-editor">
-                        <ui:TextField name="persona-edit-field" multiline="true" class="persona-edit-field" />
                         <ui:VisualElement class="preview-actions preview-actions--compact">
-                            <ui:Button name="persona-save-btn" text="Сохранить" class="btn btn--primary" />
-                            <ui:Button name="persona-cancel-btn" text="Отмена" class="btn is-last" />
+                            <ui:Button name="preview-edit-persona-btn" text="Изменить" class="btn" />
+                            <ui:Button name="preview-reset-persona-btn" text="Сбросить инструкции" class="btn is-last" />
                         </ui:VisualElement>
-                    </ui:VisualElement>
+                        <ui:VisualElement name="persona-editor-panel" class="persona-editor">
+                            <ui:TextField name="persona-edit-field" multiline="true" class="persona-edit-field" />
+                            <ui:VisualElement class="preview-actions preview-actions--compact">
+                                <ui:Button name="persona-save-btn" text="Сохранить" class="btn btn--primary" />
+                                <ui:Button name="persona-cancel-btn" text="Отмена" class="btn is-last" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:Foldout>
 
-                    <ui:Foldout name="avatar-customization-foldout" text="Кастомизация" class="customize">
-                        <ui:VisualElement class="customize__row">
-                            <ui:Label text="Основной цвет" class="label" />
-                            <ui:TextField name="customize-primary-color" value="#FFFFFF" class="customize__hex" />
-                            <ui:VisualElement name="customize-swatches-primary" class="customize__swatches" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="customize__row">
-                            <ui:Label text="Акцент" class="label" />
-                            <ui:TextField name="customize-secondary-color" value="#7C7AED" class="customize__hex" />
-                            <ui:VisualElement name="customize-swatches-secondary" class="customize__swatches" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="customize__row">
-                            <ui:Label text="Ореол" class="label" />
-                            <ui:TextField name="customize-halo-color" value="#7C7AED" class="customize__hex" />
-                            <ui:VisualElement name="customize-swatches-halo" class="customize__swatches" />
-                        </ui:VisualElement>
-                        <ui:Slider name="customize-halo-intensity" label="Интенсивность ореола" low-value="0" high-value="1" value="0.6" class="customize__slider" />
-                        <ui:Slider name="customize-saturation" label="Насыщенность" low-value="0" high-value="2" value="1" class="customize__slider" />
-                        <ui:Slider name="customize-brightness" label="Яркость" low-value="0" high-value="2" value="1" class="customize__slider" />
+                    <ui:Foldout name="avatar-customization-foldout" text="Кастомизация" class="customize" value="false">
                         <ui:VisualElement class="customize__group">
                             <ui:Label text="Эмодзи" class="label" />
                             <ui:VisualElement name="customize-emoji-grid" class="customize__emoji-grid" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="customize__group">
-                            <ui:Label text="Рамка" class="label" />
-                            <ui:VisualElement name="customize-frame-segment" class="customize__frame-segment" />
                         </ui:VisualElement>
                         <ui:VisualElement class="preview-actions preview-actions--compact">
                             <ui:Button name="customize-save-btn" text="Сохранить" class="btn btn--primary" />
                             <ui:Button name="customize-cancel-btn" text="Отмена" class="btn is-last" />
                         </ui:VisualElement>
                     </ui:Foldout>
+
+                    <ui:VisualElement name="preview-actions-row" class="preview-actions">
+                        <ui:Button name="preview-delete-avatar-btn" text="Удалить" class="btn btn--danger preview-actions__btn" />
+                        <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary preview-actions__btn is-last" />
+                    </ui:VisualElement>
                 </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>

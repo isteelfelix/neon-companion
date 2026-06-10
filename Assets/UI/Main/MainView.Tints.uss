@@ -7,6 +7,7 @@
 
 /* ---- Chat-stage hero avatar ---- */
 .avatar__art--neon    { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
+.avatar__art--yorha-2b { background-color: #24242b; background-image: url("project://database/Assets/UI/Avatars/yorha-2b.png"); -unity-background-scale-mode: scale-to-fit; }
 .avatar__art--aurora  { background-image: url("project://database/Assets/UI/Avatars/aurora.png");  -unity-background-scale-mode: scale-and-crop; }
 .avatar__art--ember   { background-image: url("project://database/Assets/UI/Avatars/ember.png");   -unity-background-scale-mode: scale-and-crop; }
 .avatar__art--glass   { background-image: url("project://database/Assets/UI/Avatars/glass.png");   -unity-background-scale-mode: scale-and-crop; }
@@ -27,9 +28,12 @@
 
 /* ---- Animated gallery tile ---- */
 .avtile--neon-animated { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
+.avtile--yorha-2b { background-color: #24242b; background-image: url("project://database/Assets/UI/Avatars/yorha-2b.png"); -unity-background-scale-mode: scale-to-fit; }
+.avtile--yorha-2b-animated { background-color: #24242b; background-image: url("project://database/Assets/UI/Avatars/yorha-2b.png"); -unity-background-scale-mode: scale-to-fit; }
 
 /* ---- Preview hero (Avatars page) ---- */
 .preview-hero--neon   { background-image: url("project://database/Assets/UI/Avatars/neon-companion.png"); -unity-background-scale-mode: scale-and-crop; background-position-y: top; }
+.preview-hero--yorha-2b { background-color: #24242b; background-image: url("project://database/Assets/UI/Avatars/yorha-2b.png"); -unity-background-scale-mode: scale-to-fit; }
 .preview-hero--aurora { background-image: url("project://database/Assets/UI/Avatars/aurora.png"); -unity-background-scale-mode: scale-and-crop; }
 .preview-hero--ember  { background-image: url("project://database/Assets/UI/Avatars/ember.png");  -unity-background-scale-mode: scale-and-crop; }
 .preview-hero--glass  { background-image: url("project://database/Assets/UI/Avatars/glass.png");  -unity-background-scale-mode: scale-and-crop; }

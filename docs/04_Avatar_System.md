@@ -44,6 +44,10 @@
   confused.png
 ```
 
+Встроенные motion packs сейчас находятся в `Assets/Resources/Avatars/`:
+- `neon` — основной набор Neon
+- `yorha-2b` — пиксельный набор YoRHa 2B, конвертированный из шести GIF-состояний
+
 ### Структура `motion_pack.json`
 
 ```json

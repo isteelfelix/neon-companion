@@ -49,3 +49,45 @@
     --r-xl: 20px;
     --r-pill: 999px;
 }
+
+/* ============== Accent palettes (U-13) ==============
+   Default (indigo) is defined above. A theme class on #app-root
+   re-defines the accent family for the whole tree. Both the root
+   itself and descendants need the override because the `*` block
+   above defines the vars locally on every element. */
+
+.theme-rose,
+.theme-rose * {
+    --accent: #EC4899;
+    --accent-2: #F472B6;
+    --accent-soft: rgba(236, 72, 153, 0.16);
+    --accent-glow: rgba(236, 72, 153, 0.40);
+    --accent-text: #F9C2DD;
+}
+
+.theme-cyan,
+.theme-cyan * {
+    --accent: #22D3EE;
+    --accent-2: #67E8F9;
+    --accent-soft: rgba(34, 211, 238, 0.16);
+    --accent-glow: rgba(34, 211, 238, 0.40);
+    --accent-text: #B9F1FB;
+}
+
+.theme-ember,
+.theme-ember * {
+    --accent: #F97316;
+    --accent-2: #FBBF24;
+    --accent-soft: rgba(249, 115, 22, 0.16);
+    --accent-glow: rgba(249, 115, 22, 0.40);
+    --accent-text: #FCD9B8;
+}
+
+.theme-mono,
+.theme-mono * {
+    --accent: #8A93A8;
+    --accent-2: #AAB3C5;
+    --accent-soft: rgba(138, 147, 168, 0.16);
+    --accent-glow: rgba(138, 147, 168, 0.40);
+    --accent-text: #D7DCE6;
+}

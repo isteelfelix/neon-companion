@@ -52,6 +52,7 @@
 | A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Verified by Felix: ApplyAvatarViewMode() called at startup. Avatars in Resources as imported Unity sprites (.png). frameCount field in motion_pack avoids pixel reads (61c12e1) |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Verified: avatar transitions idle→thinking→talking |
+| A-12 | Встроенный анимированный аватар YoRHa 2B | ⏳ | M3 | Код и assets добавлены: 6 motion clips, static/animated gallery, localization. Ожидает проверки в Unity Editor. |
 
 ## UI и UX
 | # | Фича | Статус | Спринт | Заметки |
@@ -68,8 +69,8 @@
 | U-10 | Иконка приложения в интерфейсе | ✅ | M2 | Verified by Felix: removed "N" from rail + brand__mark updated to app-icon-1024.png |
 | U-11 | Баг: сжатие левой панели | ✅ | M2 | overflow: hidden на .rail |
 | U-12 | Баг: многострочный ввод — переполнение | ✅ | M2 | Felix fixed in 2abf128: stable UITK TextField Enter routing, Shift+Enter newline, no stale/double submit |
-| U-13 | Вкладка Темы — переосмысление | 📋 | M2 | Текущая реализация бесполезна |
-| U-14 | Настройки аватара — перегруженность | 📋 | M2 | |
+| U-13 | Вкладка Темы — переосмысление | ⏳ | M2 | Реальные цветовые темы: 5 палитр акцента (Indigo/Rose/Cyan/Ember/Mono) как override токенов в Tokens.uss, класс theme-* на app-root, карточка «Палитра» со свотчами (C#), uiTheme в AppSettings. ThemeColors для inline-цветов попапов. Halo и превью следуют палитре |
+| U-14 | Настройки аватара — перегруженность | ⏳ | M2 | Разгружено: секция «Параметры» удалена, персона свёрнута в foldout (редактор и сброс внутри), кастомизация сокращена до эмодзи (цвета/слайдеры/рамки выпилены: UXML + panel + data + USS), «Удалить» — только для своих аватаров |
 | U-15 | Сцена загрузки (splash screen) | ✅ | M2 | Cyberpunk splash + dynamic effects. SplashViewController removed as dead code (18d0e2b) |
 | U-16 | Маска API-ключа в редакторе провайдера | ✅ | M2 | Eye toggle button |
 | U-17 | Дашборд запланированных задач (cron) | 📋 | M3 | |

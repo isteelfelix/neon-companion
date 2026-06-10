@@ -49,11 +49,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ---- Static data ----
 
         internal static readonly string[] BuiltInAvatarIds =
-            { "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
+            { "neon", "yorha-2b", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" };
 
         private static readonly Dictionary<string, BuiltInAvatarMeta> BuiltInAvatarMetaById = new Dictionary<string, BuiltInAvatarMeta>
         {
             ["neon"]   = new BuiltInAvatarMeta("avatar.builtin.neon.name", "Неон", "avatar.builtin.neon.style", "стандартный", "avatar.builtin.neon.persona", "Неон — спокойный и практичный AI-компаньон разработчика. Отвечает кратко, структурно и по делу.", AvatarFilter.Standard),
+            ["yorha-2b"] = new BuiltInAvatarMeta("avatar.builtin.yorha2b.name", "YoRHa 2B", "avatar.builtin.yorha2b.style", "пиксельный · анимированный", "avatar.builtin.yorha2b.persona", "2B — сдержанный и собранный AI-компаньон. Отвечает точно, кратко и по существу.", AvatarFilter.Minimal),
             ["aurora"] = new BuiltInAvatarMeta("avatar.builtin.aurora.name", "Аврора", "avatar.builtin.aurora.style", "прохладный · градиент", "avatar.builtin.aurora.persona", "Аврора — спокойная и аналитичная. Объясняет ясно и сначала обдумывает ответ.", AvatarFilter.Gradient),
             ["ember"]  = new BuiltInAvatarMeta("avatar.builtin.ember.name", "Эмбер", "avatar.builtin.ember.style", "тёплый · градиент", "avatar.builtin.ember.persona", "Эмбер — тёплая и эмпатичная. Улавливает настроение и отвечает бережно.", AvatarFilter.Gradient),
             ["glass"]  = new BuiltInAvatarMeta("avatar.builtin.glass.name", "Гласс", "avatar.builtin.glass.style", "минимал · тёмный", "avatar.builtin.glass.persona", "Гласс — энергичная и смелая. Любит сложные задачи и быстрый темп.", AvatarFilter.Minimal),
@@ -102,7 +103,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _previewTitle;
         private Label _previewTag;
         private Label _previewPersona;
-        private Label _previewAnimationInfo;
         private Label _previewPersonaStateBadge;
         private Label _previewPersonaStateHelp;
         private VisualElement _previewPersonaStateRow;
@@ -126,6 +126,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _galleryAnimated;
         private VisualElement _gallery3D;
         private VisualElement _avtileNeonAnimated;
+        private VisualElement _avtileYorha2bAnimated;
         private Button _avatarFilterAllBtn;
         private Button _avatarFilterStandardBtn;
         private Button _avatarFilterGradientBtn;
@@ -185,7 +186,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewTitle     = root.Q<Label>("preview-title");
             _previewTag       = root.Q<Label>("preview-tag");
             _previewPersona   = root.Q<Label>("preview-persona");
-            _previewAnimationInfo = root.Q<Label>("preview-animation-info");
             _previewPersonaStateBadge = root.Q<Label>("preview-persona-state-badge");
             _previewPersonaStateHelp  = root.Q<Label>("preview-persona-state-help");
             _previewPersonaStateRow   = root.Q<VisualElement>("preview-persona-state-row");
@@ -207,6 +207,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _galleryAnimated      = root.Q<VisualElement>("gallery-animated");
             _gallery3D            = root.Q<VisualElement>("gallery-3d");
             _avtileNeonAnimated   = root.Q<VisualElement>("avtile-neon-animated");
+            _avtileYorha2bAnimated = root.Q<VisualElement>("avtile-yorha-2b-animated");
             _avatarFilterAllBtn       = root.Q<Button>("avatar-filter-all-btn");
             _avatarFilterStandardBtn  = root.Q<Button>("avatar-filter-standard-btn");
             _avatarFilterGradientBtn  = root.Q<Button>("avatar-filter-gradient-btn");
@@ -267,6 +268,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_viewModeAnimatedBtn, OnViewModeAnimatedClicked);
             RegisterClick(_viewMode3DBtn,       OnViewMode3DClicked);
             RegisterClick(_avtileNeonAnimated,  OnNeonAnimatedTileClicked);
+            RegisterClick(_avtileYorha2bAnimated, OnYorha2bAnimatedTileClicked);
             RegisterClick(_avatarFilterAllBtn,      OnAvatarFilterAllClicked);
             RegisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
             RegisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
@@ -296,6 +298,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_viewModeAnimatedBtn, OnViewModeAnimatedClicked);
             UnregisterClick(_viewMode3DBtn,       OnViewMode3DClicked);
             UnregisterClick(_avtileNeonAnimated,  OnNeonAnimatedTileClicked);
+            UnregisterClick(_avtileYorha2bAnimated, OnYorha2bAnimatedTileClicked);
             UnregisterClick(_avatarFilterAllBtn,      OnAvatarFilterAllClicked);
             UnregisterClick(_avatarFilterStandardBtn, OnAvatarFilterStandardClicked);
             UnregisterClick(_avatarFilterGradientBtn, OnAvatarFilterGradientClicked);
@@ -468,10 +471,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _previewTag.text = AvatarStyleTag(avatarId);
             if (_previewPersona != null)
                 _previewPersona.text = AvatarPersonaText(avatarId);
-            if (_previewAnimationInfo != null)
-                _previewAnimationInfo.text = (_avatarViewMode == AvatarViewMode.Animated)
-                    ? BuildAnimationInfoText(profile)
-                    : LocalizationExtensions.Get("avatar.animation.static", "Статичное изображение");
 
             UpdatePersonaStateUi(avatarId);
             UpdateAvatarActionButtons(avatarId);
@@ -495,6 +494,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _avtileNeonAnimated?.EnableInClassList("avtile--selected",
                 _avatarViewMode == AvatarViewMode.Animated && avatarId == "neon");
+            _avtileYorha2bAnimated?.EnableInClassList("avtile--selected",
+                _avatarViewMode == AvatarViewMode.Animated && avatarId == "yorha-2b");
         }
 
         // ---- Motion state (called from ChatController and voice events) ----
@@ -589,6 +590,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewPersonaStateHelp.text = LocalizationExtensions.Get("avatar.persona.state.builtin.help", "Сейчас используются встроенные инструкции по умолчанию.");
         }
 
+        public void RefreshPreviewPersonaText(string avatarId)
+        {
+            if (_previewPersona != null)
+                _previewPersona.text = AvatarPersonaText(avatarId);
+        }
+
         public void UpdateAvatarActionButtons(string avatarId)
         {
             bool isCustom = GetCustomProfile(avatarId) != null;
@@ -657,15 +664,25 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnNeonAnimatedTileClicked(ClickEvent _)
         {
-            if (_activeAvatarId == "neon")
+            SelectAnimatedAvatar("neon");
+        }
+
+        private void OnYorha2bAnimatedTileClicked(ClickEvent _)
+        {
+            SelectAnimatedAvatar("yorha-2b");
+        }
+
+        private void SelectAnimatedAvatar(string avatarId)
+        {
+            if (_activeAvatarId == avatarId)
             {
-                SyncGallerySelection("neon");
-                ApplyAvatarArt("neon");
+                SyncGallerySelection(avatarId);
+                ApplyAvatarArt(avatarId);
                 _d.SaveSettings?.Invoke();
             }
             else
             {
-                SelectAvatar("neon");
+                SelectAvatar(avatarId);
             }
         }
 
@@ -706,6 +723,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_gallery3D,       is3D ? DisplayStyle.Flex : DisplayStyle.None);
 
             _avtileNeonAnimated?.EnableInClassList("avtile--selected", isAnimated && _activeAvatarId == "neon");
+            _avtileYorha2bAnimated?.EnableInClassList("avtile--selected", isAnimated && _activeAvatarId == "yorha-2b");
         }
 
         private static AvatarViewMode ParseAvatarViewMode(string value)
@@ -1063,27 +1081,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void ApplyAvatarCustomizationVisual(AvatarCustomizationData data)
         {
             var effective = CloneCustomization(data) ?? new AvatarCustomizationData();
-            if (_avatarArt != null)
-                _avatarArt.style.unityBackgroundImageTintColor = new StyleColor(BuildTintColor(effective.PrimaryColor, effective.Saturation, effective.Brightness));
-            if (_previewHero != null)
-                _previewHero.style.unityBackgroundImageTintColor = new StyleColor(BuildTintColor(effective.PrimaryColor, effective.Saturation, effective.Brightness));
-
-            if (_avatarCircle != null)
-            {
-                _avatarCircle.style.borderBottomColor = new StyleColor(ParseHtmlColor(effective.SecondaryColor, new Color(0.486f, 0.478f, 0.929f)));
-                _avatarCircle.style.borderTopColor    = _avatarCircle.style.borderBottomColor;
-                _avatarCircle.style.borderLeftColor   = _avatarCircle.style.borderBottomColor;
-                _avatarCircle.style.borderRightColor  = _avatarCircle.style.borderBottomColor;
-            }
-
-            var halo = _d.Root?.Q<VisualElement>("avatar-glow");
-            if (halo != null)
-            {
-                var haloColor = ParseHtmlColor(effective.HaloColor, new Color(0.486f, 0.478f, 0.929f));
-                haloColor.a = Mathf.Clamp01(effective.HaloIntensity) * 0.55f;
-                halo.style.backgroundColor = new StyleColor(haloColor);
-                halo.style.opacity = Mathf.Clamp(0.15f + effective.HaloIntensity, 0f, 1f);
-            }
 
             string emoji = effective.OverlayEmoji ?? string.Empty;
             if (_avatarEmojiOverlay != null)
@@ -1096,9 +1093,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _previewEmojiOverlay.text = emoji;
                 SetDisplay(_previewEmojiOverlay, string.IsNullOrEmpty(emoji) ? DisplayStyle.None : DisplayStyle.Flex);
             }
-
-            SetFrameClass(_avatarCircle, effective.CustomFrame, "avatar-frame");
-            SetFrameClass(_previewHero, effective.CustomFrame, "preview-frame");
         }
 
         private void EnsureAvatarAnimationImage()
@@ -1318,18 +1312,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             _avatarAnimator.PlayOneShot(reactionClipName, RefreshAvatarMotionState, true);
-        }
-
-        private static string BuildAnimationInfoText(AvatarProfile profile)
-        {
-            if (profile != null && profile.is3D)
-                return LocalizationExtensions.Get("avatar.animation.3d", "3D модель");
-
-            var resolved = AvatarMotionPackLoader.ResolveProfileMotion(profile);
-            if (resolved == null || resolved.animationClips == null || resolved.animationClips.Count == 0)
-                return LocalizationExtensions.Get("avatar.animation.none", "Анимация недоступна");
-
-            return LocalizationExtensions.GetFormat("avatar.animation.clips", "{0} клипов", resolved.animationClips.Count);
         }
 
         private AvatarProfile GetCustomProfile(string avatarId)
@@ -1854,69 +1836,18 @@ namespace NeonCompanion.Runtime.UI.UITK
                 element.UnregisterCallback<ClickEvent>(handler);
         }
 
-        private static void SetFrameClass(VisualElement element, string frame, string prefix)
-        {
-            if (element == null) return;
-            element.EnableInClassList($"{prefix}--none", false);
-            element.EnableInClassList($"{prefix}--neon", false);
-            element.EnableInClassList($"{prefix}--gold", false);
-            element.EnableInClassList($"{prefix}--holographic", false);
-            string normalized = string.IsNullOrWhiteSpace(frame) ? "none" : frame.ToLowerInvariant();
-            element.EnableInClassList($"{prefix}--{normalized}", true);
-        }
-
-        private static Color BuildTintColor(string hex, float saturation, float brightness)
-        {
-            var baseColor = ParseHtmlColor(hex, Color.white);
-            float gray = baseColor.r * 0.299f + baseColor.g * 0.587f + baseColor.b * 0.114f;
-            var saturated = new Color(
-                Mathf.Clamp01(gray + (baseColor.r - gray) * Mathf.Clamp(saturation, 0f, 2f)),
-                Mathf.Clamp01(gray + (baseColor.g - gray) * Mathf.Clamp(saturation, 0f, 2f)),
-                Mathf.Clamp01(gray + (baseColor.b - gray) * Mathf.Clamp(saturation, 0f, 2f)),
-                1f);
-            float b = Mathf.Clamp(brightness, 0f, 2f);
-            return new Color(
-                Mathf.Clamp01(saturated.r * b),
-                Mathf.Clamp01(saturated.g * b),
-                Mathf.Clamp01(saturated.b * b),
-                1f);
-        }
-
-        private static Color ParseHtmlColor(string hex, Color fallback)
-        {
-            if (!string.IsNullOrWhiteSpace(hex) && ColorUtility.TryParseHtmlString(hex, out var parsed))
-                return parsed;
-            return fallback;
-        }
-
         private static AvatarCustomizationData CloneCustomization(AvatarCustomizationData source)
         {
             if (source == null) return null;
             return new AvatarCustomizationData
             {
-                PrimaryColor   = source.PrimaryColor,
-                SecondaryColor = source.SecondaryColor,
-                HaloColor      = source.HaloColor,
-                HaloIntensity  = source.HaloIntensity,
-                Saturation     = source.Saturation,
-                Brightness     = source.Brightness,
-                OverlayEmoji   = source.OverlayEmoji,
-                CustomFrame    = source.CustomFrame
+                OverlayEmoji = source.OverlayEmoji
             };
         }
 
         private static bool IsCustomizationEffectivelyDefault(AvatarCustomizationData data)
         {
-            if (data == null) return true;
-            bool defaultColors = string.Equals((data.PrimaryColor ?? string.Empty).ToUpperInvariant(), "#FFFFFF", StringComparison.Ordinal)
-                && string.Equals((data.SecondaryColor ?? string.Empty).ToUpperInvariant(), "#7C7AED", StringComparison.Ordinal)
-                && string.Equals((data.HaloColor ?? string.Empty).ToUpperInvariant(), "#7C7AED", StringComparison.Ordinal);
-            bool defaultScalars = Mathf.Abs(data.HaloIntensity - 0.6f) < 0.0001f
-                && Mathf.Abs(data.Saturation - 1f) < 0.0001f
-                && Mathf.Abs(data.Brightness - 1f) < 0.0001f;
-            bool defaultOverlay = string.IsNullOrEmpty(data.OverlayEmoji)
-                && (string.IsNullOrWhiteSpace(data.CustomFrame) || string.Equals(data.CustomFrame, "none", StringComparison.OrdinalIgnoreCase));
-            return defaultColors && defaultScalars && defaultOverlay;
+            return data == null || string.IsNullOrEmpty(data.OverlayEmoji);
         }
 
         // ---- Crop / transform helpers ----

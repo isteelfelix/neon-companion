@@ -236,7 +236,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _deps.SetTopbar(
                     LocalizationExtensions.Get("topbar.themes.title", "Темы"),
-                    LocalizationExtensions.Get("topbar.themes.subtitle", "Форма, ореол и дыхание для аватара"));
+                    LocalizationExtensions.Get("topbar.themes.subtitle", "Палитра акцента, форма, ореол и дыхание"));
             }
             if (_deps != null && _deps.SetChatModelPickerVisible != null)
                 _deps.SetChatModelPickerVisible(false);

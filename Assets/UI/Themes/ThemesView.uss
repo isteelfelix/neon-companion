@@ -91,9 +91,9 @@
     width: 118px;
     height: 118px;
     border-radius: 999px;
-    background-color: rgba(124, 122, 237, 0.22);
+    background-color: var(--accent-soft);
     border-width: 1px;
-    border-color: rgba(124, 122, 237, 0.36);
+    border-color: var(--accent-glow);
 }
 
 .themes-preview__avatar {
@@ -239,6 +239,32 @@
     font-size: 12px;
     color: var(--text-3);
     white-space: normal;
+}
+
+/* ---- Accent palette swatches (built in C#) ---- */
+
+.theme-swatches {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.theme-swatch {
+    width: 28px;
+    height: 28px;
+    margin: 0 0 0 10px;
+    padding: 0;
+    border-radius: 999px;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+.theme-swatch:hover {
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
+.theme-swatch--active {
+    border-color: rgb(255, 255, 255);
 }
 
 .icon--palette { background-image: url("project://database/Assets/UI/Icons/palette.svg"); }

@@ -7,7 +7,7 @@
         <ui:VisualElement class="page__head">
             <ui:VisualElement class="page__head-copy">
                 <ui:Label text="Темы" class="page__title" />
-                <ui:Label text="Форма и поведение аватара в интерфейсе. Без смены персоны — только визуальный режим." class="page__subtitle" />
+                <ui:Label text="Палитра акцента и поведение аватара в интерфейсе." class="page__subtitle" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -16,7 +16,7 @@
                 <ui:VisualElement class="themes-hero">
                     <ui:VisualElement class="themes-hero__copy">
                         <ui:Label text="Визуальная подача Neon" class="themes-hero__title" />
-                        <ui:Label text="Собери внешний вид аватара: форма, halo и breathing. Изменения применяются сразу и сохраняются локально." class="themes-hero__subtitle" />
+                        <ui:Label text="Выбери палитру акцента и собери внешний вид аватара: форма, halo и breathing. Изменения применяются сразу и сохраняются локально." class="themes-hero__subtitle" />
                     </ui:VisualElement>
                     <ui:VisualElement class="themes-preview">
                         <ui:VisualElement name="themes-preview-halo" class="themes-preview__halo" />
@@ -67,7 +67,7 @@
                     <ui:VisualElement class="icon icon--sparkle themes-card__icon" />
                     <ui:Label text="Что дальше" class="themes-card__title" />
                 </ui:VisualElement>
-                <ui:Label text="Следующим большим куском сюда можно вынести палитры, реактивные состояния и дополнительные пресеты отображения." class="themes-note" />
+                <ui:Label text="Дальше: реактивные состояния и дополнительные пресеты отображения." class="themes-note" />
             </ui:VisualElement>
         </ui:ScrollView>
     </ui:VisualElement>

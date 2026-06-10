@@ -62,7 +62,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private int _previewLoadingFrame;
         private IVisualElementScheduledItem _previewLoadingSchedule;
         private readonly HashSet<string> _discardedPreviewPaths = new HashSet<string>();
-        private Action _audioFilePlaybackCompleted;
 
         public bool IsVoicePlaying => _isVoicePlaying;
         public bool IsVoiceRecording => _isVoiceRecording;
@@ -275,25 +274,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.AttachAssistantAudio?.Invoke(path, durationSecs);
         }
 
-        /// <summary>Play a WAV file (used by chat voice bubbles for replay).</summary>
-        internal void PlayAudioFile(string wavPath, Action onComplete = null)
-        {
-            if (_messageAudioPlayer == null || string.IsNullOrEmpty(wavPath))
-            {
-                onComplete?.Invoke();
-                return;
-            }
-
-            Action previousCompletion = _audioFilePlaybackCompleted;
-            _audioFilePlaybackCompleted = null;
-            previousCompletion?.Invoke();
-
-            _audioFilePlaybackCompleted = onComplete;
-            _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
-            _messageAudioPlayer.OnPlaybackComplete += HandleAudioFilePlaybackComplete;
-            _messageAudioPlayer.Play(wavPath);
-        }
-
         internal void ToggleMessageAudio(string audioPath)
         {
             if (_messageAudioPlayer == null || string.IsNullOrEmpty(audioPath))
@@ -302,16 +282,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_voiceOutputManager != null && _voiceOutputManager.TogglePlayback(audioPath))
                 return;
 
-            VoicePlaybackState state = _messageAudioPlayer.GetState(audioPath);
-            if (!state.IsCurrent)
-            {
-                Action previousCompletion = _audioFilePlaybackCompleted;
-                _audioFilePlaybackCompleted = null;
-                previousCompletion?.Invoke();
-            }
-
-            _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
-            _messageAudioPlayer.OnPlaybackComplete += HandleAudioFilePlaybackComplete;
             _messageAudioPlayer.Toggle(audioPath);
         }
 
@@ -323,16 +293,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_voiceOutputManager != null && _voiceOutputManager.SeekPlayback(audioPath, normalized))
                 return;
 
-            VoicePlaybackState state = _messageAudioPlayer.GetState(audioPath);
-            if (!state.IsCurrent)
-            {
-                Action previousCompletion = _audioFilePlaybackCompleted;
-                _audioFilePlaybackCompleted = null;
-                previousCompletion?.Invoke();
-            }
-
-            _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
-            _messageAudioPlayer.OnPlaybackComplete += HandleAudioFilePlaybackComplete;
             _messageAudioPlayer.SeekNormalized(audioPath, normalized);
         }
 
@@ -347,16 +307,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_messageAudioPlayer == null)
                 return new VoicePlaybackState();
             return _messageAudioPlayer.GetState(audioPath);
-        }
-
-        private void HandleAudioFilePlaybackComplete()
-        {
-            if (_messageAudioPlayer != null)
-                _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
-
-            Action completed = _audioFilePlaybackCompleted;
-            _audioFilePlaybackCompleted = null;
-            completed?.Invoke();
         }
 
         // ============================================================

@@ -76,7 +76,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private static readonly string[] BuiltInMotionPackAvatarIds =
         {
-            "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose"
+            "neon", "yorha-2b", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose"
         };
 
         // ── Lifecycle ─────────────────────────────────────────────────────────

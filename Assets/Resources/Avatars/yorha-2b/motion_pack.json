@@ -1,0 +1,66 @@
+{
+  "formatVersion": 1,
+  "format": "spritesheet-pack",
+  "clips": [
+    {
+      "action": "idle",
+      "spriteSheetPath": "idle_sheet.png",
+      "columns": 4,
+      "rows": 2,
+      "frameCount": 6,
+      "frameRate": 5.555556,
+      "loop": true,
+      "pingPong": false
+    },
+    {
+      "action": "thinking",
+      "spriteSheetPath": "thinking_sheet.png",
+      "columns": 4,
+      "rows": 2,
+      "frameCount": 6,
+      "frameRate": 5.555556,
+      "loop": true,
+      "pingPong": false
+    },
+    {
+      "action": "talking",
+      "spriteSheetPath": "talking_sheet.png",
+      "columns": 4,
+      "rows": 2,
+      "frameCount": 6,
+      "frameRate": 5.555556,
+      "loop": true,
+      "pingPong": false
+    },
+    {
+      "action": "listening",
+      "spriteSheetPath": "listening_sheet.png",
+      "columns": 4,
+      "rows": 2,
+      "frameCount": 6,
+      "frameRate": 5.555556,
+      "loop": true,
+      "pingPong": false
+    },
+    {
+      "action": "smile",
+      "spriteSheetPath": "smile_sheet.png",
+      "columns": 4,
+      "rows": 1,
+      "frameCount": 4,
+      "frameRate": 4,
+      "loop": false,
+      "pingPong": false
+    },
+    {
+      "action": "confused",
+      "spriteSheetPath": "confused_sheet.png",
+      "columns": 4,
+      "rows": 2,
+      "frameCount": 8,
+      "frameRate": 5.555556,
+      "loop": false,
+      "pingPong": false
+    }
+  ]
+}
