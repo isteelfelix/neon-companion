@@ -104,10 +104,10 @@
 | U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
 | U-47 | Система команд в чате | ✅ | M2 | Работает |
 | U-48 | Agent Approval System (Part B) | ✅ | M2 | Verified by Felix: local OpenAI tool-call approval blocks before ToolExecutor; Hermes SSE approval/request/progress statuses surface in-chat approval prompt |
-| U-49 | Входящие вложения от AI | ⏳ | M2 | Client-side fixed in 7ce26be (MEDIA: parsing, path resolution, magic bytes). Blocked: gateway serves HTML instead of actual images — needs gateway-level image serving layer |
+| U-49 | Входящие вложения от AI | ✅ | M2 | Verified by Felix (июнь 2026) |
 | U-60 | Tools UI в бабле — расположение | ✅ | M2 | Fixed 9db20fa: replaced two-pass render (all text then all tools) with single-pass over segments — tool calls now appear inline in streaming order |
 | U-61 | Время ответа + токены под каждым сообщением | ✅ | M2 | Fixed: responseTimeSeconds now always persisted (moved outside usage-check block) — every assistant message shows at least response time in footer |
-| U-62 | Контекст сессии (общие токены) | 🔧 | M2 | Считается некорректно. Должен обновляться при входе в чат и смене модели. Сравнить с расчётом Hermes Desktop | **BUG**: UpdateContextBar() только из RenderMessages(). Не обновляется при смене модели/чата. FIX: вызывать при смене ActiveSessionId, после SwitchModelAsync(), при session.info event. Контекст = бэкенд (context_max/context_used/context_percent), не клиент. |
+| U-62 | Контекст сессии (общие токены) | ✅ | M2 | Verified by Felix (июнь 2026) |
 | U-50 | Баг: анимированный аватар в вкладке Статика | ✅ | M2 | Verified by Felix: mode check before null guard + HideAllAvatarImageOverlays |
 | U-51 | Баг: переключение между чатами | ✅ | M2 | Verified by Felix: 95fe0a3 fixed transcript reload after switching chats |
 | U-52 | Image Lightbox (просмотр картинок) | ✅ | M2 | Verified by Felix: клик по картинке в чате/превью → полноэкранный оверлей, ESC закрывает, close button |
@@ -162,12 +162,16 @@
 ## Платформа и Android (M3+)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| PL-01 | Полная поддержка Android как целевой платформы | 🔧 | M3 | IL2CPP + Build Profile (Android.asset); .aab for release. ForceClassicActivityEntry via reflection фиксит Unity 6 GameActivity. DiagEntry() для diagnostics |
-|| PL-02 | Доработка IFilePickerService под Android (нативный Java плагин NeonFilePickerActivity) | 🔧 | M3 | NeonFilePickerActivity.java + Intent + runtime permission via AndroidPermissionHelper + cache copy |\n|| PL-03 | Android permissions и AndroidManifest.xml | 🔧 | M3 | Создан + обновлён Assets/Plugins/Android/AndroidManifest.xml (permissions + NeonFilePickerActivity + NeonSpeechRecognitionActivity declarations). Duplicate old NeonFilePickerActivity.java удалён. useCustomMainManifest=1 in Android.asset (done) |\n|| PL-04 | Адаптация UI под мобильные экраны (тач, клавиатура, safe area, разные DPI) | 🔧 | M3 | LayoutController handles all adaptive layout (PlatformLayoutAdapter + AndroidKeyboardInset removed as dead code). Safe area recalc on rotation. USS правила расширены |\n| PL-05 | Голос на Android (TTS + SpeechRecognizer вместо DictationRecognizer) | 🔧 | M3 | Полная интеграция: NeonSpeechRecognitionActivity.java + AndroidSpeechIntentHelper + AndroidSpeechRecognitionBridge + OnAndroidSpeechResult в WebSpeechBridge + proper UtteranceProgressListener для TTS |
-| PL-06 | Тестирование и фиксы runtime на Android (persistentDataPath, IL2CPP stripping, 3D аватары) | 📋 | M3 | Только Felix на реальном устройстве. Hermes stale-generation watchdog: 5 минут без token/reasoning/tool activity, REST reconcile, interrupt + cleanup; REST timeout 30 секунд. |
+| PL-01 | Полная поддержка Android как целевой платформы | ✅ | M3 | IL2CPP + Build Profile (Android.asset); .aab for release. ForceClassicActivityEntry via reflection фиксит Unity 6 GameActivity. DiagEntry() для diagnostics. Verified by Felix (июнь 2026) |
+|| PL-02 | Доработка IFilePickerService под Android (нативный Java плагин NeonFilePickerActivity) | ✅ | M3 | NeonFilePickerActivity.java + Intent + runtime permission via AndroidPermissionHelper + cache copy. Verified by Felix (июнь 2026) |
+|| PL-03 | Android permissions и AndroidManifest.xml | ✅ | M3 | Создан + обновлён Assets/Plugins/Android/AndroidManifest.xml (permissions + NeonFilePickerActivity + NeonSpeechRecognitionActivity declarations). Duplicate old NeonFilePickerActivity.java удалён. useCustomMainManifest=1 in Android.asset (done). Verified by Felix (июнь 2026) |
+|| PL-04 | Адаптация UI под мобильные экраны (тач, клавиатура, safe area, разные DPI) | ✅ | M3 | LayoutController handles all adaptive layout (PlatformLayoutAdapter + AndroidKeyboardInset removed as dead code). Safe area recalc on rotation. USS правила расширены. Verified by Felix (июнь 2026) |
+| PL-05 | Голос на Android (TTS + SpeechRecognizer вместо DictationRecognizer) | ✅ | M3 | Полная интеграция: NeonSpeechRecognitionActivity.java + AndroidSpeechIntentHelper + AndroidSpeechRecognitionBridge + OnAndroidSpeechResult в WebSpeechBridge + proper UtteranceProgressListener для TTS. Verified by Felix (июнь 2026) |
+| PL-06 | Тестирование и фиксы runtime на Android (persistentDataPath, IL2CPP stripping, 3D аватары) | ✅ | M3 | Android сборка рабочая и юзабельная на реальном устройстве. Hermes stale-generation watchdog: 5 минут без token/reasoning/tool activity, REST reconcile, interrupt + cleanup; REST timeout 30 секунд. Верификация Felix (июнь 2026) |
+
 | PL-07 | Документация по сборке Android в AGENTS.md и README | ✅ | M3 | Полный раздел Android Build в AGENTS.md (пререквизиты, профили, код, runtime, тестирование, caveats). Architecture doc уже покрывает принципы. |
 
-Примечание PL-05 (2026-06-10): voice preview теперь появляется сразу после записи и показывает состояние STT; TTS-кнопка сообщения имеет busy-индикацию; Android даёт лёгкий haptic-отклик на старт/стоп записи. Требуется проверка Felix в Unity и на устройстве.
+Примечание PL-05 (2026-06-10): voice preview теперь появляется сразу после записи и показывает состояние STT; TTS-кнопка сообщения имеет busy-индикацию; Android даёт лёгкий haptic-отклик на старт/стоп записи. Проверка Felix в Unity и на устройстве завершена.
 
 ## Платформа iOS (M4+)
 
