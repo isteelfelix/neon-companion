@@ -42,7 +42,11 @@ Assets/Scripts/Runtime/
   Data/Repositories/ JSON-file-backed repos (IProviderConfigRepository, etc.)
   Data/Storage/     JsonFileStorage (Application.persistentDataPath)
   Data/Secrets/     DeviceSecretStore
-  UI/UITK/          MainViewController (5700+ lines, the god object), NeonDropdown
+  UI/UITK/          MainViewController (1676 lines), AvatarGalleryController (1930 lines),
+                    ProvidersController, ChatController, SettingsController,
+                    SessionHistoryController, VoiceController, LayoutController,
+                    NavigationController, SplashViewController, NeonDropdown,
+                    ThemeColors (accent palette singleton)
   UI/Chat/          ChatViewModel
   UI/Avatars/       AvatarCustomizationPanel
   UI/Settings/      SettingsViewModel
@@ -76,13 +80,25 @@ Assets/StreamingAssets/
 
 ## MainViewController
 
-`Assets/Scripts/Runtime/UI/UITK/MainViewController.cs` — **5700+ lines**. This is the single controller for almost all UI: chat, providers, avatars, settings, themes, model picker, sidebar, composer.
+`Assets/Scripts/Runtime/UI/UITK/MainViewController.cs` — **1676 lines**. Orchestration hub: wires up sub-controllers, handles app lifecycle, sidebar, composer, and model picker. Avatar logic lives in `AvatarGalleryController`, providers in `ProvidersController`, chat in `ChatController`, settings in `SettingsController`, voice in `VoiceController`.
+
+Sub-controllers (all in `UI/UITK/`):
+- `AvatarGalleryController` (1930 lines) — avatar gallery, animation, persona, built-in metadata, texture loading
+- `ProvidersController` (2193 lines) — provider CRUD, model discovery, connection test
+- `ChatController` (1694 lines) — message send/receive, session streaming, tool calls
+- `SettingsController` (1305 lines) — app settings UI, theme palette card
+- `SessionHistoryController` (1069 lines) — sidebar session list, status dots
+- `VoiceController` (734 lines) — recording, STT, TTS playback
+- `LayoutController` (609 lines) — form factor detection, responsive layout
+- `NavigationController` (317 lines) — screen routing
+- `SplashViewController` (543 lines) — splash/onboarding
 
 Rules:
 - Do not refactor lightly. Any change here can break multiple screens.
 - Before adding new UI features, check if the element already exists in UXML but lacks a binding.
-- New screens/panels should ideally get their own controller, but check existing patterns first.
+- New screens/panels should get their own controller — the main VC is no longer the dumping ground.
 - Callbacks are registered in `RegisterCallbacks()` and unregistered in `UnregisterCallbacks()`. Always add both.
+- Avatar-related code belongs in `AvatarGalleryController`, not MainViewController.
 
 ## Data Flow
 

@@ -1,67 +1,46 @@
 # 15_MainViewController_Refactor.md
 
 ## Проблема
-`MainViewController.cs` — 5269 строк, god object. Управляет всем: навигацией, чатом, сессиями, провайдерами, аватарами, голосом, layout. Сложно поддерживать, невозможно тестировать, локальные модели ломаются при чтении.
+`MainViewController.cs` — 5269 строк, god object. Управляет всем: навигацией, чатом, сессиями, провайдерами, аватарами, голосом, layout. Сложно поддерживать, невозможно тестировать.
 
 ## Цель
-Разбить на 7 выделенных контроллеров. MainViewController остаётся координатором (~1000 строк).
+Разбить на 7 выделенных контроллеров. MainViewController остаётся координатором.
+
+## Статус: ✅ Выполнено (июнь 2026)
+
+Все 7 контроллеров извлечены. MainViewController сократился с 5269 до **1676 строк**.
+
+## Контроллеры (фактические размеры)
+
+| # | Контроллер | Строки | Ответственность |
+|---|-----------|--------|----------------|
+| 1 | **NavigationController** | 317 | Навигация, переключение экранов |
+| 2 | **ChatController** | 1694 | Отправка/получение сообщений, стриминг, tool calls |
+| 3 | **SessionHistoryController** | 1069 | Список сессий в сайдбаре, статус-точки |
+| 4 | **ProvidersController** | 2193 | CRUD провайдеров, discovery моделей, connection test |
+| 5 | **AvatarGalleryController** | 1930 | Галерея аватаров, анимация, персона, built-in метаданные, загрузка текстур |
+| 6 | **VoiceController** | 734 | Запись, STT, воспроизведение TTS |
+| 7 | **LayoutController** | 609 | Определение форм-фактора, адаптивный layout |
+
+## MainViewController (координатор, 1676 строк)
+
+Осталось:
+- OnEnable/Disable/Bind/RegisterCallbacks lifecycle
+- Сервисы (`_app`, `_chatService`)
+- `RefreshAsync`, локализация
+- Кросс-кут стейт через delegates
+- Сайдбар, композер, выбор модели
 
 ## Паттерн
-Уже реализован в `SettingsController` — delegate-based deps через `BuildSettingsControllerDeps()`. Все новые контроллеры по той же схеме.
+Delegate-based deps через `BuildXxxControllerDeps()`. Все контроллеры по той же схеме:
+1. Контроллер с `Init(deps)` + `RegisterCallbacks()` + `UnregisterCallbacks()`
+2. MainViewController создаёт контроллер в `Bind()`, передаёт deps
+3. `RegisterCallbacks`/`UnregisterCallbacks` делегируются
 
-## Контроллеры
+## Дополнительно
 
-### 1. NavigationController (~200 строк)
-**Поля:** `_navItems`, `_sessionItems`, 6 `_nav*` VisualElements + Labels + counts, `_providerTag`, `_navCloseLabel`
-**Методы:** `AddNav`, `SetActiveNav`, `ShowArea`, `OnNav*Clicked`, `UpdatePanelToggleTooltips`
-**Deps:** panel visibility toggle delegate
+### ThemeColors (60 строк)
+Статический синглтон акцентной палитры. 5 тем: indigo, rose, cyan, ember, mono. Свойства `Accent` и `AccentSoft` для inline-стилизации в C# (попапы, контекстные меню). Для USS — CSS-классы `.theme-*` на `#app-root`.
 
-### 2. ChatController (~700 строк)
-**Поля:** `_chatPanel`, `_composer`, `_messageInput`, send/summarize/search/more/attach/copy/regen buttons, `_messagesList`, `_typingIndicator`, both typing anim sets, `_thinkingBubble`/`_thinkingText`, `_toolCallUiHelper`, pending attachments, streaming flags
-**Методы:** `SendCurrentMessageAsync`, `OnSendClicked`, `SummarizeCurrentConversationAsync`, `OnStreamToken`, `OnToolProgress`, `AddStreamingBubble`, `ClearThinkingBubble`, `RenderMessages`, scroll/copy/typing methods
-**Deps:** ChatService, streaming delegates
-
-### 3. SessionHistoryController (~500 строк)
-**Поля:** `_historyPanel`, session ScrollViews, `_sessionItems`, history search UI (both bar sets), `_historyState`, search query, session ids/titles
-**Методы:** `RenderSessionList`, `StartNewSessionAsync`, `OnHistorySearchToggled/Cleared`, `SearchSessionsFromComposerAsync`, `OnNewSessionClicked`, `IsActiveSession`, `AddSessionHeader`
-**Deps:** ChatService, provider list for labels
-
-### 4. ProvidersController (~800 строк)
-**Поля:** `_providersPanel`, `_providersList`, add/import buttons, edit panel + 8 `_edit*` fields, save/cancel/test, model picker overlay, 9+ provider/status labels, `_topbarModelPicker`, discovered/auto-discover state, preset dicts
-**Методы:** `ShowProviders`, `TestProviderConnectionAsync`, `ApplyModelSelectionAsync`, provider CRUD, model discovery, header sync, import/export
-**Deps:** ProviderManager, ChatService
-
-### 5. AvatarGalleryController (~600 строк)
-**Поля:** BuiltInAvatarIds/Meta, viewmode buttons, gallery containers, `_activeAvatarId/Filter`, preview/hero elements, persona editor, custom avatar tiles/textures, profile caches, filter buttons/counts, `_avatarCustomizationPanel`, emoji overlays, upload/open buttons, 2D/3D renderer/service refs, motion state
-**Методы:** `ShowAvatars`, Select/Apply/Filter/ViewMode, persona editor, customization events, 3D ensure/disable, motion/reaction methods, profile refresh
-**Deps:** SpriteSheetAnimator, Avatar3DService
-
-### 6. VoiceController (~200 строк)
-**Поля:** `_listenBtn`/`_micBtn`, 4 voice service/manager fields, playing/recording/bound flags
-**Методы:** `EnsureVoicePipelineAsync`, `OnVoiceRecordingStarted/Stopped`, `HandleVoicePlaybackStarted/Completed`, `RefreshVoiceControls`, `Bind/UnbindVoiceAnimationEvents`
-**Deps:** ChatService (for bind), settings toggle
-
-### 7. LayoutController (~150 строк)
-**Поля:** resize handles, `_panelResizeHandler`, toggle buttons, 2 visibility bools, `_railElement`
-**Методы:** toggle handlers, tooltip updates
-**Deps:** PanelResizeHandler
-
-### MainViewController (координатор, ~1000 строк)
-**Остаётся:** OnEnable/Disable/Bind/RegisterCallbacks lifecycle, сервисы (`_app`, `_chatService`), `RefreshAsync`, localization refresh, SettingsController init, кросс-кут стейт через delegates.
-
-## Порядок миграции
-1. **NavigationController** — самый изолированный, минимум deps
-2. **LayoutController** — тоже изолирован, маленький
-3. **VoiceController** — тонкий, чёткие границы
-4. **SessionHistoryController** — средняя сложность
-5. **ChatController** — крупный, зависит от Session
-6. **ProvidersController** — крупный, зависит от Chat
-7. **AvatarGalleryController** — самый сложный, зависит от Voice + Chat
-
-## Каждый шаг
-1. Создать новый контроллер с `Init(deps)` + `RegisterCallbacks()` + `UnregisterCallbacks()`
-2. Перенести поля и методы
-3. MainViewController создаёт контроллер в `Bind()`, передаёт deps
-4. `RegisterCallbacks`/`UnregisterCallbacks` делегируются
-5. Git commit: "refactor: extract XxxController from MainViewController"
-6. `git diff --stat` — проверить что линейный баланс ≈ 0
+### AvatarCustomizationPanel (урезан)
+Цветовая кастомизация аватаров (PrimaryColor, SecondaryColor, HaloColor, слайдеры, рамки) удалена. Остался только выбор эмодзи-overlay. Глобальная палитра акцента заменяет per-avatar цвета.

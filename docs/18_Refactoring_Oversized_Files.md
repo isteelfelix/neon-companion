@@ -19,7 +19,7 @@
 | ProvidersController | `UI/UITK/ProvidersController.cs` |
 | AvatarGalleryController | `UI/UITK/AvatarGalleryController.cs` |
 
-MainViewController is already well-decomposed at the top level; its remaining bulk comes from avatar-motion wiring and model-picker bootstrapping that hasn't yet been pushed down.
+MainViewController (1676 lines) is now a thin orchestrator. Avatar logic fully lives in AvatarGalleryController (1930 lines). Remaining work: split ProvidersController and AvatarGalleryController further per the plans below.
 
 ### Inner-class locations (no cross-file duplication found)
 
