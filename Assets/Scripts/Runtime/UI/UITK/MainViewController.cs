@@ -1543,10 +1543,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             for (int i = 0; i < 120 && isActiveAndEnabled; i++)
             {
                 var bootstrap = UnityEngine.Object.FindAnyObjectByType<AppBootstrap>();
-                if (bootstrap?.App != null)
+                if (bootstrap != null)
                 {
-                    _app = bootstrap.App;
-                    return _app;
+                    await bootstrap.InitializationTask;
+                    if (bootstrap.App != null)
+                    {
+                        _app = bootstrap.App;
+                        return _app;
+                    }
                 }
 
                 await Task.Yield();

@@ -12,6 +12,7 @@ using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.Plugins;
 using NeonCompanion.Runtime.Voice;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Core
@@ -23,6 +24,7 @@ namespace NeonCompanion.Runtime.Core
         private PersistentShellService _persistentShell;
 
         public CompanionApp App { get; private set; }
+        public Task InitializationTask { get; private set; } = Task.CompletedTask;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void ConfigureRuntime()
@@ -124,10 +126,13 @@ namespace NeonCompanion.Runtime.Core
             else
                 chatService.SetTransport(null);
 
-            // The saved backend mode is the UI/workspace context. Restore the last active
-            // provider for that backend without letting a provider from another backend flip
-            // the mode at startup.
-            _ = ReconcileBackendModeToSavedContextAsync(backendSelector, providerManager, savedSettings);
+            // Restore provider/backend before the main UI starts loading chat sessions.
+            InitializationTask = RestoreStartupContextAsync(
+                backendSelector,
+                providerManager,
+                chatService,
+                settings,
+                savedSettings);
 
             // Apply avatar system prompt
             var settingsData = settings.Load();
@@ -151,15 +156,6 @@ namespace NeonCompanion.Runtime.Core
             string language = settingsData?.language ?? "ru";
             var localizationService = new JsonLocalizationService(language);
             LocalizationExtensions.SetLocalizationService(localizationService);
-
-            App = new CompanionApp(
-                services,
-                aiClient,
-                providers,
-                sessions,
-                avatars,
-                settings,
-                avatarService);
 
             services.Register<IJsonStorage>(storage);
             services.Register<ISecretStore>(secrets);
@@ -190,30 +186,86 @@ namespace NeonCompanion.Runtime.Core
             pluginManager.Initialize(services);
             services.Register<PluginManager>(pluginManager);
 
+            // Publish App only after the registry is complete. Consumers also await
+            // InitializationTask before using the restored provider/backend context.
+            App = new CompanionApp(
+                services,
+                aiClient,
+                providers,
+                sessions,
+                avatars,
+                settings,
+                avatarService);
+
             NeonLogger.Log("App bootstrap completed.");
         }
 
-        private static async System.Threading.Tasks.Task ReconcileBackendModeToSavedContextAsync(
+        private static async Task RestoreStartupContextAsync(
             GlobalBackendSelector backendSelector,
             ProviderManager providerManager,
+            ChatService chatService,
+            IAppSettingsRepository settingsRepository,
             AppSettings settings)
         {
-            BackendMode desiredMode = backendSelector.CurrentMode;
-            string preferredProviderId = null;
-            if (settings != null)
+            try
             {
-                preferredProviderId = desiredMode == BackendMode.Hermes
-                    ? settings.activeHermesProviderId
-                    : settings.activeOpenAiProviderId;
-                if (string.IsNullOrWhiteSpace(preferredProviderId))
-                    preferredProviderId = settings.activeProviderId;
+                AppSettings startupSettings = settings ?? new AppSettings();
+                BackendMode desiredMode = backendSelector.CurrentMode;
+                ProviderConfig activeProvider = null;
+
+                // activeProviderId is the last provider used across all backends. Prefer it and
+                // derive the backend from the provider so the two cannot start out inconsistent.
+                if (!string.IsNullOrWhiteSpace(startupSettings.activeProviderId))
+                {
+                    ProviderConfig lastUsed = await providerManager.GetProviderByIdAsync(startupSettings.activeProviderId);
+                    if (lastUsed != null && lastUsed.isEnabled)
+                    {
+                        activeProvider = lastUsed;
+                        desiredMode = ChatService.IsHermesProvider(lastUsed)
+                            ? BackendMode.Hermes
+                            : BackendMode.OpenAI;
+                    }
+                }
+
+                if (activeProvider == null)
+                {
+                    string preferredProviderId = desiredMode == BackendMode.Hermes
+                        ? startupSettings.activeHermesProviderId
+                        : startupSettings.activeOpenAiProviderId;
+                    activeProvider = await providerManager.GetActiveProviderForBackendAsync(
+                        desiredMode,
+                        preferredProviderId,
+                        true);
+                }
+
+                if (backendSelector.CurrentMode != desiredMode)
+                    await backendSelector.SetMode(desiredMode);
+
+                if (activeProvider == null)
+                {
+                    chatService.ClearActiveProviderState();
+                    NeonLogger.LogWarning("[Bootstrap] No enabled provider for backend " + desiredMode + ".");
+                    return;
+                }
+
+                chatService.SetActiveProviderWithoutSession(activeProvider);
+
+                if (desiredMode == BackendMode.Hermes)
+                    backendSelector.ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
+
+                startupSettings.backendMode = desiredMode == BackendMode.Hermes ? "hermes" : "openai";
+                startupSettings.activeProviderId = activeProvider.id;
+                if (desiredMode == BackendMode.Hermes)
+                    startupSettings.activeHermesProviderId = activeProvider.id;
+                else
+                    startupSettings.activeOpenAiProviderId = activeProvider.id;
+                settingsRepository.Save(startupSettings);
+
+                NeonLogger.Log("[Bootstrap] Restored " + desiredMode + " provider: " + activeProvider.displayName);
             }
-
-            ProviderConfig activeProvider = await providerManager.GetActiveProviderForBackendAsync(desiredMode, preferredProviderId, true);
-
-            if (desiredMode == BackendMode.Hermes && activeProvider != null)
+            catch (System.Exception ex)
             {
-                backendSelector.ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
+                NeonLogger.LogError("[Bootstrap] Provider restore failed: " + ex);
             }
         }
     }

@@ -13,9 +13,7 @@ namespace NeonCompanion.Runtime.Avatar
         private static readonly Dictionary<string, Sprite[]> SpriteCache = new Dictionary<string, Sprite[]>(StringComparer.OrdinalIgnoreCase);
 
         // Built-in packs use "res://<ResourcesKey>" so they load from Resources (works
-        // inside the APK on Android, unlike StreamingAssets+File). Sheets are stored as
-        // TextAsset (.bytes) and decoded via LoadImage → readable RGBA32, which the
-        // blank-frame trim (GetPixel) below needs.
+        // inside the APK on Android, unlike StreamingAssets+File).
         private const string ResourcesScheme = "res://";
 
         private static Texture2D LoadTextureFromResources(string path)
@@ -28,6 +26,14 @@ namespace NeonCompanion.Runtime.Avatar
             }
 
             string key = path.Substring(ResourcesScheme.Length);
+            Texture2D importedTexture = Resources.Load<Texture2D>(key);
+            if (importedTexture != null)
+            {
+                TextureCache[path] = importedTexture;
+                return importedTexture;
+            }
+
+            // Legacy fallback for packs that still store encoded image bytes as TextAsset.
             var asset = Resources.Load<TextAsset>(key);
             if (asset == null)
                 return null;
@@ -73,7 +79,7 @@ namespace NeonCompanion.Runtime.Avatar
             return texture;
         }
 
-        public static Sprite[] LoadFrames(string path, int columns, int rows)
+        public static Sprite[] LoadFrames(string path, int columns, int rows, int frameCount = 0)
         {
             if (string.IsNullOrWhiteSpace(path) || columns <= 0 || rows <= 0)
                 return Array.Empty<Sprite>();
@@ -83,7 +89,7 @@ namespace NeonCompanion.Runtime.Avatar
             if (string.IsNullOrWhiteSpace(resolvedPath))
                 return Array.Empty<Sprite>();
 
-            string cacheKey = $"{resolvedPath}|{columns}x{rows}";
+            string cacheKey = BuildSpriteCacheKey(resolvedPath, columns, rows, frameCount);
             if (SpriteCache.TryGetValue(cacheKey, out var cached))
             {
                 // Guard against stale sprite entries after an Editor Play-Mode reset
@@ -101,10 +107,12 @@ namespace NeonCompanion.Runtime.Avatar
             if (frameWidth <= 0 || frameHeight <= 0)
                 return Array.Empty<Sprite>();
 
-            var sprites = new List<Sprite>(columns * rows);
-            for (int row = rows - 1; row >= 0; row--)
+            int availableFrames = columns * rows;
+            int framesToCreate = frameCount > 0 ? Mathf.Min(frameCount, availableFrames) : availableFrames;
+            var sprites = new List<Sprite>(framesToCreate);
+            for (int row = rows - 1; row >= 0 && sprites.Count < framesToCreate; row--)
             {
-                for (int column = 0; column < columns; column++)
+                for (int column = 0; column < columns && sprites.Count < framesToCreate; column++)
                 {
                     var rect = new Rect(column * frameWidth, row * frameHeight, frameWidth, frameHeight);
                     var sprite = Sprite.Create(texture, rect, new Vector2(0.5f, 0.5f), 100f);
@@ -116,7 +124,7 @@ namespace NeonCompanion.Runtime.Avatar
             // Spritesheets often have fewer actual frames than columns×rows cells;
             // the remainder are fully transparent. Without trimming, the animator
             // plays into those empty cells and the character appears to blink/vanish.
-            if (sprites.Count > 1)
+            if (frameCount <= 0 && sprites.Count > 1)
             {
                 int trimTo = sprites.Count;
                 for (int i = sprites.Count - 1; i > 0; i--)
@@ -162,25 +170,30 @@ namespace NeonCompanion.Runtime.Avatar
             if (string.IsNullOrWhiteSpace(manifestPath))
                 yield break;
 
-            string resolvedPath = ResolvePath(manifestPath);
-            if (string.IsNullOrWhiteSpace(resolvedPath) || !System.IO.File.Exists(resolvedPath))
+            bool isResources = manifestPath.StartsWith(ResourcesScheme, StringComparison.Ordinal);
+            string resolvedPath = isResources ? manifestPath : ResolvePath(manifestPath);
+            if (string.IsNullOrWhiteSpace(resolvedPath))
                 yield break;
 
             AvatarMotionPackManifest manifest;
-            try
-            {
-                string json = System.IO.File.ReadAllText(resolvedPath);
-                manifest = JsonUtility.FromJson<AvatarMotionPackManifest>(json);
-            }
-            catch
-            {
+            if (!TryLoadManifest(resolvedPath, isResources, out manifest))
                 yield break;
-            }
 
             if (manifest == null || manifest.clips == null || manifest.clips.Count == 0)
                 yield break;
 
-            string baseDir = System.IO.Path.GetDirectoryName(resolvedPath) ?? string.Empty;
+            string baseDir;
+            if (isResources)
+            {
+                int slash = resolvedPath.LastIndexOf('/');
+                baseDir = slash > ResourcesScheme.Length
+                    ? resolvedPath.Substring(0, slash)
+                    : resolvedPath;
+            }
+            else
+            {
+                baseDir = System.IO.Path.GetDirectoryName(resolvedPath) ?? string.Empty;
+            }
             int total = manifest.clips.Count;
 
             for (int i = 0; i < total; i++)
@@ -190,10 +203,12 @@ namespace NeonCompanion.Runtime.Avatar
                     continue;
 
                 string spritePath = clip.spriteSheetPath;
-                if (!System.IO.Path.IsPathRooted(spritePath) && !string.IsNullOrEmpty(baseDir))
+                if (isResources)
+                    spritePath = BuildResourcePath(baseDir, spritePath);
+                else if (!System.IO.Path.IsPathRooted(spritePath) && !string.IsNullOrEmpty(baseDir))
                     spritePath = System.IO.Path.Combine(baseDir, spritePath);
 
-                yield return PreloadFramesCoroutine(spritePath, clip.columns, clip.rows);
+                yield return PreloadFramesCoroutine(spritePath, clip.columns, clip.rows, clip.frameCount);
 
                 if (onClipLoaded != null)
                     onClipLoaded(clip.action, i + 1, total);
@@ -205,10 +220,16 @@ namespace NeonCompanion.Runtime.Avatar
             if (manifest.lipsyncClip != null && !string.IsNullOrWhiteSpace(manifest.lipsyncClip.spriteSheetPath))
             {
                 string lipsyncPath = manifest.lipsyncClip.spriteSheetPath;
-                if (!System.IO.Path.IsPathRooted(lipsyncPath) && !string.IsNullOrEmpty(baseDir))
+                if (isResources)
+                    lipsyncPath = BuildResourcePath(baseDir, lipsyncPath);
+                else if (!System.IO.Path.IsPathRooted(lipsyncPath) && !string.IsNullOrEmpty(baseDir))
                     lipsyncPath = System.IO.Path.Combine(baseDir, lipsyncPath);
 
-                yield return PreloadFramesCoroutine(lipsyncPath, manifest.lipsyncClip.columns, manifest.lipsyncClip.rows);
+                yield return PreloadFramesCoroutine(
+                    lipsyncPath,
+                    manifest.lipsyncClip.columns,
+                    manifest.lipsyncClip.rows,
+                    manifest.lipsyncClip.frameCount);
             }
         }
 
@@ -216,16 +237,18 @@ namespace NeonCompanion.Runtime.Avatar
             string path,
             int columns,
             int rows,
+            int frameCount = 0,
             int spritesPerFrame = 8)
         {
             if (string.IsNullOrWhiteSpace(path) || columns <= 0 || rows <= 0)
                 yield break;
 
-            string resolvedPath = ResolvePath(path);
+            bool isResources = path.StartsWith(ResourcesScheme, StringComparison.Ordinal);
+            string resolvedPath = isResources ? path : ResolvePath(path);
             if (string.IsNullOrWhiteSpace(resolvedPath))
                 yield break;
 
-            string cacheKey = BuildSpriteCacheKey(resolvedPath, columns, rows);
+            string cacheKey = BuildSpriteCacheKey(resolvedPath, columns, rows, frameCount);
             if (HasValidSpriteCache(cacheKey))
                 yield break;
 
@@ -238,13 +261,22 @@ namespace NeonCompanion.Runtime.Avatar
 
             if (texture == null)
             {
-                yield return LoadTextureCoroutine(resolvedPath, loaded => texture = loaded);
+                if (isResources)
+                    texture = LoadTextureFromResources(resolvedPath);
+                else
+                    yield return LoadTextureCoroutine(resolvedPath, loaded => texture = loaded);
             }
 
             if (texture == null)
                 yield break;
 
-            yield return BuildFrameSpritesCoroutine(texture, cacheKey, columns, rows, Mathf.Max(1, spritesPerFrame));
+            yield return BuildFrameSpritesCoroutine(
+                texture,
+                cacheKey,
+                columns,
+                rows,
+                frameCount,
+                Mathf.Max(1, spritesPerFrame));
         }
 
         private static System.Collections.IEnumerator LoadTextureCoroutine(
@@ -285,6 +317,7 @@ namespace NeonCompanion.Runtime.Avatar
             string cacheKey,
             int columns,
             int rows,
+            int frameCount,
             int spritesPerFrame)
         {
             if (texture == null || string.IsNullOrEmpty(cacheKey) || columns <= 0 || rows <= 0)
@@ -295,11 +328,13 @@ namespace NeonCompanion.Runtime.Avatar
             if (frameWidth <= 0 || frameHeight <= 0)
                 yield break;
 
-            var sprites = new List<Sprite>(columns * rows);
+            int availableFrames = columns * rows;
+            int framesToCreate = frameCount > 0 ? Mathf.Min(frameCount, availableFrames) : availableFrames;
+            var sprites = new List<Sprite>(framesToCreate);
             int createdThisFrame = 0;
-            for (int row = rows - 1; row >= 0; row--)
+            for (int row = rows - 1; row >= 0 && sprites.Count < framesToCreate; row--)
             {
-                for (int column = 0; column < columns; column++)
+                for (int column = 0; column < columns && sprites.Count < framesToCreate; column++)
                 {
                     var rect = new Rect(column * frameWidth, row * frameHeight, frameWidth, frameHeight);
                     var sprite = Sprite.Create(texture, rect, new Vector2(0.5f, 0.5f), 100f);
@@ -314,7 +349,8 @@ namespace NeonCompanion.Runtime.Avatar
                 }
             }
 
-            yield return TrimTrailingBlankSpritesCoroutine(texture, sprites, 4);
+            if (frameCount <= 0)
+                yield return TrimTrailingBlankSpritesCoroutine(texture, sprites, 4);
             SpriteCache[cacheKey] = sprites.ToArray();
         }
 
@@ -360,9 +396,61 @@ namespace NeonCompanion.Runtime.Avatar
                 sprites.RemoveRange(trimTo, sprites.Count - trimTo);
         }
 
-        private static string BuildSpriteCacheKey(string resolvedPath, int columns, int rows)
+        private static string BuildSpriteCacheKey(string resolvedPath, int columns, int rows, int frameCount)
         {
-            return $"{resolvedPath}|{columns}x{rows}";
+            return $"{resolvedPath}|{columns}x{rows}|{frameCount}";
+        }
+
+        private static string BuildResourcePath(string baseDir, string rawPath)
+        {
+            if (string.IsNullOrWhiteSpace(rawPath))
+                return rawPath;
+
+            string noExtension = rawPath.Trim().Replace('\\', '/');
+            int dot = noExtension.LastIndexOf('.');
+            if (dot > noExtension.LastIndexOf('/'))
+                noExtension = noExtension.Substring(0, dot);
+
+            return baseDir.TrimEnd('/') + "/" + noExtension.TrimStart('/');
+        }
+
+        private static bool TryLoadManifest(
+            string resolvedPath,
+            bool isResources,
+            out AvatarMotionPackManifest manifest)
+        {
+            manifest = null;
+            TextAsset manifestAsset = null;
+            try
+            {
+                string json;
+                if (isResources)
+                {
+                    string key = resolvedPath.Substring(ResourcesScheme.Length);
+                    manifestAsset = Resources.Load<TextAsset>(key);
+                    if (manifestAsset == null)
+                        return false;
+                    json = manifestAsset.text;
+                }
+                else
+                {
+                    if (!System.IO.File.Exists(resolvedPath))
+                        return false;
+                    json = System.IO.File.ReadAllText(resolvedPath);
+                }
+
+                manifest = JsonUtility.FromJson<AvatarMotionPackManifest>(json);
+                return manifest != null;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (manifestAsset != null)
+                    Resources.UnloadAsset(manifestAsset);
+            }
         }
 
         private static bool HasValidSpriteCache(string cacheKey)

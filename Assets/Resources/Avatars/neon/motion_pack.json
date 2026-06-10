@@ -7,6 +7,7 @@
       "spriteSheetPath": "idle_sheet.png",
       "columns": 8,
       "rows": 8,
+      "frameCount": 61,
       "frameRate": 12,
       "loop": true,
       "pingPong": true
@@ -16,6 +17,7 @@
       "spriteSheetPath": "thinking_sheet.png",
       "columns": 8,
       "rows": 8,
+      "frameCount": 61,
       "frameRate": 12,
       "loop": true,
       "pingPong": true
@@ -25,6 +27,7 @@
       "spriteSheetPath": "talking_sheet.png",
       "columns": 8,
       "rows": 8,
+      "frameCount": 61,
       "frameRate": 12,
       "loop": true,
       "pingPong": true
@@ -34,6 +37,7 @@
       "spriteSheetPath": "listening_sheet.png",
       "columns": 8,
       "rows": 8,
+      "frameCount": 61,
       "frameRate": 12,
       "loop": true,
       "pingPong": true
@@ -43,6 +47,7 @@
       "spriteSheetPath": "smile_sheet.png",
       "columns": 8,
       "rows": 8,
+      "frameCount": 61,
       "frameRate": 12,
       "loop": false,
       "pingPong": false
@@ -52,6 +57,7 @@
       "spriteSheetPath": "confused_sheet.png",
       "columns": 8,
       "rows": 8,
+      "frameCount": 61,
       "frameRate": 12,
       "loop": false,
       "pingPong": false

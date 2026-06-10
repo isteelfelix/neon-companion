@@ -48,7 +48,11 @@ namespace NeonCompanion.Runtime.Avatar
                 if (clip == null || string.IsNullOrWhiteSpace(clip.clipName))
                     continue;
 
-                var frames = SpriteSheetAnimationLoader.LoadFrames(clip.spriteSheetPath, clip.columns, clip.rows);
+                var frames = SpriteSheetAnimationLoader.LoadFrames(
+                    clip.spriteSheetPath,
+                    clip.columns,
+                    clip.rows,
+                    clip.frameCount);
                 NeonLogger.Log("[SpriteSheetAnimator] clip='" + clip.clipName +
                     "' path='" + clip.spriteSheetPath +
                     "' frames=" + (frames?.Length.ToString() ?? "null"));
@@ -165,7 +169,11 @@ namespace NeonCompanion.Runtime.Avatar
             if (clip == null || string.IsNullOrWhiteSpace(clip.clipName) || _targetImage == null)
                 return;
 
-            var frames = SpriteSheetAnimationLoader.LoadFrames(clip.spriteSheetPath, clip.columns, clip.rows);
+            var frames = SpriteSheetAnimationLoader.LoadFrames(
+                clip.spriteSheetPath,
+                clip.columns,
+                clip.rows,
+                clip.frameCount);
             if (frames == null || frames.Length == 0)
                 return;
 

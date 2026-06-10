@@ -14,6 +14,7 @@ namespace NeonCompanion.Runtime.Avatar
         public string spriteSheetPath;
         public int columns = 1;
         public int rows = 1;
+        public int frameCount;
         public float frameRate = 8f;
         public bool loop = true;
         public bool pingPong = false;
@@ -303,6 +304,12 @@ namespace NeonCompanion.Runtime.Avatar
                 return false;
             }
 
+            if (clip.frameCount < 0 || clip.frameCount > clip.columns * clip.rows)
+            {
+                error = "frameCount must be between 0 and columns*rows for action: " + label;
+                return false;
+            }
+
             if (clip.frameRate <= 0f)
             {
                 error = "frameRate must be positive for action: " + label;
@@ -321,6 +328,7 @@ namespace NeonCompanion.Runtime.Avatar
                 spriteSheetPath = ResolveClipPath(clip.spriteSheetPath, baseDir),
                 columns = Mathf.Max(1, clip.columns),
                 rows = Mathf.Max(1, clip.rows),
+                frameCount = Mathf.Clamp(clip.frameCount, 0, Mathf.Max(1, clip.columns * clip.rows)),
                 frameRate = Mathf.Max(0.01f, clip.frameRate),
                 loop = oneShot ? false : clip.loop,
                 pingPong = oneShot ? false : clip.pingPong,

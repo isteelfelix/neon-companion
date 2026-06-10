@@ -22,6 +22,8 @@
 - `SessionHistoryController`: `RerenderStatus()` for live status dot refresh without server round-trip.
 
 ### Fixed
+- **Enabled provider missing after restart** — startup now restores the last used `activeProviderId`, derives and restores its backend, installs it into `ChatService`, and makes the main UI await this initialization before opening sessions. Provider resolution also falls back to an enabled provider for the current backend.
+- **Main scene startup stall after avatar asset migration** — built-in motion sheets are imported Unity sprites in `Resources` again instead of runtime-decoded PNG `TextAsset`s. The loading scene now preloads `res://` motion packs, avoiding the long CPU/memory spike after `Main` appears.
 - **Cannot open sessions after provider selection** — `SetMode(Hermes)` creates transport but doesn't connect WS. `SwitchToHermesSessionAsync` now calls `ConnectHermes()` when `IsConnected` is false.
 - **ResumeHermesSessionAsync silent failure** — added `IsConnected` guard to prevent RPC on closed socket.
 - **Foreground stream misroute** — send now pinned to `sendSid`; completion renders only if user still views the target session.

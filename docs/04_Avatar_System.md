@@ -34,7 +34,7 @@
 Каноничный runtime-формат — один `motion_pack.json` на один аватар. Спрайтшиты хранятся напрямую в корне аватара (без подкаталога `motion/`):
 
 ```text
-<StreamingAssets/Avatars/neon>/
+<Resources/Avatars/neon>/
   motion_pack.json
   idle.png
   thinking.png
@@ -56,6 +56,7 @@
       "spriteSheetPath": "idle.png",
       "columns": 4,
       "rows": 4,
+      "frameCount": 16,
       "frameRate": 12,
       "loop": true,
       "pingPong": false
@@ -68,6 +69,7 @@
 - `action` — имя действия (`idle`, `thinking`, `talking`, `listening`, `smile`, `confused`)
 - `spriteSheetPath` — путь к PNG спрайтшиту (относительно корня аватара)
 - `columns`, `rows` — размерность сетки спрайтшита
+- `frameCount` — необязательное число заполненных ячеек; рекомендуется для built-in pack, чтобы не читать пиксели импортированной текстуры
 - `frameRate` — частота кадров
 - `loop` — зацикленность
 - `pingPong` — обратное проигрывание (idle/thinking)

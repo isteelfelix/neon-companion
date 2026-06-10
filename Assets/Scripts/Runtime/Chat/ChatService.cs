@@ -2266,7 +2266,10 @@ namespace NeonCompanion.Runtime.Chat
                     return provider;
             }
 
-            return _currentProvider != null && _currentProvider.isEnabled ? _currentProvider : null;
+            if (_currentProvider != null && _currentProvider.isEnabled)
+                return _currentProvider;
+
+            return await GetActiveProviderForCurrentBackendAsync();
         }
 
         private async Task<ProviderConfig> GetActiveProviderForCurrentBackendAsync(string preferredProviderId = null, bool fallbackToFirst = true)

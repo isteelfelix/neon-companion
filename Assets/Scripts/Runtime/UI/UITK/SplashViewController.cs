@@ -74,6 +74,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             ("..", "Starting companion runtime...",             false),
         };
 
+        private static readonly string[] BuiltInMotionPackAvatarIds =
+        {
+            "neon", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose"
+        };
+
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
         private void Awake()
@@ -281,6 +286,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         private static List<string> DiscoverAvatarMotionPackManifests()
         {
             var manifests = new List<string>();
+            for (int i = 0; i < BuiltInMotionPackAvatarIds.Length; i++)
+            {
+                string avatarId = BuiltInMotionPackAvatarIds[i];
+                string resourceKey = "Avatars/" + avatarId + "/motion_pack";
+                TextAsset manifestAsset = Resources.Load<TextAsset>(resourceKey);
+                if (manifestAsset == null)
+                    continue;
+
+                manifests.Add("res://" + resourceKey);
+                Resources.UnloadAsset(manifestAsset);
+            }
+
             string avatarsDir = Path.Combine(Application.streamingAssetsPath, "Avatars");
             if (string.IsNullOrWhiteSpace(avatarsDir) || !Directory.Exists(avatarsDir))
                 return manifests;
@@ -311,6 +328,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             try
             {
+                if (manifestPath.StartsWith("res://", StringComparison.Ordinal))
+                {
+                    string[] parts = manifestPath.Substring("res://".Length).Split('/');
+                    return parts.Length >= 2 ? parts[parts.Length - 2] : "unknown";
+                }
+
                 string dir = Path.GetDirectoryName(manifestPath);
                 if (!string.IsNullOrWhiteSpace(dir))
                     return Path.GetFileName(dir);

@@ -10,6 +10,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public string spriteSheetPath;
         public int columns = 1;
         public int rows = 1;
+        public int frameCount;
         public float frameRate = 8f;
         public bool loop = true;
         public bool pingPong = false;
