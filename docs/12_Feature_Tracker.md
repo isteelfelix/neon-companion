@@ -164,8 +164,10 @@
 |---|------|--------|--------|---------|
 | PL-01 | Полная поддержка Android как целевой платформы | 🔧 | M3 | IL2CPP + Build Profile (Android.asset); .aab for release. ForceClassicActivityEntry via reflection фиксит Unity 6 GameActivity. DiagEntry() для diagnostics |
 || PL-02 | Доработка IFilePickerService под Android (нативный Java плагин NeonFilePickerActivity) | 🔧 | M3 | NeonFilePickerActivity.java + Intent + runtime permission via AndroidPermissionHelper + cache copy |\n|| PL-03 | Android permissions и AndroidManifest.xml | 🔧 | M3 | Создан + обновлён Assets/Plugins/Android/AndroidManifest.xml (permissions + NeonFilePickerActivity + NeonSpeechRecognitionActivity declarations). Duplicate old NeonFilePickerActivity.java удалён. useCustomMainManifest=1 in Android.asset (done) |\n|| PL-04 | Адаптация UI под мобильные экраны (тач, клавиатура, safe area, разные DPI) | 🔧 | M3 | LayoutController handles all adaptive layout (PlatformLayoutAdapter + AndroidKeyboardInset removed as dead code). Safe area recalc on rotation. USS правила расширены |\n| PL-05 | Голос на Android (TTS + SpeechRecognizer вместо DictationRecognizer) | 🔧 | M3 | Полная интеграция: NeonSpeechRecognitionActivity.java + AndroidSpeechIntentHelper + AndroidSpeechRecognitionBridge + OnAndroidSpeechResult в WebSpeechBridge + proper UtteranceProgressListener для TTS |
-| PL-06 | Тестирование и фиксы runtime на Android (persistentDataPath, IL2CPP stripping, 3D аватары) | 📋 | M3 | Только Felix на реальном устройстве |
+| PL-06 | Тестирование и фиксы runtime на Android (persistentDataPath, IL2CPP stripping, 3D аватары) | 📋 | M3 | Только Felix на реальном устройстве. Hermes stale-generation watchdog: 5 минут без token/reasoning/tool activity, REST reconcile, interrupt + cleanup; REST timeout 30 секунд. |
 | PL-07 | Документация по сборке Android в AGENTS.md и README | ✅ | M3 | Полный раздел Android Build в AGENTS.md (пререквизиты, профили, код, runtime, тестирование, caveats). Architecture doc уже покрывает принципы. |
+
+Примечание PL-05 (2026-06-10): voice preview теперь появляется сразу после записи и показывает состояние STT; TTS-кнопка сообщения имеет busy-индикацию; Android даёт лёгкий haptic-отклик на старт/стоп записи. Требуется проверка Felix в Unity и на устройстве.
 
 ## Платформа iOS (M4+)
 

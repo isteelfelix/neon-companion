@@ -49,6 +49,7 @@ namespace NeonCompanion.Runtime.Data.Models
         // Voice: local file path to recorded/synthesised audio (null = text-only message)
         public string audioPath;
         public float audioDurationSecs;
+        [NonSerialized] public bool voiceOutputBusy;
     }
 
     [Serializable]

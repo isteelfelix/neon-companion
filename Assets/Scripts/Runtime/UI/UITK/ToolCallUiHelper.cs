@@ -81,16 +81,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ? cleanLabel.Substring(0, 60) + "..."
                 : cleanLabel ?? string.Empty;
 
-            bool isDone = string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase) ||
-                          string.Equals(status, "done", StringComparison.OrdinalIgnoreCase) ||
-                          string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase);
+            bool isDone = IsDoneStatus(status);
+            bool isFailed = IsFailedStatus(status);
             string icon = string.IsNullOrEmpty(emoji) ? GetToolEmoji(tool) : emoji;
 
             // Header row (clickable to expand/collapse)
             var header = new VisualElement();
             header.AddToClassList("tool-entry");
             header.AddToClassList("tool-entry--header");
-            header.AddToClassList(isDone ? "tool-entry--done" : "tool-entry--running");
+            header.AddToClassList(isFailed ? "tool-entry--failed" : (isDone ? "tool-entry--done" : "tool-entry--running"));
 
             var toggleLabel = new Label(isDone ? "▼" : "▶");
             toggleLabel.AddToClassList("tool-entry__toggle");
@@ -104,9 +103,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             var detailLabel = new Label(truncated);
             detailLabel.AddToClassList("tool-entry__label");
 
-            var statusLabel = new Label(isDone ? "✓" : "●");
+            var statusLabel = new Label(isFailed ? "×" : (isDone ? "✓" : "●"));
             statusLabel.AddToClassList("tool-entry__status");
-            statusLabel.AddToClassList(isDone ? "tool-entry__status--done" : "tool-entry__status--running");
+            statusLabel.AddToClassList(isFailed
+                ? "tool-entry__status--failed"
+                : (isDone ? "tool-entry__status--done" : "tool-entry__status--running"));
 
             header.Add(toggleLabel);
             header.Add(iconLabel);
@@ -173,6 +174,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                    string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsFailedStatus(string status)
+        {
+            return string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(status, "error", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(status, "timeout", StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>
         /// Render a run of consecutive same-tool calls as one collapsed chip ("tool ×N"). Expanding
         /// reveals the individual calls (each its own command line, expandable to its output).
@@ -181,14 +189,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             int count = group != null ? group.Count : 0;
             bool allDone = true;
+            bool anyFailed = false;
             if (group != null)
             {
                 for (int i = 0; i < group.Count; i++)
                 {
-                    if (group[i] == null || !IsDoneStatus(group[i].status))
+                    if (group[i] != null && IsFailedStatus(group[i].status))
+                        anyFailed = true;
+                    if (group[i] == null || (!IsDoneStatus(group[i].status) && !IsFailedStatus(group[i].status)))
                     {
                         allDone = false;
-                        break;
                     }
                 }
             }
@@ -197,7 +207,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             var header = new VisualElement();
             header.AddToClassList("tool-entry");
             header.AddToClassList("tool-entry--header");
-            header.AddToClassList(allDone ? "tool-entry--done" : "tool-entry--running");
+            header.AddToClassList(anyFailed ? "tool-entry--failed" : (allDone ? "tool-entry--done" : "tool-entry--running"));
 
             var toggleLabel = new Label("▶");
             toggleLabel.AddToClassList("tool-entry__toggle");
@@ -211,9 +221,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             var detailLabel = new Label("×" + count);
             detailLabel.AddToClassList("tool-entry__label");
 
-            var statusLabel = new Label(allDone ? "✓" : "●");
+            var statusLabel = new Label(anyFailed ? "×" : (allDone ? "✓" : "●"));
             statusLabel.AddToClassList("tool-entry__status");
-            statusLabel.AddToClassList(allDone ? "tool-entry__status--done" : "tool-entry__status--running");
+            statusLabel.AddToClassList(anyFailed
+                ? "tool-entry__status--failed"
+                : (allDone ? "tool-entry__status--done" : "tool-entry__status--running"));
 
             header.Add(toggleLabel);
             header.Add(iconLabel);

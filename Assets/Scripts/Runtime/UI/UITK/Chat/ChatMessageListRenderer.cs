@@ -656,8 +656,26 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 var listenBtn = new Button();
                 listenBtn.AddToClassList("iconbtn");
                 listenBtn.AddToClassList("icon");
-                listenBtn.AddToClassList("icon--headphones");
-                listenBtn.tooltip = LocalizationExtensions.Get("tooltip.listen", "Speak last response");
+                if (message.voiceOutputBusy)
+                {
+                    actions.AddToClassList("transcript__bubble-actions--busy");
+                    listenBtn.AddToClassList("voice-output-button--busy");
+                    listenBtn.tooltip = LocalizationExtensions.Get(
+                        "voice.output.processing",
+                        "Preparing audio...");
+                    int loadingFrame = 0;
+                    listenBtn.text = ".";
+                    listenBtn.schedule.Execute(() =>
+                    {
+                        loadingFrame = (loadingFrame % 3) + 1;
+                        listenBtn.text = new string('.', loadingFrame);
+                    }).Every(350);
+                }
+                else
+                {
+                    listenBtn.AddToClassList("icon--headphones");
+                    listenBtn.tooltip = LocalizationExtensions.Get("tooltip.listen", "Speak last response");
+                }
                 RegisterClick(listenBtn, () => ChatController.OnListenMessageClickedStatic(message));
 
                 actions.Add(copyBtn);

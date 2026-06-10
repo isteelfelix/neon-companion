@@ -15,10 +15,16 @@ using UnityEngine;
 
 namespace NeonCompanion.Runtime.Chat
 {
+    public sealed class HermesGenerationStalledException : TimeoutException
+    {
+        public HermesGenerationStalledException(string message) : base(message) { }
+    }
+
     public sealed class ChatService
     {
         private const int RichHermesHistoryMessageThreshold = 120;
         private const int HermesCompletionPollMs = 2000;
+        private const int HermesInactivityTimeoutMs = 5 * 60 * 1000;
         private const int HermesCompletionMaxWaitMs = 30 * 60 * 1000;
 
         private readonly IAiClient _aiClient;
@@ -43,6 +49,7 @@ namespace NeonCompanion.Runtime.Chat
             public System.Text.StringBuilder reasoning;
             public bool active;
             public DateTime startTime;
+            public DateTime lastActivityTime;
             public bool usageBaselineKnown;
             public int baselineOutput;
             public int baselineTotal;
@@ -1281,6 +1288,7 @@ namespace NeonCompanion.Runtime.Chat
             stream.lastError = null;
             stream.pendingUserContent = message;
             stream.interrupted = false;
+            stream.lastActivityTime = DateTime.UtcNow;
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             stream.complete = completion;
 
@@ -1352,6 +1360,7 @@ namespace NeonCompanion.Runtime.Chat
                     stream.lastError = null;
                     stream.pendingUserContent = message;
                     stream.interrupted = false;
+                    stream.lastActivityTime = DateTime.UtcNow;
                     stream.complete = completion;
 
                     if (stream.viewModel != null && stream.viewModel.Messages != null &&
@@ -1412,14 +1421,38 @@ namespace NeonCompanion.Runtime.Chat
 
             while (true)
             {
+                DateTime now = DateTime.UtcNow;
+                if (stream != null && stream.lastActivityTime != default(DateTime) &&
+                    (now - stream.lastActivityTime).TotalMilliseconds >= HermesInactivityTimeoutMs)
+                {
+                    NeonLogger.LogWarning("[Hermes] No generation activity for " +
+                        (HermesInactivityTimeoutMs / 60000) + " minutes; reconciling and interrupting stale session " + sessionId);
+
+                    if (await TryReconcileCompletedHermesSessionAsync(sessionId, stream))
+                        return;
+
+                    try { await _chatTransport.Interrupt(sessionId); }
+                    catch (Exception ex) { NeonLogger.LogWarning("[Hermes] Stale session interrupt failed: " + ex.Message); }
+
+                    FinalizeTimedOutHermesStream(stream);
+                    throw new HermesGenerationStalledException(LocalizationExtensions.Get(
+                        "chat.hermes.inactivity_timeout",
+                        "Hermes stopped responding. The stale generation was cancelled."));
+                }
+
                 int delayMs = HermesCompletionPollMs;
-                double remainingMs = (deadline - DateTime.UtcNow).TotalMilliseconds;
+                double remainingMs = (deadline - now).TotalMilliseconds;
                 if (remainingMs <= 0)
                 {
                     NeonLogger.LogWarning("[Hermes] Generation timed out after " + (HermesCompletionMaxWaitMs / 60000) + " minutes");
                     if (await TryReconcileCompletedHermesSessionAsync(sessionId, stream))
                         return;
-                    throw new TimeoutException("Hermes generation timed out.");
+                    try { await _chatTransport.Interrupt(sessionId); }
+                    catch (Exception ex) { NeonLogger.LogWarning("[Hermes] Maximum-time interrupt failed: " + ex.Message); }
+                    FinalizeTimedOutHermesStream(stream);
+                    throw new HermesGenerationStalledException(LocalizationExtensions.Get(
+                        "chat.hermes.max_timeout",
+                        "Hermes generation exceeded the maximum allowed time and was cancelled."));
                 }
                 if (remainingMs < delayMs)
                     delayMs = (int)remainingMs;
@@ -1641,6 +1674,7 @@ namespace NeonCompanion.Runtime.Chat
             s.buffer = new System.Text.StringBuilder();
             s.reasoning = new System.Text.StringBuilder();
             s.startTime = DateTime.UtcNow;
+            s.lastActivityTime = s.startTime;
             CaptureHermesUsageBaseline(sessionId, s);
             s.streamingMessage = new ChatMessage
             {
@@ -1689,6 +1723,41 @@ namespace NeonCompanion.Runtime.Chat
             stream.lastError = null;
             stream.pendingUserContent = null;
             stream.interrupted = false;
+            stream.lastActivityTime = default(DateTime);
+        }
+
+        private static void FinalizeTimedOutHermesStream(HermesStream stream)
+        {
+            if (stream == null)
+                return;
+
+            if (stream.streamingMessage != null)
+            {
+                stream.streamingMessage.responseTimeSeconds =
+                    (float)Math.Max(0, (DateTime.UtcNow - stream.startTime).TotalSeconds);
+
+                if (stream.streamingMessage.segments != null)
+                {
+                    for (int i = 0; i < stream.streamingMessage.segments.Count; i++)
+                    {
+                        ChatMessageSegment segment = stream.streamingMessage.segments[i];
+                        if (segment == null ||
+                            !string.Equals(segment.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase) ||
+                            !string.Equals(segment.status, "running", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        segment.status = "failed";
+                        if (string.IsNullOrEmpty(segment.details))
+                        {
+                            segment.details = LocalizationExtensions.Get(
+                                "chat.hermes.tool_timeout",
+                                "No completion event was received before the inactivity timeout.");
+                        }
+                    }
+                }
+            }
         }
 
         private static void CompleteInterruptedHermesStream(HermesStream stream)
@@ -1802,6 +1871,7 @@ namespace NeonCompanion.Runtime.Chat
         private void HandleHermesStreamStarted(string sessionId)
         {
             EnsureStreamingMessage(sessionId);
+            TouchHermesStream(sessionId);
             // A session began producing output — refresh the sidebar "working" indicator.
             RaiseSessionStatesChanged();
         }
@@ -1816,6 +1886,7 @@ namespace NeonCompanion.Runtime.Chat
                 return;
 
             s.buffer.Append(text);
+            s.lastActivityTime = DateTime.UtcNow;
             s.streamingMessage.content = s.buffer.ToString();
 
             // Also add as text segment for interleaved rendering with tool segments
@@ -1947,6 +2018,7 @@ namespace NeonCompanion.Runtime.Chat
                 s.streamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
 
             string status = update.status == ToolCallStatus.Running ? "running" : "complete";
+            s.lastActivityTime = DateTime.UtcNow;
             // The TUI/stdio gateway doesn't include an emoji in the payload, so leave it empty there
             // and let the UI derive a per-tool emoji client-side (ToolCallUiHelper.GetToolEmoji).
             // The API SSE gateway does send one — pass it through. Status is shown separately
@@ -2031,7 +2103,15 @@ namespace NeonCompanion.Runtime.Chat
             HermesStream s = GetStream(sessionId);
             if (s == null || !s.active || s.streamingMessage == null)
                 return;
+            s.lastActivityTime = DateTime.UtcNow;
             s.reasoning?.Append(text);
+        }
+
+        private void TouchHermesStream(string sessionId)
+        {
+            HermesStream stream = GetStream(sessionId);
+            if (stream != null)
+                stream.lastActivityTime = DateTime.UtcNow;
         }
 
         private void HandleHermesError(string sessionId, string error)

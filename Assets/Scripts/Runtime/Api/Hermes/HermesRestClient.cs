@@ -62,6 +62,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
     public class HermesRestClient
     {
+        private const int RequestTimeoutSeconds = 30;
         private string _baseUrl;
         private string _token;
 
@@ -110,6 +111,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             var url = _baseUrl + path;
             using (var request = UnityWebRequest.Get(url))
             {
+                request.timeout = RequestTimeoutSeconds;
                 ApplyHeaders(request);
                 var op = request.SendWebRequest();
                 while (!op.isDone)
@@ -130,6 +132,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             var url = _baseUrl + path;
             using (var request = UnityWebRequest.Delete(url))
             {
+                request.timeout = RequestTimeoutSeconds;
                 ApplyHeaders(request);
                 var op = request.SendWebRequest();
                 while (!op.isDone)

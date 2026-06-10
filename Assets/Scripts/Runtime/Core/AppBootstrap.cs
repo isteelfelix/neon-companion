@@ -69,7 +69,6 @@ namespace NeonCompanion.Runtime.Core
             var windowChrome = PlatformServiceFactory.CreateWindowChromeService(gameObject);
             var voiceService = PlatformServiceFactory.CreateVoiceService(gameObject);
 #if UNITY_ANDROID && !UNITY_EDITOR
-            AndroidPermissionHelper.RequestPermission(AndroidPermissionHelper.RECORD_AUDIO);
             AndroidPermissionHelper.RequestPermission(AndroidPermissionHelper.READ_EXTERNAL_STORAGE);
 #endif
 

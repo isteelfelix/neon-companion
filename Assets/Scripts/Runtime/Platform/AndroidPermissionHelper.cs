@@ -38,4 +38,39 @@ namespace NeonCompanion.Runtime.Platform
         public const string READ_EXTERNAL_STORAGE = "android.permission.READ_EXTERNAL_STORAGE";
         public const string WRITE_EXTERNAL_STORAGE = "android.permission.WRITE_EXTERNAL_STORAGE";
     }
+
+    public static class AndroidHapticFeedback
+    {
+        public static void Pulse()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                AndroidJavaObject activity;
+                using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                    activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+
+                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                {
+                    try
+                    {
+                        using (AndroidJavaObject window = activity.Call<AndroidJavaObject>("getWindow"))
+                        using (AndroidJavaObject decorView = window.Call<AndroidJavaObject>("getDecorView"))
+                        {
+                            decorView.Call<bool>("performHapticFeedback", 1);
+                        }
+                    }
+                    finally
+                    {
+                        activity.Dispose();
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[NeonCompanion] Android haptic feedback failed: " + ex.Message);
+            }
+#endif
+        }
+    }
 }

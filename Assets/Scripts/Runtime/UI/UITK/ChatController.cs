@@ -645,9 +645,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                     string.Equals(chat.CurrentSessionId, sendSid, StringComparison.Ordinal);
                 if (stillForeground)
                 {
-                    _d.MessageInput.value = composerText;
-                    _inputManager.QueueComposerHeightUpdate();
-                    RestorePendingComposerAttachments(pendingAttachments);
+                    if (!(ex is HermesGenerationStalledException))
+                    {
+                        _d.MessageInput.value = composerText;
+                        _inputManager.QueueComposerHeightUpdate();
+                        RestorePendingComposerAttachments(pendingAttachments);
+                    }
                     if (chat == null || chat.CurrentProvider == null || !chat.CurrentProvider.isEnabled)
                         _d.RenderMessages(null);
                     else

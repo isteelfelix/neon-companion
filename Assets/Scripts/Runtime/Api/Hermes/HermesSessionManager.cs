@@ -382,6 +382,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrEmpty(sessionId))
                 return;
 
+            string displaySessionId = DisplaySessionIdFor(sessionId);
             try
             {
                 await _gateway.Request<object>(
@@ -391,6 +392,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
             catch (Exception ex)
             {
                 Debug.LogWarning("[Hermes] Interrupt failed: " + ex.Message);
+            }
+            finally
+            {
+                SetBusy(displaySessionId, false);
+                SetAwaiting(displaySessionId, false);
             }
         }
 

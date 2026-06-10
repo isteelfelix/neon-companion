@@ -889,6 +889,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 OnVoiceRecordingStarted = OnVoiceRecordingStarted,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 AttachAssistantAudio = AttachAssistantAudio,
+                OnVoicePlaybackCompleted = ClearTtsBusyState,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetChatServiceSync = () => _chatService,
                 IsBound = () => _isBound,
@@ -1368,25 +1369,51 @@ namespace NeonCompanion.Runtime.UI.UITK
         // The clicked assistant message to attach the next synthesized clip to (headphones button).
         // Null means "the latest assistant message" (auto-TTS of a fresh response).
         private ChatMessage _ttsTargetMessage;
+        private ChatMessage _ttsBusyMessage;
 
         private void OnListenMessage(ChatMessage message)
         {
             if (message == null)
                 return;
 
+            if (_ttsBusyMessage != null || _voiceController.IsVoicePlaying)
+                return;
+
+            _ttsBusyMessage = message;
+            message.voiceOutputBusy = true;
+            RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
+
             // Already have a cached clip for this message → just replay it, no re-synthesis.
             if (!string.IsNullOrEmpty(message.audioPath) && System.IO.File.Exists(message.audioPath))
             {
-                _voiceController.PlayAudioFile(message.audioPath);
+                _voiceController.PlayAudioFile(message.audioPath, ClearTtsBusyState);
                 return;
             }
 
             string text = ChatMessageListRenderer.BuildMessageCopyText(message);
             if (string.IsNullOrWhiteSpace(text))
+            {
+                ClearTtsBusyState();
                 return;
+            }
 
             _ttsTargetMessage = message;
-            _voiceController.EnqueueVoiceResponse(text);
+            if (!_voiceController.EnqueueVoiceResponse(text))
+            {
+                _ttsTargetMessage = null;
+                ClearTtsBusyState();
+            }
+        }
+
+        private void ClearTtsBusyState()
+        {
+            if (_ttsBusyMessage == null)
+                return;
+
+            _ttsBusyMessage.voiceOutputBusy = false;
+            _ttsBusyMessage = null;
+            _ttsTargetMessage = null;
+            RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
         }
 
         private async Task EnsureVoicePipelineAsync(ChatService chat) => await _voiceController.EnsureVoicePipelineAsync(chat);

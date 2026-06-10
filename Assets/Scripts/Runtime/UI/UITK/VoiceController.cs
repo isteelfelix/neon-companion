@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
@@ -26,6 +27,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Action RefreshAvatarMotionState;
             /// <summary>(ttsAudioPath, durationSecs) — attach a synthesized clip to the latest assistant message.</summary>
             public Action<string, float> AttachAssistantAudio;
+            public Action OnVoicePlaybackCompleted;
             public Func<Task<ChatService>> GetChatServiceAsync;
             public Func<ChatService> GetChatServiceSync;
             public Func<bool> IsBound;
@@ -37,6 +39,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VoiceInputManager _voiceInputManager;
         private VoiceOutputManager _voiceOutputManager;
         private VoicePreviewPlayer _previewPlayer;
+        private VoicePreviewPlayer _messageAudioPlayer;
         private LipsyncController _lipsyncController;
         private ChatService _providerEventsChat;
         private bool _voiceBoundToChat;
@@ -53,6 +56,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _previewText;
         private float _previewDurationSecs;
         private bool _previewPlaying;
+        private bool _previewTranscribing;
+        private bool _previewTranscriptionFailed;
+        private int _previewLoadingFrame;
+        private IVisualElementScheduledItem _previewLoadingSchedule;
+        private readonly HashSet<string> _discardedPreviewPaths = new HashSet<string>();
+        private Action _audioFilePlaybackCompleted;
 
         public bool IsVoicePlaying => _isVoicePlaying;
         public bool IsVoiceRecording => _isVoiceRecording;
@@ -133,10 +142,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _voiceInputManager.Initialize(_voiceService, _d.MicButton,
                     _d.IsVoiceEnabledBySettings, _d.OnVoiceRecordingStarted);
                 _voiceInputManager.OnVoiceMessage += HandleVoiceMessage;
+                _voiceInputManager.OnVoicePreviewReady += HandleVoicePreviewReady;
+                _voiceInputManager.OnTranscriptionFailed += HandleTranscriptionFailed;
             }
 
             if (_previewPlayer == null)
                 _previewPlayer = _d.gameObject.AddComponent<VoicePreviewPlayer>();
+            if (_messageAudioPlayer == null)
+                _messageAudioPlayer = _d.gameObject.AddComponent<VoicePreviewPlayer>();
 
             if (_lipsyncController == null)
             {
@@ -210,6 +223,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_voiceInputManager != null)
             {
                 _voiceInputManager.OnVoiceMessage -= HandleVoiceMessage;
+                _voiceInputManager.OnVoicePreviewReady -= HandleVoicePreviewReady;
+                _voiceInputManager.OnTranscriptionFailed -= HandleTranscriptionFailed;
                 UnityEngine.Object.Destroy(_voiceInputManager);
                 _voiceInputManager = null;
             }
@@ -245,9 +260,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             _voiceOutputManager?.StopSpeakingAndClear();
         }
 
-        internal void EnqueueVoiceResponse(string text)
+        internal bool EnqueueVoiceResponse(string text)
         {
-            _voiceOutputManager?.EnqueueResponse(text);
+            if (_voiceOutputManager == null || string.IsNullOrWhiteSpace(text))
+                return false;
+
+            _voiceOutputManager.EnqueueResponse(text);
+            return true;
         }
 
         private void HandleResponseAudioReady(string path, float durationSecs)
@@ -256,15 +275,60 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         /// <summary>Play a WAV file (used by chat voice bubbles for replay).</summary>
-        internal void PlayAudioFile(string wavPath)
+        internal void PlayAudioFile(string wavPath, Action onComplete = null)
         {
-            if (_previewPlayer != null && !string.IsNullOrEmpty(wavPath))
-                _previewPlayer.Play(wavPath);
+            if (_messageAudioPlayer == null || string.IsNullOrEmpty(wavPath))
+            {
+                onComplete?.Invoke();
+                return;
+            }
+
+            Action previousCompletion = _audioFilePlaybackCompleted;
+            _audioFilePlaybackCompleted = null;
+            previousCompletion?.Invoke();
+
+            _audioFilePlaybackCompleted = onComplete;
+            _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
+            _messageAudioPlayer.OnPlaybackComplete += HandleAudioFilePlaybackComplete;
+            _messageAudioPlayer.Play(wavPath);
+        }
+
+        private void HandleAudioFilePlaybackComplete()
+        {
+            if (_messageAudioPlayer != null)
+                _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
+
+            Action completed = _audioFilePlaybackCompleted;
+            _audioFilePlaybackCompleted = null;
+            completed?.Invoke();
         }
 
         // ============================================================
         // Voice preview (composer)
         // ============================================================
+
+        private void HandleVoicePreviewReady(string wavPath, float durationSecs)
+        {
+            if (string.IsNullOrEmpty(wavPath))
+                return;
+
+            if (_previewBar != null &&
+                !string.IsNullOrEmpty(_previewWavPath) &&
+                !string.Equals(_previewWavPath, wavPath, StringComparison.Ordinal))
+            {
+                if (_previewTranscribing)
+                    _discardedPreviewPaths.Add(_previewWavPath);
+                else
+                    DeletePreviewFile(_previewWavPath);
+            }
+
+            _previewWavPath = wavPath;
+            _previewDurationSecs = durationSecs;
+            _previewText = "";
+            _previewTranscribing = true;
+            _previewTranscriptionFailed = false;
+            ShowVoicePreview();
+        }
 
         private void HandleVoiceMessage(string text, string wavPath)
         {
@@ -276,28 +340,57 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            _previewText       = text;
-            _previewWavPath    = wavPath;
-            _previewDurationSecs = 0f;
-            // Try to read duration from file size (44-byte WAV header, 16-bit mono 16kHz).
-            try
+            if (_discardedPreviewPaths.Remove(wavPath))
             {
-                long fileSize = new System.IO.FileInfo(wavPath).Length;
-                long dataSamples = (fileSize - 44) / 2;
-                _previewDurationSecs = dataSamples / 16000f;
+                DeletePreviewFile(wavPath);
+                return;
             }
-            catch { }
 
-            ShowVoicePreview();
+            if (_previewBar == null ||
+                !string.Equals(_previewWavPath, wavPath, StringComparison.Ordinal))
+            {
+                if (_d.ComposerPreviews == null && _d.SendVoiceMessageAsync != null)
+                    _ = _d.SendVoiceMessageAsync(text, wavPath);
+                return;
+            }
+
+            _previewText = text;
+            _previewTranscribing = false;
+            _previewTranscriptionFailed = false;
+            RefreshPreviewTextState();
+        }
+
+        private void HandleTranscriptionFailed(string wavPath)
+        {
+            if (_discardedPreviewPaths.Remove(wavPath))
+            {
+                DeletePreviewFile(wavPath);
+                return;
+            }
+
+            if (_previewBar == null ||
+                !string.Equals(_previewWavPath, wavPath, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _previewText = "";
+            _previewTranscribing = false;
+            _previewTranscriptionFailed = true;
+            RefreshPreviewTextState();
         }
 
         private void ShowVoicePreview()
         {
             if (_d.ComposerPreviews == null)
             {
-                // No UI parent — fall back to direct send.
-                if (_d.SendVoiceMessageAsync != null)
+                // No UI parent — wait for STT, then fall back to direct send.
+                if (!_previewTranscribing &&
+                    !_previewTranscriptionFailed &&
+                    _d.SendVoiceMessageAsync != null)
+                {
                     _ = _d.SendVoiceMessageAsync(_previewText, _previewWavPath);
+                }
                 return;
             }
 
@@ -306,12 +399,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             string text = _previewText;
             string path = _previewWavPath;
             float durationSecs = _previewDurationSecs;
+            bool transcribing = _previewTranscribing;
+            bool transcriptionFailed = _previewTranscriptionFailed;
 
             HideVoicePreview();
 
             _previewText = text;
             _previewWavPath = path;
             _previewDurationSecs = durationSecs;
+            _previewTranscribing = transcribing;
+            _previewTranscriptionFailed = transcriptionFailed;
 
             _previewBar = new VisualElement();
             _previewBar.name = "voice-preview-bar";
@@ -342,6 +439,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewTextLabel = new Label(_previewText);
             _previewTextLabel.AddToClassList("voice-preview__text");
             _previewBar.Add(_previewTextLabel);
+            RefreshPreviewTextState();
 
             // ── Spacer ───────────────────────────────────────────────
             var spacer = new VisualElement();
@@ -367,6 +465,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void HideVoicePreview()
         {
+            StopPreviewLoadingAnimation();
+
             if (_previewPlayer != null)
             {
                 _previewPlayer.Stop();
@@ -387,6 +487,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewWavPath      = "";
             _previewText         = "";
             _previewDurationSecs = 0f;
+            _previewTranscribing = false;
+            _previewTranscriptionFailed = false;
         }
 
         private void OnPreviewPlayClicked()
@@ -416,13 +518,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnPreviewCancelClicked()
         {
             string pathToDelete = _previewWavPath;
+            if (_previewTranscribing && !string.IsNullOrEmpty(pathToDelete))
+                _discardedPreviewPaths.Add(pathToDelete);
             HideVoicePreview();
-
-            if (!string.IsNullOrEmpty(pathToDelete))
-            {
-                try { System.IO.File.Delete(pathToDelete); }
-                catch { }
-            }
+            DeletePreviewFile(pathToDelete);
         }
 
         /// <summary>
@@ -435,6 +534,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_previewBar == null)
                 return false;
 
+            if (_previewTranscribing || _previewTranscriptionFailed)
+                return true;
+
             string text = _previewText;
             string path = _previewWavPath;
             HideVoicePreview();
@@ -442,6 +544,63 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.SendVoiceMessageAsync != null)
                 _ = _d.SendVoiceMessageAsync(text, path);
             return true;
+        }
+
+        private void RefreshPreviewTextState()
+        {
+            if (_previewTextLabel == null)
+                return;
+
+            StopPreviewLoadingAnimation();
+            _previewTextLabel.EnableInClassList("voice-preview__text--loading", _previewTranscribing);
+            _previewTextLabel.EnableInClassList("voice-preview__text--error", _previewTranscriptionFailed);
+
+            if (_previewTranscribing)
+            {
+                _previewLoadingFrame = 0;
+                AdvancePreviewLoadingText();
+                _previewLoadingSchedule = _previewTextLabel.schedule
+                    .Execute(AdvancePreviewLoadingText)
+                    .Every(350);
+            }
+            else if (_previewTranscriptionFailed)
+            {
+                _previewTextLabel.text = LocalizationExtensions.Get(
+                    "voice.transcription.failed",
+                    "Не удалось распознать речь");
+            }
+            else
+            {
+                _previewTextLabel.text = _previewText;
+            }
+        }
+
+        private void AdvancePreviewLoadingText()
+        {
+            if (_previewTextLabel == null || !_previewTranscribing)
+                return;
+
+            _previewLoadingFrame = (_previewLoadingFrame % 3) + 1;
+            string label = LocalizationExtensions.Get("voice.transcription.loading", "Распознаём речь");
+            _previewTextLabel.text = label + new string('.', _previewLoadingFrame);
+        }
+
+        private void StopPreviewLoadingAnimation()
+        {
+            if (_previewLoadingSchedule != null)
+            {
+                _previewLoadingSchedule.Pause();
+                _previewLoadingSchedule = null;
+            }
+        }
+
+        private static void DeletePreviewFile(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            try { System.IO.File.Delete(path); }
+            catch { }
         }
 
         private void UpdatePreviewPlayIcon()
@@ -525,6 +684,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _isVoicePlaying = false;
             _d.RefreshAvatarMotionState?.Invoke();
+            _d.OnVoicePlaybackCompleted?.Invoke();
         }
 
         private void HandleVoiceRecordingStarted()

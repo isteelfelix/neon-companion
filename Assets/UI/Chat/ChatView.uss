@@ -383,6 +383,11 @@
     visibility: visible;
 }
 
+.transcript__bubble-actions--busy {
+    opacity: 1;
+    visibility: visible;
+}
+
 .transcript__bubble-actions > Button {
     width: 16px;
     height: 16px;
@@ -403,6 +408,14 @@
     background-color: rgba(0, 0, 0, 0.8);
     color: var(--text-0);
     -unity-background-image-tint-color: var(--text-0);
+}
+
+.transcript__bubble-actions > .voice-output-button--busy {
+    background-color: var(--accent);
+    color: rgb(255, 255, 255);
+    font-size: 9px;
+    -unity-text-align: middle-center;
+    padding: 0;
 }
 
 .transcript__meta {
@@ -1055,6 +1068,10 @@
     color: var(--accent);
     transition-property: opacity;
     transition-duration: 0.6s;
+}
+
+.tool-entry__status--failed {
+    color: rgb(255, 84, 84);
 }
 
 .tool-entry__status--done {
@@ -2094,6 +2111,14 @@
     -unity-text-overflow-position: end;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.voice-preview__text--loading {
+    color: var(--accent);
+}
+
+.voice-preview__text--error {
+    color: rgb(239, 171, 86);
 }
 
 .voice-preview__cancel {

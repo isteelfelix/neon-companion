@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Platform;
 using UnityEngine;
 using UnityEngine.Android;
 using UnityEngine.UIElements;
@@ -19,6 +20,9 @@ namespace NeonCompanion.Runtime.Voice
         private bool _pulseGrowing = true;
         private float _pulseOpacity = 1f;
         private bool _isHolding;
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private bool _permissionRequestPending;
+#endif
 
         // One entry per completed recording, in order, so each transcription result is paired
         // with its own WAV file (a single shared field would be clobbered by back-to-back records).
@@ -28,6 +32,8 @@ namespace NeonCompanion.Runtime.Voice
 
         public event Action OnRecordingStarted;
         public event Action OnRecordingStopped;
+        public event Action<string, float> OnVoicePreviewReady;
+        public event Action<string> OnTranscriptionFailed;
 
         /// <summary>
         /// Fires when STT is done. (transcribedText, wavFilePath) — wavFilePath may be "" for
@@ -56,12 +62,18 @@ namespace NeonCompanion.Runtime.Voice
 
             if (_micButton != null)
             {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                // Touch input uses tap-to-toggle. A press/release pair is too short for useful
+                // microphone capture and can start and stop within the same rendered frame.
+                _micButton.clicked += OnAndroidMicClicked;
+#else
                 // Register in the TrickleDown (capture) phase: Button's built-in Clickable
                 // calls StopImmediatePropagation() in BubbleUp, which would otherwise eat
                 // these handlers and break press-and-hold.
                 _micButton.RegisterCallback<PointerDownEvent>(OnMicPointerDown, TrickleDown.TrickleDown);
                 _micButton.RegisterCallback<PointerUpEvent>(OnMicPointerUp, TrickleDown.TrickleDown);
                 _micButton.RegisterCallback<PointerCaptureOutEvent>(OnMicPointerCaptureOut);
+#endif
             }
 
             UpdateMicButtonState();
@@ -77,9 +89,13 @@ namespace NeonCompanion.Runtime.Voice
 
             if (_micButton != null)
             {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                _micButton.clicked -= OnAndroidMicClicked;
+#else
                 _micButton.UnregisterCallback<PointerDownEvent>(OnMicPointerDown, TrickleDown.TrickleDown);
                 _micButton.UnregisterCallback<PointerUpEvent>(OnMicPointerUp, TrickleDown.TrickleDown);
                 _micButton.UnregisterCallback<PointerCaptureOutEvent>(OnMicPointerCaptureOut);
+#endif
             }
         }
 
@@ -108,6 +124,60 @@ namespace NeonCompanion.Runtime.Voice
         {
             UpdateMicButtonState();
         }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private void OnAndroidMicClicked()
+        {
+            if (_voiceService == null || _micButton == null)
+                return;
+
+            if (!_voiceService.IsAvailable || !(_isVoiceEnabled?.Invoke() ?? false))
+            {
+                NeonLogger.Log("Voice input is disabled by settings or unavailable backend.");
+                return;
+            }
+
+            if (IsRecording)
+            {
+                StopRecording();
+                return;
+            }
+
+            if (Permission.HasUserAuthorizedPermission(Permission.Microphone))
+            {
+                StartRecording();
+                return;
+            }
+
+            RequestMicrophonePermissionAndStart();
+        }
+
+        private void RequestMicrophonePermissionAndStart()
+        {
+            if (_permissionRequestPending)
+                return;
+
+            _permissionRequestPending = true;
+            PermissionCallbacks callbacks = new PermissionCallbacks();
+            callbacks.PermissionGranted += permissionName =>
+            {
+                _permissionRequestPending = false;
+                if (permissionName == Permission.Microphone &&
+                    _voiceService != null &&
+                    !IsRecording &&
+                    (_isVoiceEnabled?.Invoke() ?? false))
+                {
+                    StartRecording();
+                }
+            };
+            callbacks.PermissionDenied += permissionName =>
+            {
+                _permissionRequestPending = false;
+                NeonLogger.LogWarning("Microphone permission denied: " + permissionName);
+            };
+            Permission.RequestUserPermission(Permission.Microphone, callbacks);
+        }
+#endif
 
         // Hold-to-record: press starts capture, release stops and ships it.
         private void OnMicPointerDown(PointerDownEvent evt)
@@ -161,13 +231,23 @@ namespace NeonCompanion.Runtime.Voice
             bool started = _voiceService.IsRecording;
             UpdateMicVisual(started);
             if (started)
+            {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                AndroidHapticFeedback.Pulse();
+#endif
                 OnRecordingStarted?.Invoke();
+            }
         }
 
         private void StopRecording()
         {
+            bool wasRecording = _voiceService.IsRecording;
             _voiceService.StopRecording();
             UpdateMicVisual(false);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (wasRecording)
+                AndroidHapticFeedback.Pulse();
+#endif
             OnRecordingStopped?.Invoke();
         }
 
@@ -187,6 +267,7 @@ namespace NeonCompanion.Runtime.Voice
         private void HandleRecordingComplete(string wavPath, float durationSecs)
         {
             _pendingVoicePaths.Enqueue(wavPath ?? "");
+            OnVoicePreviewReady?.Invoke(wavPath ?? "", durationSecs);
         }
 
         private void HandleSpeechRecognized(string text)
@@ -204,6 +285,8 @@ namespace NeonCompanion.Runtime.Voice
             // a preview or send directly (based on whether path is non-empty).
             if (!string.IsNullOrWhiteSpace(text))
                 OnVoiceMessage?.Invoke(text.Trim(), path);
+            else
+                OnTranscriptionFailed?.Invoke(path);
         }
 
         private void UpdateMicButtonState()

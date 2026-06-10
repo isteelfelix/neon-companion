@@ -430,25 +430,45 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             // visible height at 140px and provides the scrollbar. Floor at the min height only.
             float target = Mathf.Max(size.y + ComposerInputVerticalPadding, ComposerInputMinHeight);
             if (_composerInputHeight > 0f && Mathf.Abs(_composerInputHeight - target) < 0.5f)
+            {
+                QueueComposerScrollSync(false);
                 return;
+            }
 
             _composerInputHeight = target;
             field.style.height = target;
             textEl.style.minHeight = target;
 
-            // When the draft grows past the cap, keep the newest line visible (caret-follow), since a
-            // ScrollView does not auto-track a TextField caret. Height only changes when lines are
-            // added/removed, so this won't fight the user scrolling up to review same-height text.
-            if (_composerScroll != null)
+            QueueComposerScrollSync(true);
+        }
+
+        private void QueueComposerScrollSync(bool followOverflow)
+        {
+            var scroll = _composerScroll;
+            if (scroll == null)
+                return;
+
+            // Wait for the resized TextField and ScrollView viewport to finish layout. A stale
+            // bottom offset must be cleared when the draft becomes short enough to fit, otherwise
+            // the first line remains clipped even though no scrollbar is needed.
+            scroll.schedule.Execute(() =>
             {
-                var scroll = _composerScroll;
-                float bottom = target;
-                scroll.schedule.Execute(() =>
-                {
-                    if (scroll.panel != null)
-                        scroll.scrollOffset = new Vector2(0f, bottom);
-                }).StartingIn(0);
-            }
+                if (scroll.panel == null)
+                    return;
+
+                float viewportHeight = scroll.contentViewport != null
+                    ? scroll.contentViewport.resolvedStyle.height
+                    : scroll.contentRect.height;
+                float contentHeight = scroll.contentContainer != null
+                    ? scroll.contentContainer.resolvedStyle.height
+                    : _composerInputHeight;
+                float maxScroll = Mathf.Max(0f, contentHeight - viewportHeight);
+
+                if (maxScroll <= 0.5f)
+                    scroll.scrollOffset = Vector2.zero;
+                else if (followOverflow)
+                    scroll.scrollOffset = new Vector2(0f, maxScroll);
+            }).StartingIn(0);
         }
 
         private TextElement GetComposerTextElement(TextField field)
