@@ -1,6 +1,6 @@
 # 11_Changelog.md
 
-## [Unreleased]
+## [0.4.0] - 2026-06-10
 
 ### Added
 - **YoRHa 2B animated avatar** — added a built-in pixel-art avatar with GIF-derived motion clips for idle, thinking, talking, listening, smile, and confused states, plus static/animated gallery entries and localized persona metadata.
