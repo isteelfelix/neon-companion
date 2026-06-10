@@ -14,6 +14,7 @@ namespace NeonCompanion.Runtime.Voice
         private Func<bool> _isUserRecording;
         private Func<bool> _shouldAutoVoice;
         private bool _isConsuming;
+        private string _activeResponse;
 
         public event Action<string> OnPlaybackStarted;
         public event Action OnPlaybackCompleted;
@@ -29,18 +30,49 @@ namespace NeonCompanion.Runtime.Voice
             _shouldAutoVoice = shouldAutoVoice;
 
             if (_voiceService != null)
+            {
+                _voiceService.OnPlaybackStarted += HandlePlaybackStarted;
                 _voiceService.OnSpeechAudioReady += HandleSpeechAudioReady;
+            }
         }
 
         private void OnDestroy()
         {
             if (_voiceService != null)
+            {
+                _voiceService.OnPlaybackStarted -= HandlePlaybackStarted;
                 _voiceService.OnSpeechAudioReady -= HandleSpeechAudioReady;
+            }
+        }
+
+        private void HandlePlaybackStarted()
+        {
+            OnPlaybackStarted?.Invoke(_activeResponse ?? string.Empty);
         }
 
         private void HandleSpeechAudioReady(string path, float durationSecs)
         {
             OnResponseAudioReady?.Invoke(path, durationSecs);
+        }
+
+        public VoicePlaybackState GetPlaybackState(string audioPath)
+        {
+            ISeekableVoicePlayback seekable = _voiceService as ISeekableVoicePlayback;
+            return seekable != null
+                ? seekable.GetPlaybackState(audioPath)
+                : new VoicePlaybackState();
+        }
+
+        public bool TogglePlayback(string audioPath)
+        {
+            ISeekableVoicePlayback seekable = _voiceService as ISeekableVoicePlayback;
+            return seekable != null && seekable.TogglePlayback(audioPath);
+        }
+
+        public bool SeekPlayback(string audioPath, float normalized)
+        {
+            ISeekableVoicePlayback seekable = _voiceService as ISeekableVoicePlayback;
+            return seekable != null && seekable.SeekPlayback(audioPath, normalized);
         }
 
         public void BindChat(ChatService chatService)
@@ -102,7 +134,7 @@ namespace NeonCompanion.Runtime.Voice
                     }
 
                     var next = _queue.Dequeue();
-                    OnPlaybackStarted?.Invoke(next);
+                    _activeResponse = next;
 
                     var tcs = new TaskCompletionSource<bool>();
 
@@ -110,7 +142,9 @@ namespace NeonCompanion.Runtime.Voice
                     _voiceService.OnPlaybackComplete += Complete;
                     _voiceService.Speak(next);
 
-                    var timeoutTask = Task.Delay(15000);
+                    // Covers synthesis plus full playback, including user pause. Backend HTTP
+                    // requests keep their own shorter timeout; this is only a final stuck guard.
+                    var timeoutTask = Task.Delay(30 * 60 * 1000);
                     var doneTask = await Task.WhenAny(tcs.Task, timeoutTask);
                     _voiceService.OnPlaybackComplete -= Complete;
 
@@ -124,10 +158,12 @@ namespace NeonCompanion.Runtime.Voice
                         _voiceService.StopSpeaking();
 
                     OnPlaybackCompleted?.Invoke();
+                    _activeResponse = null;
                 }
             }
             finally
             {
+                _activeResponse = null;
                 _isConsuming = false;
             }
         }

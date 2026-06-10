@@ -166,6 +166,7 @@ namespace NeonCompanion.Runtime.Platform
 
 #pragma warning disable 0067
         public event System.Action<string> OnSpeechRecognized;
+        public event System.Action OnPlaybackStarted;
         public event System.Action OnPlaybackComplete;
         public event System.Action<string, float> OnRecordingComplete;
         public event System.Action<string, float> OnSpeechAudioReady;

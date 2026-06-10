@@ -24,7 +24,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             // If a voice preview is active in the composer, this sends it and returns true,
             // so the standard send button doubles as the voice-message send.
-            public Func<bool> TrySendVoicePreview;
+            public Func<string, bool> TrySendVoicePreview;
 
             // UI elements
             public TextField MessageInput;
@@ -74,7 +74,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Sounds (U-40)
             public Action PlayNotificationSound;
             // Voice bubble replay
-            public Action<string> PlayAudioFile;
+            public Action<string> ToggleAudioFile;
+            public Action<string, float> SeekAudioFile;
+            public Func<string, VoicePlaybackState> GetAudioPlaybackState;
         }
 
         // QueuedMessage extracted to Models/Chat/QueuedMessage.cs
@@ -199,7 +201,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 i => _selectionManager != null && _selectionManager.IsIndexSelected(i),
                 i => _selectionManager?.ToggleSelection(i),
                 () => { _ = StartNewSessionAsync(); },
-                _d.PlayAudioFile);
+                _d.ToggleAudioFile,
+                _d.SeekAudioFile,
+                _d.GetAudioPlaybackState);
             _editController.SetMessageListRenderer(_messageListRenderer);
         }
 
@@ -466,7 +470,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         public async Task SendCurrentMessageAsync()
         {
             // The standard send button also sends an active voice preview (no separate button).
-            if (_d.TrySendVoicePreview != null && _d.TrySendVoicePreview())
+            string currentComposerText = _inputManager != null
+                ? _inputManager.CurrentText
+                : (_d.MessageInput != null ? _d.MessageInput.value : string.Empty);
+            if (_d.TrySendVoicePreview != null && _d.TrySendVoicePreview(currentComposerText))
                 return;
 
             _notifications.MarkRead();

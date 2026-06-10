@@ -24,6 +24,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             /// <summary>(transcribedText, wavFilePath) — sends the voice message to the chat. Returns true if accepted.</summary>
             public Func<string, string, Task<bool>> SendVoiceMessageAsync;
             public Action OnVoiceRecordingStarted;
+            public Action OnVoicePlaybackStarted;
             public Action RefreshAvatarMotionState;
             /// <summary>(ttsAudioPath, durationSecs) — attach a synthesized clip to the latest assistant message.</summary>
             public Action<string, float> AttachAssistantAudio;
@@ -140,7 +141,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _voiceInputManager = _d.gameObject.AddComponent<VoiceInputManager>();
                 _voiceInputManager.Initialize(_voiceService, _d.MicButton,
-                    _d.IsVoiceEnabledBySettings, _d.OnVoiceRecordingStarted);
+                    _d.IsVoiceEnabledBySettings, CanStartVoiceRecording, _d.OnVoiceRecordingStarted);
                 _voiceInputManager.OnVoiceMessage += HandleVoiceMessage;
                 _voiceInputManager.OnVoicePreviewReady += HandleVoicePreviewReady;
                 _voiceInputManager.OnTranscriptionFailed += HandleTranscriptionFailed;
@@ -293,6 +294,61 @@ namespace NeonCompanion.Runtime.UI.UITK
             _messageAudioPlayer.Play(wavPath);
         }
 
+        internal void ToggleMessageAudio(string audioPath)
+        {
+            if (_messageAudioPlayer == null || string.IsNullOrEmpty(audioPath))
+                return;
+
+            if (_voiceOutputManager != null && _voiceOutputManager.TogglePlayback(audioPath))
+                return;
+
+            VoicePlaybackState state = _messageAudioPlayer.GetState(audioPath);
+            if (!state.IsCurrent)
+            {
+                Action previousCompletion = _audioFilePlaybackCompleted;
+                _audioFilePlaybackCompleted = null;
+                previousCompletion?.Invoke();
+            }
+
+            _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
+            _messageAudioPlayer.OnPlaybackComplete += HandleAudioFilePlaybackComplete;
+            _messageAudioPlayer.Toggle(audioPath);
+        }
+
+        internal void SeekMessageAudio(string audioPath, float normalized)
+        {
+            if (_messageAudioPlayer == null || string.IsNullOrEmpty(audioPath))
+                return;
+
+            if (_voiceOutputManager != null && _voiceOutputManager.SeekPlayback(audioPath, normalized))
+                return;
+
+            VoicePlaybackState state = _messageAudioPlayer.GetState(audioPath);
+            if (!state.IsCurrent)
+            {
+                Action previousCompletion = _audioFilePlaybackCompleted;
+                _audioFilePlaybackCompleted = null;
+                previousCompletion?.Invoke();
+            }
+
+            _messageAudioPlayer.OnPlaybackComplete -= HandleAudioFilePlaybackComplete;
+            _messageAudioPlayer.OnPlaybackComplete += HandleAudioFilePlaybackComplete;
+            _messageAudioPlayer.SeekNormalized(audioPath, normalized);
+        }
+
+        internal VoicePlaybackState GetMessageAudioState(string audioPath)
+        {
+            if (_voiceOutputManager != null)
+            {
+                VoicePlaybackState outputState = _voiceOutputManager.GetPlaybackState(audioPath);
+                if (outputState.IsCurrent)
+                    return outputState;
+            }
+            if (_messageAudioPlayer == null)
+                return new VoicePlaybackState();
+            return _messageAudioPlayer.GetState(audioPath);
+        }
+
         private void HandleAudioFilePlaybackComplete()
         {
             if (_messageAudioPlayer != null)
@@ -316,10 +372,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 !string.IsNullOrEmpty(_previewWavPath) &&
                 !string.Equals(_previewWavPath, wavPath, StringComparison.Ordinal))
             {
-                if (_previewTranscribing)
-                    _discardedPreviewPaths.Add(_previewWavPath);
-                else
-                    DeletePreviewFile(_previewWavPath);
+                // The composer supports one audio clip per message. Keep the existing preview
+                // and discard any late/programmatic second recording defensively.
+                _discardedPreviewPaths.Add(wavPath);
+                return;
             }
 
             _previewWavPath = wavPath;
@@ -328,6 +384,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewTranscribing = true;
             _previewTranscriptionFailed = false;
             ShowVoicePreview();
+            _voiceInputManager?.RefreshState();
         }
 
         private void HandleVoiceMessage(string text, string wavPath)
@@ -358,6 +415,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewTranscribing = false;
             _previewTranscriptionFailed = false;
             RefreshPreviewTextState();
+            _voiceInputManager?.RefreshState();
         }
 
         private void HandleTranscriptionFailed(string wavPath)
@@ -378,6 +436,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewTranscribing = false;
             _previewTranscriptionFailed = true;
             RefreshPreviewTextState();
+            _voiceInputManager?.RefreshState();
         }
 
         private void ShowVoicePreview()
@@ -489,6 +548,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewDurationSecs = 0f;
             _previewTranscribing = false;
             _previewTranscriptionFailed = false;
+            _voiceInputManager?.RefreshState();
         }
 
         private void OnPreviewPlayClicked()
@@ -529,21 +589,42 @@ namespace NeonCompanion.Runtime.UI.UITK
         /// returns true. Hides the preview first to avoid re-entry when the send re-runs the
         /// composer flow.
         /// </summary>
-        internal bool TrySendActivePreview()
+        internal bool TrySendActivePreview(string composerText)
         {
             if (_previewBar == null)
                 return false;
 
-            if (_previewTranscribing || _previewTranscriptionFailed)
+            string typedText = (composerText ?? string.Empty).Trim();
+            if (_previewTranscribing)
                 return true;
 
-            string text = _previewText;
+            if (_previewTranscriptionFailed && string.IsNullOrWhiteSpace(typedText))
+                return true;
+
+            string text = CombineVoiceMessageText(typedText, _previewText);
             string path = _previewWavPath;
             HideVoicePreview();
 
             if (_d.SendVoiceMessageAsync != null)
                 _ = _d.SendVoiceMessageAsync(text, path);
             return true;
+        }
+
+        private bool CanStartVoiceRecording()
+        {
+            return _previewBar == null && string.IsNullOrEmpty(_previewWavPath);
+        }
+
+        private static string CombineVoiceMessageText(string typedText, string transcription)
+        {
+            string typed = (typedText ?? string.Empty).Trim();
+            string voice = (transcription ?? string.Empty).Trim();
+
+            if (string.IsNullOrEmpty(typed))
+                return voice;
+            if (string.IsNullOrEmpty(voice))
+                return typed;
+            return typed + "\n\n" + voice;
         }
 
         private void RefreshPreviewTextState()
@@ -677,6 +758,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void HandleVoicePlaybackStarted(string _)
         {
             _isVoicePlaying = true;
+            _d.OnVoicePlaybackStarted?.Invoke();
             _d.RefreshAvatarMotionState?.Invoke();
         }
 

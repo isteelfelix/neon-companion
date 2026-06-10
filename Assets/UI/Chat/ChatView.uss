@@ -581,6 +581,13 @@
     scale: 1.1 1.1;
 }
 
+.mic-btn--audio-attached {
+    opacity: 0.45;
+    background-color: rgba(124, 122, 237, 0.12);
+    border-color: rgba(124, 122, 237, 0.35);
+    -unity-background-image-tint-color: var(--accent-text);
+}
+
 .composer--focused {
     border-color: var(--accent);
 }
@@ -2161,10 +2168,15 @@
 .voice-bubble {
     flex-direction: row;
     align-items: center;
+    min-width: 220px;
     margin-top: 6px;
     padding-top: 6px;
     border-top-width: 1px;
     border-top-color: rgba(124, 122, 237, 0.20);
+}
+
+.voice-bubble--playing {
+    border-top-color: var(--accent);
 }
 
 .voice-bubble__play {
@@ -2186,17 +2198,46 @@
     flex-shrink: 0;
 }
 
-.voice-bubble__mic {
-    width: 12px;
-    height: 12px;
-    min-width: 12px;
-    min-height: 12px;
-    -unity-background-image-tint-color: rgba(255, 255, 255, 0.55);
-    margin-right: 4px;
-    flex-shrink: 0;
+.voice-bubble--paused .voice-bubble__play {
+    background-color: var(--accent-2);
 }
 
-.voice-bubble__duration {
+.voice-bubble__timeline {
+    flex-grow: 1;
+    min-width: 150px;
+    flex-direction: column;
+}
+
+.voice-bubble__track {
+    position: relative;
+    height: 20px;
+    min-height: 20px;
+    justify-content: center;
+}
+
+.voice-bubble__track-line {
+    height: 5px;
+    min-height: 5px;
+    width: 100%;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.18);
+    overflow: hidden;
+}
+
+.voice-bubble__progress {
+    height: 5px;
+    width: 0%;
+    border-radius: 3px;
+    background-color: var(--accent-text);
+}
+
+.voice-bubble__time-row {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-top: -2px;
+}
+
+.voice-bubble__time {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.55);
 }

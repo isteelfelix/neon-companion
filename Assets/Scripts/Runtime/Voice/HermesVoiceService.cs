@@ -7,7 +7,7 @@ using UnityEngine.Networking;
 
 namespace NeonCompanion.Runtime.Voice
 {
-    public sealed class HermesVoiceService : MonoBehaviour, IVoiceService
+    public sealed class HermesVoiceService : MonoBehaviour, IVoiceService, ISeekableVoicePlayback
     {
         private string _hermesRestUrl;
         private string _apiKey;
@@ -18,6 +18,9 @@ namespace NeonCompanion.Runtime.Voice
         private string _activeDevice;
         private bool _isRecording;
         private bool _isSpeaking;
+        private bool _playbackPaused;
+        private string _activePlaybackPath;
+        private AudioClip _playbackClip;
         private Coroutine _playbackCoroutine;
         private Coroutine _vadCoroutine;
 
@@ -43,6 +46,7 @@ namespace NeonCompanion.Runtime.Voice
         public bool AutoStopOnSilence { get; set; } = true;
 
         public event Action<string> OnSpeechRecognized;
+        public event Action OnPlaybackStarted;
         public event Action OnPlaybackComplete;
         public event Action<string, float> OnRecordingComplete;
         public event Action<string, float> OnSpeechAudioReady;
@@ -85,7 +89,17 @@ namespace NeonCompanion.Runtime.Voice
                 _playbackCoroutine = null;
             }
             if (_audioSource != null)
+            {
                 _audioSource.Stop();
+                _audioSource.clip = null;
+            }
+            if (_playbackClip != null)
+            {
+                Destroy(_playbackClip);
+                _playbackClip = null;
+            }
+            _activePlaybackPath = null;
+            _playbackPaused = false;
             if (_recordingClip != null)
             {
                 Destroy(_recordingClip);
@@ -214,25 +228,80 @@ namespace NeonCompanion.Runtime.Voice
         {
             if (string.IsNullOrEmpty(text))
                 return;
-            if (_playbackCoroutine != null)
-                StopCoroutine(_playbackCoroutine);
+            if (_playbackCoroutine != null || _isSpeaking)
+                StopSpeaking();
             _playbackCoroutine = StartCoroutine(SpeakCoroutine(text));
         }
 
         public void StopSpeaking()
         {
+            bool hadPlayback = _playbackCoroutine != null || _isSpeaking;
             if (_playbackCoroutine != null)
             {
                 StopCoroutine(_playbackCoroutine);
                 _playbackCoroutine = null;
             }
             if (_audioSource != null)
+            {
                 _audioSource.Stop();
-            if (_isSpeaking)
+                _audioSource.clip = null;
+            }
+            if (_playbackClip != null)
+            {
+                Destroy(_playbackClip);
+                _playbackClip = null;
+            }
+            _playbackPaused = false;
+            _activePlaybackPath = null;
+            if (hadPlayback)
             {
                 _isSpeaking = false;
                 OnPlaybackComplete?.Invoke();
             }
+        }
+
+        public VoicePlaybackState GetPlaybackState(string audioPath)
+        {
+            bool isCurrent = !string.IsNullOrEmpty(audioPath) &&
+                             string.Equals(_activePlaybackPath, audioPath, StringComparison.Ordinal);
+            return new VoicePlaybackState
+            {
+                IsCurrent = isCurrent,
+                IsPlaying = isCurrent && _audioSource != null && _audioSource.isPlaying,
+                IsPaused = isCurrent && _playbackPaused,
+                IsLoading = false,
+                PositionSecs = isCurrent && _audioSource != null ? _audioSource.time : 0f,
+                DurationSecs = isCurrent && _playbackClip != null ? _playbackClip.length : 0f
+            };
+        }
+
+        public bool TogglePlayback(string audioPath)
+        {
+            if (_audioSource == null || _playbackClip == null ||
+                !string.Equals(_activePlaybackPath, audioPath, StringComparison.Ordinal))
+                return false;
+
+            if (_playbackPaused)
+            {
+                _playbackPaused = false;
+                _audioSource.UnPause();
+            }
+            else if (_audioSource.isPlaying)
+            {
+                _audioSource.Pause();
+                _playbackPaused = true;
+            }
+            return true;
+        }
+
+        public bool SeekPlayback(string audioPath, float normalized)
+        {
+            if (_audioSource == null || _playbackClip == null ||
+                !string.Equals(_activePlaybackPath, audioPath, StringComparison.Ordinal))
+                return false;
+
+            _audioSource.time = _playbackClip.length * Mathf.Clamp01(normalized);
+            return true;
         }
 
         // ============================================================
@@ -402,15 +471,27 @@ namespace NeonCompanion.Runtime.Voice
                                 AudioClip clip = DownloadHandlerAudioClip.GetContent(fileReq);
                                 if (clip != null)
                                 {
+                                    _playbackClip = clip;
+                                    _activePlaybackPath = filePath;
+                                    _playbackPaused = false;
+                                    _audioSource.clip = clip;
                                     // Hand the saved TTS file to the UI so it can attach a replayable
                                     // voice bubble to the assistant message (cached — no re-synthesis).
                                     OnSpeechAudioReady?.Invoke(filePath, clip.length);
                                     _isSpeaking = true;
-                                    _audioSource.PlayOneShot(clip);
+                                    _audioSource.Play();
+                                    OnPlaybackStarted?.Invoke();
                                     yield return null;
-                                    while (_audioSource != null && _audioSource.isPlaying)
+                                    while (_audioSource != null && (_audioSource.isPlaying || _playbackPaused))
                                         yield return null;
-                                    Destroy(clip);
+                                    _audioSource.clip = null;
+                                    if (_playbackClip == clip)
+                                    {
+                                        Destroy(_playbackClip);
+                                        _playbackClip = null;
+                                    }
+                                    _activePlaybackPath = null;
+                                    _playbackPaused = false;
                                 }
                             }
                             else

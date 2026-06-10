@@ -12,10 +12,12 @@ namespace NeonCompanion.Runtime.Voice
     public sealed class VoiceInputManager : MonoBehaviour
     {
         private const string MicRecordingClass = "mic-btn--recording";
+        private const string MicAudioAttachedClass = "mic-btn--audio-attached";
 
         private IVoiceService _voiceService;
         private Button _micButton;
         private Func<bool> _isVoiceEnabled;
+        private Func<bool> _canStartRecording;
         private Action _onRecordingStarted;
         private bool _pulseGrowing = true;
         private float _pulseOpacity = 1f;
@@ -45,11 +47,13 @@ namespace NeonCompanion.Runtime.Voice
             IVoiceService voiceService,
             Button micButton,
             Func<bool> isVoiceEnabled,
+            Func<bool> canStartRecording,
             Action onRecordingStarted)
         {
             _voiceService = voiceService;
             _micButton = micButton;
             _isVoiceEnabled = isVoiceEnabled;
+            _canStartRecording = canStartRecording;
             _onRecordingStarted = onRecordingStarted;
 
             if (_voiceService != null)
@@ -131,15 +135,15 @@ namespace NeonCompanion.Runtime.Voice
             if (_voiceService == null || _micButton == null)
                 return;
 
-            if (!_voiceService.IsAvailable || !(_isVoiceEnabled?.Invoke() ?? false))
-            {
-                NeonLogger.Log("Voice input is disabled by settings or unavailable backend.");
-                return;
-            }
-
             if (IsRecording)
             {
                 StopRecording();
+                return;
+            }
+
+            if (!CanStartRecording())
+            {
+                NeonLogger.Log("Voice input is disabled, unavailable, or the composer already has an audio preview.");
                 return;
             }
 
@@ -165,7 +169,7 @@ namespace NeonCompanion.Runtime.Voice
                 if (permissionName == Permission.Microphone &&
                     _voiceService != null &&
                     !IsRecording &&
-                    (_isVoiceEnabled?.Invoke() ?? false))
+                    CanStartRecording())
                 {
                     StartRecording();
                 }
@@ -185,9 +189,9 @@ namespace NeonCompanion.Runtime.Voice
             if (_voiceService == null || _micButton == null || IsRecording)
                 return;
 
-            if (!_voiceService.IsAvailable || !(_isVoiceEnabled?.Invoke() ?? false))
+            if (!CanStartRecording())
             {
-                NeonLogger.Log("Voice input is disabled by settings or unavailable backend.");
+                NeonLogger.Log("Voice input is disabled, unavailable, or the composer already has an audio preview.");
                 return;
             }
 
@@ -294,10 +298,37 @@ namespace NeonCompanion.Runtime.Voice
             if (_micButton == null)
                 return;
 
-            bool enabled = (_isVoiceEnabled?.Invoke() ?? false) && (_voiceService?.IsAvailable ?? false);
+            bool voiceEnabled = _isVoiceEnabled?.Invoke() ?? false;
+            bool serviceAvailable = _voiceService?.IsAvailable ?? false;
+            bool composerAllowsRecording = _canStartRecording?.Invoke() ?? true;
+            bool audioAttached = voiceEnabled && serviceAvailable && !composerAllowsRecording;
+            bool enabled = IsRecording || (voiceEnabled && serviceAvailable && composerAllowsRecording);
+            _micButton.EnableInClassList(MicAudioAttachedClass, audioAttached);
             _micButton.SetEnabled(enabled);
             if (!enabled)
+            {
                 UpdateMicVisual(false);
+                if (voiceEnabled && serviceAvailable && !composerAllowsRecording)
+                {
+                    _micButton.tooltip = LocalizationExtensions.Get(
+                        "voice.mic.audio_exists",
+                        "Remove the current audio recording before recording another one.");
+                }
+            }
+            else if (!IsRecording)
+            {
+                UpdateMicVisual(false);
+            }
+
+            if (audioAttached)
+                _micButton.style.opacity = 0.45f;
+        }
+
+        private bool CanStartRecording()
+        {
+            return (_isVoiceEnabled?.Invoke() ?? false) &&
+                   (_voiceService?.IsAvailable ?? false) &&
+                   (_canStartRecording?.Invoke() ?? true);
         }
 
         private void UpdateMicVisual(bool isRecording)

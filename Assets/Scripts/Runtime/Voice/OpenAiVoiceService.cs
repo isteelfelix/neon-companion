@@ -42,6 +42,7 @@ namespace NeonCompanion.Runtime.Voice
         public bool AutoStopOnSilence { get; set; } = true;
 
         public event Action<string> OnSpeechRecognized;
+        public event Action OnPlaybackStarted;
         public event Action OnPlaybackComplete;
         public event Action<string, float> OnRecordingComplete;
         // OpenAI TTS streams the clip without saving a file, so no cached bubble is produced here.
@@ -222,6 +223,7 @@ namespace NeonCompanion.Runtime.Voice
 
         public void StopSpeaking()
         {
+            bool hadPlayback = _playbackCoroutine != null || _isSpeaking;
             if (_playbackCoroutine != null)
             {
                 StopCoroutine(_playbackCoroutine);
@@ -229,7 +231,7 @@ namespace NeonCompanion.Runtime.Voice
             }
             if (_audioSource != null)
                 _audioSource.Stop();
-            if (_isSpeaking)
+            if (hadPlayback)
             {
                 _isSpeaking = false;
                 OnPlaybackComplete?.Invoke();
@@ -366,6 +368,7 @@ namespace NeonCompanion.Runtime.Voice
                     {
                         _isSpeaking = true;
                         _audioSource.PlayOneShot(clip);
+                        OnPlaybackStarted?.Invoke();
                         yield return null;
                         while (_audioSource != null && _audioSource.isPlaying)
                             yield return null;

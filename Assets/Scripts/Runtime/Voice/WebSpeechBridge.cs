@@ -48,6 +48,7 @@ namespace NeonCompanion.Runtime.Voice
         public bool AutoStopOnSilence { get; set; } = true;
 
         public event Action<string> OnSpeechRecognized;
+        public event Action OnPlaybackStarted;
         public event Action OnPlaybackComplete;
         // WebSpeechBridge transcribes directly in the browser/OS — no WAV file is captured.
 #pragma warning disable 0067
@@ -142,6 +143,7 @@ namespace NeonCompanion.Runtime.Voice
             _isSpeaking = true;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
+            OnPlaybackStarted?.Invoke();
             NeonWebSpeech_Speak(text, gameObject.name);
 #elif UNITY_ANDROID && !UNITY_EDITOR
             if (_androidTts == null)
@@ -153,6 +155,7 @@ namespace NeonCompanion.Runtime.Voice
             string utteranceId = Guid.NewGuid().ToString("N");
             _androidTts.Call<int>("speak", text, 0, null, utteranceId);
 #elif UNITY_IOS && !UNITY_EDITOR
+            OnPlaybackStarted?.Invoke();
             NeonSpeech_Speak(text, gameObject.name);
             Platform.iOS.iOSSpeechBridge.GetOrCreate(gameObject.name);
 #else
@@ -286,7 +289,10 @@ namespace NeonCompanion.Runtime.Voice
                 _bridge = bridge;
             }
 
-            public void onStart(string utteranceId) { }
+            public void onStart(string utteranceId)
+            {
+                _bridge.OnPlaybackStarted?.Invoke();
+            }
 
             public void onDone(string utteranceId)
             {

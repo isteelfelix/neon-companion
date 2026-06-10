@@ -124,7 +124,7 @@
 ## Голос и 3D (M2+)
 | # | Фича | Статус | Спринт | Заметки |
 |---|------|--------|--------|---------|
-| V-01 | Голосовой ввод/вывод | ✅ | M2 | Voice input/output fully implemented: VoiceInputManager, VoiceController, VoicePreviewPlayer, settings UI, chat audio attachments, HermesVoiceService + OpenAiVoiceService. VoiceOutputManager + LipsyncController removed as dead code (18d0e2b) |
+| V-01 | Голосовой ввод/вывод | ✅ | M2 | Voice input/output fully implemented: VoiceInputManager, VoiceController, VoicePreviewPlayer, settings UI, chat audio attachments, HermesVoiceService + OpenAiVoiceService. Composer supports one audio preview per message and mixed audio + typed text; chat audio bubbles support play/pause and seekable progress. VoiceOutputManager + LipsyncController removed as dead code (18d0e2b) |
 | V-02 | Lipsync | 📋 | M3 | Blocked on V-01 completion → ready to start. Depends on avatar motion system. |
 | V-03 | 3D аватары | 📋 | M3 | Deferred: 3D models not added to project yet |
 | V-04 | Desktop realtime avatar layer | 📋 | M2+ | |

@@ -700,7 +700,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             return new ChatController.Deps
             {
-                TrySendVoicePreview = () => _voiceController != null && _voiceController.TrySendActivePreview(),
+                TrySendVoicePreview = text => _voiceController != null && _voiceController.TrySendActivePreview(text),
                 MessageInput = _composerInput,
                 SendButton = _sendButton,
                 StopButton = _stopButton,
@@ -736,7 +736,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 OpenModelPickerAsync = () => _providersController.OpenModelPickerAsync(),
                 GetAvatarDisplayName = () => _avatarGalleryController.AvatarDisplayName(_avatarGalleryController.ActiveAvatarId),
                 PlayNotificationSound = PlayNotificationBeep,
-                PlayAudioFile = path => _voiceController.PlayAudioFile(path),
+                ToggleAudioFile = path => _voiceController.ToggleMessageAudio(path),
+                SeekAudioFile = (path, normalized) => _voiceController.SeekMessageAudio(path, normalized),
+                GetAudioPlaybackState = path => _voiceController.GetMessageAudioState(path),
                 SetCurrentSession = (id, title) => { _currentSessionId = id; _currentSessionTitle = title; }
             };
         }
@@ -887,6 +889,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ShouldAutoVoiceResponse = ShouldAutoVoiceResponse,
                 SendVoiceMessageAsync = SendVoiceMessageAsync,
                 OnVoiceRecordingStarted = OnVoiceRecordingStarted,
+                OnVoicePlaybackStarted = OnTtsPlaybackStarted,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 AttachAssistantAudio = AttachAssistantAudio,
                 OnVoicePlaybackCompleted = ClearTtsBusyState,
@@ -1380,8 +1383,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             _ttsBusyMessage = message;
-            message.voiceOutputBusy = true;
-            RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
 
             // Already have a cached clip for this message → just replay it, no re-synthesis.
             if (!string.IsNullOrEmpty(message.audioPath) && System.IO.File.Exists(message.audioPath))
@@ -1398,6 +1399,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _ttsTargetMessage = message;
+            message.voiceOutputBusy = true;
+            RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
             if (!_voiceController.EnqueueVoiceResponse(text))
             {
                 _ttsTargetMessage = null;
@@ -1413,6 +1416,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ttsBusyMessage.voiceOutputBusy = false;
             _ttsBusyMessage = null;
             _ttsTargetMessage = null;
+            RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
+        }
+
+        private void OnTtsPlaybackStarted()
+        {
+            if (_ttsBusyMessage == null || !_ttsBusyMessage.voiceOutputBusy)
+                return;
+
+            _ttsBusyMessage.voiceOutputBusy = false;
             RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
         }
 
@@ -1436,6 +1448,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 target.audioPath = audioPath;
                 target.audioDurationSecs = durationSecs;
+                target.voiceOutputBusy = false;
                 RenderMessages(messages);
                 return;
             }

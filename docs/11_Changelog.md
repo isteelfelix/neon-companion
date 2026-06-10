@@ -3,7 +3,8 @@
 ## [Unreleased]
 
 ### Added
-- **Voice operation feedback** — recorded WAV previews now appear in the composer immediately while STT is still transcribing; assistant headphones actions stay visibly busy during TTS generation/playback; Android recording start/stop uses light haptic feedback.
+- **Seekable voice bubbles** — cached user/assistant audio now has an animated playback timeline, elapsed/total time, drag/tap seeking, and a real play/pause toggle.
+- **Voice operation feedback** — recorded WAV previews now appear in the composer immediately while STT is still transcribing; assistant headphones actions animate while TTS audio is being prepared and return to normal when playback actually starts; Android recording start/stop uses light haptic feedback.
 - **Adaptive form factor detection** — `LayoutController` rewrite (577 lines): resolves Phone/Tablet/Desktop from physical width via `ConstantPhysicalSize` breakpoints. Phone: off-canvas drawer (rail) + fullscreen avatar overlay with scrim. Tablet/Desktop: `app--compact` / `app--narrow` sub-breakpoints, auto-hide avatar panel. Safe-area padding recomputed on every geometry change (rotation). `ff-phone` / `ff-tablet` / `ff-desktop` classes on app-root.
 - **PlatformLayoutAdapter removed** — all platform-adaptive layout logic consolidated into `LayoutController`. No more split between two classes.
 - **Localization via Resources** — JSON localization files moved from `StreamingAssets/` to `Resources/Localization/`. Uses `Resources.Load<TextAsset>()` (works synchronously on every platform, including inside Android APK where StreamingAssets files can't be read with `File.*`).
@@ -23,6 +24,7 @@
 - `SessionHistoryController`: `RerenderStatus()` for live status dot refresh without server round-trip.
 
 ### Fixed
+- **Voice composer allowed conflicting audio states** — the microphone now has an explicit dimmed/outlined disabled state while one audio preview is attached, preventing a second recording from replacing the first. Typed composer text is preserved and sent together with the voice transcription and the single audio bubble; typed text can also accompany audio when STT fails.
 - **Hermes session can appear active for 30 minutes after a lost completion event** — generation now tracks token/reasoning/tool activity and triggers a 5-minute inactivity watchdog. The client reconciles against REST history, interrupts only if the turn is still incomplete, clears stale busy state, stops the elapsed timer, and marks unfinished tool entries as failed. Hermes REST requests now have a 30-second timeout.
 - **Composer clips the first visible line** — composer scroll synchronization now clears stale vertical offset whenever the draft fits inside the viewport, while preserving bottom-follow only for genuinely overflowing text.
 - **Enabled provider missing after restart** — startup now restores the last used `activeProviderId`, derives and restores its backend, installs it into `ChatService`, and makes the main UI await this initialization before opening sessions. Provider resolution also falls back to an enabled provider for the current backend.

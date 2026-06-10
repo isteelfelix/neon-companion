@@ -5,6 +5,7 @@ using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.UI.UITK;
+using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UIElements;
@@ -28,7 +29,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Func<int, bool> _isIndexSelected;
         private readonly Action<int> _toggleSelection;
         private readonly Action _onNewSessionRequested;
-        private readonly Action<string> _playAudioFile;
+        private readonly Action<string> _toggleAudioFile;
+        private readonly Action<string, float> _seekAudioFile;
+        private readonly Func<string, VoicePlaybackState> _getAudioPlaybackState;
 
         internal VisualElement _transcriptContextRoot;
         private readonly Dictionary<string, VisualElement> _messageRowCache = new Dictionary<string, VisualElement>();
@@ -55,7 +58,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Func<int, bool> isIndexSelected,
             Action<int> toggleSelection,
             Action onNewSessionRequested,
-            Action<string> playAudioFile = null)
+            Action<string> toggleAudioFile = null,
+            Action<string, float> seekAudioFile = null,
+            Func<string, VoicePlaybackState> getAudioPlaybackState = null)
         {
             _messagesList = messagesList;
             _messageEditController = messageEditController;
@@ -68,7 +73,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _isIndexSelected = isIndexSelected;
             _toggleSelection = toggleSelection;
             _onNewSessionRequested = onNewSessionRequested;
-            _playAudioFile = playAudioFile;
+            _toggleAudioFile = toggleAudioFile;
+            _seekAudioFile = seekAudioFile;
+            _getAudioPlaybackState = getAudioPlaybackState;
         }
 
         internal void Render(IReadOnlyList<ChatMessage> messages)
@@ -317,7 +324,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 if (!selecting)
                     _messageRowCache.TryGetValue(renderKey, out row);
                 if (row == null)
-                    row = CreateMessageElement(message, ShowImageLightbox, _scrollToBottomCallback, _playAudioFile);
+                    row = CreateMessageElement(
+                        message,
+                        ShowImageLightbox,
+                        _scrollToBottomCallback,
+                        _toggleAudioFile,
+                        _seekAudioFile,
+                        _getAudioPlaybackState);
 
                 row.userData = i;
                 var bubbleForTag = row.Q<VisualElement>(className: "transcript__bubble");
@@ -380,6 +393,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     hash = AppendHash(hash, message.tokenCount);
                     hash = AppendHash(hash, message.responseTimeSeconds.GetHashCode());
                     hash = AppendHash(hash, message.audioPath);
+                    hash = AppendHash(hash, message.voiceOutputBusy ? 1 : 0);
 
                     int attachmentCount = message.attachments != null ? message.attachments.Count : 0;
                     hash = AppendHash(hash, attachmentCount);
@@ -475,7 +489,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             return container;
         }
 
-        internal static VisualElement CreateMessageElement(ChatMessage message, Action<string> onImageClick = null, Action onImageLoaded = null, Action<string> onAudioPlay = null)
+        internal static VisualElement CreateMessageElement(
+            ChatMessage message,
+            Action<string> onImageClick = null,
+            Action onImageLoaded = null,
+            Action<string> onAudioToggle = null,
+            Action<string, float> onAudioSeek = null,
+            Func<string, VoicePlaybackState> getAudioPlaybackState = null)
         {
             if (message == null)
             {
@@ -717,7 +737,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
 
             // Voice bubble — user messages with a recorded WAV, or assistant messages with a
-            // synthesized TTS clip. Both replay from the cached file (no re-synthesis).
+            // synthesized TTS clip. Both use the same seekable cached-file player.
             if ((role == "user" || role == "assistant") && !string.IsNullOrEmpty(message.audioPath)
                 && System.IO.File.Exists(message.audioPath))
             {
@@ -733,25 +753,94 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 var playBtn = new Button();
                 playBtn.AddToClassList("voice-bubble__play");
                 playBtn.text = "▶";
+                playBtn.tooltip = LocalizationExtensions.Get("voice.preview.play", "Play");
                 RegisterClick(playBtn, () =>
                 {
-                    if (onAudioPlay != null)
-                        onAudioPlay(capturedPath);
+                    if (onAudioToggle != null)
+                        onAudioToggle(capturedPath);
                 });
                 voiceBubble.Add(playBtn);
 
-                var micIcon = new VisualElement();
-                micIcon.AddToClassList("icon");
-                micIcon.AddToClassList("icon--mic");
-                micIcon.AddToClassList("voice-bubble__mic");
-                voiceBubble.Add(micIcon);
+                var timeline = new VisualElement();
+                timeline.AddToClassList("voice-bubble__timeline");
 
-                string durationText = capturedDuration > 0f
-                    ? ((int)(capturedDuration / 60f)) + ":" + ((int)(capturedDuration % 60f)).ToString("D2")
-                    : "0:00";
-                var durLabel = new Label(durationText);
-                durLabel.AddToClassList("voice-bubble__duration");
-                voiceBubble.Add(durLabel);
+                var track = new VisualElement();
+                track.AddToClassList("voice-bubble__track");
+                track.tooltip = LocalizationExtensions.Get("voice.playback.seek", "Seek audio");
+                var trackLine = new VisualElement();
+                trackLine.AddToClassList("voice-bubble__track-line");
+                var progressFill = new VisualElement();
+                progressFill.AddToClassList("voice-bubble__progress");
+                trackLine.Add(progressFill);
+                track.Add(trackLine);
+                timeline.Add(track);
+
+                var timeRow = new VisualElement();
+                timeRow.AddToClassList("voice-bubble__time-row");
+                var elapsedLabel = new Label("0:00");
+                elapsedLabel.AddToClassList("voice-bubble__time");
+                var durationLabel = new Label(FormatAudioTime(capturedDuration));
+                durationLabel.AddToClassList("voice-bubble__time");
+                timeRow.Add(elapsedLabel);
+                timeRow.Add(durationLabel);
+                timeline.Add(timeRow);
+                voiceBubble.Add(timeline);
+
+                int seekPointerId = -1;
+                Action<Vector2> seekToPointer = panelPosition =>
+                {
+                    if (onAudioSeek == null || track.contentRect.width <= 0f)
+                        return;
+                    Vector2 local = track.WorldToLocal(panelPosition);
+                    onAudioSeek(capturedPath, Mathf.Clamp01(local.x / track.contentRect.width));
+                };
+                track.RegisterCallback<PointerDownEvent>(evt =>
+                {
+                    seekPointerId = evt.pointerId;
+                    track.CapturePointer(evt.pointerId);
+                    seekToPointer(evt.position);
+                    evt.StopPropagation();
+                });
+                track.RegisterCallback<PointerMoveEvent>(evt =>
+                {
+                    if (seekPointerId != evt.pointerId || !track.HasPointerCapture(evt.pointerId))
+                        return;
+                    seekToPointer(evt.position);
+                    evt.StopPropagation();
+                });
+                track.RegisterCallback<PointerUpEvent>(evt =>
+                {
+                    if (seekPointerId != evt.pointerId)
+                        return;
+                    seekToPointer(evt.position);
+                    if (track.HasPointerCapture(evt.pointerId))
+                        track.ReleasePointer(evt.pointerId);
+                    seekPointerId = -1;
+                    evt.StopPropagation();
+                });
+                track.RegisterCallback<PointerCaptureOutEvent>(_ => seekPointerId = -1);
+
+                voiceBubble.schedule.Execute(() =>
+                {
+                    VoicePlaybackState state = getAudioPlaybackState != null
+                        ? getAudioPlaybackState(capturedPath)
+                        : new VoicePlaybackState();
+                    float duration = state.IsCurrent && state.DurationSecs > 0f
+                        ? state.DurationSecs
+                        : capturedDuration;
+                    float position = state.IsCurrent ? state.PositionSecs : 0f;
+                    float progress = duration > 0f ? Mathf.Clamp01(position / duration) : 0f;
+
+                    progressFill.style.width = Length.Percent(progress * 100f);
+                    elapsedLabel.text = FormatAudioTime(position);
+                    durationLabel.text = FormatAudioTime(duration);
+                    playBtn.text = state.IsLoading ? "…" : (state.IsPlaying ? "⏸" : "▶");
+                    playBtn.tooltip = state.IsPlaying
+                        ? LocalizationExtensions.Get("voice.preview.pause", "Pause")
+                        : LocalizationExtensions.Get("voice.preview.play", "Play");
+                    voiceBubble.EnableInClassList("voice-bubble--playing", state.IsPlaying);
+                    voiceBubble.EnableInClassList("voice-bubble--paused", state.IsPaused);
+                }).Every(50);
 
                 bubble.Add(voiceBubble);
             }
@@ -759,6 +848,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             row.Add(bubble);
 
             return row;
+        }
+
+        private static string FormatAudioTime(float seconds)
+        {
+            float safeSeconds = Mathf.Max(0f, seconds);
+            int totalSeconds = Mathf.FloorToInt(safeSeconds);
+            return (totalSeconds / 60) + ":" + (totalSeconds % 60).ToString("D2");
         }
 
         internal static string BuildMessageCopyText(ChatMessage message)

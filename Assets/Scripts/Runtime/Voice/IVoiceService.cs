@@ -16,6 +16,8 @@ namespace NeonCompanion.Runtime.Voice
         bool AutoStopOnSilence { get; set; }
 
         event Action<string> OnSpeechRecognized;
+        /// <summary>Fires when synthesized/native audio actually starts playing.</summary>
+        event Action OnPlaybackStarted;
         event Action OnPlaybackComplete;
         /// <summary>
         /// Fires after recording stops but before (or during) transcription.
@@ -34,5 +36,12 @@ namespace NeonCompanion.Runtime.Voice
         byte[] StopRecording();
         void Speak(string text);
         void StopSpeaking();
+    }
+
+    public interface ISeekableVoicePlayback
+    {
+        VoicePlaybackState GetPlaybackState(string audioPath);
+        bool TogglePlayback(string audioPath);
+        bool SeekPlayback(string audioPath, float normalized);
     }
 }

@@ -6,6 +6,16 @@ using UnityEngine.Networking;
 
 namespace NeonCompanion.Runtime.Voice
 {
+    public struct VoicePlaybackState
+    {
+        public bool IsCurrent;
+        public bool IsPlaying;
+        public bool IsPaused;
+        public bool IsLoading;
+        public float PositionSecs;
+        public float DurationSecs;
+    }
+
     /// <summary>
     /// Lightweight MonoBehaviour that loads a WAV file from disk and plays it through its own
     /// AudioSource. Used both for composer voice preview and chat-bubble replay.
@@ -15,6 +25,9 @@ namespace NeonCompanion.Runtime.Voice
         private AudioSource _src;
         private AudioClip _clip;
         private Coroutine _loadCoroutine;
+        private string _activePath;
+        private bool _paused;
+        private float _pendingSeekNormalized = -1f;
 
         public event Action OnPlaybackComplete;
 
@@ -51,8 +64,77 @@ namespace NeonCompanion.Runtime.Voice
             if (_loadCoroutine != null)
                 StopCoroutine(_loadCoroutine);
             _src.Stop();
+            if (_clip != null)
+            {
+                Destroy(_clip);
+                _clip = null;
+            }
+            _paused = false;
+            _activePath = wavPath;
 
             _loadCoroutine = StartCoroutine(LoadAndPlay(wavPath, volume));
+        }
+
+        public void Toggle(string wavPath, float volume = 1f)
+        {
+            if (!string.Equals(_activePath, wavPath, StringComparison.Ordinal) || _clip == null)
+            {
+                Play(wavPath, volume);
+                return;
+            }
+
+            if (_paused)
+            {
+                _paused = false;
+                _src.UnPause();
+                return;
+            }
+
+            if (_src.isPlaying)
+            {
+                _src.Pause();
+                _paused = true;
+                return;
+            }
+
+            Play(wavPath, volume);
+        }
+
+        public void SeekNormalized(string wavPath, float normalized)
+        {
+            float clamped = Mathf.Clamp01(normalized);
+            if (!string.Equals(_activePath, wavPath, StringComparison.Ordinal) || _clip == null)
+            {
+                _pendingSeekNormalized = clamped;
+                Play(wavPath);
+                return;
+            }
+
+            if (_loadCoroutine == null && !_src.isPlaying && !_paused)
+            {
+                _pendingSeekNormalized = clamped;
+                Play(wavPath);
+                return;
+            }
+
+            _src.time = _clip.length * clamped;
+            if (!_src.isPlaying && !_paused)
+                _src.Play();
+        }
+
+        public VoicePlaybackState GetState(string wavPath)
+        {
+            bool isCurrent = !string.IsNullOrEmpty(wavPath) &&
+                             string.Equals(_activePath, wavPath, StringComparison.Ordinal);
+            return new VoicePlaybackState
+            {
+                IsCurrent = isCurrent,
+                IsPlaying = isCurrent && _src != null && _src.isPlaying,
+                IsPaused = isCurrent && _paused,
+                IsLoading = isCurrent && _loadCoroutine != null && _clip == null,
+                PositionSecs = isCurrent && _src != null ? _src.time : 0f,
+                DurationSecs = isCurrent && _clip != null ? _clip.length : 0f
+            };
         }
 
         public void Stop()
@@ -63,6 +145,9 @@ namespace NeonCompanion.Runtime.Voice
                 _loadCoroutine = null;
             }
             _src.Stop();
+            _paused = false;
+            _activePath = null;
+            _pendingSeekNormalized = -1f;
         }
 
         private IEnumerator LoadAndPlay(string wavPath, float volume)
@@ -86,9 +171,14 @@ namespace NeonCompanion.Runtime.Voice
                     {
                         _src.volume = volume;
                         _src.clip   = _clip;
+                        if (_pendingSeekNormalized >= 0f)
+                        {
+                            _src.time = _clip.length * _pendingSeekNormalized;
+                            _pendingSeekNormalized = -1f;
+                        }
                         _src.Play();
 
-                        while (_src.isPlaying)
+                        while (_src.isPlaying || _paused)
                             yield return null;
                     }
                 }
@@ -99,6 +189,7 @@ namespace NeonCompanion.Runtime.Voice
             }
 
             _loadCoroutine = null;
+            _paused = false;
             OnPlaybackComplete?.Invoke();
         }
     }
