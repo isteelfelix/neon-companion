@@ -143,9 +143,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 };
             }
 
-            // Build label: "V0.2 | BUILD 20260527"
+            // Player Settings is the single source of truth for the app version.
             if (_versionLabel != null)
-                _versionLabel.text = $"V{Application.version} · BUILD {DateTime.Now:yyyyMMdd}";
+                _versionLabel.text = "V" + Application.version;
 
             // Tricolor gradient title: cyan → indigo → magenta per character
             if (_titleLabel != null)

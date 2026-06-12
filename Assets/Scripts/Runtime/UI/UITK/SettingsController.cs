@@ -166,6 +166,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsPluginsConfig  = root.Q<Label>("settings-plugins-config");
             _settingsPluginsList    = root.Q<VisualElement>("settings-plugins-list");
             _brandVersion           = root.Q<Label>("brand-version");
+            if (_settingsVersion != null)
+                _settingsVersion.text = Application.version;
+            if (_brandVersion != null)
+                _brandVersion.text = Application.version;
             _shapeRound  = root.Q<Button>("shape-round");
             _shapeSquare = root.Q<Button>("shape-square");
             _shapeHex    = root.Q<Button>("shape-hex");
@@ -589,12 +593,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 if (_settingsStoragePath != null)
                     _settingsStoragePath.text = Application.persistentDataPath;
-
-                // Single source of truth: Player Settings → bundleVersion (Application.version).
-                if (_settingsVersion != null)
-                    _settingsVersion.text = Application.version;
-                if (_brandVersion != null)
-                    _brandVersion.text = Application.version;
 
                 RefreshPluginStatus(app);
                 SetAvatarShape(s.avatarShape ?? "round", save: false);

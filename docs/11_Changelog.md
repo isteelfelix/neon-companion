@@ -1,5 +1,10 @@
 # 11_Changelog.md
 
+## [Unreleased]
+
+### Fixed
+- All runtime version labels now use Unity Player Settings through `Application.version`; removed stale hardcoded splash/version-file values and aligned mobile Build Profiles.
+
 ## [0.4.0] - 2026-06-10
 
 ### Added

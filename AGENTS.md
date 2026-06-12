@@ -4,7 +4,7 @@ Instructions for AI coding agents working on neon-companion.
 
 ## What This Is
 
-Unity 6 (6000.4+) desktop/mobile client for chatting with personal AI agents via OpenAI-compatible APIs. C# / UI Toolkit / JSON storage. Current version: see `VERSION` file.
+Unity 6 (6000.4+) desktop/mobile client for chatting with personal AI agents via OpenAI-compatible APIs. C# / UI Toolkit / JSON storage. The app version is set in the active Unity Build Profile's Player Settings (`bundleVersion`).
 
 **You cannot build or run this project on this server.** There is no Unity installation. Felix builds and tests locally. Your job is to write correct code and push — Felix confirms it works.
 
@@ -168,7 +168,7 @@ MonoImporter:
 
 ## Build
 
-No CI/CD. Felix builds locally via Unity Editor (`File → Build Settings`). Version is in the `VERSION` file at project root.
+No CI/CD. Felix builds locally via Unity Editor (`File → Build Settings`). Version is set in the active Build Profile's Player Settings and exposed at runtime through `Application.version`.
 
 ## Documentation
 

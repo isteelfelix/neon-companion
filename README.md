@@ -83,9 +83,7 @@ This project is intended as a personal companion shell for self-hosted agents, w
 
 ## Versioning
 
-Project version is tracked in the root [`VERSION`](VERSION) file and follows semantic versioning (`MAJOR.MINOR.PATCH`).
-
-Current version: `0.3.0`.
+Project version is set in the active Unity Build Profile's Player Settings (`Version` / `bundleVersion`) and follows semantic versioning (`MAJOR.MINOR.PATCH`). Runtime UI reads it through `Application.version`.
 
 ## Connecting Your Own Agent
 

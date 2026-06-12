@@ -26,7 +26,7 @@ Unity -batchmode -nographics -projectPath . \
 - Диагностика: `-executeMethod AndroidHeadlessBuild.DiagEntry` (печатает enum `applicationEntry`)
 
 ### Версионирование
-Версия хранится в файле `VERSION` в корне проекта (формат `MAJOR.MINOR.PATCH`).
+Версия задаётся в Player Settings активного Unity Build Profile (`Version` / `bundleVersion`, формат `MAJOR.MINOR.PATCH`). Интерфейс приложения получает её через `Application.version`.
 
 ### Публикация
 Релизы публикуются вручную через GitHub Releases: https://github.com/isteelfelix/neon-companion/releases
