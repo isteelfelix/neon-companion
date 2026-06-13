@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Hermes;
@@ -2232,15 +2233,16 @@ namespace NeonCompanion.Runtime.Chat
             for (int i = start; i < sourceMessages.Count; i++)
             {
                 var message = sourceMessages[i];
-                bool hasText = !string.IsNullOrWhiteSpace(message?.content);
+                string content = BuildSummaryMessageContent(message);
+                bool hasText = !string.IsNullOrWhiteSpace(content);
                 bool hasAttachments = message?.attachments != null && message.attachments.Count > 0;
                 if (message == null || string.IsNullOrWhiteSpace(message.role) || (!hasText && !hasAttachments))
                     continue;
 
                 requestMessages.Add(new AiChatMessage
                 {
-                    role = message.role,
-                    content = hasText ? message.content : "[image]"
+                    role = NormalizeSummaryRole(message.role),
+                    content = hasText ? content : "[image]"
                 });
             }
 
@@ -2253,10 +2255,16 @@ namespace NeonCompanion.Runtime.Chat
                 content = LocalizationExtensions.Get("chat.summary.user_prompt", "Сделай короткое резюме диалога на русском языке (2-4 предложения).")
             });
 
+            string requestModel = !string.IsNullOrWhiteSpace(CurrentSessionModel)
+                ? CurrentSessionModel
+                : provider.defaultModel;
+            if (string.IsNullOrWhiteSpace(requestModel))
+                return LocalizationExtensions.Get("chat.summary.provider_not_configured", "Провайдер не настроен.");
+
             var request = new AiChatRequest
             {
-                model = CurrentSessionModel ?? provider.defaultModel,
-                providerSessionId = _currentChatViewModel?.ProviderSessionId,
+                model = requestModel,
+                providerSessionId = null,
                 temperature = 0.2f,
                 maxTokens = 140,
                 systemPrompt = LocalizationExtensions.Get("chat.summary.system_prompt", "Ты помощник, который кратко и точно суммирует переписку на русском языке."),
@@ -2268,6 +2276,43 @@ namespace NeonCompanion.Runtime.Chat
             return string.IsNullOrWhiteSpace(summary)
                 ? LocalizationExtensions.Get("chat.summary.failed", "Не удалось получить резюме.")
                 : summary;
+        }
+
+        private static string NormalizeSummaryRole(string role)
+        {
+            if (string.Equals(role, "user", StringComparison.OrdinalIgnoreCase))
+                return "user";
+            if (string.Equals(role, "system", StringComparison.OrdinalIgnoreCase))
+                return "system";
+            return "assistant";
+        }
+
+        private static string BuildSummaryMessageContent(ChatMessage message)
+        {
+            if (message == null)
+                return null;
+            if (!string.IsNullOrWhiteSpace(message.content))
+                return message.content;
+            if (message.segments == null || message.segments.Count == 0)
+                return null;
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < message.segments.Count; i++)
+            {
+                ChatMessageSegment segment = message.segments[i];
+                if (segment == null ||
+                    !string.Equals(segment.kind, ChatMessageSegment.TextKind, StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(segment.text))
+                {
+                    continue;
+                }
+
+                if (sb.Length > 0)
+                    sb.AppendLine();
+                sb.Append(segment.text.Trim());
+            }
+
+            return sb.Length == 0 ? null : sb.ToString();
         }
 
         private void SyncFromProvider(ProviderConfig provider)
