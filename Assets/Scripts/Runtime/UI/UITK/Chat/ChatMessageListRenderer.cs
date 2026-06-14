@@ -107,16 +107,27 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (content == null)
                 return;
 
-            list.schedule.Execute(PinTranscriptToBottom);
-            list.schedule.Execute(PinTranscriptToBottom).StartingIn(50);
-            list.schedule.Execute(PinTranscriptToBottom).StartingIn(150);
-            list.schedule.Execute(PinTranscriptToBottom).StartingIn(300);
-
+            // Coalesce rapid calls (one per streamed token): while a pin batch is already
+            // armed, do nothing. The GeometryChangedEvent fires exactly when the content
+            // height changes and re-pins, then disarms so the next call re-arms. Previously
+            // every call scheduled four separate pins, i.e. hundreds of redundant layout
+            // passes over a single streamed response.
             if (_pinBottomQueued)
                 return;
 
             _pinBottomQueued = true;
             content.RegisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
+            list.schedule.Execute(PinTranscriptToBottom);
+            // Fallback in case the content height does not change (no geometry event fires):
+            // pin once and disarm so the next ScrollToBottom can re-arm.
+            list.schedule.Execute(() =>
+            {
+                if (!_pinBottomQueued)
+                    return;
+                _pinBottomQueued = false;
+                content.UnregisterCallback<GeometryChangedEvent>(OnTranscriptGeometryForScroll);
+                PinTranscriptToBottom();
+            }).StartingIn(300);
         }
 
         internal void ShowImageLightbox(string imagePath)
@@ -191,10 +202,24 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             return null;
         }
 
+        // Decoded textures are reused across transcript rebuilds. Without this, every rebuild
+        // re-fetched each attachment from disk via UnityWebRequest AND leaked the previous
+        // Texture2D (Unity textures are not GC-collected). Chat attachments are bounded per
+        // session, so a simple keep-alive cache is appropriate.
+        private static readonly Dictionary<string, Texture2D> s_ImageCache = new Dictionary<string, Texture2D>();
+
         internal static async void LoadImageAsync(Image imageElement, string path, Action onLoaded = null)
         {
             if (imageElement == null || string.IsNullOrEmpty(path))
                 return;
+
+            Texture2D cached;
+            if (s_ImageCache.TryGetValue(path, out cached) && cached != null)
+            {
+                imageElement.image = cached;
+                onLoaded?.Invoke();
+                return;
+            }
 
             try
             {
@@ -208,8 +233,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     if (request.result == UnityWebRequest.Result.Success)
                     {
                         var download = request.downloadHandler as DownloadHandlerTexture;
-                        if (download != null)
+                        if (download != null && download.texture != null)
                         {
+                            s_ImageCache[path] = download.texture;
                             imageElement.image = download.texture;
                             onLoaded?.Invoke();
                         }
@@ -817,11 +843,32 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 });
                 track.RegisterCallback<PointerCaptureOutEvent>(_ => seekPointerId = -1);
 
+                bool voiceIdleRendered = false;
                 voiceBubble.schedule.Execute(() =>
                 {
                     VoicePlaybackState state = getAudioPlaybackState != null
                         ? getAudioPlaybackState(capturedPath)
                         : new VoicePlaybackState();
+
+                    // When this clip is not the active one, render the idle state exactly once
+                    // and then no-op. Avoids dirtying layout 20x/sec on every voice bubble in
+                    // the transcript while nothing is playing.
+                    if (!state.IsCurrent)
+                    {
+                        if (voiceIdleRendered)
+                            return;
+                        voiceIdleRendered = true;
+                        progressFill.style.width = Length.Percent(0f);
+                        elapsedLabel.text = FormatAudioTime(0f);
+                        durationLabel.text = FormatAudioTime(capturedDuration);
+                        playBtn.text = "▶";
+                        playBtn.tooltip = LocalizationExtensions.Get("voice.preview.play", "Play");
+                        voiceBubble.EnableInClassList("voice-bubble--playing", false);
+                        voiceBubble.EnableInClassList("voice-bubble--paused", false);
+                        return;
+                    }
+
+                    voiceIdleRendered = false;
                     float duration = state.IsCurrent && state.DurationSecs > 0f
                         ? state.DurationSecs
                         : capturedDuration;
