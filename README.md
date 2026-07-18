@@ -2,6 +2,16 @@
 
 Source-available Unity client for connecting to personal AI agents with avatar visualization.
 
+## Links
+
+All my works and releases can be found here:
+
+[![All my works — Patreon](https://img.shields.io/badge/All%20my%20works-Patreon-orange?logo=patreon)](https://www.patreon.com/Chieftain51)
+
+For contacts and updates:
+
+[![Contact / Updates — X](https://img.shields.io/badge/Contact%20%2F%20Updates-X-black?logo=x)](https://x.com/iChieftain51)
+
 ## About the Project
 
 **neon-companion** is a cross-platform desktop/mobile application that allows you to chat with your own AI agents through an OpenAI-compatible API. The app supports custom backends, multiple providers, chat history, 2D/3D avatar visualization, and a native markdown rendering engine.
