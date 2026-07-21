@@ -70,20 +70,40 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SessionInfo = "session.info";
         public const string MessageStart = "message.start";
         public const string MessageDelta = "message.delta";
+        public const string MessageInterim = "message.interim";
         public const string MessageComplete = "message.complete";
+        public const string ThinkingDelta = "thinking.delta";
         public const string ReasoningDelta = "reasoning.delta";
+        public const string ReasoningAvailable = "reasoning.available";
+        public const string StatusUpdate = "status.update";
         public const string ToolStart = "tool.start";
         public const string ToolProgress = "tool.progress";
         public const string ToolComplete = "tool.complete";
+        public const string ToolGenerating = "tool.generating";
         public const string ClarifyRequest = "clarify.request";
         public const string ApprovalRequest = "approval.request";
         public const string SudoRequest = "sudo.request";
+        public const string SecretRequest = "secret.request";
+        public const string BackgroundComplete = "background.complete";
+        public const string SessionTitle = "session.title";
         public const string TerminalExecute = "terminal.execute";
         public const string ClientPing = "client.ping";
         public const string FileTransferStart = "file.transfer.start";
         public const string FileTransferChunk = "file.transfer.chunk";
         public const string FileTransferFinish = "file.transfer.finish";
         public const string Error = "error";
+
+        // Subagent stream events (Desktop use-message-stream). These carry an explicit
+        // session_id when scoped to a background session; when unscoped they are DROPPED
+        // by the routing layer (see gateway-events.ts gatewayEventRequiresSessionId),
+        // never attributed to the focused chat. Match on the SubagentPrefix.
+        public const string SubagentPrefix = "subagent.";
+        public const string SubagentSpawnRequested = "subagent.spawn_requested";
+        public const string SubagentStart = "subagent.start";
+        public const string SubagentProgress = "subagent.progress";
+        public const string SubagentComplete = "subagent.complete";
+        public const string SubagentThinking = "subagent.thinking";
+        public const string SubagentTool = "subagent.tool";
     }
 
     // === RPC Method Names ===
@@ -95,10 +115,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SessionClose = "session.close";
         public const string SessionList = "session.list";
         public const string SessionInterrupt = "session.interrupt";
+        public const string SessionSteer = "session.steer";
         public const string PromptSubmit = "prompt.submit";
+        public const string SlashExec = "slash.exec";
+        public const string ModelOptions = "model.options";
         public const string ClarifyRespond = "clarify.respond";
         public const string ApprovalRespond = "approval.respond";
+        public const string SudoRespond = "sudo.respond";
+        public const string SecretRespond = "secret.respond";
         public const string TerminalRespond = "terminal.respond";
+        public const string ImageAttach = "image.attach";
+        public const string ImageDetach = "image.detach";
         public const string ClientRegister = "client.register";
         public const string ClientPong = "client.pong";
         public const string FileTransferAck = "file.transfer.ack";
@@ -127,8 +154,49 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
 
         // Config
+        // Default per-request ack timeout. Desktop's shared client uses 120s, but its
+        // gateway instance overrides to 30s (DEFAULT_GATEWAY_REQUEST_TIMEOUT_MS); companion
+        // keeps 30s to match that instance default.
         public int RequestTimeoutMs { get; set; } = 30000;
+        // Open-handshake timeout. Desktop DEFAULT_CONNECT_TIMEOUT_MS = 15s: a dead socket must
+        // fail to Error instead of hanging forever in Connecting.
+        public int ConnectTimeoutMs { get; set; } = 15000;
         public string RequestIdPrefix { get; set; } = "r";
+
+        // prompt.submit is effectively fire-and-forget: turn completion is signalled by the
+        // message.complete/error stream events, NOT the RPC ack. Desktop bounds it at
+        // PROMPT_SUBMIT_REQUEST_TIMEOUT_MS = 1_800_000 (matches backend agent.gateway_timeout).
+        // Bounding it at the 30s default surfaces a spurious "request timed out" mid-turn.
+        public const int PromptSubmitTimeoutMs = 1800000;
+
+        /// <summary>
+        /// Default ack timeout for a given RPC method when the caller does not override it.
+        /// Only prompt.submit needs the long timeout; everything else uses RequestTimeoutMs.
+        /// </summary>
+        public int DefaultTimeoutForMethod(string method)
+        {
+            if (method == RpcMethods.PromptSubmit)
+                return PromptSubmitTimeoutMs;
+            return RequestTimeoutMs;
+        }
+
+        /// <summary>
+        /// True when a JSON-RPC call failed because the backend predates the method
+        /// (JSON-RPC -32601). Mirrors Desktop gateway-rpc.ts isMissingRpcMethod.
+        /// </summary>
+        public static bool IsMissingRpcMethod(Exception error)
+        {
+            if (error == null)
+                return false;
+            var message = error.Message;
+            if (string.IsNullOrEmpty(message))
+                return false;
+            message = message.ToLowerInvariant();
+            return message.Contains("method not found")
+                || message.Contains("-32601")
+                || message.Contains("unknown method")
+                || message.Contains("no such method");
+        }
 
         public ConnectionState State => _state;
         public event Action<GatewayEvent> OnEvent;
@@ -148,7 +216,29 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 _socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(30);
 
                 var uri = new Uri(wsUrl);
-                await _socket.ConnectAsync(uri, CancellationToken.None);
+
+                // Bound the open handshake so a dead socket fails to Error instead of
+                // hanging forever in Connecting (Desktop DEFAULT_CONNECT_TIMEOUT_MS = 15s).
+                if (ConnectTimeoutMs > 0)
+                {
+                    var connectCts = new CancellationTokenSource(ConnectTimeoutMs);
+                    try
+                    {
+                        await _socket.ConnectAsync(uri, connectCts.Token);
+                    }
+                    catch (OperationCanceledException) when (connectCts.IsCancellationRequested)
+                    {
+                        throw new TimeoutException("Gateway connect timed out after " + ConnectTimeoutMs + "ms");
+                    }
+                    finally
+                    {
+                        connectCts.Dispose();
+                    }
+                }
+                else
+                {
+                    await _socket.ConnectAsync(uri, CancellationToken.None);
+                }
 
                 SetState(ConnectionState.Open);
 
@@ -200,7 +290,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 throw new InvalidOperationException("Gateway not connected");
 
             var id = RequestIdPrefix + (++_nextId);
-            var timeout = timeoutMs > 0 ? timeoutMs : RequestTimeoutMs;
+            var timeout = timeoutMs > 0 ? timeoutMs : DefaultTimeoutForMethod(method);
 
             var tcs = new TaskCompletionSource<JToken>(TaskCreationOptions.RunContinuationsAsynchronously);
             var cts = new CancellationTokenSource();
