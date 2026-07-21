@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Hermes REST v2 read surface** — `HermesRestClient` now mirrors Desktop read endpoints for status, model info/options, config, skills, toolsets, and cron jobs, with bearer-auth GET/POST/PATCH/DELETE helpers and a typed missing-endpoint exception for 404 `No such API endpoint` capability gaps.
+
 ### Fixed
 - All runtime version labels now use Unity Player Settings through `Application.version`; removed stale hardcoded splash/version-file values and aligned mobile Build Profiles.
 

@@ -238,27 +238,31 @@ REST management через HTTP. Использует `UnityWebRequest`.
 
 **Эндпоинты (через `wss://example.com` → nginx → `:8642`):**
 
+Статус:
+- `GET /api/status` — liveness/readiness backend status
+
 Сессии:
-- `GET /api/sessions` — список сессий
+- `GET /api/sessions` — список сессий (`limit`, `offset`, `min_messages`, `archived`, `order`)
 - `GET /api/sessions/:id/messages` — сообщения сессии
 - `DELETE /api/sessions/:id` — физическое удаление из DB
-- `PATCH /api/sessions/:id` — переименование
 
 Модели:
 - `GET /api/model/info` — текущая модель
 - `GET /api/model/options` — доступные модели/провайдеры
-- `POST /api/model/set` — смена модели
 
 Конфиг:
-- `GET /api/config` / `PUT /api/config` — чтение/запись
-- `GET /api/config/schema` — схема полей
+- `GET /api/config` — чтение текущего конфига
 
 Навыки:
 - `GET /api/skills` — список
-- `PUT /api/skills/toggle` — вкл/выкл
 
 Инструменты:
 - `GET /api/tools/toolsets` — список toolset'ов
+
+Cron:
+- `GET /api/cron/jobs` — список cron jobs (`profile` optional)
+
+`HermesRestClient` keeps generic GET/POST/PATCH/DELETE helpers with bearer-token auth, but mutating control-plane methods are intentionally not exposed until UI flows need them. A `404` response whose body says `No such API endpoint` is surfaced as `HermesEndpointMissingException` so callers can degrade instead of retrying a missing backend capability.
 
 ### 6. ChatService
 

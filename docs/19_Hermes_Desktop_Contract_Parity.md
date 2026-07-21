@@ -178,21 +178,21 @@ For a remote companion client, **token auth is the realistic target**; OAuth tic
 
 ---
 
-## 7. REST control plane (categories only — not to implement in this chain)
+## 7. REST control plane
 
-Desktop REST paths enumerated from `hermes.ts`. Companion REST is `HermesRestClient` (`/api/sessions*` only). Most control-plane REST is Desktop-host settings UI and **out of scope** for the agent-turn chain.
+Desktop REST paths enumerated from `hermes.ts`. Companion REST is `HermesRestClient`; it now exposes a read-only subset of Desktop's management surface for Hermes-native integrations. Most mutating control-plane REST remains Desktop-host settings UI and **out of scope** for the agent-turn chain.
 
 | REST category | Desktop endpoints (summary) | Companion | Priority |
 |---|---|---|---|
-| Status / liveness | `/api/status` | **NO** (uses `gateway.ready` + WS state) | P2 |
-| Sessions (stored) | Desktop aggregates via gateway; companion `/api/sessions`, `/api/sessions/{id}/messages`, DELETE | PARTIAL (companion-only REST path; confirm backend serves it) | P1 |
-| Model | `/api/model/info`, `/api/model/set`, `/api/model/auxiliary`, `/api/model/moa` | PARTIAL (companion switches model via `slash.exec` + `model.options` RPC) | P2 |
-| Config | `/api/config`, `/api/config/defaults`, `/api/config/schema` | **NO** | P2 |
+| Status / liveness | `/api/status` | **YES** (`GetStatus`, short timeout) | P2 |
+| Sessions (stored) | Desktop aggregates via gateway; companion `/api/sessions`, `/api/sessions/{id}/messages`, DELETE | PARTIAL (`archived`/`order` query parity added; no Desktop all-profile/sidebar aggregation) | P1 |
+| Model | `/api/model/info`, `/api/model/options`, `/api/model/set`, `/api/model/auxiliary`, `/api/model/moa` | PARTIAL (`GET /info` + `GET /options`; companion still switches model via `slash.exec` + `model.options` RPC) | P2 |
+| Config | `/api/config`, `/api/config/defaults`, `/api/config/schema` | PARTIAL (`GET /api/config` read-only) | P2 |
 | Env | `/api/env`, `/api/env/reveal` | **NO** | P3 |
-| Skills | `/api/skills`, `/api/skills/toggle`, `/api/skills/hub/*` | **NO** | P3 |
+| Skills | `/api/skills`, `/api/skills/toggle`, `/api/skills/hub/*` | PARTIAL (`GET /api/skills` read-only) | P3 |
 | MCP | `/api/mcp/servers`, `/api/mcp/catalog`, `/api/mcp/catalog/install` | **NO** | P3 |
-| Toolsets / terminal backends | `/api/tools/toolsets`, `/api/tools/terminal/backend(s)`, `/api/tools/computer-use/*` | **NO** | P3 |
-| Cron | `/api/cron/jobs` | **NO** | P3 |
+| Toolsets / terminal backends | `/api/tools/toolsets`, `/api/tools/terminal/backend(s)`, `/api/tools/computer-use/*` | PARTIAL (`GET /api/tools/toolsets` read-only) | P3 |
+| Cron | `/api/cron/jobs` | PARTIAL (`GET /api/cron/jobs`, optional `profile`) | P3 |
 | Profiles / providers | `/api/profiles`, `/api/providers/*`, `/api/providers/oauth` | **NO** (note: `/api/providers/oauth` is the OAuth mint path if adopted, §6) | P2 |
 | Messaging | `/api/messaging/platforms` | **NO** | P3 |
 | Audio | `/api/audio/speak`, `/api/audio/transcribe`, `/api/audio/elevenlabs/voices` | **NO** (companion voice is client-side) | P3 |
@@ -209,7 +209,7 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 1. **`HermesGateway` timeouts & connect (P0).** Add a connect/open-handshake timeout (~15 s → `Error` state); raise the shared default toward 120 s; allow per-call timeout override (already supported via `Request<T>(…, timeoutMs)`). Add the missing event **name constants** (`message.interim`, `thinking.delta`, `reasoning.available`, `status.update`, `tool.generating`, `secret.request`, `background.complete`, `session.title`, `subagent.*`).
 2. **`HermesSessionManager` routing (P0/P1).** Port `resolveGatewayEventSessionId`: track an `_unscopedStreamSessionId` pin set on `message.start`, cleared on `error`/`message.complete`, drop unscoped `subagent.*`; replace `EventSessionId`'s bare fallback. Add handlers for the new stream events. Pass `PROMPT_SUBMIT_REQUEST_TIMEOUT_MS = 1_800_000` to the `prompt.submit` call. Add `secret.respond` / `sudo.respond` responders and `session.steer`.
 3. **Transport wiring (`IChatTransport`) (P1).** Surface `secret.request` (currently only clarify/approval/error events exist on the interface) and interim/thinking deltas so `ChatService` can render them; keep session-id multiplexing.
-4. **`HermesRestClient` (P2).** Reconcile `session.list` vs `session.active_list`; confirm `/api/sessions` is served for remote clients or move to the gateway RPC; add `/api/status` liveness if needed. Defer OAuth mint (`/api/providers/oauth`) until an OAuth-gated target is required.
+4. **Remaining REST parity (P2/P3).** Reconcile `session.list` vs `session.active_list`; confirm `/api/sessions` is served for remote clients or move stored-session history fully to gateway RPC. Defer OAuth mint (`/api/providers/oauth`) until an OAuth-gated target is required. Mutating Desktop settings routes stay out of scope until Companion has UI flows for them.
 
 ---
 
@@ -228,6 +228,8 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 
 **Matched:** JSON-RPC 2.0 framing, request/response id correlation, event dispatch (`method: "event"`), core stream events (`message.*`, `reasoning.delta`, `tool.*`), core session RPC (`create`/`resume`/`close`/`interrupt`/`prompt.submit`), runtime↔stored id mapping (bidirectional), `client.register`/`client.pong` remote handshake, token query auth.
 
+**REST matched:** `/api/status`, `/api/model/info`, `/api/model/options`, `/api/config` read-only, `/api/skills`, `/api/tools/toolsets`, `/api/cron/jobs`, and existing stored-session list/messages/delete. Companion mirrors Desktop's 60s startup/list timeout class for slow read endpoints and surfaces missing routes as `HermesEndpointMissingException` when a 404 body says `No such API endpoint`.
+
 **Still missing (ranked):**
 1. `prompt.submit` long timeout (1 800 000 ms) — **P0**.
 2. Connect/open-handshake timeout — **P0**.
@@ -236,5 +238,6 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 5. `secret.respond` / `sudo.respond` / `session.steer` RPC — **P1**.
 6. `session.list` vs `session.active_list` reconciliation, rewind `truncate_before_user_ordinal` — **P2**.
 7. OAuth ticket mint + reauth surface — **P2** (only if target is OAuth-gated).
+8. Desktop REST mutators and host-only surfaces: config writes/schema/defaults, skill/toolset toggles/config, MCP/catalog, profiles/providers, messaging, audio, memory/learning, ops/update/gateway lifecycle — **P3/out of scope** until Companion grows matching flows.
 
 _No changes were made under `/opt/hermes` (read-only reference)._
