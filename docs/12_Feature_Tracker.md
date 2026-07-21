@@ -37,6 +37,7 @@
 | H-07 | Runtime vs display ID mapping | ✅ | M3 | session.create → stored_session_id (DB) + session_id (runtime). WS events route via _displayByRuntimeSession |
 | H-08 | Session listing via WS | ✅ | M3 | session.list RPC. Server DB = source of truth in Hermes mode |
 | H-09 | WS connection guard | ✅ | M3 | SwitchToHermesSessionAsync connects WS before ResumeSession (fix for silent failure) |
+| H-10 | Hermes Desktop contract parity | 📋 | M4 | Contract freeze done — см. docs/19_Hermes_Desktop_Contract_Parity.md. Open P0: prompt.submit timeout 1 800 000ms, connect-handshake timeout; P1: unscoped stream pin + subagent drop, missing stream events (interim/thinking/reasoning.available/status.update/tool.generating/secret.request), secret/sudo.respond, session.steer |
 
 ## Аватары
 | # | Фича | Статус | Спринт | Заметки |
