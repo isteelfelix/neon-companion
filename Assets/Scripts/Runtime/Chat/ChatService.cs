@@ -56,7 +56,7 @@ namespace NeonCompanion.Runtime.Chat
             public int baselineTotal;
             public TaskCompletionSource<bool> complete;
             public Action<string> tokenCb;                              // UI; set only while foreground
-            public Action<string, string, string, string> toolCb;      // UI; set only while foreground
+            public Action<ToolProgressInfo> toolCb;                     // UI; set only while foreground
             public string lastError;
             public string pendingUserContent;
             public bool interrupted;
@@ -238,7 +238,7 @@ namespace NeonCompanion.Runtime.Chat
         /// back to a session that is still generating). No-op if the session has no live stream.
         /// Returns the partial assistant text accumulated so far, or null.
         /// </summary>
-        public string AttachForegroundStreamCallbacks(Action<string> tokenCb, Action<string, string, string, string> toolCb)
+        public string AttachForegroundStreamCallbacks(Action<string> tokenCb, Action<ToolProgressInfo> toolCb)
         {
             string sid = _currentSession?.providerSessionId;
             HermesStream s = GetStream(sid);
@@ -1154,7 +1154,7 @@ namespace NeonCompanion.Runtime.Chat
             return true;
         }
 
-        public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
+        public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<ToolProgressInfo> onToolProgress = null)
         {
             if (_currentChatViewModel == null)
                 await GetOrCreateChatAsync();
@@ -1187,7 +1187,7 @@ namespace NeonCompanion.Runtime.Chat
             string message,
             IReadOnlyList<ChatAttachment> attachments,
             Action<string> onStreamToken = null,
-            Action<string, string, string, string> onToolProgress = null)
+            Action<ToolProgressInfo> onToolProgress = null)
         {
             // Hermes backend: route through WebSocket transport
             if (_chatTransport != null)
@@ -1265,7 +1265,7 @@ namespace NeonCompanion.Runtime.Chat
         /// session's id and streams into that session's own context — switching the UI to another
         /// session does not disturb or misroute this generation.
         /// </summary>
-        private async Task SendViaTransport(string message, IReadOnlyList<ChatAttachment> attachments = null, Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
+        private async Task SendViaTransport(string message, IReadOnlyList<ChatAttachment> attachments = null, Action<string> onStreamToken = null, Action<ToolProgressInfo> onToolProgress = null)
         {
             if (_chatTransport == null)
                 return;
@@ -2018,15 +2018,26 @@ namespace NeonCompanion.Runtime.Chat
             if (s.streamingMessage.segments == null)
                 s.streamingMessage.segments = new System.Collections.Generic.List<ChatMessageSegment>();
 
-            string status = update.status == ToolCallStatus.Running ? "running" : "complete";
+            // Desktop: complete + payload.error → isError; Companion uses status "error".
+            string status = "running";
+            if (update.status == ToolCallStatus.Complete)
+                status = !string.IsNullOrEmpty(update.error) ? "error" : "complete";
             s.lastActivityTime = DateTime.UtcNow;
             // The TUI/stdio gateway doesn't include an emoji in the payload, so leave it empty there
             // and let the UI derive a per-tool emoji client-side (ToolCallUiHelper.GetToolEmoji).
             // The API SSE gateway does send one — pass it through. Status is shown separately
             // (left stripe + ● / ✓), so we no longer overwrite the icon with a status glyph.
             string emoji = update.emoji ?? string.Empty;
-            string key = (update.name ?? "") + "\x01" + (update.toolId ?? "");
+            string toolId = update.toolId ?? string.Empty;
+            // Prefer stable tool_id (Desktop toolCallId). Fall back to name-only so progress
+            // label changes still merge into the same card.
+            string key = !string.IsNullOrEmpty(toolId)
+                ? "id\x01" + toolId
+                : (update.name ?? "") + "\x01";
             string label = !string.IsNullOrEmpty(update.preview) ? update.preview : (update.name ?? "");
+            string details = update.details;
+            if (string.IsNullOrEmpty(details) && !string.IsNullOrEmpty(update.error))
+                details = update.error;
 
             for (int i = 0; i < s.streamingMessage.segments.Count; i++)
             {
@@ -2039,6 +2050,7 @@ namespace NeonCompanion.Runtime.Chat
                 }
 
                 existing.tool = update.name ?? "";
+                existing.toolId = toolId;
                 if (!string.IsNullOrEmpty(label))
                     existing.label = label;
                 if (!string.IsNullOrEmpty(emoji))
@@ -2046,26 +2058,43 @@ namespace NeonCompanion.Runtime.Chat
                 existing.status = status;
                 if (!string.IsNullOrEmpty(update.inlineDiff))
                     existing.inlineDiff = update.inlineDiff;
-                if (!string.IsNullOrEmpty(update.details))
-                    existing.details = update.details;
+                if (!string.IsNullOrEmpty(details))
+                    existing.details = details;
 
-                s.toolCb?.Invoke(update.name, existing.label ?? "", existing.emoji ?? "", status);
+                EmitToolProgress(s, existing);
                 return;
             }
 
-            s.streamingMessage.segments.Add(new ChatMessageSegment
+            ChatMessageSegment created = new ChatMessageSegment
             {
                 kind = ChatMessageSegment.ToolKind,
                 key = key,
                 tool = update.name ?? "",
+                toolId = toolId,
                 label = label,
                 emoji = emoji,
                 status = status,
                 inlineDiff = update.inlineDiff,
-                details = update.details
-            });
+                details = details
+            };
+            s.streamingMessage.segments.Add(created);
+            EmitToolProgress(s, created);
+        }
 
-            s.toolCb?.Invoke(update.name, label, emoji, status);
+        private static void EmitToolProgress(HermesStream stream, ChatMessageSegment segment)
+        {
+            if (stream == null || stream.toolCb == null || segment == null)
+                return;
+
+            ToolProgressInfo info = new ToolProgressInfo();
+            info.tool = segment.tool;
+            info.toolId = segment.toolId;
+            info.label = segment.label ?? string.Empty;
+            info.emoji = segment.emoji ?? string.Empty;
+            info.status = segment.status ?? string.Empty;
+            info.inlineDiff = segment.inlineDiff;
+            info.details = segment.details;
+            stream.toolCb.Invoke(info);
         }
 
         private static void NormalizeHermesFinalTextSegments(ChatMessage message, string finalText)

@@ -74,6 +74,18 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         internal void OnToolProgress(string tool, string label, string emoji, string status)
         {
+            OnToolProgress(ToolProgressInfo.Create(tool, label, emoji, status));
+        }
+
+        internal void OnToolProgress(ToolProgressInfo info)
+        {
+            if (info == null)
+                return;
+
+            string tool = info.tool;
+            string label = info.label;
+            string status = info.status;
+
             if (_thinkingBubble != null && _thinkingText != null)
             {
                 string displayText = string.IsNullOrEmpty(label) ? GetThinkingText(tool) : label;
@@ -83,7 +95,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _thinkingBubble.style.display = DisplayStyle.Flex;
             }
 
-            bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(tool, label, emoji, status, _label);
+            // Insert after the current text segment so tool cards stay ordered between
+            // preceding assistant text and subsequent tokens (Desktop flushes deltas first).
+            bool insertedNewEntry = _approvalController != null && _approvalController.OnToolProgress(info, _label);
             if (insertedNewEntry)
                 ResetStreamingSegment();
             _scrollToBottom?.Invoke();
@@ -92,7 +106,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 var request = new ToolCallRequest
                 {
-                    id = Guid.NewGuid().ToString("N"),
+                    id = !string.IsNullOrEmpty(info.toolId) ? info.toolId : Guid.NewGuid().ToString("N"),
                     toolName = tool ?? string.Empty,
                     description = !string.IsNullOrEmpty(label) ? label : tool,
                     parameters = new Dictionary<string, string>()
@@ -234,7 +248,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 }
                 else if (string.Equals(seg.kind, ChatMessageSegment.ToolKind, StringComparison.OrdinalIgnoreCase))
                 {
-                    OnToolProgress(seg.tool, seg.label, seg.emoji, seg.status);
+                    ToolProgressInfo info = new ToolProgressInfo();
+                    info.tool = seg.tool;
+                    info.toolId = seg.toolId;
+                    info.label = seg.label;
+                    info.emoji = seg.emoji;
+                    info.status = seg.status;
+                    info.inlineDiff = seg.inlineDiff;
+                    info.details = seg.details;
+                    OnToolProgress(info);
                 }
             }
         }

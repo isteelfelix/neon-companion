@@ -1119,7 +1119,7 @@ namespace NeonCompanion.Runtime.Api
             AiChatRequest request,
             Action<string> onToken,
             CancellationToken cancellationToken = default,
-            Action<string, string, string, string> onToolProgress = null)
+            Action<ToolProgressInfo> onToolProgress = null)
         {
             ProviderValidator.Validate(provider);
 
@@ -1560,7 +1560,7 @@ namespace NeonCompanion.Runtime.Api
                 }
             }
 
-            public void ProcessPayload(string payload, Action<string, string, string, string> onToolProgress)
+            public void ProcessPayload(string payload, Action<ToolProgressInfo> onToolProgress)
             {
                 if (string.IsNullOrWhiteSpace(payload))
                     return;
@@ -1602,7 +1602,7 @@ namespace NeonCompanion.Runtime.Api
                 return result;
             }
 
-            private void ApplyToolCallDelta(string itemJson, Action<string, string, string, string> onToolProgress)
+            private void ApplyToolCallDelta(string itemJson, Action<ToolProgressInfo> onToolProgress)
             {
                 int index = ExtractJsonIntValue(itemJson, "index", 0);
                 if (index < 0)
@@ -1631,7 +1631,7 @@ namespace NeonCompanion.Runtime.Api
                 EmitRequestOnce(state, onToolProgress);
             }
 
-            private void ApplyLegacyFunctionCallDelta(string payload, Action<string, string, string, string> onToolProgress)
+            private void ApplyLegacyFunctionCallDelta(string payload, Action<ToolProgressInfo> onToolProgress)
             {
                 var state = GetState(0);
                 int functionIdx = payload.IndexOf("\"function_call\"", StringComparison.Ordinal);
@@ -1656,13 +1656,13 @@ namespace NeonCompanion.Runtime.Api
                 return _states[index];
             }
 
-            private static void EmitRequestOnce(ToolCallState state, Action<string, string, string, string> onToolProgress)
+            private static void EmitRequestOnce(ToolCallState state, Action<ToolProgressInfo> onToolProgress)
             {
                 if (state == null || state.EmittedRequest || string.IsNullOrWhiteSpace(state.Name) || onToolProgress == null)
                     return;
 
                 state.EmittedRequest = true;
-                onToolProgress.Invoke(state.Name, state.Name, "\uD83D\uDD27", "requesting");
+                onToolProgress.Invoke(ToolProgressInfo.Create(state.Name, state.Name, "\uD83D\uDD27", "requesting"));
             }
 
             private static bool TryReadNextObject(string json, int start, out string objectJson, out int nextPos)
@@ -1714,7 +1714,7 @@ namespace NeonCompanion.Runtime.Api
             int offset,
             Action<string> onToken,
             bool flushPartialLine,
-            Action<string, string, string, string> onToolProgress = null,
+            Action<ToolProgressInfo> onToolProgress = null,
             StreamingToolCallAccumulator toolCallAccumulator = null,
             SseParseState state = null)
         {
@@ -1814,7 +1814,7 @@ namespace NeonCompanion.Runtime.Api
             return searchFrom;
         }
 
-        private static void ParseAndEmitToolProgress(string json, Action<string, string, string, string> onToolProgress)
+        private static void ParseAndEmitToolProgress(string json, Action<ToolProgressInfo> onToolProgress)
         {
             if (string.IsNullOrWhiteSpace(json) || onToolProgress == null)
                 return;
@@ -1826,11 +1826,11 @@ namespace NeonCompanion.Runtime.Api
             if (string.IsNullOrEmpty(status) && LooksLikeApprovalText(label))
                 status = "approval_required";
 
-            onToolProgress.Invoke(tool, label, emoji, status);
+            onToolProgress.Invoke(ToolProgressInfo.Create(tool, label, emoji, status));
         }
 
         // Part B: emit tool request as progress with "requesting" status so ChatController can trigger approval UI
-        private static void ParseAndEmitToolRequest(string json, Action<string, string, string, string> onToolProgress)
+        private static void ParseAndEmitToolRequest(string json, Action<ToolProgressInfo> onToolProgress)
         {
             if (string.IsNullOrWhiteSpace(json) || onToolProgress == null)
                 return;
@@ -1839,7 +1839,7 @@ namespace NeonCompanion.Runtime.Api
             string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? "\uD83D\uDD27"; // 🔧
             string label = ExtractJsonStringValue(json, "label", 0) ?? ExtractJsonStringValue(json, "description", 0) ?? tool;
 
-            onToolProgress.Invoke(tool, label, emoji, "approval_required");
+            onToolProgress.Invoke(ToolProgressInfo.Create(tool, label, emoji, "approval_required"));
         }
 
         private static bool LooksLikeApprovalText(string value)
@@ -1857,7 +1857,7 @@ namespace NeonCompanion.Runtime.Api
         }
 
         // Minimal OpenAI tool_calls detection (no full delta accumulation; enough to surface approval prompt)
-        private static bool TryDetectAndEmitToolCallRequest(string json, Action<string, string, string, string> onToolProgress)
+        private static bool TryDetectAndEmitToolCallRequest(string json, Action<ToolProgressInfo> onToolProgress)
         {
             if (string.IsNullOrWhiteSpace(json) || onToolProgress == null)
                 return false;
@@ -1881,7 +1881,7 @@ namespace NeonCompanion.Runtime.Api
             {
                 string label = ExtractJsonStringValue(json, "label", 0) ?? toolName;
                 string emoji = ExtractJsonStringValue(json, "emoji", 0) ?? "\uD83D\uDD27";
-                onToolProgress.Invoke(toolName, label, emoji, "requesting");
+                onToolProgress.Invoke(ToolProgressInfo.Create(toolName, label, emoji, "requesting"));
                 return true;
             }
 

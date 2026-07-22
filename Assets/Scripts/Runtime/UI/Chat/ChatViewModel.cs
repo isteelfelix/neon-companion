@@ -70,7 +70,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             Messages.Add(chatMsg);
         }
 
-        public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
+        public async Task RegenerateAsync(Action<string> onStreamToken = null, Action<ToolProgressInfo> onToolProgress = null)
         {
             if (IsSending) return;
 
@@ -86,7 +86,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
         }
 
-        public async Task SendAsync(Action<string> onStreamToken = null, Action<string, string, string, string> onToolProgress = null)
+        public async Task SendAsync(Action<string> onStreamToken = null, Action<ToolProgressInfo> onToolProgress = null)
         {
             bool hasPendingAttachments = PendingAttachments != null && PendingAttachments.Count > 0;
             if (IsSending || (string.IsNullOrWhiteSpace(InputMessage) && !hasPendingAttachments))
@@ -116,7 +116,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             _cts = new CancellationTokenSource();
         }
 
-        private async Task SendRequestAsync(Action<string> onStreamToken, Action<string, string, string, string> onToolProgress = null)
+        private async Task SendRequestAsync(Action<string> onStreamToken, Action<ToolProgressInfo> onToolProgress = null)
         {
             try
             {
@@ -177,11 +177,13 @@ namespace NeonCompanion.Runtime.UI.Chat
                         AppendTextSegment(streamMsg, token);
                         onStreamToken(token);
                     };
-                    Action<string, string, string, string> handleToolProgress = (tool, label, emoji, status) =>
+                    Action<ToolProgressInfo> handleToolProgress = info =>
                     {
-                        UpsertToolSegment(streamMsg, tool, label, emoji, status);
+                        if (info == null)
+                            return;
+                        UpsertToolSegment(streamMsg, info.tool, info.label, info.emoji, info.status, info.toolId, info.inlineDiff, info.details);
                         if (onToolProgress != null)
-                            onToolProgress(tool, label, emoji, status);
+                            onToolProgress(info);
                     };
                     var response = await _aiClient.SendMessageStreamAsync(_provider, request, token =>
                     {
@@ -273,7 +275,15 @@ namespace NeonCompanion.Runtime.UI.Chat
             segment.text = (segment.text ?? string.Empty) + text;
         }
 
-        private static void UpsertToolSegment(ChatMessage message, string tool, string label, string emoji, string status)
+        private static void UpsertToolSegment(
+            ChatMessage message,
+            string tool,
+            string label,
+            string emoji,
+            string status,
+            string toolId = null,
+            string inlineDiff = null,
+            string details = null)
         {
             if (message == null)
                 return;
@@ -281,7 +291,7 @@ namespace NeonCompanion.Runtime.UI.Chat
             if (message.segments == null)
                 message.segments = new List<ChatMessageSegment>();
 
-            string key = BuildToolSegmentKey(tool, label);
+            string key = BuildToolSegmentKey(tool, toolId, label);
             for (int i = 0; i < message.segments.Count; i++)
             {
                 var existing = message.segments[i];
@@ -293,9 +303,17 @@ namespace NeonCompanion.Runtime.UI.Chat
                 }
 
                 existing.tool = tool ?? string.Empty;
-                existing.label = label ?? string.Empty;
-                existing.emoji = emoji ?? string.Empty;
+                if (!string.IsNullOrEmpty(toolId))
+                    existing.toolId = toolId;
+                if (!string.IsNullOrEmpty(label))
+                    existing.label = label;
+                if (!string.IsNullOrEmpty(emoji))
+                    existing.emoji = emoji;
                 existing.status = status ?? string.Empty;
+                if (!string.IsNullOrEmpty(inlineDiff))
+                    existing.inlineDiff = inlineDiff;
+                if (!string.IsNullOrEmpty(details))
+                    existing.details = details;
                 return;
             }
 
@@ -304,14 +322,19 @@ namespace NeonCompanion.Runtime.UI.Chat
                 kind = ChatMessageSegment.ToolKind,
                 key = key,
                 tool = tool ?? string.Empty,
+                toolId = toolId ?? string.Empty,
                 label = label ?? string.Empty,
                 emoji = emoji ?? string.Empty,
-                status = status ?? string.Empty
+                status = status ?? string.Empty,
+                inlineDiff = inlineDiff,
+                details = details
             });
         }
 
-        private static string BuildToolSegmentKey(string tool, string label)
+        private static string BuildToolSegmentKey(string tool, string toolId, string label)
         {
+            if (!string.IsNullOrEmpty(toolId))
+                return "id\x01" + toolId;
             return (tool ?? string.Empty) + "\x01" + (label ?? string.Empty);
         }
 

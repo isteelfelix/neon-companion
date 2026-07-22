@@ -23,11 +23,37 @@ namespace NeonCompanion.Runtime.Data.Models
         public string key;
         public string text;
         public string tool;
+        public string toolId;
         public string label;
         public string emoji;
         public string status;
         public string inlineDiff;
         public string details;
+    }
+
+    /// <summary>
+    /// Live tool-card update (tool.start / progress / generating / complete).
+    /// Desktop keys rows by tool_id and merges progress/result in place; Companion mirrors that.
+    /// </summary>
+    public sealed class ToolProgressInfo
+    {
+        public string tool;
+        public string toolId;
+        public string label;
+        public string emoji;
+        public string status;
+        public string inlineDiff;
+        public string details;
+
+        public static ToolProgressInfo Create(string tool, string label, string emoji, string status)
+        {
+            ToolProgressInfo info = new ToolProgressInfo();
+            info.tool = tool;
+            info.label = label;
+            info.emoji = emoji;
+            info.status = status;
+            return info;
+        }
     }
 
     [Serializable]

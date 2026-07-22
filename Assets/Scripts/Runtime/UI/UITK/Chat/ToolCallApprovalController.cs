@@ -141,6 +141,21 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             return _toolCallUiHelper.OnToolProgress(tool, label, emoji, status, insertAfterElement);
         }
 
+        internal bool OnToolProgress(ToolProgressInfo info, VisualElement insertAfterElement = null)
+        {
+            if (info == null)
+                return false;
+            return _toolCallUiHelper.OnToolProgress(
+                info.tool,
+                info.toolId,
+                info.label,
+                info.emoji,
+                info.status,
+                info.inlineDiff,
+                info.details,
+                insertAfterElement);
+        }
+
         internal void ClearToolProgress()
         {
             _toolCallUiHelper.Clear();

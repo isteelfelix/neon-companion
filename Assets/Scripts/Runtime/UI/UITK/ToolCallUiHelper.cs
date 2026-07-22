@@ -266,25 +266,202 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public bool OnToolProgress(string tool, string label, string emoji, string status, VisualElement insertAfterElement = null)
         {
+            return OnToolProgress(tool, null, label, emoji, status, null, null, insertAfterElement);
+        }
+
+        /// <summary>
+        /// Upsert a live tool card. Desktop keys by tool_id and merges progress/result in place;
+        /// when toolId is present we do the same so label changes do not spawn duplicate chips.
+        /// </summary>
+        public bool OnToolProgress(
+            string tool,
+            string toolId,
+            string label,
+            string emoji,
+            string status,
+            string inlineDiff,
+            string detailsText,
+            VisualElement insertAfterElement = null)
+        {
             if (_bubble == null)
                 return false;
 
-            string key = tool + "\x01" + label;
+            string key = BuildLiveEntryKey(tool, toolId, label);
 
             VisualElement existing;
             if (_entries.TryGetValue(key, out existing))
             {
-                if (string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(status, "done", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(status, "complete", StringComparison.OrdinalIgnoreCase))
-                    MarkEntryDone(existing);
+                UpdateExistingEntry(existing, tool, label, emoji, status, inlineDiff, detailsText);
                 return false;
             }
 
-            var entry = CreateEntryElement(tool, label, emoji, status);
+            // Progress events can arrive with a stable tool_id after a first card was keyed
+            // without one (or vice-versa). Prefer merging into a same-name running card.
+            if (!string.IsNullOrEmpty(toolId) || !string.IsNullOrEmpty(tool))
+            {
+                string aliasKey = FindAliasKey(tool, toolId, label);
+                if (!string.IsNullOrEmpty(aliasKey) && _entries.TryGetValue(aliasKey, out existing))
+                {
+                    _entries.Remove(aliasKey);
+                    _entries[key] = existing;
+                    UpdateExistingEntry(existing, tool, label, emoji, status, inlineDiff, detailsText);
+                    return false;
+                }
+            }
+
+            var entry = CreateEntryElement(tool, label, emoji, status, inlineDiff, detailsText);
             _bubble.Insert(GetInsertIndex(insertAfterElement), entry);
             _entries[key] = entry;
             return true;
+        }
+
+        private static string BuildLiveEntryKey(string tool, string toolId, string label)
+        {
+            if (!string.IsNullOrEmpty(toolId))
+                return "id\x01" + toolId;
+            return (tool ?? string.Empty) + "\x01" + (label ?? string.Empty);
+        }
+
+        private string FindAliasKey(string tool, string toolId, string label)
+        {
+            // If we now have a tool_id, find a prior name-only running card for the same tool.
+            if (!string.IsNullOrEmpty(toolId) && !string.IsNullOrEmpty(tool))
+            {
+                string prefix = tool + "\x01";
+                foreach (var pair in _entries)
+                {
+                    if (pair.Key != null && pair.Key.StartsWith(prefix, StringComparison.Ordinal) &&
+                        !pair.Key.StartsWith("id\x01", StringComparison.Ordinal))
+                        return pair.Key;
+                }
+            }
+
+            // If we previously keyed by tool_id and a later event lacks it, match id-prefixed keys
+            // is not recoverable without the id — fall through.
+            if (string.IsNullOrEmpty(toolId) && !string.IsNullOrEmpty(tool) && !string.IsNullOrEmpty(label))
+            {
+                string exact = tool + "\x01" + label;
+                if (_entries.ContainsKey(exact))
+                    return exact;
+            }
+
+            return null;
+        }
+
+        private static void UpdateExistingEntry(
+            VisualElement entry,
+            string tool,
+            string label,
+            string emoji,
+            string status,
+            string inlineDiff,
+            string detailsText)
+        {
+            if (entry == null)
+                return;
+
+            VisualElement root = entry.ClassListContains("tool-entry-root") ? entry : entry.parent;
+            if (root == null)
+                root = entry;
+
+            if (!string.IsNullOrEmpty(label))
+            {
+                string cleanLabel = SelectableMarkdownElement.StripAnsi(label);
+                string truncated = cleanLabel != null && cleanLabel.Length > 60
+                    ? cleanLabel.Substring(0, 60) + "..."
+                    : cleanLabel ?? string.Empty;
+                Label detailLabel = root.Q<Label>(className: "tool-entry__label");
+                if (detailLabel != null)
+                    detailLabel.text = truncated;
+            }
+
+            if (!string.IsNullOrEmpty(tool))
+            {
+                Label nameLabel = root.Q<Label>(className: "tool-entry__name");
+                if (nameLabel != null)
+                    nameLabel.text = tool;
+            }
+
+            if (!string.IsNullOrEmpty(emoji))
+            {
+                Label iconLabel = root.Q<Label>(className: "tool-entry__icon");
+                if (iconLabel != null)
+                    iconLabel.text = emoji;
+            }
+
+            bool isFailed = IsFailedStatus(status);
+            bool isDone = IsDoneStatus(status);
+            if (isFailed)
+                MarkEntryFailed(root);
+            else if (isDone)
+                MarkEntryDone(root);
+
+            if (!string.IsNullOrEmpty(inlineDiff) || !string.IsNullOrWhiteSpace(detailsText))
+                ReplaceDetailsBody(root, inlineDiff, detailsText, label);
+        }
+
+        private static void ReplaceDetailsBody(VisualElement root, string inlineDiff, string detailsText, string labelFallback)
+        {
+            if (root == null)
+                return;
+
+            VisualElement details = root.Q(className: "tool-entry__details");
+            if (details == null)
+                return;
+
+            details.Clear();
+
+            if (!string.IsNullOrEmpty(inlineDiff))
+            {
+                var diffView = new SelectableMarkdownElement();
+                diffView.SetDiff(inlineDiff);
+                diffView.AddToClassList("tool-entry__diff");
+                diffView.style.flexGrow = 1;
+                diffView.style.minHeight = 20;
+                details.Add(diffView);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(detailsText))
+            {
+                var detailsView = new SelectableMarkdownElement();
+                detailsView.SetMarkdown(detailsText);
+                detailsView.AddToClassList("tool-entry__args");
+                detailsView.style.flexGrow = 1;
+                detailsView.style.minWidth = 0;
+                detailsView.style.width = Length.Percent(100);
+                detailsView.style.minHeight = 20;
+                details.Add(detailsView);
+                return;
+            }
+
+            string cleanLabel = SelectableMarkdownElement.StripAnsi(labelFallback);
+            var argsLabel = new Label(cleanLabel ?? string.Empty);
+            argsLabel.AddToClassList("tool-entry__args");
+            details.Add(argsLabel);
+        }
+
+        private static void MarkEntryFailed(VisualElement entry)
+        {
+            var root = entry != null && entry.ClassListContains("tool-entry-root") ? entry : (entry != null ? entry.parent : null);
+            if (root == null) return;
+
+            var headerEl = root.Q(className: "tool-entry--header");
+            if (headerEl != null)
+            {
+                headerEl.RemoveFromClassList("tool-entry--running");
+                headerEl.RemoveFromClassList("tool-entry--done");
+                headerEl.AddToClassList("tool-entry--failed");
+            }
+
+            var statusLabel = root.Q<Label>(className: "tool-entry__status");
+            if (statusLabel != null)
+            {
+                statusLabel.text = "×";
+                statusLabel.RemoveFromClassList("tool-entry__status--running");
+                statusLabel.RemoveFromClassList("tool-entry__status--done");
+                statusLabel.AddToClassList("tool-entry__status--failed");
+            }
         }
 
         private int GetInsertIndex(VisualElement insertAfterElement = null)
@@ -324,6 +501,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (headerEl != null)
             {
                 headerEl.RemoveFromClassList("tool-entry--running");
+                headerEl.RemoveFromClassList("tool-entry--failed");
                 headerEl.AddToClassList("tool-entry--done");
             }
 
@@ -332,12 +510,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 statusLabel.text = "✓";
                 statusLabel.RemoveFromClassList("tool-entry__status--running");
+                statusLabel.RemoveFromClassList("tool-entry__status--failed");
                 statusLabel.AddToClassList("tool-entry__status--done");
             }
-
-            var toggleLabel = root.Q<Label>(className: "tool-entry__toggle");
-            if (toggleLabel != null)
-                toggleLabel.text = "▼";
         }
 
         private static string GetToolEmoji(string tool)

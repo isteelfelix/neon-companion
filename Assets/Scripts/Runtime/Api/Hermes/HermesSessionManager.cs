@@ -104,6 +104,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string inline_diff;
         public string emoji;
         public object args;
+        /// <summary>Desktop GatewayEventPayload.error — string or boolean; truthy marks tool as failed.</summary>
+        public object error;
     }
 
     [Serializable]
@@ -987,16 +989,107 @@ namespace NeonCompanion.Runtime.Api.Hermes
             var payload = evt.Payload.ToObject<ToolEventPayload>();
             if (payload == null) return;
 
+            // Desktop toolId(payload): tool_id || tool_call_id || id
+            string toolId = FirstNonEmpty(
+                payload.tool_id,
+                TokenString(evt.Payload, "tool_call_id"),
+                TokenString(evt.Payload, "id"));
+
+            // Desktop upsertToolPart: on complete, isError = Boolean(payload.error); result.error
+            // is also carried into the tool result for the expanded row.
+            string errorText = status == ToolCallStatus.Complete
+                ? ExtractToolError(evt.Payload, payload.error)
+                : null;
+            string details = null;
+            if (status == ToolCallStatus.Complete)
+            {
+                details = ExtractToolDetails(evt.Payload);
+                if (string.IsNullOrWhiteSpace(details) && !string.IsNullOrWhiteSpace(errorText))
+                    details = errorText;
+            }
+            // Progress may carry a short preview/context only — still surface as details when no
+            // prior result body exists so the expanded row is not empty mid-run.
+            else if (status == ToolCallStatus.Running)
+            {
+                string progressPreview = payload.context ?? payload.preview;
+                if (!string.IsNullOrWhiteSpace(progressPreview))
+                    details = LimitToolDetails(progressPreview);
+            }
+
             OnToolUpdate?.Invoke(sid, new ToolCallUpdate
             {
                 name = payload.name,
-                toolId = payload.tool_id,
+                toolId = toolId,
                 status = status,
                 preview = payload.context ?? payload.preview,
                 inlineDiff = payload.inline_diff,
-                details = status == ToolCallStatus.Complete ? ExtractToolDetails(evt.Payload) : null,
-                emoji = payload.emoji
+                details = details,
+                emoji = payload.emoji,
+                error = errorText
             });
+        }
+
+        private static string ExtractToolError(JToken token, object payloadError)
+        {
+            string fromPayload = FormatToolError(payloadError);
+            if (!string.IsNullOrWhiteSpace(fromPayload))
+                return fromPayload;
+
+            if (token == null || token.Type != JTokenType.Object)
+                return null;
+
+            JToken errorToken = token["error"];
+            if (errorToken == null || errorToken.Type == JTokenType.Null)
+                return null;
+
+            return FormatToolErrorToken(errorToken);
+        }
+
+        private static string FormatToolError(object error)
+        {
+            if (error == null)
+                return null;
+
+            if (error is bool)
+            {
+                bool flag = (bool)error;
+                return flag ? "error" : null;
+            }
+
+            if (error is string)
+            {
+                string text = (string)error;
+                return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+            }
+
+            string asText = error.ToString();
+            if (string.IsNullOrWhiteSpace(asText) || string.Equals(asText, "False", StringComparison.OrdinalIgnoreCase))
+                return null;
+            if (string.Equals(asText, "True", StringComparison.OrdinalIgnoreCase))
+                return "error";
+            return asText.Trim();
+        }
+
+        private static string FormatToolErrorToken(JToken errorToken)
+        {
+            if (errorToken == null || errorToken.Type == JTokenType.Null)
+                return null;
+
+            if (errorToken.Type == JTokenType.Boolean)
+                return errorToken.Value<bool>() ? "error" : null;
+
+            if (errorToken.Type == JTokenType.String)
+            {
+                string text = errorToken.Value<string>();
+                return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+            }
+
+            string extracted = ExtractText(errorToken);
+            if (!string.IsNullOrWhiteSpace(extracted))
+                return extracted.Trim();
+
+            string raw = errorToken.ToString(Formatting.None);
+            return string.IsNullOrWhiteSpace(raw) ? "error" : LimitToolDetails(raw);
         }
 
         private static string ExtractToolDetails(JToken token)
@@ -1004,7 +1097,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (token == null || token.Type != JTokenType.Object)
                 return null;
 
-            string[] keys = { "result", "output", "content", "text", "rendered", "message", "response", "data" };
+            // Prefer human-readable result fields; error is handled separately for failed status
+            // but may also surface as the expanded body when no result is present.
+            string[] keys = { "result", "output", "content", "text", "rendered", "message", "response", "data", "summary" };
             for (int i = 0; i < keys.Length; i++)
             {
                 JToken child = token[keys[i]];

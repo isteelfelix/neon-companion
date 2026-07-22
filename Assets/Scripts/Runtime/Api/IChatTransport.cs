@@ -99,6 +99,8 @@ namespace NeonCompanion.Runtime.Api
         public string inlineDiff;
         public string details;
         public string emoji;
+        /// <summary>tool.complete error field (string or truthy). When set, UI shows failed status.</summary>
+        public string error;
     }
 
     [Serializable]

@@ -18,7 +18,7 @@ namespace NeonCompanion.Runtime.Api
             AiChatRequest request,
             Action<string> onToken,
             CancellationToken cancellationToken = default,
-            Action<string, string, string, string> onToolProgress = null);
+            Action<ToolProgressInfo> onToolProgress = null);
 
         Task<ConnectionTestResult> TestConnectionAsync(
             ProviderConfig provider,
