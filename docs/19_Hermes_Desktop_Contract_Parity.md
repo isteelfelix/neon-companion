@@ -1,6 +1,6 @@
 # 19 — Hermes Desktop Contract Parity
 
-**Status:** Contract freeze (P1). Docs only — no production C# changed in this pass.
+**Status:** Contract freeze (P1) + implementation P2–P5. P2 gateway timeouts/events, P3 session-manager routing + agent event plumbing, P5 secret UI + `thinking.delta` routing are now in code (see the ✅ markers in §1 and §10).
 **Goal:** Bring neon-companion's Hermes agent plumbing up to the current **Hermes Desktop** contracts. Desktop is the source of truth for connections, gateway events/RPC, tool/agent wrapping, timeouts, and session identity. This is **not** a UI port of the Electron/React app.
 
 ## Sources of truth (read-only reference, `/opt/hermes`)
@@ -33,25 +33,25 @@ Desktop event union: `GatewayEventName` in `json-rpc-gateway.ts:1-23`. Additiona
 | `session.info` | union + handler | YES (`HandleSessionInfo`) | P0 |
 | `message.start` | union + stream pin anchor | YES (`HandleMessageStart`) | P0 |
 | `message.delta` | union + handler | YES (`HandleMessageDelta`) | P0 |
-| `message.interim` | stream (`gateway-event.ts`) | **NO** | P1 |
+| `message.interim` | stream (`gateway-event.ts`) | YES (`HandleMessageInterim`, P3) | P1 |
 | `message.complete` | union + stream end | YES (`HandleMessageComplete`) | P0 |
-| `thinking.delta` | stream + unscoped-pin set | **NO** (only `reasoning.delta`) | P1 |
+| `thinking.delta` | stream + unscoped-pin set | YES (routed to `HandleReasoningDelta`, P5) | P1 |
 | `reasoning.delta` | union + handler | YES (`HandleReasoningDelta`) | P0 |
-| `reasoning.available` | union + unscoped-pin set | **NO** | P1 |
-| `status.update` | union + unscoped-pin set | **NO** | P1 |
+| `reasoning.available` | union + unscoped-pin set | YES (routed to `HandleReasoningDelta`, P3) | P1 |
+| `status.update` | union + unscoped-pin set | YES (`HandleStatusUpdate`, P3; re-reads runtime info, no busy toggle) | P1 |
 | `tool.start` | union + handler | YES (`HandleToolStart`) | P0 |
 | `tool.progress` | union + handler | YES (`HandleToolProgress`) | P0 |
 | `tool.complete` | union + handler (+`inline_diff`) | YES (`HandleToolComplete`) | P0 |
-| `tool.generating` | union + unscoped-pin set | **NO** | P1 |
-| `clarify.request` | union + handler | YES (`HandleClarifyRequest`) | P1 |
-| `approval.request` | union + handler | YES (`HandleApprovalRequest`) | P1 |
-| `sudo.request` | union + handler | YES (`HandleSudoRequest`) | P1 |
-| `secret.request` | union + handler | **NO** (no handler; no `secret.respond`) | P1 |
-| `background.complete` | union | **NO** | P2 |
+| `tool.generating` | union + unscoped-pin set | YES (routed to `HandleToolStart` → `OnToolUpdate`, P3) | P1 |
+| `clarify.request` | union + handler | YES (`HandleClarifyRequest`; UI in `ToolCallApprovalController`) | P1 |
+| `approval.request` | union + handler | YES (`HandleApprovalRequest`; UI in `ToolCallApprovalController`) | P1 |
+| `sudo.request` | union + handler | PARTIAL — surfaced as `OnApprovalRequest` (`type="sudo"`) and answered via `RespondToApproval`; `RespondToSudo(password)` exists but no password-capture UI yet | P1 |
+| `secret.request` | union + handler | YES (`HandleSecretRequest` → `OnSecretRequest`; `secret.respond`; masked text prompt UI in `ToolCallApprovalController`, P5) | P1 |
+| `background.complete` | union | YES (`HandleBackgroundComplete`, P3; log-only, no background panel) | P2 |
 | `error` | union + handler + stream end | YES (`HandleError`) | P0 |
 | `skin.changed` | union | **NO** (avatar/skin — likely non-goal) | P3 |
-| `session.title` | stream handler | **NO** | P2 |
-| `subagent.spawn_requested` / `subagent.start` / `subagent.*` | stream; **dropped when unscoped** (`gateway-events.ts:55-57`) | **NO** (no subagent drop rule) | P1 |
+| `session.title` | stream handler | PARTIAL — `HandleSessionTitle` → `OnSessionTitle` fired (P3); no UI consumer wired yet | P2 |
+| `subagent.spawn_requested` / `subagent.start` / `subagent.*` | stream; **dropped when unscoped** (`gateway-events.ts:55-57`) | YES (wildcard → `HandleSubagentEvent`, P3; unscoped dropped, scoped logged under owning session) | P1 |
 | `moa.reference` / `moa.aggregating` | stream (MoA presets) | **NO** | P2 |
 | `review.summary` | stream | **NO** | P2 |
 | `browser.progress` | unscoped-pin set (`gateway-events.ts:20-39`) | **NO** | P2 |
@@ -208,7 +208,7 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 
 1. **`HermesGateway` timeouts & connect (P0).** Add a connect/open-handshake timeout (~15 s → `Error` state); raise the shared default toward 120 s; allow per-call timeout override (already supported via `Request<T>(…, timeoutMs)`). Add the missing event **name constants** (`message.interim`, `thinking.delta`, `reasoning.available`, `status.update`, `tool.generating`, `secret.request`, `background.complete`, `session.title`, `subagent.*`).
 2. **`HermesSessionManager` routing (P0/P1).** Port `resolveGatewayEventSessionId`: track an `_unscopedStreamSessionId` pin set on `message.start`, cleared on `error`/`message.complete`, drop unscoped `subagent.*`; replace `EventSessionId`'s bare fallback. Add handlers for the new stream events. Pass `PROMPT_SUBMIT_REQUEST_TIMEOUT_MS = 1_800_000` to the `prompt.submit` call. Add `secret.respond` / `sudo.respond` responders and `session.steer`.
-3. **Transport wiring (`IChatTransport`) (P1).** Surface `secret.request` (currently only clarify/approval/error events exist on the interface) and interim/thinking deltas so `ChatService` can render them; keep session-id multiplexing.
+3. **Transport wiring (`IChatTransport`) (P1).** ✅ Done (P3/P5): `OnSecretRequest` is on the interface; interim/thinking/reasoning-available deltas are handled in `HermesSessionManager` (interim is silent by design, thinking/reasoning-available route to `OnReasoningDelta`); session-id multiplexing preserved. Secret consumed by `ToolCallApprovalController` (masked text prompt → `secret.respond`).
 4. **Remaining REST parity (P2/P3).** Reconcile `session.list` vs `session.active_list`; confirm `/api/sessions` is served for remote clients or move stored-session history fully to gateway RPC. Defer OAuth mint (`/api/providers/oauth`) until an OAuth-gated target is required. Mutating Desktop settings routes stay out of scope until Companion has UI flows for them.
 
 ---
@@ -230,14 +230,20 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 
 **REST matched:** `/api/status`, `/api/model/info`, `/api/model/options`, `/api/config` read-only, `/api/skills`, `/api/tools/toolsets`, `/api/cron/jobs`, and existing stored-session list/messages/delete. Companion mirrors Desktop's 60s startup/list timeout class for slow read endpoints and surfaces missing routes as `HermesEndpointMissingException` when a 404 body says `No such API endpoint`.
 
-**Still missing (ranked):**
-1. `prompt.submit` long timeout (1 800 000 ms) — **P0**.
-2. Connect/open-handshake timeout — **P0**.
-3. Unscoped stream pin + `subagent.*` drop in event routing — **P1**.
-4. Stream event types: `message.interim`, `thinking.delta`, `reasoning.available`, `status.update`, `tool.generating`, `secret.request` — **P1**.
-5. `secret.respond` / `sudo.respond` / `session.steer` RPC — **P1**.
-6. `session.list` vs `session.active_list` reconciliation, rewind `truncate_before_user_ordinal` — **P2**.
-7. OAuth ticket mint + reauth surface — **P2** (only if target is OAuth-gated).
-8. Desktop REST mutators and host-only surfaces: config writes/schema/defaults, skill/toolset toggles/config, MCP/catalog, profiles/providers, messaging, audio, memory/learning, ops/update/gateway lifecycle — **P3/out of scope** until Companion grows matching flows.
+**Implemented in code (P2–P5):**
+1. `prompt.submit` long timeout (`HermesGateway.PromptSubmitTimeoutMs = 1 800 000`) — **P2**. ✅
+2. Connect/open-handshake timeout — **P2**. ✅
+3. Unscoped stream pin + `subagent.*` drop in event routing (`EventSessionId`, `HandleSubagentEvent`) — **P3**. ✅
+4. Stream event handlers: `message.interim`, `thinking.delta`, `reasoning.available`, `status.update`, `tool.generating`, `secret.request` all registered in `RegisterEventHandlers` — **P3/P5**. ✅
+5. `secret.respond` / `sudo.respond` RPC responders (`RespondToSecret` / `RespondToSudo`) — **P2/P3**. ✅
+6. **Secret UI (P5):** `OnSecretRequest` surfaced on `IChatTransport`; `ToolCallApprovalController` shows a masked text-input prompt and answers with `secret.respond {request_id, value}` (never routed through the approve/deny responder). Per-session multiplexing preserved (foreground shows inline; background defers via `StorePendingSecret` + attention badge). ✅
+
+**Still missing / partial (ranked):**
+1. `sudo.request` password-capture UI — **P1**. Currently surfaced as an approve/deny `OnApprovalRequest` (`type="sudo"`) and answered via `RespondToApproval`; `RespondToSudo(password)` exists but no password prompt is wired.
+2. `session.title` UI consumer — **P2**. `OnSessionTitle` is fired but no view updates the sidebar title live (avoids a MainViewController refactor).
+3. `session.steer` RPC — **P1**.
+4. `session.list` vs `session.active_list` reconciliation, rewind `truncate_before_user_ordinal` — **P2**.
+5. OAuth ticket mint + reauth surface — **P2** (only if target is OAuth-gated).
+6. Desktop REST mutators and host-only surfaces: config writes/schema/defaults, skill/toolset toggles/config, MCP/catalog, profiles/providers, messaging, audio, memory/learning, ops/update/gateway lifecycle — **P3/out of scope** until Companion grows matching flows.
 
 _No changes were made under `/opt/hermes` (read-only reference)._

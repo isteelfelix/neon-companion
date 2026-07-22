@@ -113,6 +113,8 @@ WebSocket JSON-RPC 2.0 клиент.
 | `prompt.submit` | Отправить сообщение | `{session_id, text}` (runtime id) |
 | `clarify.respond` | Ответ на clarify | `{session_id, answer}` |
 | `approval.respond` | Ответ на approval | `{session_id, choice}` |
+| `secret.respond` | Ответ на secret (текстовое значение) | `{request_id, value}` |
+| `sudo.respond` | Ответ на sudo (пароль) | `{request_id, password}` |
 | `slash.exec` | Выполнить slash-команду | `{session_id, command}` |
 
 **События (server → client):**
@@ -123,10 +125,16 @@ WebSocket JSON-RPC 2.0 клиент.
 | `message.start` | — | Начало генерации |
 | `message.delta` | `{text}` | Токен стриминга |
 | `message.complete` | `{text, usage}` | Генерация завершена |
-| `reasoning.delta` | `{text}` | Thinking-токены |
-| `tool.start` / `tool.progress` / `tool.complete` | `ToolEventPayload` | Tool calls |
+| `reasoning.delta` / `reasoning.available` / `thinking.delta` | `{text}` | Thinking-токены (все → `HandleReasoningDelta`) |
+| `message.interim` | `{text}` | Промежуточный текст (тихо; уже стримится через delta) |
+| `status.update` | — | Смена фазы (compacting и т.п.); только re-read runtime info, busy не трогает |
+| `tool.start` / `tool.progress` / `tool.generating` / `tool.complete` | `ToolEventPayload` | Tool calls (`tool.generating` → та же running-ветка, что `tool.start`) |
 | `clarify.request` | `{request_id, question}` | Агент спрашивает |
 | `approval.request` / `sudo.request` | `{request_id, question}` | Аппрувалы |
+| `secret.request` | `{request_id, env_var, prompt}` | Захват секрета/креда → `OnSecretRequest` (маскированный ввод, `secret.respond`) |
+| `session.title` | `{session_id, title}` | Авто-заголовок → `OnSessionTitle` (UI-консьюмер пока не подключён) |
+| `subagent.*` | любой | Скоуп-логируется под своей сессией; unscoped **дропается** |
+| `background.complete` | — | Фоновая сессия завершена (лог, без панели) |
 | `error` | `{message}` | Ошибка |
 
 ### 3. HermesSessionManager

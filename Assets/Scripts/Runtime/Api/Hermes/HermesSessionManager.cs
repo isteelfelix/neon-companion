@@ -666,6 +666,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
             // reasoning.available is a whole-block reasoning push; companion reasoning is
             // append-only, so route it through the same path as reasoning.delta.
             _gateway.On(GatewayEvents.ReasoningAvailable, HandleReasoningDelta);
+            // thinking.delta is a reasoning stream too (Desktop pins it like reasoning.delta).
+            // Without this it is in the unscoped-pin set but has no handler, so it is dropped.
+            _gateway.On(GatewayEvents.ThinkingDelta, HandleReasoningDelta);
             _gateway.On(GatewayEvents.StatusUpdate, HandleStatusUpdate);
             _gateway.On(GatewayEvents.ToolStart, HandleToolStart);
             _gateway.On(GatewayEvents.ToolProgress, HandleToolProgress);

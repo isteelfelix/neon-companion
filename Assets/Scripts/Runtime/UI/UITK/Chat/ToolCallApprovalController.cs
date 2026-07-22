@@ -5,6 +5,7 @@ using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
+using NeonCompanion.Runtime.Localization;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.UI.UITK.Chat
@@ -26,13 +27,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private TaskCompletionSource<bool> _pendingApprovalTcs;
         private IChatTransport _hermesTransport;
 
-        // A background session's approval/clarify request, deferred until the user opens it.
+        // A background session's approval/clarify/secret request, deferred until the user opens it.
         private sealed class PendingRequest
         {
             public string sessionId;
             public bool isClarify;
             public ClarifyRequest clarify;
             public ApprovalRequest approval;
+            public SecretRequest secret;
         }
         private readonly Dictionary<string, PendingRequest> _pendingBySession = new Dictionary<string, PendingRequest>();
 
@@ -91,6 +93,21 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             try { _playAttentionSound?.Invoke(); } catch { }
         }
 
+        // Defer a background session's secret request (distinct: needs a text value, not approve/deny).
+        private void StorePendingSecret(string sessionId, SecretRequest secret)
+        {
+            if (string.IsNullOrEmpty(sessionId) || secret == null)
+                return;
+            _pendingBySession[sessionId] = new PendingRequest
+            {
+                sessionId = sessionId,
+                secret = secret
+            };
+            var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
+            chat?.MarkSessionAttention(sessionId);
+            try { _playAttentionSound?.Invoke(); } catch { }
+        }
+
         /// <summary>
         /// Show any deferred approval/clarify for the session the user just opened. Called when the
         /// foreground session changes.
@@ -106,7 +123,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
             chat?.ClearSessionAttention(sessionId);
 
-            if (p.isClarify)
+            if (p.secret != null)
+                ShowSecretNow(p.secret);
+            else if (p.isClarify)
                 ShowClarifyNow(p.clarify);
             else
                 _ = HandleHermesApprovalRequestAsync(p.sessionId, p.approval);
@@ -253,6 +272,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
                 _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
+                _hermesTransport.OnSecretRequest -= OnHermesSecretRequest;
                 _hermesTransport = null;
             }
         }
@@ -263,6 +283,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
                 _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
+                _hermesTransport.OnSecretRequest -= OnHermesSecretRequest;
                 _pendingBySession.Clear();
             }
 
@@ -274,6 +295,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     _hermesTransport = selector.SessionManager;
                     _hermesTransport.OnClarifyRequest += OnHermesClarifyRequest;
                     _hermesTransport.OnApprovalRequest += OnHermesApprovalRequest;
+                    _hermesTransport.OnSecretRequest += OnHermesSecretRequest;
                 }
             }
             else
@@ -428,6 +450,83 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 {
                     NeonLogger.LogError("Error stopping on Hermes approval reject: " + ex);
                 }
+            }
+        }
+
+        // secret.request is NOT an approve/deny choice: the agent is blocked on
+        // secret.respond {request_id, value} (a captured text value, e.g. an API key). It must
+        // never go through RespondToApproval — it gets its own masked text-input prompt.
+        private void OnHermesSecretRequest(string sessionId, SecretRequest request)
+        {
+            if (request == null || string.IsNullOrEmpty(request.requestId))
+                return;
+
+            if (IsForeground(sessionId))
+                ShowSecretNow(request);
+            else
+                StorePendingSecret(sessionId, request);
+        }
+
+        private void ShowSecretNow(SecretRequest request)
+        {
+            if (request == null || _messagesList == null)
+                return;
+
+            string label = !string.IsNullOrWhiteSpace(request.prompt)
+                ? request.prompt
+                : (!string.IsNullOrWhiteSpace(request.envVar)
+                    ? LocalizationExtensions.Get("secret.enter_value_for", "Enter a value for ") + request.envVar
+                    : LocalizationExtensions.Get("secret.enter_value", "Enter secret value"));
+            _showSystemMessage?.Invoke("[Hermes] " + label);
+            ShowSecretInput(request);
+        }
+
+        private void ShowSecretInput(SecretRequest request)
+        {
+            var container = new VisualElement();
+            container.AddToClassList("secret-input");
+            container.style.marginTop = 4;
+            container.style.marginLeft = 40;
+            container.style.flexDirection = FlexDirection.Row;
+            container.style.flexWrap = Wrap.Wrap;
+
+            var field = new TextField();
+            field.isPasswordField = true; // mask the captured secret in the UI
+            field.AddToClassList("secret-input__field");
+            field.style.minWidth = 200;
+
+            var submit = new Button(() => OnSecretSubmit(request, container, field));
+            submit.text = LocalizationExtensions.Get("secret.submit", "Submit");
+            submit.AddToClassList("secret-input__btn");
+
+            container.Add(field);
+            container.Add(submit);
+            _messagesList.Add(container);
+            _scrollToBottom?.Invoke();
+        }
+
+        private void OnSecretSubmit(SecretRequest request, VisualElement container, TextField field)
+        {
+            string value = field != null ? field.value : null;
+            if (container != null)
+                container.SetEnabled(false);
+            // Never echo the secret back into the transcript.
+            _showSystemMessage?.Invoke("[You] " + LocalizationExtensions.Get("secret.submitted", "(secret submitted)"));
+            _ = SendSecretResponse(request, value ?? string.Empty);
+        }
+
+        private async Task SendSecretResponse(SecretRequest request, string value)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector?.SessionManager == null)
+                return;
+            try
+            {
+                await selector.SessionManager.RespondToSecret(request.requestId, value);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError("[Hermes] Failed to send secret response: " + ex.Message);
             }
         }
 
