@@ -185,17 +185,36 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private const int SessionListRequestTimeoutSeconds = 60;
         private string _baseUrl;
         private string _token;
+        // When set, the client is in OAuth remote mode: REST calls authenticate with the
+        // session cookie instead of a Bearer token, and a 401 flags the session for reauth.
+        // Null => legacy token mode (unchanged).
+        private HermesRemoteAuth _remoteAuth;
 
-        public HermesRestClient(string baseUrl, string token = null)
+        public HermesRestClient(string baseUrl, string token = null, HermesRemoteAuth remoteAuth = null)
         {
             _baseUrl = (baseUrl ?? "").TrimEnd('/');
             _token = token;
+            _remoteAuth = remoteAuth;
         }
 
         public void Configure(string baseUrl, string token = null)
         {
             _baseUrl = (baseUrl ?? "").TrimEnd('/');
             _token = token;
+        }
+
+        /// <summary>
+        /// Attach (or clear) the OAuth remote session. When present the client sends the session
+        /// cookie instead of a Bearer token. Pass null to return to legacy token mode.
+        /// </summary>
+        public void SetRemoteAuth(HermesRemoteAuth remoteAuth)
+        {
+            _remoteAuth = remoteAuth;
+        }
+
+        private bool IsOAuthMode
+        {
+            get { return _remoteAuth != null && _remoteAuth.HasSession; }
         }
 
         // === Sessions ===
@@ -350,6 +369,19 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 if (request.result != UnityWebRequest.Result.Success)
                 {
                     string response = request.downloadHandler != null ? request.downloadHandler.text : null;
+
+                    // In OAuth remote mode a 401/403 means the session cookie is dead — flag it
+                    // so the connection layer / UI can prompt for a fresh sign-in instead of
+                    // silently failing every REST call. Gated on IsOAuthMode so token-mode 401s
+                    // keep their original generic-Exception behavior unchanged.
+                    if (IsOAuthMode && (request.responseCode == 401 || request.responseCode == 403))
+                    {
+                        _remoteAuth.MarkReauthRequired("expired");
+                        string reauthMsg = "Hermes session expired — sign in again [" + path + "]";
+                        Debug.LogWarning("[HermesRest] " + reauthMsg);
+                        throw new HermesReauthRequiredException("expired", reauthMsg);
+                    }
+
                     if (IsEndpointMissing(request.responseCode, response))
                     {
                         string message = "Hermes REST endpoint missing: " + path;
@@ -388,6 +420,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void ApplyHeaders(UnityWebRequest request)
         {
+            // OAuth remote mode: authenticate REST with the session cookie (Cookie is not a
+            // header UnityWebRequest forbids). Otherwise fall back to legacy Bearer token.
+            if (IsOAuthMode)
+            {
+                string cookie = _remoteAuth.CookieHeader;
+                if (!string.IsNullOrEmpty(cookie))
+                    request.SetRequestHeader("Cookie", cookie);
+                return;
+            }
+
             if (!string.IsNullOrEmpty(_token))
                 request.SetRequestHeader("Authorization", "Bearer " + _token);
         }

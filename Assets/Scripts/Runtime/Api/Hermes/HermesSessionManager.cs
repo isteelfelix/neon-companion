@@ -342,10 +342,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         // === IChatTransport: Connection ===
 
-        public async Task Connect(string url, string token = null)
+        public async Task Connect(string url, string token = null, string ticket = null)
         {
             string wsUrl = url;
-            if (!string.IsNullOrEmpty(token))
+            // OAuth remote mode: a single-use ws-ticket authenticates the upgrade (?ticket=).
+            // Legacy token mode is unchanged (?token=). Ticket wins when both are supplied.
+            if (!string.IsNullOrEmpty(ticket))
+            {
+                wsUrl = HermesRemoteAuth.BuildTicketWsUrl(wsUrl, ticket);
+            }
+            else if (!string.IsNullOrEmpty(token))
             {
                 string separator = wsUrl.Contains("?") ? "&" : "?";
                 wsUrl = wsUrl + separator + "token=" + Uri.EscapeDataString(token);

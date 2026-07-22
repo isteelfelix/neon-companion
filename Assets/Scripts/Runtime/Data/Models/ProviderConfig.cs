@@ -21,6 +21,16 @@ namespace NeonCompanion.Runtime.Data.Models
         /// </summary>
         public string backendType; // null = generic
 
+        // Hermes remote auth mode: "oauth" = Desktop-style cookie session + ws-ticket
+        // (production gated gateway); anything else / null = legacy token (Bearer + ?token=).
+        public string authMode;      // "oauth" | null
+        // Dashboard-auth provider name to authenticate against for password (basic-auth) login,
+        // e.g. "basic". Only used when authMode == "oauth".
+        public string authProvider;  // null = none
+        // Username for password login (non-secret). The password is kept in the secret store,
+        // never in this config. Only used when authMode == "oauth".
+        public string authUsername;  // null = none
+
         // Voice settings (OpenAI-compatible backend)
         public string sttProvider;    // "openai", "groq", "local" — null = auto
         public string ttsProvider;    // "edge", "openai", "elevenlabs", "minimax", "mistral" — null = auto

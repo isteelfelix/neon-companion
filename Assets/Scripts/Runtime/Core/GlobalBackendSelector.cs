@@ -56,6 +56,31 @@ namespace NeonCompanion.Runtime.Core
         public HermesGateway Gateway { get; private set; }
         public HermesSessionManager SessionManager { get; private set; }
 
+        // === Remote (OAuth/basic-auth) auth ===
+
+        // Desktop-style cookie session + ws-ticket auth. Non-null once SetupHermes ran; only
+        // exercised when the active Hermes provider has authMode == "oauth".
+        private HermesRemoteAuth _remoteAuth;
+
+        /// <summary>Current remote-session state (NoSession/Authenticated/ReauthRequired).</summary>
+        public HermesAuthState RemoteAuthState
+        {
+            get { return _remoteAuth != null ? _remoteAuth.State : HermesAuthState.NoSession; }
+        }
+
+        // Secret-store key for a provider's cached password (basic-auth login). Kept out of the
+        // provider config JSON; used to re-login transparently on reconnect.
+        private static string PasswordSecretKey(string providerId)
+        {
+            return "hermes_pw_" + (providerId ?? "");
+        }
+
+        private static bool IsOAuthProvider(ProviderConfig provider)
+        {
+            return provider != null
+                && string.Equals(provider.authMode, "oauth", StringComparison.OrdinalIgnoreCase);
+        }
+
         // === Reconnect ===
 
         private int _reconnectAttempt;
@@ -193,13 +218,33 @@ namespace NeonCompanion.Runtime.Core
 
             _shouldReconnect = true;
 
+            bool oauth = IsOAuthProvider(activeProvider);
+
             try
             {
-                await SessionManager.Connect(HermesWsUrl, HermesToken);
+                if (oauth)
+                {
+                    // Desktop-style: ensure a cookie session, mint a single-use ws-ticket, then
+                    // connect the WS with ?ticket=. The ticket is never stored.
+                    string ticket = await EnsureOAuthTicketAsync(activeProvider);
+                    await SessionManager.Connect(HermesWsUrl, null, ticket);
+                }
+                else
+                {
+                    await SessionManager.Connect(HermesWsUrl, HermesToken);
+                }
                 LastConnectionError = null;
                 _reconnectAttempt = 0;
                 _reconnectDelay = 1f;
                 NeonLogger.Log("[Backend] Hermes connected");
+            }
+            catch (HermesReauthRequiredException reauth)
+            {
+                // Credential problem, not a transport blip. Surface a clear, stable message and do
+                // NOT spin the reconnect loop — nothing will change until the user signs in again.
+                LastConnectionError = "Hermes sign-in required (" + reauth.Reason + ")";
+                Debug.LogWarning("[Backend] Hermes reauth required: " + reauth.Reason);
+                OnError?.Invoke(LastConnectionError);
             }
             catch (Exception ex)
             {
@@ -208,6 +253,94 @@ namespace NeonCompanion.Runtime.Core
                 OnError?.Invoke("Hermes connection failed: " + ex.Message);
                 ScheduleReconnect();
             }
+        }
+
+        /// <summary>
+        /// Ensure a live cookie session for an OAuth provider (logging in with stored credentials
+        /// when needed) and mint a fresh single-use ws-ticket. Throws
+        /// <see cref="HermesReauthRequiredException"/> when no session can be established.
+        /// </summary>
+        private async Task<string> EnsureOAuthTicketAsync(ProviderConfig provider)
+        {
+            if (_remoteAuth == null)
+                throw new HermesReauthRequiredException("no_cookie", "Remote auth not initialized.");
+
+            if (!_remoteAuth.HasSession)
+            {
+                // Try a stored-credential (basic-auth) login. A full-OAuth session that was pasted
+                // in via SetSessionCookie already set HasSession, so we only reach here when there
+                // is genuinely nothing to authenticate with.
+                string password = _secretStore != null ? _secretStore.GetSecret(PasswordSecretKey(provider.id)) : null;
+                if (!string.IsNullOrEmpty(provider.authProvider)
+                    && !string.IsNullOrEmpty(provider.authUsername)
+                    && !string.IsNullOrEmpty(password))
+                {
+                    await _remoteAuth.PasswordLoginAsync(provider.authProvider, provider.authUsername, password);
+                }
+                else
+                {
+                    _remoteAuth.MarkReauthRequired("no_cookie");
+                    throw new HermesReauthRequiredException(
+                        "no_cookie",
+                        "No Hermes session — sign in to the remote gateway first.");
+                }
+            }
+
+            return await _remoteAuth.MintWsTicketAsync();
+        }
+
+        /// <summary>
+        /// Programmatic sign-in for an OAuth/basic-auth Hermes provider: authenticate with a
+        /// username/password, cache the password for transparent reconnects, and (re)connect.
+        /// The password is stored only in the secret store — never in provider config, never
+        /// logged. Returns true on a successful session; false surfaces via LastConnectionError.
+        /// </summary>
+        public async Task<bool> HermesPasswordLoginAsync(string username, string password)
+        {
+            if (CurrentMode != BackendMode.Hermes || _remoteAuth == null)
+            {
+                LastConnectionError = "Hermes backend is not active.";
+                return false;
+            }
+
+            var activeProvider = _activeProviderResolver != null ? _activeProviderResolver() : null;
+            if (!IsHermesProviderConfig(activeProvider) || !IsOAuthProvider(activeProvider))
+            {
+                LastConnectionError = "Active provider is not an OAuth Hermes provider.";
+                return false;
+            }
+
+            // Ensure the remote auth targets the active provider's endpoint before logging in.
+            ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
+
+            try
+            {
+                await _remoteAuth.PasswordLoginAsync(activeProvider.authProvider, username, password);
+            }
+            catch (Exception ex)
+            {
+                LastConnectionError = ex.Message;
+                Debug.LogWarning("[Backend] Hermes login failed: " + ex.Message);
+                OnError?.Invoke(LastConnectionError);
+                return false;
+            }
+
+            // Cache the password (secret store only) so ConnectHermes can re-login on reconnect,
+            // and remember the username in config for the same reason.
+            _secretStore?.SetSecret(PasswordSecretKey(activeProvider.id), password);
+            activeProvider.authUsername = username;
+
+            await ReconnectHermes();
+            return _remoteAuth.State == HermesAuthState.Authenticated;
+        }
+
+        /// <summary>
+        /// Adopt a session cookie obtained from a full browser OAuth sign-in (out of scope to run
+        /// the interactive IDP redirect inside the app). Not persisted. Follow with ConnectHermes.
+        /// </summary>
+        public void SetHermesSessionCookie(string cookie)
+        {
+            _remoteAuth?.SetSessionCookie(cookie);
         }
 
         /// <summary>
@@ -254,6 +387,8 @@ namespace NeonCompanion.Runtime.Core
                 HermesRestUrl = NormalizeRestUrl(baseUrl);
                 if (RestClient != null)
                     RestClient.Configure(HermesRestUrl, HermesToken);
+                if (_remoteAuth != null)
+                    _remoteAuth.Configure(HermesRestUrl);
             }
 
             if (apiKey != null)
@@ -383,7 +518,8 @@ namespace NeonCompanion.Runtime.Core
             ActiveTransport = SessionManager;
             ActiveTransport.OnStateChanged += HandleTransportStateChanged;
 
-            RestClient = new HermesRestClient(HermesRestUrl, HermesToken);
+            _remoteAuth = new HermesRemoteAuth(HermesRestUrl);
+            RestClient = new HermesRestClient(HermesRestUrl, HermesToken, _remoteAuth);
         }
 
         private void CleanupHermes()
@@ -392,6 +528,7 @@ namespace NeonCompanion.Runtime.Core
             Gateway = null;
             SessionManager = null;
             RestClient = null;
+            _remoteAuth = null;
         }
 
         private void SaveSettings()
