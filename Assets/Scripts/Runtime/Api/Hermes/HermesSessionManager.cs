@@ -131,6 +131,21 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string message;
     }
 
+    [Serializable]
+    public class SecretEventPayload
+    {
+        public string request_id;
+        public string env_var;
+        public string prompt;
+    }
+
+    [Serializable]
+    public class SessionTitlePayload
+    {
+        public string session_id;
+        public string title;
+    }
+
     public class TerminalExecuteRequest
     {
         public string RequestId;
@@ -160,6 +175,37 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private readonly Dictionary<string, SessionRuntimeInfo> _runtimeBySession = new Dictionary<string, SessionRuntimeInfo>();
         private readonly Dictionary<string, string> _runtimeByDisplaySession = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _displayByRuntimeSession = new Dictionary<string, string>();
+
+        // Unscoped-stream pin (Desktop gateway-events.ts resolveGatewayEventSessionId). Holds the
+        // display session id that last received an unscoped message.start, and is released on that
+        // session's message.complete/error. Unscoped stream events (delta/tool/reasoning/prompt)
+        // resolve to the pin so a mid-turn chat switch cannot steal live output onto the newly
+        // focused chat.
+        private string _unscopedStreamSessionId;
+
+        // Stream events that, when they arrive WITHOUT an explicit session_id, belong to the pinned
+        // turn rather than whatever chat is focused (Desktop UNSCOPED_STREAM_EVENT_TYPES). Companion
+        // has no browser.progress event, so it is intentionally absent.
+        private static readonly HashSet<string> UnscopedStreamEventTypes = new HashSet<string>
+        {
+            GatewayEvents.ApprovalRequest,
+            GatewayEvents.ClarifyRequest,
+            GatewayEvents.Error,
+            GatewayEvents.MessageComplete,
+            GatewayEvents.MessageDelta,
+            GatewayEvents.MessageInterim,
+            GatewayEvents.MessageStart,
+            GatewayEvents.ReasoningAvailable,
+            GatewayEvents.ReasoningDelta,
+            GatewayEvents.SecretRequest,
+            GatewayEvents.StatusUpdate,
+            GatewayEvents.SudoRequest,
+            GatewayEvents.ThinkingDelta,
+            GatewayEvents.ToolComplete,
+            GatewayEvents.ToolGenerating,
+            GatewayEvents.ToolProgress,
+            GatewayEvents.ToolStart
+        };
 
         /// <summary>True if the given session currently has a generation in flight.</summary>
         public bool IsSessionBusy(string sessionId)
@@ -270,6 +316,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public event Action<string, ToolCallUpdate> OnToolUpdate;
         public event Action<string, ClarifyRequest> OnClarifyRequest;
         public event Action<string, ApprovalRequest> OnApprovalRequest;
+        public event Action<string, SecretRequest> OnSecretRequest;
+        public event Action<string, string> OnSessionTitle;
         public event Action<string, string> OnError;
         public event Action<TransportState> OnStateChanged;
         public event Action<string> OnRuntimeInfoChanged;
@@ -345,9 +393,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             try
             {
+                // prompt.submit is effectively fire-and-forget: turn completion is signalled by
+                // message.complete/error stream events, not this ack. Pass the long timeout so a
+                // long-running turn does not surface a spurious "request timed out"
+                // (Desktop PROMPT_SUBMIT_REQUEST_TIMEOUT_MS = 1_800_000).
                 await _gateway.Request<object>(
                     RpcMethods.PromptSubmit,
-                    new { session_id = runtimeSessionId, text });
+                    new { session_id = runtimeSessionId, text },
+                    HermesGateway.PromptSubmitTimeoutMs);
             }
             catch
             {
@@ -579,6 +632,22 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 new { session_id = RuntimeSessionIdFor(sid), choice });
         }
 
+        /// <summary>Answer a secret.request (skill credential capture) with the captured value.</summary>
+        public async Task RespondToSecret(string requestId, string value)
+        {
+            await _gateway.Request<object>(
+                RpcMethods.SecretRespond,
+                new { request_id = requestId, value });
+        }
+
+        /// <summary>Answer a sudo.request with the captured password.</summary>
+        public async Task RespondToSudo(string requestId, string password)
+        {
+            await _gateway.Request<object>(
+                RpcMethods.SudoRespond,
+                new { request_id = requestId, password });
+        }
+
         // === Event Handlers ===
 
         private void RegisterEventHandlers()
@@ -591,16 +660,30 @@ namespace NeonCompanion.Runtime.Api.Hermes
             _gateway.On(GatewayEvents.SessionInfo, HandleSessionInfo);
             _gateway.On(GatewayEvents.MessageStart, HandleMessageStart);
             _gateway.On(GatewayEvents.MessageDelta, HandleMessageDelta);
+            _gateway.On(GatewayEvents.MessageInterim, HandleMessageInterim);
             _gateway.On(GatewayEvents.MessageComplete, HandleMessageComplete);
             _gateway.On(GatewayEvents.ReasoningDelta, HandleReasoningDelta);
+            // reasoning.available is a whole-block reasoning push; companion reasoning is
+            // append-only, so route it through the same path as reasoning.delta.
+            _gateway.On(GatewayEvents.ReasoningAvailable, HandleReasoningDelta);
+            _gateway.On(GatewayEvents.StatusUpdate, HandleStatusUpdate);
             _gateway.On(GatewayEvents.ToolStart, HandleToolStart);
             _gateway.On(GatewayEvents.ToolProgress, HandleToolProgress);
+            // tool.generating is the pre-run "assembling arguments" phase — a running tool update.
+            _gateway.On(GatewayEvents.ToolGenerating, HandleToolStart);
             _gateway.On(GatewayEvents.ToolComplete, HandleToolComplete);
             _gateway.On(GatewayEvents.ClarifyRequest, HandleClarifyRequest);
             _gateway.On(GatewayEvents.ApprovalRequest, HandleApprovalRequest);
             _gateway.On(GatewayEvents.SudoRequest, HandleSudoRequest);
+            _gateway.On(GatewayEvents.SecretRequest, HandleSecretRequest);
+            _gateway.On(GatewayEvents.SessionTitle, HandleSessionTitle);
+            _gateway.On(GatewayEvents.BackgroundComplete, HandleBackgroundComplete);
             _gateway.On(GatewayEvents.TerminalExecute, HandleTerminalExecute);
             _gateway.On(GatewayEvents.Error, HandleError);
+            // subagent.* has no dedicated per-type registration; a wildcard lets any subagent
+            // subtype be handled by prefix (Desktop matches on the SubagentPrefix) so none is
+            // dropped silently, while unscoped ones are still refused inside the handler.
+            _gateway.On("*", HandleWildcardEvent);
         }
 
         private bool IsActiveEvent(GatewayEvent evt)
@@ -611,12 +694,53 @@ namespace NeonCompanion.Runtime.Api.Hermes
             return sessionId == ActiveSessionId;
         }
 
-        /// <summary>Resolve the session id an event belongs to, falling back to the foreground.</summary>
+        /// <summary>
+        /// Resolve the display session id an event belongs to, porting Desktop
+        /// resolveGatewayEventSessionId (gateway-events.ts). Explicit session_id always wins;
+        /// unscoped stream events pin to the session that last received message.start so a
+        /// mid-turn chat switch cannot steal live deltas/tool output; unscoped subagent.* is
+        /// refused (returns null) rather than attributed to the focused chat. This mutates the
+        /// unscoped-stream pin and must be called exactly once per event (each handler calls it
+        /// once at the top; there is one handler per event type).
+        /// </summary>
         private string EventSessionId(GatewayEvent evt)
         {
-            if (evt != null && !string.IsNullOrEmpty(evt.SessionId))
-                return DisplaySessionIdFor(evt.SessionId);
-            return ActiveSessionId;
+            if (evt == null)
+                return ActiveSessionId;
+
+            string type = evt.Type;
+            string explicitSid = string.IsNullOrEmpty(evt.SessionId) ? null : DisplaySessionIdFor(evt.SessionId);
+            bool isEnd = type == GatewayEvents.MessageComplete || type == GatewayEvents.Error;
+
+            // Explicit session_id always wins. Release the pin only when this session's own turn ends.
+            if (!string.IsNullOrEmpty(explicitSid))
+            {
+                if (isEnd && explicitSid == _unscopedStreamSessionId)
+                    _unscopedStreamSessionId = null;
+                return explicitSid;
+            }
+
+            // Unscoped subagent.* must never attach to the focused chat (Desktop drop rule).
+            if (!string.IsNullOrEmpty(type) && type.StartsWith(GatewayEvents.SubagentPrefix))
+                return null;
+
+            bool streamEvent = !string.IsNullOrEmpty(type) && UnscopedStreamEventTypes.Contains(type);
+
+            string sid;
+            if (type == GatewayEvents.MessageStart)
+                sid = ActiveSessionId;
+            else if (streamEvent)
+                sid = !string.IsNullOrEmpty(_unscopedStreamSessionId) ? _unscopedStreamSessionId : ActiveSessionId;
+            else
+                sid = ActiveSessionId;
+
+            // message.start pins the live stream to the focused session; end events release it.
+            if (type == GatewayEvents.MessageStart && !string.IsNullOrEmpty(ActiveSessionId))
+                _unscopedStreamSessionId = ActiveSessionId;
+            else if (isEnd)
+                _unscopedStreamSessionId = null;
+
+            return sid;
         }
 
         private void ApplySessionInfo(SessionInfo info)
@@ -716,6 +840,26 @@ namespace NeonCompanion.Runtime.Api.Hermes
             string text = ExtractText(evt.Payload);
             if (!string.IsNullOrEmpty(text))
                 OnReasoningDelta?.Invoke(sid, text);
+        }
+
+        private void HandleMessageInterim(GatewayEvent evt)
+        {
+            // Interim assistant commentary (text alongside tool calls, or an attempted final
+            // answer before a verify-on-stop nudge). Its text already streamed into the live
+            // bubble via message.delta (Desktop gateway-event.ts), and companion finalizes that
+            // single bubble on message.complete — so there is nothing extra to render. Resolve
+            // the sid so the unscoped-stream pin stays consistent; the bookkeeping is the point.
+            EventSessionId(evt);
+        }
+
+        private void HandleStatusUpdate(GatewayEvent evt)
+        {
+            // status.update surfaces phase changes (e.g. compacting) and background-process
+            // notifications. Companion has no compaction UI; at least keep the pin consistent and
+            // let listeners re-read runtime info for the owning session.
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
+            OnRuntimeInfoChanged?.Invoke(sid);
         }
 
         private static UsageStats ExtractUsage(JToken token)
@@ -942,6 +1086,79 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 description = payload.question,
                 type = "sudo"
             });
+        }
+
+        private void HandleSecretRequest(GatewayEvent evt)
+        {
+            if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
+
+            var payload = evt.Payload.ToObject<SecretEventPayload>();
+            if (payload == null || string.IsNullOrEmpty(payload.request_id)) return;
+
+            // Surfaced on its own event (not OnApprovalRequest): the agent is blocked on
+            // secret.respond {request_id, value} — a text value, not an approve/deny choice.
+            OnSecretRequest?.Invoke(sid, new SecretRequest
+            {
+                requestId = payload.request_id,
+                envVar = payload.env_var,
+                prompt = payload.prompt
+            });
+        }
+
+        private void HandleSessionTitle(GatewayEvent evt)
+        {
+            if (evt.Payload == null) return;
+
+            var payload = evt.Payload.ToObject<SessionTitlePayload>();
+            if (payload == null) return;
+
+            string title = payload.title != null ? payload.title.Trim() : null;
+            if (string.IsNullOrEmpty(title)) return;
+
+            // session.title carries the STORED/display id in its payload (titler runs async after
+            // the turn). Fall back to the event's own routing when it is absent.
+            string sid = !string.IsNullOrEmpty(payload.session_id)
+                ? DisplaySessionIdFor(payload.session_id)
+                : EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
+
+            OnSessionTitle?.Invoke(sid, title);
+        }
+
+        private void HandleBackgroundComplete(GatewayEvent evt)
+        {
+            // Optional event: a background session finished. Companion has no background-session
+            // panel yet — resolve the sid (keeps pin bookkeeping consistent) and log so it is not
+            // dropped silently. Must not crash on an unexpected/absent payload.
+            string sid = EventSessionId(evt);
+            NeonLogger.Log("[Hermes] background.complete for session " + (string.IsNullOrEmpty(sid) ? "<none>" : sid));
+        }
+
+        private void HandleWildcardEvent(GatewayEvent evt)
+        {
+            if (evt == null || string.IsNullOrEmpty(evt.Type))
+                return;
+            // Only subagent.* is routed here; every other type has a dedicated handler.
+            if (evt.Type.StartsWith(GatewayEvents.SubagentPrefix))
+                HandleSubagentEvent(evt);
+        }
+
+        private void HandleSubagentEvent(GatewayEvent evt)
+        {
+            // subagent.* describes background/async work. An unscoped event (no session_id) must
+            // NEVER attach to the focused chat (Desktop gatewayEventRequiresSessionId → drop). A
+            // scoped event carries its owning session's id; companion has no subagent panel yet, so
+            // log a structured line under the CORRECT session rather than dropping it silently or
+            // misattributing it to whichever chat is focused.
+            if (string.IsNullOrEmpty(evt.SessionId))
+                return; // unscoped subagent.* → drop
+
+            string sid = DisplaySessionIdFor(evt.SessionId);
+            string preview = evt.Payload != null ? evt.Payload.ToString(Formatting.None) : "";
+            if (preview.Length > 500)
+                preview = preview.Substring(0, 500) + " …";
+            NeonLogger.Log("[Hermes] " + evt.Type + " (session " + sid + "): " + preview);
         }
 
         private void HandleError(GatewayEvent evt)

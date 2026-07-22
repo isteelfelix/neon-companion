@@ -56,6 +56,17 @@ namespace NeonCompanion.Runtime.Api
         /// <summary>Approval request from agent (approval.request). Args: sessionId, request.</summary>
         event Action<string, ApprovalRequest> OnApprovalRequest;
 
+        /// <summary>
+        /// Secret / credential capture request (secret.request). Distinct from approval: the
+        /// agent is blocked on <c>secret.respond {request_id, value}</c> (a text value, not an
+        /// approve/deny choice), so it must not be routed through the approval responder. Answer
+        /// via <see cref="Hermes.HermesSessionManager.RespondToSecret"/>. Args: sessionId, request.
+        /// </summary>
+        event Action<string, SecretRequest> OnSecretRequest;
+
+        /// <summary>Live auto-title push for a session (session.title). Args: sessionId, title.</summary>
+        event Action<string, string> OnSessionTitle;
+
         /// <summary>Error from backend. Args: sessionId (may be null for connection-level), message.</summary>
         event Action<string, string> OnError;
 
@@ -104,5 +115,13 @@ namespace NeonCompanion.Runtime.Api
         public string requestId;
         public string description;
         public string type; // "approval" | "sudo" | "secret"
+    }
+
+    [Serializable]
+    public class SecretRequest
+    {
+        public string requestId;
+        public string envVar;
+        public string prompt;
     }
 }
