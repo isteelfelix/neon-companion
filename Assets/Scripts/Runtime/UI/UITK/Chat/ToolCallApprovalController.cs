@@ -473,6 +473,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         /// Hermes-specific approval flow that returns the full gateway choice string.
         /// Desktop choices: "once" (run this time), "session" (allow for session),
         /// "always" (permanent), "deny" (reject).
+        /// When the backend supplies its own choices (e.g. smart_denied, allow_permanent=false),
+        /// each server-sent choice becomes a button. Otherwise the default triad is used.
         /// </summary>
         private async Task<(bool approved, string choice)> RequestHermesApprovalAsync(
             ToolCallRequest request, ApprovalRequest hermesRequest)
@@ -481,24 +483,44 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return (true, "once");
 
             var prompt = new NeonCompanion.Runtime.UI.UITK.ApprovalPrompt();
-            var approvalElement = prompt.Create(request);
+            bool hasServerChoices = hermesRequest != null
+                && hermesRequest.choices != null && hermesRequest.choices.Length > 0;
+
+            VisualElement approvalElement;
+            if (hasServerChoices)
+                approvalElement = prompt.Create(request, hermesRequest.choices,
+                    hermesRequest.allowPermanent, hermesRequest.smartDenied);
+            else
+                approvalElement = prompt.Create(request);
+
             _currentApprovalPrompt = prompt;
             _currentApprovalElement = approvalElement;
             _messagesList.Add(approvalElement);
             _scrollToBottom?.Invoke();
 
-            bool approved = false;
-            bool always = false;
             var completionSource = new TaskCompletionSource<bool>();
             _pendingApprovalTcs = completionSource;
 
-            prompt.OnDecision += (a, alwaysApprove) =>
+            string selectedChoice = null;
+
+            if (hasServerChoices)
             {
-                approved = a;
-                always = alwaysApprove;
-                _pendingApprovalTcs = null;
-                completionSource.TrySetResult(true);
-            };
+                prompt.OnChoiceSelected += (choice) =>
+                {
+                    selectedChoice = choice;
+                    _pendingApprovalTcs = null;
+                    completionSource.TrySetResult(true);
+                };
+            }
+            else
+            {
+                prompt.OnDecision += (approved, alwaysApprove) =>
+                {
+                    selectedChoice = approved ? (alwaysApprove ? "always" : "once") : "deny";
+                    _pendingApprovalTcs = null;
+                    completionSource.TrySetResult(true);
+                };
+            }
 
             await completionSource.Task;
 
@@ -509,20 +531,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _currentApprovalElement = null;
             _pendingApprovalTcs = null;
 
-            string choice;
-            if (!approved)
-            {
-                choice = "deny";
-            }
-            else if (always)
-            {
-                choice = "always";
-            }
-            else
-            {
-                choice = "once";
-            }
-
+            string choice = selectedChoice ?? "deny";
+            bool approved = !string.Equals(choice, "deny", StringComparison.OrdinalIgnoreCase);
             return (approved, choice);
         }
 
