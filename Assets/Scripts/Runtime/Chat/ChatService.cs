@@ -502,7 +502,12 @@ namespace NeonCompanion.Runtime.Chat
             // Foreground hint drives RuntimeInfo (context bar) and foreground-only handlers.
             var mgr = GlobalBackendSelector.Instance?.SessionManager;
             if (mgr != null)
+            {
                 mgr.SetForegroundSession(serverId);
+                UsageStats usage = await mgr.RequestSessionUsage(serverId);
+                if (usage == null || usage.context_max <= 0 || usage.context_used <= 0)
+                    await mgr.RequestContextBreakdown(serverId);
+            }
 
             NeonLogger.Log($"Switched to Hermes session {serverId}");
         }

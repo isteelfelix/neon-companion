@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
 using Newtonsoft.Json;
@@ -291,7 +292,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
         /// </summary>
         public void SetForegroundSession(string sessionId)
         {
-            ActiveSessionId = DisplaySessionIdFor(sessionId);
+            string displaySessionId = DisplaySessionIdFor(sessionId);
+            ActiveSessionId = displaySessionId;
+            OnRuntimeInfoChanged?.Invoke(displaySessionId);
         }
 
         public string RuntimeSessionIdFor(string sessionId)
@@ -778,13 +781,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrEmpty(sid))
                 return null;
 
+            string displaySid = DisplaySessionIdFor(sid);
             string runtimeSid = RuntimeSessionIdFor(sid);
             try
             {
-                return await _gateway.Request<ContextBreakdown>(
+                ContextBreakdown breakdown = await _gateway.Request<ContextBreakdown>(
                     RpcMethods.SessionContextBreakdown,
                     new { session_id = runtimeSid },
                     timeoutMs: 5000);
+                if (breakdown != null)
+                    ApplyContextBreakdown(displaySid, breakdown);
+                return breakdown;
             }
             catch
             {
@@ -802,13 +809,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrEmpty(sid))
                 return null;
 
+            string displaySid = DisplaySessionIdFor(sid);
             string runtimeSid = RuntimeSessionIdFor(sid);
             try
             {
-                return await _gateway.Request<UsageStats>(
+                UsageStats usage = await _gateway.Request<UsageStats>(
                     RpcMethods.SessionUsage,
                     new { session_id = runtimeSid },
                     timeoutMs: 5000);
+                if (usage != null)
+                    ApplyUsage(displaySid, usage);
+                return usage;
             }
             catch
             {
@@ -944,6 +955,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
             var info = evt.Payload.ToObject<SessionRuntimeInfo>();
             if (info == null) return;
 
+            SessionRuntimeInfo previous;
+            _runtimeBySession.TryGetValue(sid, out previous);
+            JToken usageToken = evt.Payload.Type == JTokenType.Object ? evt.Payload["usage"] : null;
+            if (usageToken != null && usageToken.Type == JTokenType.Object)
+                info.usage = MergeUsage(usageToken, previous != null ? previous.usage : null);
+            else if (info.usage == null && previous != null)
+                info.usage = previous.usage;
+
             _runtimeBySession[sid] = info;
             OnRuntimeInfoChanged?.Invoke(sid);
             // cwd is a foreground/workspace concern — only the viewed session drives it.
@@ -993,10 +1012,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             if (evt.Payload != null)
             {
-                UsageStats usage = ExtractUsage(evt.Payload);
-                SessionRuntimeInfo rt = RuntimeInfoFor(sid);
-                if (usage != null && rt != null)
-                    rt.usage = usage;
+                ApplyUsage(sid, evt.Payload);
             }
 
             OnComplete?.Invoke(sid, finalText);
@@ -1035,23 +1051,121 @@ namespace NeonCompanion.Runtime.Api.Hermes
             OnRuntimeInfoChanged?.Invoke(sid);
         }
 
-        private static UsageStats ExtractUsage(JToken token)
+        private void ApplyUsage(string sessionId, JToken payload)
+        {
+            if (string.IsNullOrEmpty(sessionId) || payload == null || payload.Type != JTokenType.Object)
+                return;
+
+            JToken usageToken = payload["usage"];
+            if (usageToken == null || usageToken.Type != JTokenType.Object)
+                return;
+
+            string sid = DisplaySessionIdFor(sessionId);
+            SessionRuntimeInfo rt;
+            if (!_runtimeBySession.TryGetValue(sid, out rt) || rt == null)
+            {
+                rt = new SessionRuntimeInfo();
+                _runtimeBySession[sid] = rt;
+            }
+
+            rt.usage = MergeUsage(usageToken, rt.usage);
+            OnRuntimeInfoChanged?.Invoke(sid);
+        }
+
+        private void ApplyUsage(string sessionId, UsageStats usage)
+        {
+            if (string.IsNullOrEmpty(sessionId) || usage == null)
+                return;
+
+            string sid = DisplaySessionIdFor(sessionId);
+            SessionRuntimeInfo rt;
+            if (!_runtimeBySession.TryGetValue(sid, out rt) || rt == null)
+            {
+                rt = new SessionRuntimeInfo();
+                _runtimeBySession[sid] = rt;
+            }
+
+            rt.usage = usage;
+            OnRuntimeInfoChanged?.Invoke(sid);
+        }
+
+        private void ApplyContextBreakdown(string sessionId, ContextBreakdown breakdown)
+        {
+            if (string.IsNullOrEmpty(sessionId) || breakdown == null)
+                return;
+
+            string sid = DisplaySessionIdFor(sessionId);
+            SessionRuntimeInfo rt;
+            if (!_runtimeBySession.TryGetValue(sid, out rt) || rt == null)
+            {
+                rt = new SessionRuntimeInfo();
+                _runtimeBySession[sid] = rt;
+            }
+
+            UsageStats usage = rt.usage ?? new UsageStats();
+            if (breakdown.context_max > 0)
+                usage.context_max = breakdown.context_max;
+            if (breakdown.context_used >= 0)
+                usage.context_used = breakdown.context_used;
+            if (breakdown.context_percent >= 0)
+                usage.context_percent = breakdown.context_percent;
+            rt.usage = usage;
+            OnRuntimeInfoChanged?.Invoke(sid);
+        }
+
+        private static UsageStats MergeUsage(JToken usageToken, UsageStats current)
+        {
+            UsageStats merged = current != null
+                ? new UsageStats
+                {
+                    input = current.input,
+                    output = current.output,
+                    total = current.total,
+                    calls = current.calls,
+                    context_max = current.context_max,
+                    context_used = current.context_used,
+                    context_percent = current.context_percent,
+                    cost_usd = current.cost_usd
+                }
+                : new UsageStats();
+
+            SetUsageInt(usageToken, "input", value => merged.input = value);
+            SetUsageInt(usageToken, "output", value => merged.output = value);
+            SetUsageInt(usageToken, "total", value => merged.total = value);
+            SetUsageInt(usageToken, "calls", value => merged.calls = value);
+            SetUsageInt(usageToken, "context_max", value => merged.context_max = value);
+            SetUsageInt(usageToken, "context_used", value => merged.context_used = value);
+            SetUsageFloat(usageToken, "context_percent", value => merged.context_percent = value);
+            SetUsageFloat(usageToken, "cost_usd", value => merged.cost_usd = value);
+            return merged;
+        }
+
+        private static void SetUsageInt(JToken token, string key, Action<int> set)
         {
             if (token == null || token.Type != JTokenType.Object)
-                return null;
+                return;
 
-            JToken usageToken = token["usage"];
-            if (usageToken == null || usageToken.Type != JTokenType.Object)
-                return null;
+            JToken valueToken = token[key];
+            if (valueToken == null || valueToken.Type == JTokenType.Null)
+                return;
 
-            try
-            {
-                return usageToken.ToObject<UsageStats>();
-            }
-            catch
-            {
-                return null;
-            }
+            int value;
+            if (int.TryParse(valueToken.ToString(), out value))
+                set(value);
+        }
+
+        private static void SetUsageFloat(JToken token, string key, Action<float> set)
+        {
+            if (token == null || token.Type != JTokenType.Object)
+                return;
+
+            JToken valueToken = token[key];
+            if (valueToken == null || valueToken.Type == JTokenType.Null)
+                return;
+
+            float value;
+            if (float.TryParse(valueToken.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+                set(value);
         }
 
         private static string ExtractText(JToken token)
