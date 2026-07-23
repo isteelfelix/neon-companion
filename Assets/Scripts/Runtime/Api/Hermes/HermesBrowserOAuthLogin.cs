@@ -212,7 +212,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     if (process.HasExited)
                     {
                         // One last cookie read after close — cookies may already be written.
-                        string last = await TryReadSessionCookiesViaCdpAsync(ws, ref nextId, gatewayHost);
+                        string last = await TryReadSessionCookiesViaCdpAsync(ws, nextId, gatewayHost);
+                        nextId++;
                         if (!string.IsNullOrEmpty(last))
                         {
                             result.Ok = true;
@@ -225,7 +226,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
                         return result;
                     }
 
-                    string cookieHeader = await TryReadSessionCookiesViaCdpAsync(ws, ref nextId, gatewayHost);
+                    string cookieHeader = await TryReadSessionCookiesViaCdpAsync(ws, nextId, gatewayHost);
+                    nextId++;
                     if (!string.IsNullOrEmpty(cookieHeader))
                     {
                         result.Ok = true;
@@ -301,13 +303,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private static async Task<string> TryReadSessionCookiesViaCdpAsync(
             ClientWebSocket ws,
-            ref int nextId,
+            int nextId,
             string gatewayHost)
         {
             if (ws == null || ws.State != WebSocketState.Open)
                 return null;
 
-            int id = nextId++;
+            int id = nextId;
             JObject response = await CdpSendAsync(ws, id, "Network.getAllCookies", null);
             if (response == null)
                 return null;
