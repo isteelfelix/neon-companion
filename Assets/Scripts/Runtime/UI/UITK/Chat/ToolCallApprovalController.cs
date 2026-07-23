@@ -441,13 +441,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 parameters = new Dictionary<string, string>()
             };
 
-            bool approved = await RequestToolApprovalAsync(toolReq);
+            // Use the dedicated Hermes approval flow that tracks the full choice.
+            var (approved, choice) = await RequestHermesApprovalAsync(toolReq, request);
 
             try
             {
                 var selector = GlobalBackendSelector.Instance;
                 if (selector?.SessionManager != null)
-                    await selector.SessionManager.RespondToApproval(sessionId, approved);
+                    await selector.SessionManager.RespondToApproval(sessionId, choice);
             }
             catch (Exception ex)
             {
@@ -466,6 +467,63 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     NeonLogger.LogError("Error stopping on Hermes approval reject: " + ex);
                 }
             }
+        }
+
+        /// <summary>
+        /// Hermes-specific approval flow that returns the full gateway choice string.
+        /// Desktop choices: "once" (run this time), "session" (allow for session),
+        /// "always" (permanent), "deny" (reject).
+        /// </summary>
+        private async Task<(bool approved, string choice)> RequestHermesApprovalAsync(
+            ToolCallRequest request, ApprovalRequest hermesRequest)
+        {
+            if (request == null)
+                return (true, "once");
+
+            var prompt = new NeonCompanion.Runtime.UI.UITK.ApprovalPrompt();
+            var approvalElement = prompt.Create(request);
+            _currentApprovalPrompt = prompt;
+            _currentApprovalElement = approvalElement;
+            _messagesList.Add(approvalElement);
+            _scrollToBottom?.Invoke();
+
+            bool approved = false;
+            bool always = false;
+            var completionSource = new TaskCompletionSource<bool>();
+            _pendingApprovalTcs = completionSource;
+
+            prompt.OnDecision += (a, alwaysApprove) =>
+            {
+                approved = a;
+                always = alwaysApprove;
+                _pendingApprovalTcs = null;
+                completionSource.TrySetResult(true);
+            };
+
+            await completionSource.Task;
+
+            if (approvalElement != null && approvalElement.parent != null)
+                approvalElement.RemoveFromHierarchy();
+
+            _currentApprovalPrompt = null;
+            _currentApprovalElement = null;
+            _pendingApprovalTcs = null;
+
+            string choice;
+            if (!approved)
+            {
+                choice = "deny";
+            }
+            else if (always)
+            {
+                choice = "always";
+            }
+            else
+            {
+                choice = "once";
+            }
+
+            return (approved, choice);
         }
 
         // secret.request is NOT an approve/deny choice: the agent is blocked on
@@ -537,7 +595,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return;
             try
             {
-                await selector.SessionManager.RespondToSecret(request.requestId, value);
+                // Branch on isSudo: sudo.request expects sudo.respond {request_id, password},
+                // while secret.request expects secret.respond {request_id, value}. Mixing them
+                // leaves the agent blocked forever on the wrong respond call.
+                if (request.isSudo)
+                    await selector.SessionManager.RespondToSudo(request.requestId, value);
+                else
+                    await selector.SessionManager.RespondToSecret(request.requestId, value);
             }
             catch (Exception ex)
             {

@@ -31,6 +31,14 @@ namespace NeonCompanion.Runtime.Api
         /// <summary>Interrupt the generation of a specific session.</summary>
         Task Interrupt(string sessionId);
 
+        /// <summary>
+        /// Nudge the live turn without interrupting (session.steer). The gateway appends
+        /// the text to the next tool result so the model reads it on its next iteration.
+        /// Returns true if the steer was accepted (status="queued"), false if there is no
+        /// live tool window to steer into.
+        /// </summary>
+        Task<bool> Steer(string sessionId, string text);
+
         // --- Events ---
         // All streaming events carry the originating session_id so a single transport
         // can multiplex several concurrent sessions (Hermes parallel sessions).
@@ -116,7 +124,15 @@ namespace NeonCompanion.Runtime.Api
     {
         public string requestId;
         public string description;
+        public string command;
         public string type; // "approval" | "sudo" | "secret"
+        /// <summary>Allowed choices from the backend (e.g. ["once","deny"] when smart_denied).
+        /// Null means all defaults are allowed.</summary>
+        public string[] choices;
+        /// <summary>False when the backend won't honor a permanent allow (tirith warning).</summary>
+        public bool allowPermanent = true;
+        /// <summary>True when the backend's smart-deny heuristic flagged this command.</summary>
+        public bool smartDenied;
     }
 
     [Serializable]
@@ -125,5 +141,11 @@ namespace NeonCompanion.Runtime.Api
         public string requestId;
         public string envVar;
         public string prompt;
+        /// <summary>
+        /// True when this is a sudo password capture (sudo.request), not a skill secret. Both need
+        /// a masked text value, but sudo answers via <c>sudo.respond {request_id, password}</c> and a
+        /// skill secret via <c>secret.respond {request_id, value}</c> — the responder branches on this.
+        /// </summary>
+        public bool isSudo;
     }
 }

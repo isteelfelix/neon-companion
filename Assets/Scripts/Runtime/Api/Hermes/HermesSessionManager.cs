@@ -134,11 +134,27 @@ namespace NeonCompanion.Runtime.Api.Hermes
     }
 
     [Serializable]
+    public class SteerResponse
+    {
+        public string status;
+    }
+
+    [Serializable]
     public class SecretEventPayload
     {
         public string request_id;
         public string env_var;
         public string prompt;
+    }
+
+    [Serializable]
+    public class ApprovalEventPayload
+    {
+        public string command;
+        public string description;
+        public string[] choices;
+        public bool allow_permanent = true;
+        public bool smart_denied;
     }
 
     [Serializable]
@@ -480,6 +496,26 @@ namespace NeonCompanion.Runtime.Api.Hermes
             }
         }
 
+        public async Task<bool> Steer(string sessionId, string text)
+        {
+            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(text))
+                return false;
+
+            string runtimeSid = RuntimeSessionIdFor(sessionId);
+            try
+            {
+                var result = await _gateway.Request<SteerResponse>(
+                    RpcMethods.SessionSteer,
+                    new { session_id = runtimeSid, text });
+                return result != null && string.Equals(result.status, "queued", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                // Swallow — caller falls back to queuing the text for the next turn.
+                return false;
+            }
+        }
+
         // === Session Lifecycle ===
 
         public async Task<SessionCreateResponse> CreateSession(string cwd = null, string title = null)
@@ -596,7 +632,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
         }
 
         /// <summary>
-        /// Switch model for current session via gateway slash command.
+        /// Switch model for the CURRENT session only via gateway slash command.
+        /// The trailing --session flag is mandatory for parity with Desktop
+        /// (use-model-controls.ts selectModel → config.set "model" =
+        /// "<model> --provider <provider> --session"): it forces the gateway's
+        /// resolve_persist_behavior to session scope so the pick can NEVER write
+        /// the profile default in config.yaml. Without it a bare "/model <name>"
+        /// (no provider) defers to model.persist_switch_by_default, which — when
+        /// enabled — would leak the switch into every future chat.
         /// </summary>
         public async Task<bool> SwitchModelAsync(string modelId, string providerSlug = null)
         {
@@ -604,6 +647,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             string cmd = $"/model {modelId}";
             if (!string.IsNullOrEmpty(providerSlug))
                 cmd += $" --provider {providerSlug}";
+            cmd += " --session";
 
             var result = await _gateway.Request<object>(
                 "slash.exec",
@@ -665,6 +709,19 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public async Task RespondToApproval(string sessionId, bool approved)
         {
             string choice = approved ? "once" : "deny";
+            string sid = string.IsNullOrEmpty(sessionId) ? ActiveSessionId : sessionId;
+            await _gateway.Request<object>(
+                RpcMethods.ApprovalRespond,
+                new { session_id = RuntimeSessionIdFor(sid), choice });
+        }
+
+        /// <summary>
+        /// Respond to an approval.request with an explicit choice. Desktop supports:
+        /// "once" (run this time), "session" (allow for this session), "always" (permanent),
+        /// "deny" (reject).
+        /// </summary>
+        public async Task RespondToApproval(string sessionId, string choice)
+        {
             string sid = string.IsNullOrEmpty(sessionId) ? ActiveSessionId : sessionId;
             await _gateway.Request<object>(
                 RpcMethods.ApprovalRespond,
@@ -1232,14 +1289,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (evt.Payload == null) return;
             string sid = EventSessionId(evt);
 
-            var payload = evt.Payload.ToObject<ClarifyEventPayload>();
+            var payload = evt.Payload.ToObject<ApprovalEventPayload>();
             if (payload == null) return;
 
             OnApprovalRequest?.Invoke(sid, new ApprovalRequest
             {
-                requestId = payload.request_id,
-                description = payload.question,
-                type = "approval"
+                description = payload.description ?? "dangerous command",
+                command = payload.command,
+                type = "approval",
+                choices = payload.choices,
+                allowPermanent = payload.allow_permanent,
+                smartDenied = payload.smart_denied
             });
         }
 
@@ -1249,13 +1309,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
             string sid = EventSessionId(evt);
 
             var payload = evt.Payload.ToObject<ClarifyEventPayload>();
-            if (payload == null) return;
+            if (payload == null || string.IsNullOrEmpty(payload.request_id)) return;
 
-            OnApprovalRequest?.Invoke(sid, new ApprovalRequest
+            // Sudo needs a captured PASSWORD, not an approve/deny choice: the agent is blocked on
+            // sudo.respond {request_id, password}. Route it through the masked secret-input surface
+            // (isSudo flags the responder to answer via sudo.respond, not secret.respond). Answering
+            // through the generic approval path would leave the agent blocked forever.
+            OnSecretRequest?.Invoke(sid, new SecretRequest
             {
                 requestId = payload.request_id,
-                description = payload.question,
-                type = "sudo"
+                prompt = payload.question,
+                isSudo = true
             });
         }
 

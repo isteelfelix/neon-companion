@@ -501,6 +501,31 @@ namespace NeonCompanion.Runtime.UI.UITK
             // generation instead of queuing behind an unrelated one.
             if (IsForegroundGenerating())
             {
+                // Try session.steer first: nudge the live turn without interrupting. The gateway
+                // appends the text to the next tool result so the model reads it on its next
+                // iteration. If steer succeeds (live tool window exists), the text is injected
+                // inline; otherwise fall back to queuing for the next turn.
+                bool steered = false;
+                var steerChat = _d.GetChatServiceAsync().Result;
+                if (steerChat != null && steerChat.IsHermesActive && steerChat.ChatTransport != null)
+                {
+                    string steerSid = steerChat.CurrentSessionId;
+                    if (!string.IsNullOrEmpty(steerSid))
+                    {
+                        string steerText = ChatAttachmentManager.StripAttachmentTokens(composerText, null);
+                        steered = await steerChat.ChatTransport.Steer(steerSid, steerText);
+                    }
+                }
+
+                if (steered)
+                {
+                    _d.ShowSystemMessage("steer:" + composerText.Trim());
+                    _d.MessageInput.value = string.Empty;
+                    _inputManager.QueueComposerHeightUpdate();
+                    ClearPendingComposerAttachments();
+                    return;
+                }
+
                 var qAttach = _attachmentManager.CloneCurrent();
                 string qMsg = ChatAttachmentManager.StripAttachmentTokens(composerText, qAttach);
                 _messageQueue.Enqueue(new QueuedMessage { Message = qMsg, Attachments = qAttach });
