@@ -68,6 +68,21 @@ namespace NeonCompanion.Runtime.Core
             get { return _remoteAuth != null ? _remoteAuth.State : HermesAuthState.NoSession; }
         }
 
+        /// <summary>True when a remote (cookie) session is currently held.</summary>
+        public bool HasRemoteSession
+        {
+            get { return _remoteAuth != null && _remoteAuth.HasSession; }
+        }
+
+        /// <summary>
+        /// Stable reason key for the last remote-auth failure ("no_cookie" / "expired" /
+        /// "invalid_credentials"), or null. The UI keys reauth messaging off this.
+        /// </summary>
+        public string RemoteAuthError
+        {
+            get { return _remoteAuth != null ? _remoteAuth.LastAuthError : null; }
+        }
+
         // Secret-store key for a provider's cached password (basic-auth login). Kept out of the
         // provider config JSON; used to re-login transparently on reconnect.
         private static string PasswordSecretKey(string providerId)
@@ -341,6 +356,31 @@ namespace NeonCompanion.Runtime.Core
         public void SetHermesSessionCookie(string cookie)
         {
             _remoteAuth?.SetSessionCookie(cookie);
+        }
+
+        /// <summary>
+        /// Sign out of the remote (cookie) session: forget the in-memory cookie, drop the cached
+        /// password for the active provider, and disconnect the transport. Token mode is untouched.
+        /// Safe to call in any mode. Stops the reconnect loop so a deliberate sign-out does not
+        /// immediately reconnect.
+        /// </summary>
+        public async System.Threading.Tasks.Task ClearHermesRemoteSession()
+        {
+            StopReconnect();
+
+            _remoteAuth?.Clear();
+
+            var activeProvider = _activeProviderResolver != null ? _activeProviderResolver() : null;
+            if (activeProvider != null && _secretStore != null)
+                _secretStore.DeleteSecret(PasswordSecretKey(activeProvider.id));
+
+            LastConnectionError = null;
+
+            if (SessionManager != null && SessionManager.IsConnected)
+            {
+                try { await SessionManager.Disconnect(); }
+                catch (Exception ex) { Debug.LogWarning("[Backend] Clear-session disconnect error: " + ex.Message); }
+            }
         }
 
         /// <summary>

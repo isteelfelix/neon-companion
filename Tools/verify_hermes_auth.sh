@@ -23,6 +23,8 @@ FILES=(
   "Assets/Scripts/Runtime/Api/Hermes/HermesSessionManager.cs"
   "Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs"
   "Assets/Scripts/Runtime/Data/Models/ProviderConfig.cs"
+  "Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs"
+  "Assets/Scripts/Runtime/Chat/ChatService.cs"
 )
 
 echo "== [1] Files exist =="
@@ -78,6 +80,32 @@ grep -q 'token=' Assets/Scripts/Runtime/Api/Hermes/HermesSessionManager.cs \
   && pass "?token= path kept" || fail "?token= path removed"
 grep -q 'Authorization", "Bearer ' Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.cs \
   && pass "Bearer token path kept" || fail "Bearer token path removed"
+
+echo "== [4b] UI wires to existing P8 plumbing (no duplicate auth client) =="
+grep -q 'HermesPasswordLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "UI calls HermesPasswordLoginAsync" || fail "UI missing HermesPasswordLoginAsync"
+grep -q 'SetHermesSessionCookie' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "UI calls SetHermesSessionCookie" || fail "UI missing SetHermesSessionCookie"
+grep -q 'ClearHermesRemoteSession' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "UI calls ClearHermesRemoteSession" || fail "UI missing ClearHermesRemoteSession"
+grep -q 'RemoteAuthState' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "UI reads RemoteAuthState" || fail "UI missing RemoteAuthState"
+grep -q 'EnsureAuthEditorSection' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "Auth editor section built in C#" || fail "EnsureAuthEditorSection missing"
+grep -q 'authMode' Assets/Scripts/Runtime/Chat/ChatService.cs \
+  && pass "ChatService applies authMode on save" || fail "ChatService does not copy authMode"
+# Password must not be written into ProviderConfig from the UI draft builder.
+if grep -nE 'draft\.(password|authPassword)\s*=' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "UI appears to assign password into provider draft"; else pass "password not written to provider draft"; fi
+# Localization keys present in both languages.
+for lang in en ru; do
+  if grep -q '"providers.auth.login"' "Assets/Resources/Localization/${lang}.json" \
+     && grep -q '"providers.auth.status.reauth"' "Assets/Resources/Localization/${lang}.json"; then
+    pass "providers.auth.* keys in ${lang}.json"
+  else
+    fail "providers.auth.* keys missing in ${lang}.json"
+  fi
+done
 
 echo "== [5] Cookie-extraction regex behavior =="
 python3 - <<'PY'

@@ -38,6 +38,7 @@
 | H-08 | Session listing via WS | ✅ | M3 | session.list RPC. Server DB = source of truth in Hermes mode |
 | H-09 | WS connection guard | ✅ | M3 | SwitchToHermesSessionAsync connects WS before ResumeSession (fix for silent failure) |
 | H-10 | Hermes Desktop contract parity | 📋 | M4 | Contract freeze done — см. docs/19_Hermes_Desktop_Contract_Parity.md. Open P0: prompt.submit timeout 1 800 000ms, connect-handshake timeout; P1: unscoped stream pin + subagent drop, missing stream events (interim/thinking/reasoning.available/status.update/tool.generating/secret.request), secret/sudo.respond, session.steer |
+| H-11 | Hermes remote OAuth/basic-auth UI (P8) | ⏳ | M4 | Backend plumbing in da48af4; UI in ProvidersController (mode/login/cookie/logout/status) wired to HermesPasswordLoginAsync + RemoteAuthState. Docs: 21_Hermes_Remote_OAuth_Auth.md. Needs Felix device/Unity verify. |
 
 ## Аватары
 | # | Фича | Статус | Спринт | Заметки |

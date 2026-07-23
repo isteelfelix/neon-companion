@@ -18,10 +18,17 @@ namespace NeonCompanion.Runtime.Core
         private static readonly Regex ApiKeyRegex = new Regex(
             @"\b(sk|rk|pk)-[A-Za-z0-9._\-]{6,}", RegexOptions.Compiled);
         private static readonly Regex TokenQueryRegex = new Regex(
-            @"([?&](?:token|access_token|api_key|apikey)=)[^&\s""]+",
+            @"([?&](?:token|ticket|access_token|api_key|apikey)=)[^&\s""]+",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex AssignmentRegex = new Regex(
-            @"(""?(?:api[_-]?key|apikey|password|secret|token)""?\s*[:=]\s*""?)[^""\s,}]+",
+            @"(""?(?:api[_-]?key|apikey|password|secret|token|ticket|cookie)""?\s*[:=]\s*""?)[^""\s,}]+",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        // Cookie header / session cookie blobs (never log session credentials).
+        private static readonly Regex CookieHeaderRegex = new Regex(
+            @"(Cookie\s*[:=]\s*)[^\r\n]+",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex SessionCookieRegex = new Regex(
+            @"((?:__Host-|__Secure-)?hermes_session_(?:at|rt|provider)=)[^;\s,""]+",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public static void Log(string message)
@@ -49,6 +56,8 @@ namespace NeonCompanion.Runtime.Core
             result = ApiKeyRegex.Replace(result, "$1-***");
             result = TokenQueryRegex.Replace(result, "$1***");
             result = AssignmentRegex.Replace(result, "$1***");
+            result = CookieHeaderRegex.Replace(result, "$1***");
+            result = SessionCookieRegex.Replace(result, "$1***");
             return result;
         }
     }

@@ -574,6 +574,11 @@ namespace NeonCompanion.Runtime.Chat
             _currentProvider.contextWindow = updatedProvider.contextWindow;
             _currentProvider.isEnabled = updatedProvider.isEnabled;
             _currentProvider.backendType = updatedProvider.backendType;
+            // Hermes remote-auth fields (token vs cookie/ws-ticket). Required so an active
+            // provider's auth mode change takes effect without restarting the app.
+            _currentProvider.authMode = updatedProvider.authMode;
+            _currentProvider.authProvider = updatedProvider.authProvider;
+            _currentProvider.authUsername = updatedProvider.authUsername;
             _currentProvider.sttProvider = updatedProvider.sttProvider;
             _currentProvider.ttsProvider = updatedProvider.ttsProvider;
             _currentProvider.ttsVoice = updatedProvider.ttsVoice;
