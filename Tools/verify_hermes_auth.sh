@@ -21,6 +21,7 @@ fail() { echo "  FAIL: $1"; FAIL=1; }
 
 FILES=(
   "Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs"
+  "Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs"
   "Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.cs"
   "Assets/Scripts/Runtime/Api/Hermes/HermesSessionManager.cs"
   "Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs"
@@ -116,12 +117,50 @@ if grep -nE 'SetValueWithoutNotify\(\s*"basic"\s*\)' Assets/Scripts/Runtime/UI/U
 grep -q 'gatewayAdvancedToken\|_gatewayAdvancedToken\|Bearer token' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
   && pass "Advanced Bearer token path present" || fail "Advanced token path missing"
 
+echo "== [4c] Automatic browser-login completion (not cookie paste) =="
+# Primary OAuth path must wait for automatic session capture (Desktop parity).
+grep -q 'HermesBrowserLoginAsync' Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs \
+  && pass "GlobalBackendSelector.HermesBrowserLoginAsync present" || fail "HermesBrowserLoginAsync missing"
+grep -q 'HermesBrowserLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "UI Connect calls HermesBrowserLoginAsync" || fail "UI does not call HermesBrowserLoginAsync"
+grep -q 'HermesBrowserOAuthLogin.CaptureSessionAsync' Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs \
+  && pass "CaptureSessionAsync wired" || fail "CaptureSessionAsync not wired"
+grep -q 'Network.getAllCookies' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
+  && pass "CDP Network.getAllCookies capture present" || fail "CDP cookie capture missing"
+grep -q 'remote-debugging-port' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
+  && pass "dedicated Chromium profile + CDP port" || fail "CDP browser launch missing"
+grep -q 'FindChromiumBrowserPath' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
+  && pass "browser discovery helper present" || fail "FindChromiumBrowserPath missing"
+grep -q 'CookieDomainMatchesHost' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
+  && pass "cookie domain filter helper present" || fail "CookieDomainMatchesHost missing"
+grep -q '/auth/native/handoff' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
+  && pass "optional native handoff path present" || fail "native handoff path missing"
+# Non-password OAuth branch must not be "OpenURL then tell user to paste cookie".
+if grep -n 'Application.OpenURL(loginUrl)' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  # OpenURL is only OK inside the handoff helper / non-primary paths, not as the sole ConnectOAuth action.
+  if grep -n 'Application.OpenURL(loginUrl)' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+     | grep -v '//' >/dev/null 2>&1 \
+     && ! grep -q 'HermesBrowserLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs; then
+    fail "Connect OAuth still only OpenURL(loginUrl) without automatic capture"
+  else
+    pass "Connect OAuth is not OpenURL-only"
+  fi
+else
+  pass "Connect OAuth is not OpenURL-only"
+fi
+# Must not instruct cookie paste as the primary browser-login resolution.
+if grep -nF 'paste the session cookie under Advanced' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "primary UI still tells user to paste session cookie"; else pass "no primary cookie-paste instruction"; fi
+if grep -nF 'paste the session cookie under Advanced' Assets/Resources/Localization/en.json >/dev/null 2>&1; then
+  fail "en.json still tells user to paste cookie as primary"; else pass "en.json browser hint is automatic"; fi
+
 # Localization keys present in both languages (user-facing gateway strings).
 for lang in en ru; do
   if grep -q '"providers.gateway.connect"' "Assets/Resources/Localization/${lang}.json" \
      && grep -q '"providers.gateway.url"' "Assets/Resources/Localization/${lang}.json" \
      && grep -q '"providers.gateway.status.connected"' "Assets/Resources/Localization/${lang}.json" \
-     && grep -q '"providers.gateway.sign_out"' "Assets/Resources/Localization/${lang}.json"; then
+     && grep -q '"providers.gateway.sign_out"' "Assets/Resources/Localization/${lang}.json" \
+     && grep -q '"providers.gateway.browser.waiting"' "Assets/Resources/Localization/${lang}.json"; then
     pass "providers.gateway.* keys in ${lang}.json"
   else
     fail "providers.gateway.* keys missing in ${lang}.json"
@@ -217,6 +256,27 @@ def parse_providers(providers_json):
 
 got = parse_providers('{"providers":[{"name":"basic","display_name":"Password","supports_password":true}]}')
 check("providers parse basic", got, [{"name":"basic","display":"Password","pw":True}])
+
+# Cookie domain filter pure helper (mirrors HermesBrowserOAuthLogin.CookieDomainMatchesHost)
+def domain_match(cookie_domain, host):
+    if not host:
+        return False
+    if not cookie_domain:
+        return True
+    d = cookie_domain.strip().lower()
+    h = host.strip().lower()
+    if d.startswith("."):
+        d = d[1:]
+    if d == h:
+        return True
+    if h.endswith("." + d):
+        return True
+    return False
+
+check("domain exact", domain_match("gateway.example", "gateway.example"), True)
+check("domain parent", domain_match(".example.com", "api.example.com"), True)
+check("domain reject", domain_match("other.com", "gateway.example"), False)
+check("domain empty cookie -> keep", domain_match("", "gateway.example"), True)
 
 sys.exit(0 if ok else 1)
 PY

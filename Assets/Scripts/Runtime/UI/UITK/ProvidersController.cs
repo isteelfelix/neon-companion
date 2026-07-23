@@ -2662,20 +2662,39 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            // Full OAuth (no password provider): open system browser to /login (Desktop window).
-            string loginUrl = HermesRemoteAuth.BuildLoginUrl(baseUrl);
-            if (!string.IsNullOrEmpty(loginUrl))
-                Application.OpenURL(loginUrl);
-
-            // Unity has no Electron session partition — guide user; cookie under Advanced.
-            if (!_gatewayAdvancedOpen)
-                ToggleGatewayAdvanced();
-
+            // Full OAuth (no password provider): Desktop-equivalent automatic capture.
+            // HermesBrowserLoginAsync launches Edge/Chrome with a dedicated profile, opens
+            // {base}/login, polls CDP cookies until hermes_session_* appear (mirrors
+            // electron openOauthLoginWindow), then reconnects with ws-ticket. No cookie paste.
             SetGatewayStatusMessage(
                 LocalizationExtensions.Get(
-                    "providers.gateway.browser.hint",
-                    "Complete sign-in in your browser. If Companion cannot pick up the session automatically, paste the session cookie under Advanced and Apply."),
+                    "providers.gateway.browser.waiting",
+                    "Complete sign-in in the browser window…"),
                 false);
+
+            bool ok = await selector.HermesBrowserLoginAsync(baseUrl);
+            if (ok)
+            {
+                var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+                SetProviderHeader(
+                    chat != null && chat.CurrentProvider != null ? chat.CurrentProvider : draft,
+                    chat != null ? chat.CurrentSessionModel : null);
+                SetGatewayStatusMessage(
+                    LocalizationExtensions.Get(
+                        "providers.gateway.status.connected",
+                        "Signed in · connected"),
+                    false);
+                return;
+            }
+
+            string err = selector.LastConnectionError;
+            if (string.IsNullOrEmpty(err))
+            {
+                err = LocalizationExtensions.Get(
+                    "providers.gateway.browser.failed",
+                    "Browser sign-in did not complete. Try Connect again.");
+            }
+            SetGatewayStatusMessage(err, true);
         }
 
         private async Task ConnectTokenGatewayAsync()

@@ -359,13 +359,80 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
-        /// Adopt a session cookie obtained from a full browser OAuth sign-in (Unity cannot host
-        /// Desktop's Electron session partition, so the advanced fallback pastes the cookie).
+        /// Adopt a session cookie obtained from a full browser OAuth sign-in.
+        /// Primary path uses <see cref="HermesBrowserLoginAsync"/> (CDP cookie capture);
+        /// advanced manual paste remains a last-resort fallback only.
         /// Not persisted. Follow with ConnectHermes / ReconnectHermes.
         /// </summary>
         public void SetHermesSessionCookie(string cookie)
         {
             _remoteAuth?.SetSessionCookie(cookie);
+        }
+
+        /// <summary>
+        /// Desktop-equivalent browser OAuth: open gateway /login in a dedicated Chromium/Edge
+        /// window, wait until session cookies appear (CDP cookie jar poll, mirrors
+        /// openOauthLoginWindow), adopt the cookie, mint ws-ticket via reconnect.
+        /// Returns true when signed in and reconnect was attempted.
+        /// </summary>
+        public async Task<bool> HermesBrowserLoginAsync(string baseUrl = null)
+        {
+            if (CurrentMode != BackendMode.Hermes)
+            {
+                LastConnectionError = "Hermes backend is not active.";
+                return false;
+            }
+
+            var activeProvider = _activeProviderResolver != null ? _activeProviderResolver() : null;
+            string url = baseUrl;
+            if (string.IsNullOrEmpty(url) && activeProvider != null)
+                url = activeProvider.baseUrl;
+            if (string.IsNullOrEmpty(url))
+                url = HermesRestUrl;
+            if (string.IsNullOrEmpty(url))
+            {
+                LastConnectionError = "Hermes gateway URL is not configured.";
+                return false;
+            }
+
+            // Ensure remote-auth targets this endpoint before capturing cookies.
+            if (activeProvider != null)
+                ConfigureHermesEndpoint(url, activeProvider.apiKey);
+            else
+                ConfigureHermesEndpoint(url, HermesToken);
+
+            HermesBrowserOAuthResult capture;
+            try
+            {
+                capture = await HermesBrowserOAuthLogin.CaptureSessionAsync(url);
+            }
+            catch (Exception ex)
+            {
+                LastConnectionError = ex.Message;
+                Debug.LogWarning("[Backend] Hermes browser login failed: " + ex.Message);
+                OnError?.Invoke(LastConnectionError);
+                return false;
+            }
+
+            if (capture == null || !capture.Ok || string.IsNullOrEmpty(capture.CookieHeader))
+            {
+                LastConnectionError = capture != null && !string.IsNullOrEmpty(capture.Error)
+                    ? capture.Error
+                    : "Browser sign-in did not complete.";
+                Debug.LogWarning("[Backend] Hermes browser login: " + LastConnectionError);
+                OnError?.Invoke(LastConnectionError);
+                return false;
+            }
+
+            if (_remoteAuth == null)
+            {
+                LastConnectionError = "Remote auth not initialized.";
+                return false;
+            }
+
+            _remoteAuth.SetSessionCookie(capture.CookieHeader);
+            await ReconnectHermes();
+            return _remoteAuth.State == HermesAuthState.Authenticated || _remoteAuth.HasSession;
         }
 
         /// <summary>

@@ -38,7 +38,7 @@
 | H-08 | Session listing via WS | ✅ | M3 | session.list RPC. Server DB = source of truth in Hermes mode |
 | H-09 | WS connection guard | ✅ | M3 | SwitchToHermesSessionAsync connects WS before ResumeSession (fix for silent failure) |
 | H-10 | Hermes Desktop contract parity | 📋 | M4 | Contract freeze done — см. docs/19_Hermes_Desktop_Contract_Parity.md. Open P0: prompt.submit timeout 1 800 000ms, connect-handshake timeout; P1: unscoped stream pin + subagent drop, missing stream events (interim/thinking/reasoning.available/status.update/tool.generating/secret.request), secret/sudo.respond, session.steer |
-| H-11 | Remote Hermes gateway UX (Desktop-style) | ⏳ | M4 | P8 plumbing + Desktop-style UI: Gateway URL + Connect/Sign in, probe `/api/status`+`/api/auth/providers`, status Signed in/Needs sign-in/Connected, Advanced token/cookie. Static verify: `bash Tools/verify_hermes_auth.sh`. Needs Felix device test against neon-vps. See docs/21_Hermes_Remote_OAuth_Auth.md |
+| H-11 | Remote Hermes gateway UX (Desktop-style) | ⏳ | M4 | P8 plumbing + Desktop-style UI + **automatic OAuth session capture** (CDP cookie jar via dedicated Edge/Chrome profile, mirrors Desktop openOauthLoginWindow). Gateway URL + Connect/Sign in; password path via password-login; token under Advanced. Static verify: `bash Tools/verify_hermes_auth.sh`. Needs Felix device test against neon-vps. See docs/21_Hermes_Remote_OAuth_Auth.md |
 
 ## Аватары
 | # | Фича | Статус | Спринт | Заметки |
