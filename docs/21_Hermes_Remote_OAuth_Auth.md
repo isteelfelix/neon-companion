@@ -43,8 +43,8 @@ Companion’s automatic capture does **not** require a Hermes server change: it 
 Chromium/Edge profile (partition equivalent) and reads cookies via **Chrome DevTools Protocol**,
 the same outcome Desktop gets from `session.cookies.get()`.
 
-Optional forward-compat routes (if Hermes adds them later):  
-`GET /auth/native/handoff?redirect_uri=http://127.0.0.1:port/callback` and  
+Optional forward-compat routes (if Hermes adds them later):
+`GET /auth/native/handoff?redirect_uri=http://127.0.0.1:port/callback` and
 `POST /api/auth/native/redeem` — Companion already implements the client side.
 
 ## Two auth modes (backend)

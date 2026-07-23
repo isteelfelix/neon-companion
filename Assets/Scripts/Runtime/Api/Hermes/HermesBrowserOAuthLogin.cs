@@ -7,9 +7,11 @@
 // Unity has no Electron cookie jar. This class is the Companion equivalent:
 //   1. Launch a dedicated Chromium/Edge profile with --app={base}/login and
 //      --remote-debugging-port (isolated user-data-dir = partition).
-//   2. Connect to Chrome DevTools Protocol (same machine loopback).
-//   3. Poll Network.getAllCookies until Hermes session cookies appear for the
-//      gateway host (HttpOnly cookies are visible to CDP, as they are to Electron).
+//   2. Discover a page target via CDP HTTP /json/list (NOT the browser-level
+//      /json/version endpoint — Network.* requires a page/target session).
+//   3. Connect to that page's webSocketDebuggerUrl and poll Network.getAllCookies
+//      until Hermes session cookies appear for the gateway host (HttpOnly cookies
+//      are visible to CDP, as they are to Electron).
 //   4. Return a Cookie header string for HermesRemoteAuth.SetSessionCookie.
 //
 // Optional secondary path: local loopback handoff if the gateway exposes the
@@ -156,8 +158,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     return result;
                 }
 
-                // Wait for CDP HTTP endpoint.
-                string debuggerUrl = null;
+                // Wait for a page/target DevTools endpoint via /json/list.
+                // Network.* domain methods require a page (or attached target) session —
+                // the browser websocket from /json/version is not a valid transport.
+                string pageDebuggerUrl = null;
                 DateTime start = DateTime.UtcNow;
                 DateTime deadline = start.AddSeconds(timeoutSeconds);
 
@@ -169,17 +173,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
                         return result;
                     }
 
-                    debuggerUrl = await TryGetBrowserWebSocketDebuggerUrlAsync(debugPort);
-                    if (!string.IsNullOrEmpty(debuggerUrl))
+                    pageDebuggerUrl = await TryGetPageWebSocketDebuggerUrlAsync(debugPort, loginUrl);
+                    if (!string.IsNullOrEmpty(pageDebuggerUrl))
                         break;
 
                     await Task.Delay(200);
                     await Task.Yield();
                 }
 
-                if (string.IsNullOrEmpty(debuggerUrl))
+                if (string.IsNullOrEmpty(pageDebuggerUrl))
                 {
-                    result.Error = "Sign-in browser did not expose DevTools (CDP).";
+                    result.Error = "Sign-in browser did not expose a page DevTools target (CDP /json/list).";
                     return result;
                 }
 
@@ -192,13 +196,15 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     await Task.Yield();
                 }
 
+                // Connect to the page target websocket (devtools/page/...), not browser.
                 ws = new ClientWebSocket();
                 using (CancellationTokenSource connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
                 {
-                    await ws.ConnectAsync(new Uri(debuggerUrl), connectCts.Token);
+                    await ws.ConnectAsync(new Uri(pageDebuggerUrl), connectCts.Token);
                 }
 
                 int nextId = 1;
+                // Network domain on the page target session.
                 await CdpSendAsync(ws, nextId++, "Network.enable", null);
 
                 while (DateTime.UtcNow < deadline)
@@ -391,9 +397,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
             return false;
         }
 
-        private static async Task<string> TryGetBrowserWebSocketDebuggerUrlAsync(int debugPort)
+        /// <summary>
+        /// Resolve a page/app target websocket from CDP HTTP <c>/json/list</c>.
+        /// Network domain commands must run on a page target (or a Target.attachToTarget
+        /// session), not on the browser-level websocket from <c>/json/version</c>.
+        /// </summary>
+        private static async Task<string> TryGetPageWebSocketDebuggerUrlAsync(
+            int debugPort,
+            string preferredUrl)
         {
-            string url = "http://127.0.0.1:" + debugPort + "/json/version";
+            string url = "http://127.0.0.1:" + debugPort + "/json/list";
             try
             {
                 HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
@@ -405,17 +418,89 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
                 {
                     string body = await reader.ReadToEndAsync();
-                    if (string.IsNullOrEmpty(body))
-                        return null;
-                    JObject obj = JObject.Parse(body);
-                    string wsUrl = obj.Value<string>("webSocketDebuggerUrl");
-                    return string.IsNullOrEmpty(wsUrl) ? null : wsUrl;
+                    return PickPageWebSocketDebuggerUrl(body, preferredUrl);
                 }
             }
             catch
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Pure helper: pick a page/app target <c>webSocketDebuggerUrl</c> from a CDP
+        /// <c>/json/list</c> JSON array. Prefers a target whose URL matches
+        /// <paramref name="preferredUrl"/> when present.
+        /// </summary>
+        public static string PickPageWebSocketDebuggerUrl(string jsonListBody, string preferredUrl)
+        {
+            if (string.IsNullOrEmpty(jsonListBody))
+                return null;
+
+            JArray arr;
+            try
+            {
+                arr = JArray.Parse(jsonListBody);
+            }
+            catch
+            {
+                return null;
+            }
+
+            string preferred = preferredUrl ?? string.Empty;
+            string fallback = null;
+
+            for (int i = 0; i < arr.Count; i++)
+            {
+                JToken item = arr[i];
+                if (item == null || item.Type != JTokenType.Object)
+                    continue;
+
+                string type = item.Value<string>("type");
+                if (!IsPageLikeCdpTargetType(type))
+                    continue;
+
+                string wsUrl = item.Value<string>("webSocketDebuggerUrl");
+                if (string.IsNullOrEmpty(wsUrl))
+                    continue;
+
+                // Page targets use /devtools/page/<id> (not /devtools/browser/...).
+                if (wsUrl.IndexOf("/devtools/browser", StringComparison.OrdinalIgnoreCase) >= 0)
+                    continue;
+
+                string pageUrl = item.Value<string>("url") ?? string.Empty;
+                if (!string.IsNullOrEmpty(preferred)
+                    && pageUrl.IndexOf(preferred, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return wsUrl;
+                }
+
+                // Prefer targets that already navigated to something (not about:blank only).
+                if (fallback == null)
+                    fallback = wsUrl;
+                else if (pageUrl.IndexOf("about:blank", StringComparison.OrdinalIgnoreCase) < 0
+                         && !string.IsNullOrEmpty(pageUrl))
+                    fallback = wsUrl;
+            }
+
+            return fallback;
+        }
+
+        /// <summary>
+        /// CDP target types that own a document / cookie jar suitable for Network.*.
+        /// </summary>
+        public static bool IsPageLikeCdpTargetType(string type)
+        {
+            if (string.IsNullOrEmpty(type))
+                return false;
+            if (string.Equals(type, "page", StringComparison.OrdinalIgnoreCase))
+                return true;
+            // --app= windows often report type "app" or "webview" on some Chromium builds.
+            if (string.Equals(type, "app", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(type, "webview", StringComparison.OrdinalIgnoreCase))
+                return true;
+            return false;
         }
 
         private static async Task<JObject> CdpSendAsync(

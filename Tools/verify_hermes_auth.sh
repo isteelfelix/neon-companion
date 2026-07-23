@@ -129,6 +129,41 @@ grep -q 'BuildSessionCookieFromCdpGetAllCookiesResponse' Assets/Scripts/Runtime/
   && pass "pure CDP→session-cookie handoff helper present" || fail "BuildSessionCookieFromCdpGetAllCookiesResponse missing"
 grep -q 'remote-debugging-port' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
   && pass "dedicated Chromium profile + CDP port" || fail "CDP browser launch missing"
+
+# CDP transport: Network.* must use a page/target session, not the browser websocket
+# from /json/version (that pattern is unproven / incorrect for Network domain).
+CDP_FILE="Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs"
+if grep -qE '/json/list|Target\.attachToTarget' "$CDP_FILE"; then
+  pass "CDP page target (/json/list) or Target.attachToTarget present"
+else
+  fail "CDP must use /json/list page target or Target.attachToTarget (not browser-only)"
+fi
+# Reject the old browser-only discovery helper name.
+if grep -q 'TryGetBrowserWebSocketDebuggerUrlAsync' "$CDP_FILE"; then
+  fail "still uses TryGetBrowserWebSocketDebuggerUrlAsync (browser websocket)"
+else
+  pass "no raw browser-websocket discovery helper"
+fi
+# Prefer proven page-target discovery helper.
+if grep -qE 'TryGetPageWebSocketDebuggerUrlAsync|PickPageWebSocketDebuggerUrl|Target\.attachToTarget' "$CDP_FILE"; then
+  pass "page-target websocket discovery helper present"
+else
+  fail "missing page-target discovery (PickPageWebSocketDebuggerUrl / attachToTarget)"
+fi
+# Fail the unproven pattern: string literal HTTP path /json/version used for debugger discovery.
+# Comments may mention the anti-pattern; only executable string literals are rejected.
+if grep -nE '"[^"]*/json/version[^"]*"|'\''[^'\'']*/json/version[^'\'']*'\''' "$CDP_FILE" >/dev/null 2>&1; then
+  fail "unproven raw /json/version + Network.* browser websocket pattern (string literal)"
+else
+  pass "no /json/version Network.* transport string"
+fi
+# Must fetch page list (string literal).
+if grep -nE '"[^"]*/json/list[^"]*"' "$CDP_FILE" >/dev/null 2>&1 \
+   || grep -q 'Target.attachToTarget' "$CDP_FILE"; then
+  pass "/json/list page discovery string or Target.attachToTarget present"
+else
+  fail "missing /json/list page discovery string literal"
+fi
 grep -q 'FindChromiumBrowserPath' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
   && pass "browser discovery helper present" || fail "FindChromiumBrowserPath missing"
 grep -q 'CookieDomainMatchesHost' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
