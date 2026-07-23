@@ -85,6 +85,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SudoRequest = "sudo.request";
         public const string SecretRequest = "secret.request";
         public const string BackgroundComplete = "background.complete";
+        // Self-improvement background review saved something to memory/skills and emitted a
+        // persistent summary. Desktop surfaces it as a permanent system line in the transcript.
+        public const string ReviewSummary = "review.summary";
         public const string SessionTitle = "session.title";
         public const string TerminalExecute = "terminal.execute";
         // read_terminal tool: backend asks the client to serialize its live terminal buffer.

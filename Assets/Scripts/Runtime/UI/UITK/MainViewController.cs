@@ -994,11 +994,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
                 _terminalHermesManager.OnTerminalReadRequest -= HandleRemoteTerminalRead;
+                _terminalHermesManager.OnReviewSummary -= HandleReviewSummary;
             }
 
             _terminalHermesManager = selector.SessionManager;
             _terminalHermesManager.OnTerminalExecute += HandleRemoteTerminalExecute;
             _terminalHermesManager.OnTerminalReadRequest += HandleRemoteTerminalRead;
+            _terminalHermesManager.OnReviewSummary += HandleReviewSummary;
         }
 
         private void TeardownTerminalRemoteBridge()
@@ -1007,8 +1009,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
                 _terminalHermesManager.OnTerminalReadRequest -= HandleRemoteTerminalRead;
+                _terminalHermesManager.OnReviewSummary -= HandleReviewSummary;
                 _terminalHermesManager = null;
             }
+        }
+
+        // Background self-improvement review saved to memory/skills (Desktop review.summary parity):
+        // pin it as a persistent system line in the transcript. AddSystemMessage appends to the live
+        // list, so only render it when the summary's own session is the one on screen — a background
+        // session's summary must not be misattributed to the focused chat.
+        private void HandleReviewSummary(string sessionId, string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+            if (_terminalHermesManager != null && sessionId != _terminalHermesManager.ActiveSessionId)
+                return;
+            AddSystemMessage(text);
         }
 
         private async void HandleRemoteTerminalExecute(TerminalExecuteRequest request)

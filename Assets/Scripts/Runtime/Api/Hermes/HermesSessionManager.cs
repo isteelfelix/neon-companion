@@ -330,6 +330,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public event Action<string, ApprovalRequest> OnApprovalRequest;
         public event Action<string, SecretRequest> OnSecretRequest;
         public event Action<string, string> OnSessionTitle;
+        // (sid, text) — a background self-improvement review saved to memory/skills. Surfaced as a
+        // persistent system line in the transcript (Desktop review.summary parity).
+        public event Action<string, string> OnReviewSummary;
         public event Action<string, string> OnError;
         public event Action<TransportState> OnStateChanged;
         public event Action<string> OnRuntimeInfoChanged;
@@ -717,6 +720,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             _gateway.On(GatewayEvents.SecretRequest, HandleSecretRequest);
             _gateway.On(GatewayEvents.SessionTitle, HandleSessionTitle);
             _gateway.On(GatewayEvents.BackgroundComplete, HandleBackgroundComplete);
+            _gateway.On(GatewayEvents.ReviewSummary, HandleReviewSummary);
             _gateway.On(GatewayEvents.TerminalExecute, HandleTerminalExecute);
             _gateway.On(GatewayEvents.TerminalReadRequest, HandleTerminalReadRequest);
             _gateway.On(GatewayEvents.Error, HandleError);
@@ -1300,6 +1304,23 @@ namespace NeonCompanion.Runtime.Api.Hermes
             // dropped silently. Must not crash on an unexpected/absent payload.
             string sid = EventSessionId(evt);
             NeonLogger.Log("[Hermes] background.complete for session " + (string.IsNullOrEmpty(sid) ? "<none>" : sid));
+        }
+
+        private void HandleReviewSummary(GatewayEvent evt)
+        {
+            // A background self-improvement review persisted a change to memory/skills and emitted a
+            // pre-formatted summary line ("💾 Self-improvement review: …"). The CLI/TUI print it as a
+            // persistent system line; without a consumer the change would happen silently. Python
+            // always scopes this to the reviewed session's sid and sends a plain-string {"text": …}.
+            // Surface it via OnReviewSummary so the UI can pin it into that session's transcript.
+            if (evt == null || evt.Payload == null) return;
+            string sid = EventSessionId(evt);
+            if (string.IsNullOrEmpty(sid)) return;
+
+            string text = ExtractText(evt.Payload);
+            if (string.IsNullOrEmpty(text)) return;
+
+            OnReviewSummary?.Invoke(sid, text.Trim());
         }
 
         private void HandleWildcardEvent(GatewayEvent evt)
