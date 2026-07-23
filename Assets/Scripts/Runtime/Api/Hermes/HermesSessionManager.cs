@@ -77,6 +77,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public int calls;
         public int context_max;
         public int context_used;
+        public float context_percent;
+        public float cost_usd;
     }
 
     [Serializable]
@@ -91,6 +93,26 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string text;
         public string rendered;
         public UsageStats usage;
+    }
+
+    [Serializable]
+    public class ContextUsageCategory
+    {
+        public string id;
+        public string label;
+        public string color;
+        public int tokens;
+    }
+
+    [Serializable]
+    public class ContextBreakdown
+    {
+        public ContextUsageCategory[] categories;
+        public int context_max;
+        public float context_percent;
+        public int context_used;
+        public int estimated_total;
+        public string model;
     }
 
     [Serializable]
@@ -742,6 +764,56 @@ namespace NeonCompanion.Runtime.Api.Hermes
             await _gateway.Request<object>(
                 RpcMethods.SudoRespond,
                 new { request_id = requestId, password });
+        }
+
+        // === Context / Usage RPC ===
+
+        /// <summary>
+        /// Fetch detailed context breakdown from the gateway (categories, exact used/max).
+        /// Returns null if the RPC fails or the session has no context data.
+        /// </summary>
+        public async Task<ContextBreakdown> RequestContextBreakdown(string sessionId = null)
+        {
+            string sid = string.IsNullOrEmpty(sessionId) ? ActiveSessionId : sessionId;
+            if (string.IsNullOrEmpty(sid))
+                return null;
+
+            string runtimeSid = RuntimeSessionIdFor(sid);
+            try
+            {
+                return await _gateway.Request<ContextBreakdown>(
+                    RpcMethods.SessionContextBreakdown,
+                    new { session_id = runtimeSid },
+                    timeoutMs: 5000);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Fetch cumulative session usage from the gateway. Returns null on failure.
+        /// Desktop uses this as a compatibility fallback when session.activate fails.
+        /// </summary>
+        public async Task<UsageStats> RequestSessionUsage(string sessionId = null)
+        {
+            string sid = string.IsNullOrEmpty(sessionId) ? ActiveSessionId : sessionId;
+            if (string.IsNullOrEmpty(sid))
+                return null;
+
+            string runtimeSid = RuntimeSessionIdFor(sid);
+            try
+            {
+                return await _gateway.Request<UsageStats>(
+                    RpcMethods.SessionUsage,
+                    new { session_id = runtimeSid },
+                    timeoutMs: 5000);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // === Event Handlers ===

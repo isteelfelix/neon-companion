@@ -142,6 +142,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string FileTransferChunk = "file.transfer.chunk";
         public const string FileTransferFinish = "file.transfer.finish";
         public const string ImageAttachBytes = "image.attach_bytes";
+        public const string SessionUsage = "session.usage";
+        public const string SessionContextBreakdown = "session.context_breakdown";
     }
 
     // === HermesGateway ===

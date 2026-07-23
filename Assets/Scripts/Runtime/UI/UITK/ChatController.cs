@@ -1200,13 +1200,17 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Prefer real context_length from gateway runtime info, then discovery API, then saved value, then heuristic guess.
             int contextWindow = 0;
+            bool exactContextWindow = false;
 
             // 1. Gateway runtime info (most accurate — model's actual context window)
             try
             {
                 var rt = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
                 if (rt != null && rt.context_max > 0)
+                {
                     contextWindow = rt.context_max;
+                    exactContextWindow = true;
+                }
             }
             catch { /* non-critical */ }
 
@@ -1223,14 +1227,21 @@ namespace NeonCompanion.Runtime.UI.UITK
                         if (app?.Services != null)
                             app.Services.TryGet<NeonCompanion.Runtime.Core.ModelDiscoveryService>(out disc);
                         if (disc != null && !string.IsNullOrEmpty(modelId))
+                        {
                             contextWindow = disc.GetContextWindowForModel(provider, modelId);
+                            if (contextWindow > 0)
+                                exactContextWindow = true;
+                        }
                     }
                     catch { /* non-critical */ }
                 }
 
                 // 3. Provider config
                 if (contextWindow <= 0 && provider.contextWindow > 0)
+                {
                     contextWindow = provider.contextWindow;
+                    exactContextWindow = true;
+                }
                 // 4. Heuristic guess
                 if (contextWindow <= 0)
                     contextWindow = ChatContextWindowEstimator.GuessContextWindow(provider, chat.CurrentSessionModel);
@@ -1244,11 +1255,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Prefer gateway's context_used, fall back to local estimate
             int used = 0;
+            bool exactUsed = false;
             try
             {
                 var rt = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
                 if (rt != null && rt.context_used > 0)
+                {
                     used = rt.context_used;
+                    exactUsed = true;
+                }
             }
             catch { }
             if (used <= 0)
@@ -1267,7 +1282,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             else
                 _contextBarFill.style.backgroundColor = new Color(0.9f, 0.3f, 0.3f, 0.8f);
 
-            _contextBarLabel.text = LocalizationExtensions.Get("chat.context.usage", "~{0} / {1} tokens")
+            // Show tilde only when using heuristic estimates; exact gateway data has no tilde.
+            bool isExact = exactContextWindow && exactUsed;
+            string locKey = isExact ? "chat.context.usage.exact" : "chat.context.usage";
+            string fallback = isExact ? "{0} / {1} tokens" : "~{0} / {1} tokens";
+            _contextBarLabel.text = LocalizationExtensions.Get(locKey, fallback)
                 .Replace("{0}", used.ToString("N0"))
                 .Replace("{1}", contextWindow.ToString("N0"));
         }
