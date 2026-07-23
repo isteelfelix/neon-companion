@@ -2085,10 +2085,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Remote Hermes gateway (Desktop-style URL + Connect)
         // ============================================================
         // Primary path: Gateway URL + Connect / Sign in + status + Sign out.
-        // Credentials appear only after probe says the gateway needs a password
-        // login (the "auth prompt"). Token/Bearer and cookie paste live under
-        // Advanced. Never expose authMode picker, provider=basic, or cookie paste
-        // as the primary path (rejected P8.1 UX).
+        // Gated gateways always open the browser login window (CDP cookie capture);
+        // username/password and cookie paste are never Companion UI.
+        // Token/Bearer lives under Advanced only (open / auth_required=false gateways).
 
         private void EnsureGatewayEditorSection()
         {

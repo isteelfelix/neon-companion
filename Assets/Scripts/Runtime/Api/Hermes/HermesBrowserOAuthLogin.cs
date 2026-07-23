@@ -117,7 +117,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (string.IsNullOrEmpty(browserPath))
             {
                 result.Error =
-                    "No Chromium/Edge browser found for automatic sign-in. Install Microsoft Edge or Google Chrome, or use a password-capable gateway.";
+                    "No Chromium/Edge browser found for automatic sign-in. Install Microsoft Edge or Google Chrome, then try Connect again.";
                 return result;
             }
 

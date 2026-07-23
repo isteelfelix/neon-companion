@@ -6,11 +6,11 @@
 // hermes_cli/dashboard_auth) is:
 //
 //   1. Authenticate over HTTP -> server sets an HttpOnly session cookie.
-//        * password provider: POST /auth/password-login {provider,username,password}
-//          (provider name auto-detected via GET /api/auth/providers — never user-typed)
-//        * full OAuth: HermesBrowserOAuthLogin opens {base}/login in a dedicated
-//          Chromium/Edge profile and captures HttpOnly cookies via CDP (Desktop
-//          openOauthLoginWindow equivalent). Advanced cookie paste is last-resort only.
+//        * All gated gateways (password form + OAuth IDP): HermesBrowserOAuthLogin
+//          opens {base}/login in a dedicated Chromium/Edge profile and captures
+//          HttpOnly cookies via CDP (Desktop openOauthLoginWindow equivalent).
+//          Password form posts to /auth/password-login on the gateway page itself;
+//          Companion never collects username/password.
 //   2. REST calls carry that cookie (Cookie header).
 //   3. POST /api/auth/ws-ticket (cookie-authenticated) -> single-use 30s ticket.
 //   4. Connect the WebSocket with ?ticket=<ticket>.
