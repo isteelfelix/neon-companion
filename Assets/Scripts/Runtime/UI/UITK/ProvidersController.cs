@@ -80,10 +80,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private const string CustomModelPresetValue = "Custom / manual";
         private const string OpenAiBackendModeValue = "OpenAI (HTTP REST)";
         private const string HermesBackendModeValue = "Hermes (WebSocket)";
-        // Remote-auth mode selector labels (Hermes providers only). Stable English values so
-        // comparisons survive language switches; visible label text is the same string.
-        private const string AuthModeTokenValue = "Token (Bearer)";
-        private const string AuthModeOAuthValue = "Remote login (cookie)";
         private BackendMode _providersBackendMode = BackendMode.OpenAI;
 
         private bool SelectedBackendIsHermes()
@@ -123,25 +119,31 @@ namespace NeonCompanion.Runtime.UI.UITK
         private TextField _editSttLanguage;
         private bool _voiceFieldsQueried;
 
-        // Remote-auth (Desktop-style cookie session) editor fields — built dynamically in C#
-        // (CLAUDE.md: prefer creating conditional UI in code over UXML display toggling).
-        // Only shown for Hermes providers; the OAuth sub-fields only when auth mode == oauth.
-        private VisualElement _authSection;      // whole section (Hermes only)
-        private NeonDropdown _authModeDropdown;  // Token vs remote-cookie
-        private VisualElement _authOauthWrap;    // oauth-only sub-fields
-        private TextField _authProviderField;    // dashboard-auth provider (e.g. "basic")
-        private TextField _authUsername;
-        private TextField _authPassword;         // never persisted to config
-        private TextField _authCookie;           // optional: pasted browser OAuth cookie
-        private Button _authLoginBtn;
-        private Button _authCookieBtn;
-        private Button _authClearBtn;
-        private VisualElement _authStatusRow;
-        private Label _authStatus;
-        private bool _authFieldsBuilt;
-        private bool _authBusy;
-        private bool _authEventsHooked;
-        private bool _syncingAuthUi;
+        // Remote Hermes gateway section (Desktop-style: URL + Connect; token under Advanced).
+        // Built dynamically in C# (CLAUDE.md: prefer conditional UI in code over UXML).
+        private VisualElement _gatewaySection;
+        private Label _gatewayBaseUrlLabel;
+        private VisualElement _apiKeyFieldRoot;
+        private Label _apiKeyFieldLabel;
+        private string _apiKeyLabelOpenAi;
+        private VisualElement _gatewayStatusRow;
+        private Label _gatewayStatus;
+        private Button _gatewayConnectBtn;
+        private Button _gatewaySignOutBtn;
+        private VisualElement _gatewayCredentialsWrap;
+        private TextField _gatewayUsername;
+        private TextField _gatewayPassword;
+        private Button _gatewayAdvancedToggle;
+        private VisualElement _gatewayAdvancedWrap;
+        private TextField _gatewayAdvancedToken;
+        private TextField _gatewayAdvancedCookie;
+        private Button _gatewayApplyCookieBtn;
+        private bool _gatewayFieldsBuilt;
+        private bool _gatewayAdvancedOpen;
+        private bool _gatewayBusy;
+        private bool _gatewayEventsHooked;
+        private HermesAuthProbeResult _lastProbe;
+        private string _probedAuthProvider; // auto-detected; never shown as a user field
 
         // Model picker overlay (created lazily)
         private VisualElement _modelPickerOverlay;
@@ -225,7 +227,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.GlobalBackendMode != null)
                 _d.GlobalBackendMode.UnregisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
 
-            UnhookSelectorAuthEvents();
+            UnhookGatewayAuthEvents();
         }
 
         // ============================================================
@@ -507,11 +509,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!isHermes)
                 SyncVoiceFieldsToUi(_editingProvider);
 
-            // Remote-auth section: shown for Hermes providers only.
-            EnsureAuthEditorSection();
-            SetDisplay(_authSection, isHermes ? DisplayStyle.Flex : DisplayStyle.None);
+            // Desktop-style Remote Hermes gateway section (URL + Connect; token under Advanced).
+            EnsureGatewayEditorSection();
+            ApplyHermesGatewayLayout(isHermes);
             if (isHermes)
-                SyncAuthFieldsToUi(_editingProvider);
+                SyncGatewayFieldsToUi(_editingProvider);
 
             SetTestRow(null, string.Empty);
             _d.ProviderEditPanel.style.display = DisplayStyle.Flex;
@@ -2032,24 +2034,18 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             else
             {
-                // Remote-auth config (Hermes only). Read only when the section has been built;
-                // otherwise the cloned values (from CloneProvider) are preserved. The password is
-                // an action input and is never written into the draft/config.
-                EnsureAuthEditorSection();
-                if (_authModeDropdown != null)
-                    draft.authMode = string.Equals(_authModeDropdown.value, AuthModeOAuthValue, StringComparison.Ordinal)
-                        ? "oauth" : null;
-                bool oauthMode = string.Equals(draft.authMode, "oauth", StringComparison.OrdinalIgnoreCase);
-                if (_authProviderField != null)
+                // Hermes: advanced token field is the API-key / Bearer source when present.
+                // authMode / authProvider are set by Connect (probe), not by primary form fields.
+                EnsureGatewayEditorSection();
+                if (_gatewayAdvancedToken != null
+                    && !string.IsNullOrWhiteSpace(_gatewayAdvancedToken.value))
                 {
-                    string authProvider = _authProviderField.value != null ? _authProviderField.value.Trim() : string.Empty;
-                    // Default dashboard-auth provider name for password login is "basic".
-                    if (string.IsNullOrEmpty(authProvider) && oauthMode)
-                        authProvider = "basic";
-                    draft.authProvider = string.IsNullOrEmpty(authProvider) ? null : authProvider;
+                    draft.apiKey = _gatewayAdvancedToken.value.Trim();
                 }
-                if (_authUsername != null)
-                    draft.authUsername = string.IsNullOrWhiteSpace(_authUsername.value) ? null : _authUsername.value.Trim();
+                if (!string.IsNullOrEmpty(_probedAuthProvider))
+                    draft.authProvider = _probedAuthProvider;
+                if (_gatewayUsername != null && !string.IsNullOrWhiteSpace(_gatewayUsername.value))
+                    draft.authUsername = _gatewayUsername.value.Trim();
             }
 
             // Backend type is fixed when the provider editor opens/creates the draft.
@@ -2093,98 +2089,157 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ============================================================
-        // Remote auth (Desktop-style cookie session) — Hermes only
+        // Remote Hermes gateway (Desktop-style URL + Connect)
         // ============================================================
+        // Primary path: Gateway URL + Connect / Sign in + status + Sign out.
+        // Credentials appear only after probe says the gateway needs a password
+        // login (the "auth prompt"). Token/Bearer and cookie paste live under
+        // Advanced. Never expose authMode picker, provider=basic, or cookie paste
+        // as the primary path (rejected P8.1 UX).
 
-        // Build the auth section once and insert it right after the API-key field. Kept in C#
-        // (not UXML) so it can be shown conditionally without display-toggling layout gotchas.
-        private void EnsureAuthEditorSection()
+        private void EnsureGatewayEditorSection()
         {
-            if (_authFieldsBuilt)
+            if (_gatewayFieldsBuilt)
                 return;
 
-            var apiKeyField = _d.EditApiKey != null && _d.EditApiKey.parent != null
+            // Locate the Base URL / API key field roots in the UXML editor.
+            _apiKeyFieldRoot = _d.EditApiKey != null && _d.EditApiKey.parent != null
                 ? _d.EditApiKey.parent.parent
                 : null;
-            var content = apiKeyField != null ? apiKeyField.parent : null;
-            if (content == null)
-                return; // editor not laid out yet; try again on next open
+            var baseUrlField = _d.EditBaseUrl != null ? _d.EditBaseUrl.parent : null;
+            var content = baseUrlField != null ? baseUrlField.parent : null;
+            if (content == null || _apiKeyFieldRoot == null)
+                return;
 
-            _authFieldsBuilt = true;
+            if (baseUrlField != null)
+            {
+                _gatewayBaseUrlLabel = baseUrlField.Q<Label>(className: "label");
+                if (_gatewayBaseUrlLabel == null)
+                {
+                    foreach (var child in baseUrlField.Children())
+                    {
+                        var lbl = child as Label;
+                        if (lbl != null)
+                        {
+                            _gatewayBaseUrlLabel = lbl;
+                            break;
+                        }
+                    }
+                }
+            }
 
-            _authSection = new VisualElement();
-            _authSection.name = "edit-auth-section";
+            if (_apiKeyFieldRoot != null)
+            {
+                _apiKeyFieldLabel = _apiKeyFieldRoot.Q<Label>(className: "label");
+                if (_apiKeyFieldLabel == null)
+                {
+                    foreach (var child in _apiKeyFieldRoot.Children())
+                    {
+                        var lbl = child as Label;
+                        if (lbl != null)
+                        {
+                            _apiKeyFieldLabel = lbl;
+                            break;
+                        }
+                    }
+                }
+                if (_apiKeyFieldLabel != null)
+                    _apiKeyLabelOpenAi = _apiKeyFieldLabel.text;
+            }
 
-            // Auth mode selector: token (Bearer) vs Desktop-style remote cookie session.
-            var modeField = new VisualElement();
-            modeField.AddToClassList("field");
-            var modeLabel = new Label(LocalizationExtensions.Get("providers.auth.mode", "Auth mode"));
-            modeLabel.AddToClassList("label");
-            modeField.Add(modeLabel);
-            _authModeDropdown = new NeonDropdown();
-            _authModeDropdown.AddToClassList("input");
-            _authModeDropdown.choices = new List<string> { AuthModeTokenValue, AuthModeOAuthValue };
-            _authModeDropdown.RegisterCallback<ChangeEvent<string>>(OnAuthModeChanged);
-            modeField.Add(_authModeDropdown);
-            _authSection.Add(modeField);
+            _gatewayFieldsBuilt = true;
+            _gatewaySection = new VisualElement();
+            _gatewaySection.name = "edit-gateway-section";
 
-            // OAuth / basic-auth sub-fields (shown only when auth mode == oauth).
-            _authOauthWrap = new VisualElement();
-            _authOauthWrap.name = "edit-auth-oauth";
+            // Status
+            _gatewayStatusRow = new VisualElement();
+            _gatewayStatusRow.AddToClassList("testrow");
+            _gatewayStatus = new Label(string.Empty);
+            _gatewayStatus.AddToClassList("testrow__label");
+            _gatewayStatusRow.Add(_gatewayStatus);
+            _gatewaySection.Add(_gatewayStatusRow);
 
-            _authProviderField = BuildAuthField(_authOauthWrap,
-                LocalizationExtensions.Get("providers.auth.provider", "Login provider (dashboard-auth)"), false, true);
-            _authUsername = BuildAuthField(_authOauthWrap,
-                LocalizationExtensions.Get("providers.auth.username", "Username"), false, false);
-            // Password is an action input only — never written into ProviderConfig JSON.
-            _authPassword = BuildAuthField(_authOauthWrap,
-                LocalizationExtensions.Get("providers.auth.password", "Password (not stored in provider config)"), true, false);
-            _authCookie = BuildAuthField(_authOauthWrap,
-                LocalizationExtensions.Get("providers.auth.cookie", "Browser session cookie (full OAuth)"), true, true);
-
+            // Connect + Sign out
             var actions = new VisualElement();
             actions.AddToClassList("provider-edit-actions");
-            _authLoginBtn = new Button(() => { if (!_authBusy) _ = OnAuthLoginClickedAsync(); })
-            {
-                text = LocalizationExtensions.Get("providers.auth.login", "Sign in")
-            };
-            _authLoginBtn.AddToClassList("btn");
-            _authLoginBtn.AddToClassList("btn--primary");
-            _authCookieBtn = new Button(() => { if (!_authBusy) _ = OnAuthCookieClickedAsync(); })
-            {
-                text = LocalizationExtensions.Get("providers.auth.login_cookie", "Sign in with cookie")
-            };
-            _authCookieBtn.AddToClassList("btn");
-            _authClearBtn = new Button(() => { if (!_authBusy) _ = OnAuthClearClickedAsync(); })
-            {
-                text = LocalizationExtensions.Get("providers.auth.logout", "Sign out")
-            };
-            _authClearBtn.AddToClassList("btn");
-            _authClearBtn.AddToClassList("btn--ghost");
-            actions.Add(_authLoginBtn);
-            actions.Add(_authCookieBtn);
-            actions.Add(_authClearBtn);
-            _authOauthWrap.Add(actions);
+            _gatewayConnectBtn = new Button(() => { if (!_gatewayBusy) _ = OnGatewayConnectClickedAsync(); });
+            _gatewayConnectBtn.AddToClassList("btn");
+            _gatewayConnectBtn.AddToClassList("btn--primary");
+            _gatewaySignOutBtn = new Button(() => { if (!_gatewayBusy) _ = OnGatewaySignOutClickedAsync(); });
+            _gatewaySignOutBtn.AddToClassList("btn");
+            _gatewaySignOutBtn.AddToClassList("btn--ghost");
+            actions.Add(_gatewayConnectBtn);
+            actions.Add(_gatewaySignOutBtn);
+            _gatewaySection.Add(actions);
 
-            _authStatusRow = new VisualElement();
-            _authStatusRow.AddToClassList("testrow");
-            _authStatus = new Label(string.Empty);
-            _authStatus.AddToClassList("testrow__label");
-            _authStatusRow.Add(_authStatus);
-            _authOauthWrap.Add(_authStatusRow);
+            // Transient credentials (shown only after probe finds a password provider).
+            _gatewayCredentialsWrap = new VisualElement();
+            _gatewayCredentialsWrap.name = "edit-gateway-credentials";
+            _gatewayCredentialsWrap.style.display = DisplayStyle.None;
+            var credHint = new Label(LocalizationExtensions.Get(
+                "providers.gateway.credentials.hint",
+                "Enter the gateway sign-in credentials, then Connect again."));
+            credHint.AddToClassList("label");
+            _gatewayCredentialsWrap.Add(credHint);
+            _gatewayUsername = BuildGatewayField(
+                _gatewayCredentialsWrap,
+                LocalizationExtensions.Get("providers.gateway.username", "Username"),
+                false, false);
+            _gatewayPassword = BuildGatewayField(
+                _gatewayCredentialsWrap,
+                LocalizationExtensions.Get("providers.gateway.password", "Password"),
+                true, false);
+            _gatewaySection.Add(_gatewayCredentialsWrap);
 
-            _authSection.Add(_authOauthWrap);
+            // Advanced (collapsed): token mode + cookie fallback
+            _gatewayAdvancedToggle = new Button(() => ToggleGatewayAdvanced())
+            {
+                text = LocalizationExtensions.Get("providers.gateway.advanced.show", "Advanced / Token mode")
+            };
+            _gatewayAdvancedToggle.AddToClassList("btn");
+            _gatewayAdvancedToggle.AddToClassList("btn--ghost");
+            _gatewaySection.Add(_gatewayAdvancedToggle);
 
-            int idx = content.IndexOf(apiKeyField);
+            _gatewayAdvancedWrap = new VisualElement();
+            _gatewayAdvancedWrap.name = "edit-gateway-advanced";
+            _gatewayAdvancedWrap.style.display = DisplayStyle.None;
+
+            var advHint = new Label(LocalizationExtensions.Get(
+                "providers.gateway.advanced.hint",
+                "Legacy Bearer token for open gateways, or paste a browser session cookie if system-browser OAuth cannot hand the session back to Companion."));
+            advHint.AddToClassList("label");
+            _gatewayAdvancedWrap.Add(advHint);
+
+            _gatewayAdvancedToken = BuildGatewayField(
+                _gatewayAdvancedWrap,
+                LocalizationExtensions.Get("providers.gateway.token", "Bearer token (legacy)"),
+                true, true);
+            _gatewayAdvancedCookie = BuildGatewayField(
+                _gatewayAdvancedWrap,
+                LocalizationExtensions.Get("providers.gateway.cookie", "Session cookie (advanced fallback)"),
+                true, true);
+
+            _gatewayApplyCookieBtn = new Button(() => { if (!_gatewayBusy) _ = OnGatewayApplyCookieClickedAsync(); })
+            {
+                text = LocalizationExtensions.Get("providers.gateway.apply_cookie", "Apply cookie & reconnect")
+            };
+            _gatewayApplyCookieBtn.AddToClassList("btn");
+            _gatewayAdvancedWrap.Add(_gatewayApplyCookieBtn);
+
+            _gatewaySection.Add(_gatewayAdvancedWrap);
+
+            // Insert after the base URL field (primary path stays URL then Connect).
+            int idx = content.IndexOf(baseUrlField);
             if (idx >= 0)
-                content.Insert(idx + 1, _authSection);
+                content.Insert(idx + 1, _gatewaySection);
             else
-                content.Add(_authSection);
+                content.Add(_gatewaySection);
 
-            HookSelectorAuthEvents();
+            RefreshGatewayActionLabels();
+            HookGatewayAuthEvents();
         }
 
-        private static TextField BuildAuthField(VisualElement parent, string labelText, bool password, bool mono)
+        private static TextField BuildGatewayField(VisualElement parent, string labelText, bool password, bool mono)
         {
             var field = new VisualElement();
             field.AddToClassList("field");
@@ -2201,153 +2256,235 @@ namespace NeonCompanion.Runtime.UI.UITK
             return tf;
         }
 
-        private void OnAuthModeChanged(ChangeEvent<string> evt)
+        private void ApplyHermesGatewayLayout(bool isHermes)
         {
-            if (_syncingAuthUi)
+            if (!_gatewayFieldsBuilt)
                 return;
 
-            bool oauth = string.Equals(evt != null ? evt.newValue : null, AuthModeOAuthValue, StringComparison.Ordinal);
-            SetDisplay(_authOauthWrap, oauth ? DisplayStyle.Flex : DisplayStyle.None);
-            if (_editingProvider != null)
-                _editingProvider.authMode = oauth ? "oauth" : null;
-            RefreshAuthStatus();
+            SetDisplay(_gatewaySection, isHermes ? DisplayStyle.Flex : DisplayStyle.None);
+
+            // Hermes primary path hides the API-key field; token lives under Advanced.
+            SetDisplay(_apiKeyFieldRoot, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
+
+            if (_gatewayBaseUrlLabel != null)
+            {
+                _gatewayBaseUrlLabel.text = isHermes
+                    ? LocalizationExtensions.Get("providers.gateway.url", "Gateway URL")
+                    : LocalizationExtensions.Get("providers.field.base_url", "Base URL");
+            }
+
+            if (!isHermes && _apiKeyFieldLabel != null && !string.IsNullOrEmpty(_apiKeyLabelOpenAi))
+                _apiKeyFieldLabel.text = _apiKeyLabelOpenAi;
         }
 
-        private void SyncAuthFieldsToUi(ProviderConfig provider)
+        private void SyncGatewayFieldsToUi(ProviderConfig provider)
         {
-            if (!_authFieldsBuilt)
+            if (!_gatewayFieldsBuilt)
                 return;
 
-            _syncingAuthUi = true;
-            bool oauth = provider != null
-                && string.Equals(provider.authMode, "oauth", StringComparison.OrdinalIgnoreCase);
+            _probedAuthProvider = provider != null ? provider.authProvider : null;
 
-            if (_authModeDropdown != null)
-                _authModeDropdown.SetValueWithoutNotify(oauth ? AuthModeOAuthValue : AuthModeTokenValue);
-            if (_authProviderField != null)
-                _authProviderField.SetValueWithoutNotify(
-                    string.IsNullOrEmpty(provider != null ? provider.authProvider : null) ? "basic" : provider.authProvider);
-            if (_authUsername != null)
-                _authUsername.SetValueWithoutNotify(provider != null ? (provider.authUsername ?? string.Empty) : string.Empty);
-            // Never prefill secrets into a text field.
-            if (_authPassword != null)
-                _authPassword.SetValueWithoutNotify(string.Empty);
-            if (_authCookie != null)
-                _authCookie.SetValueWithoutNotify(string.Empty);
+            if (_gatewayUsername != null)
+            {
+                _gatewayUsername.SetValueWithoutNotify(
+                    provider != null ? (provider.authUsername ?? string.Empty) : string.Empty);
+            }
+            if (_gatewayPassword != null)
+                _gatewayPassword.SetValueWithoutNotify(string.Empty);
+            if (_gatewayAdvancedToken != null)
+            {
+                _gatewayAdvancedToken.SetValueWithoutNotify(
+                    provider != null ? (provider.apiKey ?? string.Empty) : string.Empty);
+            }
+            if (_gatewayAdvancedCookie != null)
+                _gatewayAdvancedCookie.SetValueWithoutNotify(string.Empty);
 
-            SetDisplay(_authOauthWrap, oauth ? DisplayStyle.Flex : DisplayStyle.None);
-            _syncingAuthUi = false;
-            RefreshAuthStatus();
+            // Show credentials only when this provider is already in oauth mode with a username
+            // (returning user) — first-time users get credentials after Connect probes.
+            bool showCreds = provider != null
+                && string.Equals(provider.authMode, "oauth", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(provider.authUsername);
+            SetDisplay(_gatewayCredentialsWrap, showCreds ? DisplayStyle.Flex : DisplayStyle.None);
+
+            // Token-mode providers: leave Advanced collapsed unless a token is already set.
+            if (!string.IsNullOrEmpty(provider != null ? provider.apiKey : null)
+                && (provider == null || string.IsNullOrEmpty(provider.authMode)))
+            {
+                // Keep collapsed; token is mirrored for reconnect but not forced open.
+            }
+
+            RefreshGatewayActionLabels();
+            RefreshGatewayStatus();
         }
 
-        private void HookSelectorAuthEvents()
+        private void ToggleGatewayAdvanced()
         {
-            if (_authEventsHooked)
+            _gatewayAdvancedOpen = !_gatewayAdvancedOpen;
+            SetDisplay(_gatewayAdvancedWrap, _gatewayAdvancedOpen ? DisplayStyle.Flex : DisplayStyle.None);
+            if (_gatewayAdvancedToggle != null)
+            {
+                _gatewayAdvancedToggle.text = _gatewayAdvancedOpen
+                    ? LocalizationExtensions.Get("providers.gateway.advanced.hide", "Hide advanced")
+                    : LocalizationExtensions.Get("providers.gateway.advanced.show", "Advanced / Token mode");
+            }
+        }
+
+        private void RefreshGatewayActionLabels()
+        {
+            if (_gatewayConnectBtn != null)
+            {
+                _gatewayConnectBtn.text = LocalizationExtensions.Get(
+                    "providers.gateway.connect", "Connect / Sign in");
+            }
+            if (_gatewaySignOutBtn != null)
+            {
+                _gatewaySignOutBtn.text = LocalizationExtensions.Get(
+                    "providers.gateway.sign_out", "Sign out");
+            }
+        }
+
+        private void HookGatewayAuthEvents()
+        {
+            if (_gatewayEventsHooked)
                 return;
             var selector = GlobalBackendSelector.Instance;
             if (selector == null)
                 return;
-            selector.OnConnectionStateChanged += OnAuthConnectionStateChanged;
-            selector.OnError += OnAuthSelectorError;
-            _authEventsHooked = true;
+            selector.OnConnectionStateChanged += OnGatewayConnectionStateChanged;
+            selector.OnError += OnGatewaySelectorError;
+            _gatewayEventsHooked = true;
         }
 
-        private void UnhookSelectorAuthEvents()
+        private void UnhookGatewayAuthEvents()
         {
-            if (!_authEventsHooked)
+            if (!_gatewayEventsHooked)
                 return;
             var selector = GlobalBackendSelector.Instance;
             if (selector != null)
             {
-                selector.OnConnectionStateChanged -= OnAuthConnectionStateChanged;
-                selector.OnError -= OnAuthSelectorError;
+                selector.OnConnectionStateChanged -= OnGatewayConnectionStateChanged;
+                selector.OnError -= OnGatewaySelectorError;
             }
-            _authEventsHooked = false;
+            _gatewayEventsHooked = false;
         }
 
-        private void OnAuthConnectionStateChanged(TransportState state)
+        private void OnGatewayConnectionStateChanged(TransportState state)
         {
-            RefreshAuthStatus();
+            RefreshGatewayStatus();
         }
 
-        private void OnAuthSelectorError(string message)
+        private void OnGatewaySelectorError(string message)
         {
-            RefreshAuthStatus();
+            RefreshGatewayStatus();
         }
 
-        private void RefreshAuthStatus()
+        private void RefreshGatewayStatus()
         {
-            if (_authStatus == null)
+            if (_gatewayStatus == null)
                 return;
 
             var selector = GlobalBackendSelector.Instance;
             HermesAuthState state = selector != null ? selector.RemoteAuthState : HermesAuthState.NoSession;
             string reason = selector != null ? selector.RemoteAuthError : null;
             string lastError = selector != null ? selector.LastConnectionError : null;
-            bool connected = selector != null && selector.SessionManager != null && selector.SessionManager.IsConnected;
+            bool connected = selector != null
+                && selector.SessionManager != null
+                && selector.SessionManager.IsConnected;
+
+            bool isOAuth = _editingProvider != null
+                && string.Equals(_editingProvider.authMode, "oauth", StringComparison.OrdinalIgnoreCase);
 
             string text;
             bool errorStyle = false;
-            if (_authBusy)
+            bool okStyle = false;
+
+            if (_gatewayBusy)
             {
-                text = LocalizationExtensions.Get("providers.auth.status.busy", "Signing in…");
+                text = LocalizationExtensions.Get("providers.gateway.status.busy", "Connecting…");
             }
-            else if (state == HermesAuthState.Authenticated)
+            else if (isOAuth && state == HermesAuthState.Authenticated)
             {
+                okStyle = true;
                 text = connected
-                    ? LocalizationExtensions.Get("providers.auth.status.connected", "Session active · connected")
-                    : LocalizationExtensions.Get("providers.auth.status.authed", "Session active");
+                    ? LocalizationExtensions.Get("providers.gateway.status.connected", "Signed in · connected")
+                    : LocalizationExtensions.Get("providers.gateway.status.signed_in", "Signed in");
             }
-            else if (state == HermesAuthState.ReauthRequired)
+            else if (isOAuth && state == HermesAuthState.ReauthRequired)
             {
                 errorStyle = true;
-                text = LocalizationExtensions.GetFormat("providers.auth.status.reauth",
-                    "Sign-in required ({0}). Enter credentials and try again.", ReasonText(reason));
-                // Prefer the selector's last error when it is more specific (e.g. connect failure
-                // after a reauth flag) but never surface raw secrets — LastConnectionError is
-                // already sanitised by GlobalBackendSelector / HermesRemoteAuth.
-                if (!string.IsNullOrEmpty(lastError) && lastError.IndexOf("sign-in", StringComparison.OrdinalIgnoreCase) >= 0)
+                text = LocalizationExtensions.GetFormat(
+                    "providers.gateway.status.needs_signin",
+                    "Needs sign-in ({0})",
+                    ReasonText(reason));
+                if (!string.IsNullOrEmpty(lastError)
+                    && lastError.IndexOf("sign-in", StringComparison.OrdinalIgnoreCase) >= 0)
                     text = lastError;
+            }
+            else if (!isOAuth && connected)
+            {
+                okStyle = true;
+                text = LocalizationExtensions.Get(
+                    "providers.gateway.status.token_connected", "Connected (token mode)");
             }
             else if (!string.IsNullOrEmpty(lastError))
             {
                 errorStyle = true;
                 text = lastError;
             }
+            else if (isOAuth)
+            {
+                text = LocalizationExtensions.Get(
+                    "providers.gateway.status.none", "Not signed in. Enter the Gateway URL and Connect.");
+            }
             else
             {
-                text = LocalizationExtensions.Get("providers.auth.status.none", "No session. Sign in to connect.");
+                text = LocalizationExtensions.Get(
+                    "providers.gateway.status.idle", "Enter the Gateway URL and Connect.");
             }
 
-            _authStatus.text = text;
-            if (_authStatusRow != null)
+            _gatewayStatus.text = text;
+            if (_gatewayStatusRow != null)
             {
-                _authStatusRow.EnableInClassList("testrow--ok", !_authBusy && state == HermesAuthState.Authenticated);
-                _authStatusRow.EnableInClassList("testrow--error", !_authBusy && errorStyle);
+                _gatewayStatusRow.EnableInClassList("testrow--ok", !_gatewayBusy && okStyle);
+                _gatewayStatusRow.EnableInClassList("testrow--error", !_gatewayBusy && errorStyle);
             }
         }
 
         private static string ReasonText(string reason)
         {
             if (string.Equals(reason, "no_cookie", StringComparison.Ordinal))
-                return LocalizationExtensions.Get("providers.auth.reason.no_cookie", "no cookie");
+                return LocalizationExtensions.Get("providers.gateway.reason.no_cookie", "no session");
             if (string.Equals(reason, "expired", StringComparison.Ordinal))
-                return LocalizationExtensions.Get("providers.auth.reason.expired", "session expired");
+                return LocalizationExtensions.Get("providers.gateway.reason.expired", "session expired");
             if (string.Equals(reason, "invalid_credentials", StringComparison.Ordinal))
-                return LocalizationExtensions.Get("providers.auth.reason.invalid", "invalid credentials");
+                return LocalizationExtensions.Get("providers.gateway.reason.invalid", "invalid credentials");
             return reason ?? string.Empty;
         }
 
-        private void SetAuthActionsEnabled(bool enabled)
+        private void SetGatewayActionsEnabled(bool enabled)
         {
-            if (_authLoginBtn != null) _authLoginBtn.SetEnabled(enabled);
-            if (_authCookieBtn != null) _authCookieBtn.SetEnabled(enabled);
-            if (_authClearBtn != null) _authClearBtn.SetEnabled(enabled);
+            if (_gatewayConnectBtn != null) _gatewayConnectBtn.SetEnabled(enabled);
+            if (_gatewaySignOutBtn != null) _gatewaySignOutBtn.SetEnabled(enabled);
+            if (_gatewayApplyCookieBtn != null) _gatewayApplyCookieBtn.SetEnabled(enabled);
         }
 
-        // Persist the draft, make it the active Hermes provider (no session), and return it — the
-        // shared preamble for password login and cookie login. The password stays out of config.
-        private async Task<ProviderConfig> PrepareActiveOAuthProviderAsync()
+        private void SetGatewayStatusMessage(string text, bool error)
+        {
+            if (_gatewayStatus != null)
+                _gatewayStatus.text = text ?? string.Empty;
+            if (_gatewayStatusRow != null)
+            {
+                // Temporary messages during connect are neutral (neither ok nor error) unless
+                // explicitly marked as an error; final success/failure is painted by RefreshGatewayStatus.
+                _gatewayStatusRow.EnableInClassList("testrow--ok", false);
+                _gatewayStatusRow.EnableInClassList("testrow--error", error);
+            }
+        }
+
+        /// <summary>
+        /// Persist draft, activate as Hermes provider, return it. Shared by Connect / cookie.
+        /// </summary>
+        private async Task<ProviderConfig> PrepareActiveGatewayProviderAsync(string authMode)
         {
             var app = await _d.GetAppAsync();
             if (app == null)
@@ -2357,7 +2494,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (draft == null || !ChatService.IsHermesProvider(draft))
                 return null;
 
-            draft.authMode = "oauth";
+            draft.authMode = authMode; // "oauth" or null (token)
+            if (string.Equals(authMode, "oauth", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(_probedAuthProvider))
+            {
+                draft.authProvider = _probedAuthProvider;
+            }
+
             await app.ProviderManager.SaveProviderAsync(draft);
             _editingProviderSource = draft;
             _editingProvider = CloneProvider(draft);
@@ -2374,171 +2517,295 @@ namespace NeonCompanion.Runtime.UI.UITK
             return draft;
         }
 
-        private async Task OnAuthLoginClickedAsync()
+        private async Task OnGatewayConnectClickedAsync()
         {
-            var selector = GlobalBackendSelector.Instance;
-            if (selector == null || _editingProvider == null)
+            if (_editingProvider == null)
                 return;
 
-            string username = _authUsername != null ? (_authUsername.value ?? string.Empty).Trim() : string.Empty;
-            string password = _authPassword != null ? (_authPassword.value ?? string.Empty) : string.Empty;
-            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            string baseUrl = _d.EditBaseUrl != null ? (_d.EditBaseUrl.value ?? string.Empty).Trim() : string.Empty;
+            if (string.IsNullOrEmpty(baseUrl))
             {
-                if (_authStatus != null)
-                {
-                    _authStatus.text = LocalizationExtensions.Get(
-                        "providers.auth.credentials.required",
-                        "Enter username and password, then Sign in.");
-                }
-                if (_authStatusRow != null)
-                {
-                    _authStatusRow.EnableInClassList("testrow--ok", false);
-                    _authStatusRow.EnableInClassList("testrow--error", true);
-                }
+                SetGatewayStatusMessage(
+                    LocalizationExtensions.Get(
+                        "providers.gateway.url.required",
+                        "Enter the Remote Hermes Gateway URL first."),
+                    true);
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(_d.EditBaseUrl != null ? _d.EditBaseUrl.value : null))
-            {
-                if (_authStatus != null)
-                {
-                    _authStatus.text = LocalizationExtensions.Get(
-                        "providers.auth.baseurl.required",
-                        "Set the base URL before signing in.");
-                }
-                if (_authStatusRow != null)
-                {
-                    _authStatusRow.EnableInClassList("testrow--ok", false);
-                    _authStatusRow.EnableInClassList("testrow--error", true);
-                }
-                return;
-            }
+            _gatewayBusy = true;
+            SetGatewayActionsEnabled(false);
+            RefreshGatewayStatus();
 
-            _authBusy = true;
-            SetAuthActionsEnabled(false);
-            RefreshAuthStatus();
             try
             {
-                var draft = await PrepareActiveOAuthProviderAsync();
-                if (draft == null)
+                // 1) Probe — same public endpoints Desktop uses (no credentials).
+                SetGatewayStatusMessage(
+                    LocalizationExtensions.Get("providers.gateway.status.probing", "Checking gateway…"),
+                    false);
+                HermesAuthProbeResult probe = await HermesRemoteAuth.ProbeAsync(baseUrl);
+                _lastProbe = probe;
+
+                if (!probe.Reachable)
+                {
+                    SetGatewayStatusMessage(
+                        LocalizationExtensions.GetFormat(
+                            "providers.gateway.status.unreachable",
+                            "Could not reach gateway: {0}",
+                            probe.Error ?? "unreachable"),
+                        true);
                     return;
+                }
 
-                bool ok = await selector.HermesPasswordLoginAsync(username, password);
+                bool oauth = string.Equals(probe.AuthMode, "oauth", StringComparison.OrdinalIgnoreCase);
 
-                // Never keep the plaintext password in the UI after use.
-                if (_authPassword != null)
-                    _authPassword.SetValueWithoutNotify(string.Empty);
+                if (oauth)
+                {
+                    await ConnectOAuthGatewayAsync(probe, baseUrl);
+                }
+                else
+                {
+                    await ConnectTokenGatewayAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogError("[Providers] Gateway connect failed: " + ex.GetType().Name + ": " + ex.Message);
+                SetGatewayStatusMessage(ex.Message, true);
+            }
+            finally
+            {
+                _gatewayBusy = false;
+                SetGatewayActionsEnabled(true);
+                RefreshGatewayStatus();
+                await RefreshProvidersListAsync();
+            }
+        }
+
+        private async Task ConnectOAuthGatewayAsync(HermesAuthProbeResult probe, string baseUrl)
+        {
+            // Auto-detect password provider name — never ask the user for provider=basic.
+            string providerName = probe.FirstPasswordProviderName;
+            if (string.IsNullOrEmpty(providerName) && probe.IsPasswordProvider)
+                providerName = "basic";
+            if (!string.IsNullOrEmpty(providerName))
+                _probedAuthProvider = providerName;
+            else if (string.IsNullOrEmpty(_probedAuthProvider))
+                _probedAuthProvider = null;
+
+            var draft = await PrepareActiveGatewayProviderAsync("oauth");
+            if (draft == null)
+                return;
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector == null)
+                return;
+
+            selector.ConfigureHermesEndpoint(draft.baseUrl, draft.apiKey);
+
+            // Already signed in? Just reconnect.
+            if (selector.HasRemoteSession)
+            {
+                await selector.ReconnectHermes();
+                return;
+            }
+
+            bool passwordPath = probe.IsPasswordProvider
+                || !string.IsNullOrEmpty(probe.FirstPasswordProviderName);
+
+            if (passwordPath)
+            {
+                SetDisplay(_gatewayCredentialsWrap, DisplayStyle.Flex);
+
+                string username = _gatewayUsername != null
+                    ? (_gatewayUsername.value ?? string.Empty).Trim()
+                    : string.Empty;
+                string password = _gatewayPassword != null
+                    ? (_gatewayPassword.value ?? string.Empty)
+                    : string.Empty;
+
+                if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+                {
+                    // Desktop opens a login window; we surface a one-shot credentials prompt.
+                    SetGatewayStatusMessage(
+                        LocalizationExtensions.Get(
+                            "providers.gateway.credentials.required",
+                            "Needs sign-in. Enter username and password, then Connect."),
+                        true);
+                    return;
+                }
+
+                string authProvider = !string.IsNullOrEmpty(_probedAuthProvider)
+                    ? _probedAuthProvider
+                    : "basic";
+                draft.authProvider = authProvider;
+                bool ok = await selector.HermesPasswordLoginAsync(username, password, authProvider);
+
+                if (_gatewayPassword != null)
+                    _gatewayPassword.SetValueWithoutNotify(string.Empty);
 
                 if (ok)
                 {
-                    // Persist username (non-secret) after a successful login so reconnect can
-                    // re-auth with the secret-store password. Password itself never goes to JSON.
                     draft.authUsername = username;
+                    draft.authProvider = authProvider;
                     var app = await _d.GetAppAsync();
                     if (app != null)
                         await app.ProviderManager.SaveProviderAsync(draft);
                     _editingProviderSource = draft;
                     _editingProvider = CloneProvider(draft);
-                    if (_authUsername != null)
-                        _authUsername.SetValueWithoutNotify(username);
 
                     var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
-                    SetProviderHeader(chat != null && chat.CurrentProvider != null ? chat.CurrentProvider : draft,
+                    SetProviderHeader(
+                        chat != null && chat.CurrentProvider != null ? chat.CurrentProvider : draft,
                         chat != null ? chat.CurrentSessionModel : null);
                 }
+                return;
             }
-            catch (Exception ex)
-            {
-                // Log the exception type/message only — never the password/cookie/ticket.
-                NeonLogger.LogError("[Providers] Hermes remote login failed: " + ex.GetType().Name + ": " + ex.Message);
-            }
-            finally
-            {
-                _authBusy = false;
-                SetAuthActionsEnabled(true);
-                RefreshAuthStatus();
-                await RefreshProvidersListAsync();
-            }
+
+            // Full OAuth (no password provider): open system browser to /login (Desktop window).
+            string loginUrl = HermesRemoteAuth.BuildLoginUrl(baseUrl);
+            if (!string.IsNullOrEmpty(loginUrl))
+                Application.OpenURL(loginUrl);
+
+            // Unity has no Electron session partition — guide user; cookie under Advanced.
+            if (!_gatewayAdvancedOpen)
+                ToggleGatewayAdvanced();
+
+            SetGatewayStatusMessage(
+                LocalizationExtensions.Get(
+                    "providers.gateway.browser.hint",
+                    "Complete sign-in in your browser. If Companion cannot pick up the session automatically, paste the session cookie under Advanced and Apply."),
+                false);
         }
 
-        private async Task OnAuthCookieClickedAsync()
+        private async Task ConnectTokenGatewayAsync()
+        {
+            // Token / open gateway: use advanced Bearer token (or saved apiKey).
+            string token = null;
+            if (_gatewayAdvancedToken != null && !string.IsNullOrWhiteSpace(_gatewayAdvancedToken.value))
+                token = _gatewayAdvancedToken.value.Trim();
+            else if (_d.EditApiKey != null && !string.IsNullOrWhiteSpace(_d.EditApiKey.value))
+                token = _d.EditApiKey.value.Trim();
+            else if (_editingProvider != null)
+                token = _editingProvider.apiKey;
+
+            if (string.IsNullOrEmpty(token))
+            {
+                if (!_gatewayAdvancedOpen)
+                    ToggleGatewayAdvanced();
+                SetGatewayStatusMessage(
+                    LocalizationExtensions.Get(
+                        "providers.gateway.token.required",
+                        "This gateway uses token mode. Enter a Bearer token under Advanced, then Connect."),
+                    true);
+                return;
+            }
+
+            // Mirror into the draft apiKey and clear oauth mode.
+            if (_d.EditApiKey != null)
+                _d.EditApiKey.SetValueWithoutNotify(token);
+            if (_gatewayAdvancedToken != null)
+                _gatewayAdvancedToken.SetValueWithoutNotify(token);
+
+            var draft = await PrepareActiveGatewayProviderAsync(null);
+            if (draft == null)
+                return;
+
+            draft.apiKey = token;
+            draft.authMode = null;
+            var app = await _d.GetAppAsync();
+            if (app != null)
+                await app.ProviderManager.SaveProviderAsync(draft);
+            _editingProviderSource = draft;
+            _editingProvider = CloneProvider(draft);
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector == null)
+                return;
+
+            if (selector.HasRemoteSession)
+                await selector.ClearHermesRemoteSession();
+
+            selector.ConfigureHermesEndpoint(draft.baseUrl, draft.apiKey);
+            await selector.ReconnectHermes();
+
+            var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+            SetProviderHeader(
+                chat != null && chat.CurrentProvider != null ? chat.CurrentProvider : draft,
+                chat != null ? chat.CurrentSessionModel : null);
+        }
+
+        private async Task OnGatewayApplyCookieClickedAsync()
         {
             var selector = GlobalBackendSelector.Instance;
             if (selector == null || _editingProvider == null)
                 return;
 
-            string cookie = _authCookie != null ? _authCookie.value : string.Empty;
+            string cookie = _gatewayAdvancedCookie != null ? _gatewayAdvancedCookie.value : string.Empty;
             if (string.IsNullOrWhiteSpace(cookie))
             {
-                if (_authStatus != null)
-                {
-                    _authStatus.text = LocalizationExtensions.Get(
-                        "providers.auth.cookie.required",
-                        "Paste the browser session cookie first.");
-                }
-                if (_authStatusRow != null)
-                {
-                    _authStatusRow.EnableInClassList("testrow--ok", false);
-                    _authStatusRow.EnableInClassList("testrow--error", true);
-                }
+                SetGatewayStatusMessage(
+                    LocalizationExtensions.Get(
+                        "providers.gateway.cookie.required",
+                        "Paste a session cookie under Advanced first."),
+                    true);
                 return;
             }
 
-            _authBusy = true;
-            SetAuthActionsEnabled(false);
-            RefreshAuthStatus();
+            _gatewayBusy = true;
+            SetGatewayActionsEnabled(false);
             try
             {
-                var draft = await PrepareActiveOAuthProviderAsync();
+                var draft = await PrepareActiveGatewayProviderAsync("oauth");
                 if (draft == null)
                     return;
 
                 selector.ConfigureHermesEndpoint(draft.baseUrl, draft.apiKey);
                 selector.SetHermesSessionCookie(cookie);
-                // Do not keep the session cookie sitting in a text field.
-                if (_authCookie != null)
-                    _authCookie.SetValueWithoutNotify(string.Empty);
+                if (_gatewayAdvancedCookie != null)
+                    _gatewayAdvancedCookie.SetValueWithoutNotify(string.Empty);
                 await selector.ReconnectHermes();
             }
             catch (Exception ex)
             {
-                NeonLogger.LogError("[Providers] Hermes cookie login failed: " + ex.GetType().Name + ": " + ex.Message);
+                NeonLogger.LogError("[Providers] Gateway cookie apply failed: " + ex.GetType().Name + ": " + ex.Message);
+                SetGatewayStatusMessage(ex.Message, true);
             }
             finally
             {
-                _authBusy = false;
-                SetAuthActionsEnabled(true);
-                RefreshAuthStatus();
+                _gatewayBusy = false;
+                SetGatewayActionsEnabled(true);
+                RefreshGatewayStatus();
                 await RefreshProvidersListAsync();
             }
         }
 
-        private async Task OnAuthClearClickedAsync()
+        private async Task OnGatewaySignOutClickedAsync()
         {
             var selector = GlobalBackendSelector.Instance;
             if (selector == null)
                 return;
 
-            _authBusy = true;
-            SetAuthActionsEnabled(false);
-            RefreshAuthStatus();
+            _gatewayBusy = true;
+            SetGatewayActionsEnabled(false);
+            RefreshGatewayStatus();
             try
             {
                 await selector.ClearHermesRemoteSession();
-                if (_authPassword != null)
-                    _authPassword.SetValueWithoutNotify(string.Empty);
-                if (_authCookie != null)
-                    _authCookie.SetValueWithoutNotify(string.Empty);
+                if (_gatewayPassword != null)
+                    _gatewayPassword.SetValueWithoutNotify(string.Empty);
+                if (_gatewayAdvancedCookie != null)
+                    _gatewayAdvancedCookie.SetValueWithoutNotify(string.Empty);
             }
             catch (Exception ex)
             {
-                NeonLogger.LogError("[Providers] Hermes sign-out failed: " + ex.GetType().Name + ": " + ex.Message);
+                NeonLogger.LogError("[Providers] Gateway sign-out failed: " + ex.GetType().Name + ": " + ex.Message);
             }
             finally
             {
-                _authBusy = false;
-                SetAuthActionsEnabled(true);
-                RefreshAuthStatus();
+                _gatewayBusy = false;
+                SetGatewayActionsEnabled(true);
+                RefreshGatewayStatus();
                 await RefreshProvidersListAsync();
             }
         }

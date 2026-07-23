@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Deterministic static verification for the Hermes P8 remote-auth slice.
+# Deterministic static verification for the Hermes remote-auth slice (P8 plumbing + Desktop-style UI).
 #
 # The Companion is a Unity 6 project; no Unity runtime or C# compiler is available in
 # CI here, so this script does what CAN be checked deterministically:
 #   1. C# 9 compliance lint on the changed files (Unity 6 forbids C# 10+ syntax).
 #   2. Auth contract wiring is present (password-login, ws-ticket, ?ticket=, Cookie).
 #   3. Legacy token-mode path is preserved unchanged.
-#   4. The cookie-extraction regex actually works on representative Set-Cookie headers
+#   4. Desktop-style UI wiring: URL + Connect primary path; rejected P8.1 labels gone.
+#   5. The cookie-extraction regex actually works on representative Set-Cookie headers
 #      (the .NET pattern is re-run with python3, whose regex syntax matches for this pattern).
+#   6. Probe helpers (auth_required / providers) are present.
 #
 # Exit non-zero on any failure.
 set -uo pipefail
@@ -33,24 +35,14 @@ for f in "${FILES[@]}"; do
 done
 
 echo "== [2] C# 9 compliance (Unity 6 constraints) =="
-# switch expressions:  something => (inside a `switch (x) {  x => y  }` arm)
-if grep -nE '=>\s' "${FILES[@]}" | grep -vE '///|//' | grep -E '\)\s*=>|\}\s*=>|switch' >/dev/null 2>&1; then
-  # Narrow: flag only the "= <expr> switch {" / "case ... =>" style is hard; instead flag
-  # any `switch` used as an expression (assignment form: `= ... switch`).
-  :
-fi
 if grep -nE '=\s*[A-Za-z0-9_.\)]+\s+switch\s*\{' "${FILES[@]}" >/dev/null 2>&1; then
   fail "switch expression found (use switch statement)"; else pass "no switch expressions"; fi
-# Only the C# pattern form: `is not null`, `is not <CapitalizedType>`, `is not (` / `{`.
-# (Avoids flagging English prose like "URL is not configured".)
 if grep -nE '\bis\s+not\s+(null|[A-Z(\{])' "${FILES[@]}" >/dev/null 2>&1; then
   fail "'is not' pattern found (use != / !(x is T))"; else pass "no 'is not' patterns"; fi
 if grep -nE '\bis\s+null\b' "${FILES[@]}" >/dev/null 2>&1; then
   fail "'is null' pattern found (use == null)"; else pass "no 'is null' patterns"; fi
-# target-typed new(): `new(` or `= new()` with no type name before the paren.
 if grep -nE '(=|\breturn|\(|,)\s*new\s*\(' "${FILES[@]}" >/dev/null 2>&1; then
   fail "target-typed new() found (use new TypeName())"; else pass "no target-typed new()"; fi
-# UnityEngine.Serializable misuse
 if grep -nE '\[UnityEngine\.Serializable\]' "${FILES[@]}" >/dev/null 2>&1; then
   fail "[UnityEngine.Serializable] found (use [Serializable])"; else pass "no [UnityEngine.Serializable]"; fi
 
@@ -68,10 +60,8 @@ grep -q 'MarkReauthRequired' Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.
   && pass "REST 401 -> reauth flag" || fail "REST 401 reauth not wired"
 grep -qE 'no_cookie|invalid_credentials|expired' Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs \
   && pass "stable reauth reasons (no_cookie/expired/invalid_credentials)" || fail "reauth reasons missing"
-# Single-use ticket must never be persisted.
 if grep -nE 'SetSecret\([^)]*ticket' Assets/Scripts/Runtime/**/*.cs >/dev/null 2>&1; then
   fail "ticket appears to be persisted"; else pass "ticket not persisted"; fi
-# Password must not be logged.
 if grep -nE '(Debug\.Log|NeonLogger)[^\n]*password' Assets/Scripts/Runtime/**/*.cs >/dev/null 2>&1; then
   fail "password may be logged"; else pass "password not logged"; fi
 
@@ -81,33 +71,71 @@ grep -q 'token=' Assets/Scripts/Runtime/Api/Hermes/HermesSessionManager.cs \
 grep -q 'Authorization", "Bearer ' Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.cs \
   && pass "Bearer token path kept" || fail "Bearer token path removed"
 
-echo "== [4b] UI wires to existing P8 plumbing (no duplicate auth client) =="
+echo "== [4b] Desktop-style gateway UI (primary path = URL + Connect) =="
+# Positive: required wiring
+grep -q 'EnsureGatewayEditorSection' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "Gateway editor section built in C#" || fail "EnsureGatewayEditorSection missing"
+grep -q 'OnGatewayConnectClickedAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "Connect / Sign in handler present" || fail "OnGatewayConnectClickedAsync missing"
+grep -q 'HermesRemoteAuth.ProbeAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "UI probes gateway via HermesRemoteAuth.ProbeAsync" || fail "ProbeAsync not used by UI"
+grep -q '/api/status' Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs \
+  && pass "probe hits /api/status" || fail "/api/status probe missing"
+grep -q '/api/auth/providers' Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs \
+  && pass "probe hits /api/auth/providers" || fail "/api/auth/providers probe missing"
+grep -q 'BuildLoginUrl' Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs \
+  && pass "BuildLoginUrl helper present" || fail "BuildLoginUrl missing"
 grep -q 'HermesPasswordLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
-  && pass "UI calls HermesPasswordLoginAsync" || fail "UI missing HermesPasswordLoginAsync"
+  && pass "UI reuses HermesPasswordLoginAsync" || fail "UI missing HermesPasswordLoginAsync"
 grep -q 'SetHermesSessionCookie' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
-  && pass "UI calls SetHermesSessionCookie" || fail "UI missing SetHermesSessionCookie"
+  && pass "UI can apply advanced cookie fallback" || fail "UI missing SetHermesSessionCookie"
 grep -q 'ClearHermesRemoteSession' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
-  && pass "UI calls ClearHermesRemoteSession" || fail "UI missing ClearHermesRemoteSession"
+  && pass "UI calls ClearHermesRemoteSession (Sign out)" || fail "UI missing ClearHermesRemoteSession"
 grep -q 'RemoteAuthState' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
   && pass "UI reads RemoteAuthState" || fail "UI missing RemoteAuthState"
-grep -q 'EnsureAuthEditorSection' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
-  && pass "Auth editor section built in C#" || fail "EnsureAuthEditorSection missing"
 grep -q 'authMode' Assets/Scripts/Runtime/Chat/ChatService.cs \
   && pass "ChatService applies authMode on save" || fail "ChatService does not copy authMode"
 # Password must not be written into ProviderConfig from the UI draft builder.
 if grep -nE 'draft\.(password|authPassword)\s*=' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
   fail "UI appears to assign password into provider draft"; else pass "password not written to provider draft"; fi
-# Localization keys present in both languages.
+
+# Negative: rejected P8.1 primary labels must not appear in the normal path.
+if grep -nF 'Remote login (cookie)' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "rejected label 'Remote login (cookie)' still present"; else pass "no 'Remote login (cookie)' label"; fi
+if grep -nF 'Login provider (dashboard-auth)' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "rejected label 'Login provider (dashboard-auth)' still present"; else pass "no login-provider field label"; fi
+if grep -nF 'Sign in with cookie' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "rejected primary 'Sign in with cookie' still present"; else pass "no primary 'Sign in with cookie'"; fi
+if grep -nF 'AuthModeOAuthValue' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1 \
+   || grep -nF 'AuthModeTokenValue' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "authMode dropdown constants still present (user must not pick auth mode)"; else pass "no authMode dropdown constants"; fi
+# Primary path must not force the user to type provider=basic as a visible default field.
+if grep -nE 'SetValueWithoutNotify\(\s*"basic"\s*\)' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "UI pre-fills provider=basic into a visible field"; else pass "no visible provider=basic prefill"; fi
+# Advanced token path must still exist (token-mode regression guard).
+grep -q 'gatewayAdvancedToken\|_gatewayAdvancedToken\|Bearer token' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "Advanced Bearer token path present" || fail "Advanced token path missing"
+
+# Localization keys present in both languages (user-facing gateway strings).
 for lang in en ru; do
-  if grep -q '"providers.auth.login"' "Assets/Resources/Localization/${lang}.json" \
-     && grep -q '"providers.auth.status.reauth"' "Assets/Resources/Localization/${lang}.json"; then
-    pass "providers.auth.* keys in ${lang}.json"
+  if grep -q '"providers.gateway.connect"' "Assets/Resources/Localization/${lang}.json" \
+     && grep -q '"providers.gateway.url"' "Assets/Resources/Localization/${lang}.json" \
+     && grep -q '"providers.gateway.status.connected"' "Assets/Resources/Localization/${lang}.json" \
+     && grep -q '"providers.gateway.sign_out"' "Assets/Resources/Localization/${lang}.json"; then
+    pass "providers.gateway.* keys in ${lang}.json"
   else
-    fail "providers.auth.* keys missing in ${lang}.json"
+    fail "providers.gateway.* keys missing in ${lang}.json"
+  fi
+  # Rejected keys must not reappear as the primary product strings.
+  if grep -q 'Remote login (cookie)' "Assets/Resources/Localization/${lang}.json" \
+     || grep -q 'Login provider (dashboard-auth)' "Assets/Resources/Localization/${lang}.json"; then
+    fail "rejected primary labels present in ${lang}.json"
+  else
+    pass "no rejected primary labels in ${lang}.json"
   fi
 done
 
-echo "== [5] Cookie-extraction regex behavior =="
+echo "== [5] Cookie-extraction + probe pure helpers =="
 python3 - <<'PY'
 import re, sys
 NAMES = [
@@ -146,6 +174,49 @@ check("__Host- cookies (no bare double-match)", extract(h2), "__Host-hermes_sess
 # no session cookies present
 check("unrelated cookies -> None", extract("csrftoken=xyz; Path=/"), None)
 check("empty -> None", extract(""), None)
+
+# auth_required parse (mirrors HermesRemoteAuth.ParseAuthRequired)
+def parse_auth_required(status_json):
+    import json
+    if not status_json:
+        return False
+    try:
+        obj = json.loads(status_json)
+        t = obj.get("auth_required")
+        if t is True: return True
+        if t is False or t is None: return False
+        if isinstance(t, str):
+            return t.lower() in ("true", "1")
+        if isinstance(t, int):
+            return t != 0
+        return False
+    except Exception:
+        return False
+
+check("auth_required true", parse_auth_required('{"auth_required":true,"version":"1"}'), True)
+check("auth_required false", parse_auth_required('{"auth_required":false}'), False)
+check("auth_required missing", parse_auth_required('{"version":"1"}'), False)
+
+# providers parse shape
+def parse_providers(providers_json):
+    import json
+    out=[]
+    try:
+        obj=json.loads(providers_json)
+        for p in obj.get("providers") or []:
+            name=p.get("name") or ""
+            if not name: continue
+            out.append({
+                "name": name,
+                "display": p.get("display_name") or name,
+                "pw": bool(p.get("supports_password")),
+            })
+    except Exception:
+        pass
+    return out
+
+got = parse_providers('{"providers":[{"name":"basic","display_name":"Password","supports_password":true}]}')
+check("providers parse basic", got, [{"name":"basic","display":"Password","pw":True}])
 
 sys.exit(0 if ok else 1)
 PY

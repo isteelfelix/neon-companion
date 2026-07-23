@@ -3,12 +3,11 @@
 ## [Unreleased]
 
 ### Added
-- **Hermes remote auth UI (P8)** — Providers editor exposes Token (Bearer) vs Remote login (cookie) for Hermes providers, with username/password or browser-cookie sign-in, live session/reauth status, and Sign out. Wires to `HermesPasswordLoginAsync` / `SetHermesSessionCookie` / `ClearHermesRemoteSession` (no duplicate auth client). Passwords never enter provider JSON; tickets stay single-use in memory.
+- **Desktop-style Remote Hermes gateway UX** — Providers editor primary path is Gateway URL + Connect / Sign in (auto-probe `/api/status` + `/api/auth/providers`), with Signed in / Needs sign-in / Connected status and Sign out. Password credentials appear only as a one-shot auth prompt; Bearer token and cookie paste live under Advanced. Reuses P8 cookie + ws-ticket plumbing; token mode preserved.
 - **Hermes REST v2 read surface** — `HermesRestClient` now mirrors Desktop read endpoints for status, model info/options, config, skills, toolsets, and cron jobs, with bearer-auth GET/POST/PATCH/DELETE helpers and a typed missing-endpoint exception for 404 `No such API endpoint` capability gaps.
 
 ### Fixed
 - All runtime version labels now use Unity Player Settings through `Application.version`; removed stale hardcoded splash/version-file values and aligned mobile Build Profiles.
-- Active Hermes provider save now copies `authMode` / `authProvider` / `authUsername` into the live config so cookie vs token mode changes apply without restart.
 
 ## [0.4.0] - 2026-06-10
 

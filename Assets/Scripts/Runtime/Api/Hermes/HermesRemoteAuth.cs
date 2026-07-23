@@ -6,12 +6,17 @@
 // hermes_cli/dashboard_auth) is:
 //
 //   1. Authenticate over HTTP -> server sets an HttpOnly session cookie.
-//        * basic-auth provider: POST /auth/password-login {provider,username,password}
-//        * full OAuth: user signs in via browser and pastes the session cookie
-//          (SetSessionCookie) - the interactive IDP redirect is out of scope here.
+//        * password provider: POST /auth/password-login {provider,username,password}
+//          (provider name auto-detected via GET /api/auth/providers — never user-typed)
+//        * full OAuth: open the gateway /login page in the system browser; optional
+//          advanced cookie paste when Unity cannot capture the browser session jar
 //   2. REST calls carry that cookie (Cookie header).
 //   3. POST /api/auth/ws-ticket (cookie-authenticated) -> single-use 30s ticket.
 //   4. Connect the WebSocket with ?ticket=<ticket>.
+//
+// Auth mode is discovered the same way as Desktop (probeRemoteAuthMode in main.ts):
+// public GET /api/status reports auth_required; when gated, GET /api/auth/providers
+// lists providers (supports_password) for the sign-in path.
 //
 // The session cookie lives in memory only. Tickets are single-use and MUST NOT be
 // persisted (they are minted fresh per connect). Passwords are never logged.
@@ -54,6 +59,73 @@ namespace NeonCompanion.Runtime.Api.Hermes
     }
 
     /// <summary>
+    /// One dashboard-auth provider advertised by GET /api/auth/providers (Desktop probe shape).
+    /// </summary>
+    public class HermesAuthProviderInfo
+    {
+        public string Name;
+        public string DisplayName;
+        public bool SupportsPassword;
+    }
+
+    /// <summary>
+    /// Result of a Desktop-style public probe of a remote gateway (no credentials sent).
+    /// Mirrors electron <c>probeRemoteAuthMode</c>: reachable, authMode, providers.
+    /// </summary>
+    public class HermesAuthProbeResult
+    {
+        public string BaseUrl;
+        public bool Reachable;
+        /// <summary>"oauth" | "token" | "unknown"</summary>
+        public string AuthMode;
+        public System.Collections.Generic.List<HermesAuthProviderInfo> Providers;
+        public string Error;
+        public string Version;
+
+        public HermesAuthProbeResult()
+        {
+            AuthMode = "unknown";
+            Providers = new System.Collections.Generic.List<HermesAuthProviderInfo>();
+        }
+
+        /// <summary>
+        /// True when every advertised provider supports password login (Desktop
+        /// isPasswordProvider). Mixed deployments keep the generic browser OAuth path.
+        /// </summary>
+        public bool IsPasswordProvider
+        {
+            get
+            {
+                if (Providers == null || Providers.Count == 0)
+                    return false;
+                for (int i = 0; i < Providers.Count; i++)
+                {
+                    if (Providers[i] == null || !Providers[i].SupportsPassword)
+                        return false;
+                }
+                return true;
+            }
+        }
+
+        /// <summary>First password-capable provider name, or null.</summary>
+        public string FirstPasswordProviderName
+        {
+            get
+            {
+                if (Providers == null)
+                    return null;
+                for (int i = 0; i < Providers.Count; i++)
+                {
+                    if (Providers[i] != null && Providers[i].SupportsPassword
+                        && !string.IsNullOrEmpty(Providers[i].Name))
+                        return Providers[i].Name;
+                }
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
     /// Desktop-parity remote auth: cookie session + ws-ticket minting. Standalone and mostly
     /// pure so the string-shaping bits (cookie extraction, ticket parse, WS-URL build) are
     /// deterministically verifiable without a Unity runtime.
@@ -72,6 +144,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private const int LoginTimeoutSeconds = 30;
         private const int TicketTimeoutSeconds = 15;
+        private const int ProbeTimeoutSeconds = 8;
 
         private string _baseUrl;
         // In-memory only. Never written to disk / secret store — a session cookie is a bearer
@@ -141,13 +214,89 @@ namespace NeonCompanion.Runtime.Api.Hermes
             LastAuthError = reason;
         }
 
+        // === Public probe (Desktop probeRemoteAuthMode) ===
+
+        /// <summary>
+        /// Probe a remote gateway without credentials. Uses public
+        /// <c>GET /api/status</c> (auth_required) and, when gated,
+        /// <c>GET /api/auth/providers</c>. Network failures return
+        /// <see cref="HermesAuthProbeResult.Reachable"/> = false rather than throwing.
+        /// </summary>
+        public static async Task<HermesAuthProbeResult> ProbeAsync(string rawBaseUrl)
+        {
+            var result = new HermesAuthProbeResult();
+            string baseUrl = NormalizeBaseUrl(rawBaseUrl);
+            result.BaseUrl = baseUrl;
+
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                result.Error = "Gateway URL is required.";
+                return result;
+            }
+
+            try
+            {
+                string statusJson = await GetPublicJsonAsync(baseUrl + "/api/status", ProbeTimeoutSeconds);
+                bool authRequired = ParseAuthRequired(statusJson);
+                result.Version = ParseJsonStringField(statusJson, "version");
+                result.Reachable = true;
+                result.AuthMode = authRequired ? "oauth" : "token";
+
+                if (authRequired)
+                {
+                    try
+                    {
+                        string providersJson = await GetPublicJsonAsync(
+                            baseUrl + "/api/auth/providers", ProbeTimeoutSeconds);
+                        ParseProviders(providersJson, result.Providers);
+                    }
+                    catch
+                    {
+                        // Provider listing is optional metadata; auth mode is already known.
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Reachable = false;
+                result.AuthMode = "unknown";
+                result.Error = ex.Message;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Build the gateway login page URL Desktop opens in its OAuth window
+        /// (<c>{base}/login</c>).
+        /// </summary>
+        public static string BuildLoginUrl(string rawBaseUrl)
+        {
+            string baseUrl = NormalizeBaseUrl(rawBaseUrl);
+            if (string.IsNullOrEmpty(baseUrl))
+                return null;
+            return baseUrl + "/login";
+        }
+
+        public static string NormalizeBaseUrl(string rawUrl)
+        {
+            if (string.IsNullOrWhiteSpace(rawUrl))
+                return null;
+            string value = rawUrl.Trim();
+            // Drop trailing slash (keep scheme/host/path prefix).
+            while (value.Length > 0 && value[value.Length - 1] == '/')
+                value = value.Substring(0, value.Length - 1);
+            return value;
+        }
+
         // === Password (basic-auth) login ===
 
         /// <summary>
         /// Authenticate against a password-capable dashboard-auth provider and capture the
         /// session cookie. Mirrors POST /auth/password-login (hermes_cli/dashboard_auth/routes.py).
         /// Throws <see cref="HermesReauthRequiredException"/>("invalid_credentials") on 401.
-        /// The password is never logged.
+        /// The password is never logged. <paramref name="provider"/> is the dashboard-auth
+        /// provider name from the probe (e.g. "basic") — never a user-facing field.
         /// </summary>
         public async Task PasswordLoginAsync(string provider, string username, string password)
         {
@@ -263,6 +412,113 @@ namespace NeonCompanion.Runtime.Api.Hermes
         }
 
         // === Pure helpers (unit-verifiable) ===
+
+        /// <summary>
+        /// Parse <c>auth_required</c> from a /api/status JSON body (Desktop authModeFromStatus).
+        /// </summary>
+        public static bool ParseAuthRequired(string statusJson)
+        {
+            if (string.IsNullOrEmpty(statusJson))
+                return false;
+            try
+            {
+                JObject obj = JObject.Parse(statusJson);
+                JToken t = obj["auth_required"];
+                if (t == null)
+                    return false;
+                if (t.Type == JTokenType.Boolean)
+                    return t.Value<bool>();
+                if (t.Type == JTokenType.String)
+                {
+                    string s = t.Value<string>();
+                    return string.Equals(s, "true", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(s, "1", StringComparison.OrdinalIgnoreCase);
+                }
+                if (t.Type == JTokenType.Integer)
+                    return t.Value<int>() != 0;
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Parse the providers array from GET /api/auth/providers into the probe list.
+        /// </summary>
+        public static void ParseProviders(string providersJson, System.Collections.Generic.List<HermesAuthProviderInfo> into)
+        {
+            if (into == null || string.IsNullOrEmpty(providersJson))
+                return;
+            try
+            {
+                JObject obj = JObject.Parse(providersJson);
+                JToken arr = obj["providers"];
+                if (arr == null || arr.Type != JTokenType.Array)
+                    return;
+                foreach (JToken item in arr)
+                {
+                    if (item == null || item.Type != JTokenType.Object)
+                        continue;
+                    string name = item["name"] != null ? item["name"].Value<string>() : null;
+                    if (string.IsNullOrEmpty(name))
+                        continue;
+                    string display = item["display_name"] != null
+                        ? item["display_name"].Value<string>()
+                        : null;
+                    if (string.IsNullOrEmpty(display))
+                        display = name;
+                    bool supportsPassword = false;
+                    JToken sp = item["supports_password"];
+                    if (sp != null && sp.Type == JTokenType.Boolean)
+                        supportsPassword = sp.Value<bool>();
+                    into.Add(new HermesAuthProviderInfo
+                    {
+                        Name = name,
+                        DisplayName = display,
+                        SupportsPassword = supportsPassword
+                    });
+                }
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+
+        private static string ParseJsonStringField(string json, string field)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(field))
+                return null;
+            try
+            {
+                JObject obj = JObject.Parse(json);
+                JToken t = obj[field];
+                return t != null ? t.Value<string>() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static async Task<string> GetPublicJsonAsync(string url, int timeoutSeconds)
+        {
+            using (UnityWebRequest request = UnityWebRequest.Get(url))
+            {
+                request.timeout = timeoutSeconds;
+                UnityWebRequestAsyncOperation op = request.SendWebRequest();
+                while (!op.isDone)
+                    await Task.Yield();
+
+                long code = request.responseCode;
+                if (request.result != UnityWebRequest.Result.Success || code < 200 || code >= 300)
+                    throw new Exception("HTTP " + code + ": " + SafeError(request));
+
+                return request.downloadHandler != null ? request.downloadHandler.text : "";
+            }
+        }
 
         /// <summary>
         /// Extract the known session cookies from a Set-Cookie (or Cookie) header and return a

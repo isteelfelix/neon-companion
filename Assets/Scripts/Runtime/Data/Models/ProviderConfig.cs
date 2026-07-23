@@ -23,9 +23,10 @@ namespace NeonCompanion.Runtime.Data.Models
 
         // Hermes remote auth mode: "oauth" = Desktop-style cookie session + ws-ticket
         // (production gated gateway); anything else / null = legacy token (Bearer + ?token=).
+        // Set automatically by Connect after probing GET /api/status — not a primary UI control.
         public string authMode;      // "oauth" | null
-        // Dashboard-auth provider name to authenticate against for password (basic-auth) login,
-        // e.g. "basic". Only used when authMode == "oauth".
+        // Dashboard-auth provider name from GET /api/auth/providers (auto-detected, e.g. "basic").
+        // Never shown as a user-facing field. Only used when authMode == "oauth".
         public string authProvider;  // null = none
         // Username for password login (non-secret). The password is kept in the secret store,
         // never in this config. Only used when authMode == "oauth".

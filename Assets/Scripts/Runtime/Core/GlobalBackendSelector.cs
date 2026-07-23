@@ -309,8 +309,10 @@ namespace NeonCompanion.Runtime.Core
         /// username/password, cache the password for transparent reconnects, and (re)connect.
         /// The password is stored only in the secret store — never in provider config, never
         /// logged. Returns true on a successful session; false surfaces via LastConnectionError.
+        /// <paramref name="authProvider"/> is the dashboard-auth provider name from the probe
+        /// (auto-detected; defaults to the provider's stored authProvider or "basic").
         /// </summary>
-        public async Task<bool> HermesPasswordLoginAsync(string username, string password)
+        public async Task<bool> HermesPasswordLoginAsync(string username, string password, string authProvider = null)
         {
             if (CurrentMode != BackendMode.Hermes || _remoteAuth == null)
             {
@@ -328,9 +330,15 @@ namespace NeonCompanion.Runtime.Core
             // Ensure the remote auth targets the active provider's endpoint before logging in.
             ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
 
+            string providerName = authProvider;
+            if (string.IsNullOrEmpty(providerName))
+                providerName = activeProvider.authProvider;
+            if (string.IsNullOrEmpty(providerName))
+                providerName = "basic";
+
             try
             {
-                await _remoteAuth.PasswordLoginAsync(activeProvider.authProvider, username, password);
+                await _remoteAuth.PasswordLoginAsync(providerName, username, password);
             }
             catch (Exception ex)
             {
@@ -341,17 +349,19 @@ namespace NeonCompanion.Runtime.Core
             }
 
             // Cache the password (secret store only) so ConnectHermes can re-login on reconnect,
-            // and remember the username in config for the same reason.
+            // and remember username + provider name (non-secret) for the same reason.
             _secretStore?.SetSecret(PasswordSecretKey(activeProvider.id), password);
             activeProvider.authUsername = username;
+            activeProvider.authProvider = providerName;
 
             await ReconnectHermes();
             return _remoteAuth.State == HermesAuthState.Authenticated;
         }
 
         /// <summary>
-        /// Adopt a session cookie obtained from a full browser OAuth sign-in (out of scope to run
-        /// the interactive IDP redirect inside the app). Not persisted. Follow with ConnectHermes.
+        /// Adopt a session cookie obtained from a full browser OAuth sign-in (Unity cannot host
+        /// Desktop's Electron session partition, so the advanced fallback pastes the cookie).
+        /// Not persisted. Follow with ConnectHermes / ReconnectHermes.
         /// </summary>
         public void SetHermesSessionCookie(string cookie)
         {
@@ -364,7 +374,7 @@ namespace NeonCompanion.Runtime.Core
         /// Safe to call in any mode. Stops the reconnect loop so a deliberate sign-out does not
         /// immediately reconnect.
         /// </summary>
-        public async System.Threading.Tasks.Task ClearHermesRemoteSession()
+        public async Task ClearHermesRemoteSession()
         {
             StopReconnect();
 
