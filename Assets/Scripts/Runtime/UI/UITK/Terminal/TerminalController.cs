@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Terminal;
 using NeonCompanion.Runtime.Terminal.Emulator;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -363,6 +366,73 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 try { _session.Dispose(); } catch (Exception) { }
                 _session = null;
             }
+        }
+
+        // ---- Remote buffer read (Hermes terminal.read.request) --------------------
+
+        /// <summary>
+        /// Serialize the live terminal buffer for the Hermes <c>read_terminal</c> tool, mirroring
+        /// Desktop's <c>makeTerminalReader</c> (buffer.ts): absolute line indices into
+        /// scrollback+screen, a default window of the visible screen, right-trimmed lines with the
+        /// blank tail dropped. Returns the JSON string the backend expects, or <c>null</c> when
+        /// there is no live pane (no shell started) so the caller answers with empty text.
+        /// Runs on Unity's main thread (the gateway dispatches events there), same as the emulator.
+        /// </summary>
+        public string ReadScreenJson(int start, int count)
+        {
+            if (_emulator == null || !_sessionStarted)
+                return null;
+
+            ScreenBuffer buffer = _emulator.ActiveBuffer;
+            if (buffer == null)
+                return null;
+
+            int total = buffer.TotalRows;
+            int rows = _emulator.Rows;
+            // Absolute index of the first visible row (Desktop buf.baseY): scrollback precedes the
+            // visible screen in AbsoluteLine indexing.
+            int baseY = buffer.ScrollbackCount;
+
+            int from = Math.Max(0, Math.Min(start >= 0 ? start : baseY, total));
+            // count provided (incl. 0) -> max(1, count); absent (-1) -> the visible screen height.
+            int window = count >= 0 ? Math.Max(1, count) : rows;
+            int to = Math.Max(from, Math.Min(from + window, total));
+
+            List<string> lines = new List<string>();
+            for (int i = from; i < to; i++)
+                lines.Add(LineToText(buffer.AbsoluteLine(i)));
+
+            // Drop trailing blank lines so the agent sees a tight view (Desktop pops empty tail).
+            while (lines.Count > 0 && lines[lines.Count - 1].Trim().Length == 0)
+                lines.RemoveAt(lines.Count - 1);
+
+            JObject result = new JObject();
+            result["total_lines"] = total;
+            result["start"] = from;
+            result["end"] = to;
+            result["viewport_rows"] = rows;
+            result["cursor_row"] = baseY + _emulator.CursorRow;
+            result["text"] = string.Join("\n", lines);
+            return result.ToString(Formatting.None);
+        }
+
+        private static string LineToText(TerminalCell[] line)
+        {
+            if (line == null)
+                return string.Empty;
+
+            StringBuilder sb = new StringBuilder(line.Length);
+            for (int i = 0; i < line.Length; i++)
+            {
+                char c = line[i].Char;
+                sb.Append(c == '\0' ? ' ' : c);
+            }
+
+            // Right-trim, matching xterm translateToString(true).
+            int end = sb.Length;
+            while (end > 0 && sb[end - 1] == ' ')
+                end--;
+            return sb.ToString(0, end);
         }
 
         // ---- Remote one-shot execution (Hermes terminal.execute) ------------------

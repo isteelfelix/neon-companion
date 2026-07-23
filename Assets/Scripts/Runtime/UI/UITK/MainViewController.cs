@@ -993,10 +993,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_terminalHermesManager != null)
             {
                 _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
+                _terminalHermesManager.OnTerminalReadRequest -= HandleRemoteTerminalRead;
             }
 
             _terminalHermesManager = selector.SessionManager;
             _terminalHermesManager.OnTerminalExecute += HandleRemoteTerminalExecute;
+            _terminalHermesManager.OnTerminalReadRequest += HandleRemoteTerminalRead;
         }
 
         private void TeardownTerminalRemoteBridge()
@@ -1004,6 +1006,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_terminalHermesManager != null)
             {
                 _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
+                _terminalHermesManager.OnTerminalReadRequest -= HandleRemoteTerminalRead;
                 _terminalHermesManager = null;
             }
         }
@@ -1044,6 +1047,43 @@ namespace NeonCompanion.Runtime.UI.UITK
                 catch (Exception ex)
                 {
                     Debug.LogWarning("[Terminal] Failed to respond to terminal RPC: " + ex.Message);
+                }
+            }
+        }
+
+        // Answer a terminal.read.request (read_terminal tool). The backend blocks on the response,
+        // so we always reply. We deliberately DON'T spin up the terminal controller here: if the
+        // user never opened the terminal there is no live pane, so we answer with empty text
+        // (Desktop returns '' the same way) rather than launching a PTY the user didn't ask for.
+        private async void HandleRemoteTerminalRead(TerminalReadRequest request)
+        {
+            if (request == null)
+                return;
+
+            string text = string.Empty;
+            if (_terminalController != null)
+            {
+                try
+                {
+                    text = _terminalController.ReadScreenJson(request.Start, request.Count) ?? string.Empty;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[Terminal] read_terminal serialize failed: " + ex.Message);
+                    text = string.Empty;
+                }
+            }
+
+            var selector = Core.GlobalBackendSelector.Instance;
+            if (selector != null && selector.SessionManager != null)
+            {
+                try
+                {
+                    await selector.SessionManager.RespondToTerminalRead(request.RequestId, text);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[Terminal] Failed to respond to terminal.read RPC: " + ex.Message);
                 }
             }
         }

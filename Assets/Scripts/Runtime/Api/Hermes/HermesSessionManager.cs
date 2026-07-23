@@ -156,6 +156,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public bool Persistent;
     }
 
+    // read_terminal tool -> terminal.read.request. Start/Count are optional paging hints into
+    // the terminal buffer; -1 means "unset" (client picks its default window). The client must
+    // answer with terminal.read.respond because the backend blocks on it.
+    public class TerminalReadRequest
+    {
+        public string RequestId;
+        public int Start;
+        public int Count;
+    }
+
     // === HermesSessionManager ===
 
     public class HermesSessionManager : IChatTransport
@@ -325,6 +335,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public event Action<string> OnRuntimeInfoChanged;
 
         public event Action<TerminalExecuteRequest> OnTerminalExecute;
+        public event Action<TerminalReadRequest> OnTerminalReadRequest;
 
         // === Constructor ===
 
@@ -636,6 +647,18 @@ namespace NeonCompanion.Runtime.Api.Hermes
             await _gateway.Request<object>(RpcMethods.TerminalRespond, payload);
         }
 
+        /// <summary>
+        /// Answer a terminal.read.request. <paramref name="text"/> is the JSON-serialized
+        /// terminal buffer view (empty string = no live pane), matching Desktop
+        /// gateway-event.ts which sends { request_id, text }.
+        /// </summary>
+        public async Task RespondToTerminalRead(string requestId, string text)
+        {
+            await _gateway.Request<object>(
+                RpcMethods.TerminalReadRespond,
+                new { request_id = requestId, text = text ?? string.Empty });
+        }
+
         public async Task RespondToApproval(string sessionId, bool approved)
         {
             string choice = approved ? "once" : "deny";
@@ -695,6 +718,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             _gateway.On(GatewayEvents.SessionTitle, HandleSessionTitle);
             _gateway.On(GatewayEvents.BackgroundComplete, HandleBackgroundComplete);
             _gateway.On(GatewayEvents.TerminalExecute, HandleTerminalExecute);
+            _gateway.On(GatewayEvents.TerminalReadRequest, HandleTerminalReadRequest);
             _gateway.On(GatewayEvents.Error, HandleError);
             // subagent.* has no dedicated per-type registration; a wildcard lets any subagent
             // subtype be handled by prefix (Desktop matches on the SubagentPrefix) so none is
@@ -1162,6 +1186,40 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 Command = payload.command ?? string.Empty,
                 TimeoutMs = payload.timeout_ms > 0 ? payload.timeout_ms : 30000,
                 Persistent = payload.persistent
+            });
+        }
+
+        // read_terminal tool. Unlike terminal.execute this is NOT gated on the active session:
+        // the backend blocks on terminal.read.respond regardless of which chat is focused, and
+        // Companion has a single terminal, so we always answer (Desktop gateway-event.ts does the
+        // same — it reads request_id/start/count and responds immediately). start/count are
+        // optional; absent -> -1 so the UI layer applies its default window (visible screen).
+        private void HandleTerminalReadRequest(GatewayEvent evt)
+        {
+            if (evt.Payload == null) return;
+            var payload = evt.Payload as JObject;
+            if (payload == null) return;
+
+            var requestIdToken = payload["request_id"];
+            string requestId = requestIdToken != null ? requestIdToken.ToObject<string>() : null;
+            if (string.IsNullOrEmpty(requestId))
+                return;
+
+            int start = -1;
+            var startToken = payload["start"];
+            if (startToken != null && startToken.Type == JTokenType.Integer)
+                start = startToken.ToObject<int>();
+
+            int count = -1;
+            var countToken = payload["count"];
+            if (countToken != null && countToken.Type == JTokenType.Integer)
+                count = countToken.ToObject<int>();
+
+            OnTerminalReadRequest?.Invoke(new TerminalReadRequest
+            {
+                RequestId = requestId,
+                Start = start,
+                Count = count
             });
         }
 

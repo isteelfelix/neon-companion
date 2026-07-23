@@ -87,6 +87,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string BackgroundComplete = "background.complete";
         public const string SessionTitle = "session.title";
         public const string TerminalExecute = "terminal.execute";
+        // read_terminal tool: backend asks the client to serialize its live terminal buffer.
+        // The Python side BLOCKS on the matching terminal.read.respond RPC, so this must always
+        // be answered (empty text = no live pane). Desktop gateway-event.ts handles it the same.
+        public const string TerminalReadRequest = "terminal.read.request";
         public const string ClientPing = "client.ping";
         public const string FileTransferStart = "file.transfer.start";
         public const string FileTransferChunk = "file.transfer.chunk";
@@ -124,6 +128,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SudoRespond = "sudo.respond";
         public const string SecretRespond = "secret.respond";
         public const string TerminalRespond = "terminal.respond";
+        public const string TerminalReadRespond = "terminal.read.respond";
         public const string ImageAttach = "image.attach";
         public const string ImageDetach = "image.detach";
         public const string ClientRegister = "client.register";
