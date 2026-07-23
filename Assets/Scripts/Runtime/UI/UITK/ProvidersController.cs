@@ -130,14 +130,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _gatewayStatus;
         private Button _gatewayConnectBtn;
         private Button _gatewaySignOutBtn;
-        private VisualElement _gatewayCredentialsWrap;
-        private TextField _gatewayUsername;
-        private TextField _gatewayPassword;
         private Button _gatewayAdvancedToggle;
         private VisualElement _gatewayAdvancedWrap;
         private TextField _gatewayAdvancedToken;
-        private TextField _gatewayAdvancedCookie;
-        private Button _gatewayApplyCookieBtn;
         private bool _gatewayFieldsBuilt;
         private bool _gatewayAdvancedOpen;
         private bool _gatewayBusy;
@@ -2044,8 +2039,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 if (!string.IsNullOrEmpty(_probedAuthProvider))
                     draft.authProvider = _probedAuthProvider;
-                if (_gatewayUsername != null && !string.IsNullOrWhiteSpace(_gatewayUsername.value))
-                    draft.authUsername = _gatewayUsername.value.Trim();
             }
 
             // Backend type is fixed when the provider editor opens/creates the draft.
@@ -2172,26 +2165,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             actions.Add(_gatewaySignOutBtn);
             _gatewaySection.Add(actions);
 
-            // Transient credentials (shown only after probe finds a password provider).
-            _gatewayCredentialsWrap = new VisualElement();
-            _gatewayCredentialsWrap.name = "edit-gateway-credentials";
-            _gatewayCredentialsWrap.style.display = DisplayStyle.None;
-            var credHint = new Label(LocalizationExtensions.Get(
-                "providers.gateway.credentials.hint",
-                "Enter the gateway sign-in credentials, then Connect again."));
-            credHint.AddToClassList("label");
-            _gatewayCredentialsWrap.Add(credHint);
-            _gatewayUsername = BuildGatewayField(
-                _gatewayCredentialsWrap,
-                LocalizationExtensions.Get("providers.gateway.username", "Username"),
-                false, false);
-            _gatewayPassword = BuildGatewayField(
-                _gatewayCredentialsWrap,
-                LocalizationExtensions.Get("providers.gateway.password", "Password"),
-                true, false);
-            _gatewaySection.Add(_gatewayCredentialsWrap);
-
-            // Advanced (collapsed): token mode + cookie fallback
+            // Desktop parity: username/password and cookie paste are NOT Companion UI.
+            // Password providers render their form on the gateway /login page inside the
+            // automatic browser window (openOauthLoginWindow equivalent). Advanced holds
+            // only legacy Bearer token for open (auth_required=false) gateways.
             _gatewayAdvancedToggle = new Button(() => ToggleGatewayAdvanced())
             {
                 text = LocalizationExtensions.Get("providers.gateway.advanced.show", "Advanced / Token mode")
@@ -2206,7 +2183,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             var advHint = new Label(LocalizationExtensions.Get(
                 "providers.gateway.advanced.hint",
-                "Legacy Bearer token for open gateways, or paste a browser session cookie if system-browser OAuth cannot hand the session back to Companion."));
+                "Legacy Bearer token for open (auth_required=false) gateways only. OAuth/password gateways use automatic browser sign-in."));
             advHint.AddToClassList("label");
             _gatewayAdvancedWrap.Add(advHint);
 
@@ -2214,17 +2191,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _gatewayAdvancedWrap,
                 LocalizationExtensions.Get("providers.gateway.token", "Bearer token (legacy)"),
                 true, true);
-            _gatewayAdvancedCookie = BuildGatewayField(
-                _gatewayAdvancedWrap,
-                LocalizationExtensions.Get("providers.gateway.cookie", "Session cookie (advanced fallback)"),
-                true, true);
-
-            _gatewayApplyCookieBtn = new Button(() => { if (!_gatewayBusy) _ = OnGatewayApplyCookieClickedAsync(); })
-            {
-                text = LocalizationExtensions.Get("providers.gateway.apply_cookie", "Apply cookie & reconnect")
-            };
-            _gatewayApplyCookieBtn.AddToClassList("btn");
-            _gatewayAdvancedWrap.Add(_gatewayApplyCookieBtn);
 
             _gatewaySection.Add(_gatewayAdvancedWrap);
 
@@ -2284,33 +2250,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _probedAuthProvider = provider != null ? provider.authProvider : null;
 
-            if (_gatewayUsername != null)
-            {
-                _gatewayUsername.SetValueWithoutNotify(
-                    provider != null ? (provider.authUsername ?? string.Empty) : string.Empty);
-            }
-            if (_gatewayPassword != null)
-                _gatewayPassword.SetValueWithoutNotify(string.Empty);
             if (_gatewayAdvancedToken != null)
             {
                 _gatewayAdvancedToken.SetValueWithoutNotify(
                     provider != null ? (provider.apiKey ?? string.Empty) : string.Empty);
-            }
-            if (_gatewayAdvancedCookie != null)
-                _gatewayAdvancedCookie.SetValueWithoutNotify(string.Empty);
-
-            // Show credentials only when this provider is already in oauth mode with a username
-            // (returning user) — first-time users get credentials after Connect probes.
-            bool showCreds = provider != null
-                && string.Equals(provider.authMode, "oauth", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrEmpty(provider.authUsername);
-            SetDisplay(_gatewayCredentialsWrap, showCreds ? DisplayStyle.Flex : DisplayStyle.None);
-
-            // Token-mode providers: leave Advanced collapsed unless a token is already set.
-            if (!string.IsNullOrEmpty(provider != null ? provider.apiKey : null)
-                && (provider == null || string.IsNullOrEmpty(provider.authMode)))
-            {
-                // Keep collapsed; token is mirrored for reconnect but not forced open.
             }
 
             RefreshGatewayActionLabels();
@@ -2465,7 +2408,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_gatewayConnectBtn != null) _gatewayConnectBtn.SetEnabled(enabled);
             if (_gatewaySignOutBtn != null) _gatewaySignOutBtn.SetEnabled(enabled);
-            if (_gatewayApplyCookieBtn != null) _gatewayApplyCookieBtn.SetEnabled(enabled);
         }
 
         private void SetGatewayStatusMessage(string text, bool error)
@@ -2482,7 +2424,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         /// <summary>
-        /// Persist draft, activate as Hermes provider, return it. Shared by Connect / cookie.
+        /// Persist draft, activate as Hermes provider, return it. Shared by Connect paths.
         /// </summary>
         private async Task<ProviderConfig> PrepareActiveGatewayProviderAsync(string authMode)
         {
@@ -2584,14 +2526,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task ConnectOAuthGatewayAsync(HermesAuthProbeResult probe, string baseUrl)
         {
-            // Auto-detect password provider name — never ask the user for provider=basic.
-            string providerName = probe.FirstPasswordProviderName;
-            if (string.IsNullOrEmpty(providerName) && probe.IsPasswordProvider)
+            // Desktop parity (gateway-settings.tsx signIn + openOauthLoginWindow):
+            // ALL gated gateways — password and OAuth IDP — complete login in the browser
+            // window on {base}/login. Password form lives on the gateway page (POST
+            // /auth/password-login); Companion never collects username/password itself.
+            string providerName = probe != null ? probe.FirstPasswordProviderName : null;
+            if (string.IsNullOrEmpty(providerName) && probe != null && probe.IsPasswordProvider)
                 providerName = "basic";
             if (!string.IsNullOrEmpty(providerName))
                 _probedAuthProvider = providerName;
-            else if (string.IsNullOrEmpty(_probedAuthProvider))
-                _probedAuthProvider = null;
 
             var draft = await PrepareActiveGatewayProviderAsync("oauth");
             if (draft == null)
@@ -2610,62 +2553,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            bool passwordPath = probe.IsPasswordProvider
-                || !string.IsNullOrEmpty(probe.FirstPasswordProviderName);
-
-            if (passwordPath)
-            {
-                SetDisplay(_gatewayCredentialsWrap, DisplayStyle.Flex);
-
-                string username = _gatewayUsername != null
-                    ? (_gatewayUsername.value ?? string.Empty).Trim()
-                    : string.Empty;
-                string password = _gatewayPassword != null
-                    ? (_gatewayPassword.value ?? string.Empty)
-                    : string.Empty;
-
-                if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
-                {
-                    // Desktop opens a login window; we surface a one-shot credentials prompt.
-                    SetGatewayStatusMessage(
-                        LocalizationExtensions.Get(
-                            "providers.gateway.credentials.required",
-                            "Needs sign-in. Enter username and password, then Connect."),
-                        true);
-                    return;
-                }
-
-                string authProvider = !string.IsNullOrEmpty(_probedAuthProvider)
-                    ? _probedAuthProvider
-                    : "basic";
-                draft.authProvider = authProvider;
-                bool ok = await selector.HermesPasswordLoginAsync(username, password, authProvider);
-
-                if (_gatewayPassword != null)
-                    _gatewayPassword.SetValueWithoutNotify(string.Empty);
-
-                if (ok)
-                {
-                    draft.authUsername = username;
-                    draft.authProvider = authProvider;
-                    var app = await _d.GetAppAsync();
-                    if (app != null)
-                        await app.ProviderManager.SaveProviderAsync(draft);
-                    _editingProviderSource = draft;
-                    _editingProvider = CloneProvider(draft);
-
-                    var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
-                    SetProviderHeader(
-                        chat != null && chat.CurrentProvider != null ? chat.CurrentProvider : draft,
-                        chat != null ? chat.CurrentSessionModel : null);
-                }
-                return;
-            }
-
-            // Full OAuth (no password provider): Desktop-equivalent automatic capture.
-            // HermesBrowserLoginAsync launches Edge/Chrome with a dedicated profile, opens
-            // {base}/login, polls CDP cookies until hermes_session_* appear (mirrors
-            // electron openOauthLoginWindow), then reconnects with ws-ticket. No cookie paste.
+            // Automatic session capture: dedicated Chromium/Edge profile + CDP cookie poll
+            // (HermesBrowserOAuthLogin), then ws-ticket mint via ReconnectHermes.
             SetGatewayStatusMessage(
                 LocalizationExtensions.Get(
                     "providers.gateway.browser.waiting",
@@ -2754,51 +2643,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 chat != null ? chat.CurrentSessionModel : null);
         }
 
-        private async Task OnGatewayApplyCookieClickedAsync()
-        {
-            var selector = GlobalBackendSelector.Instance;
-            if (selector == null || _editingProvider == null)
-                return;
-
-            string cookie = _gatewayAdvancedCookie != null ? _gatewayAdvancedCookie.value : string.Empty;
-            if (string.IsNullOrWhiteSpace(cookie))
-            {
-                SetGatewayStatusMessage(
-                    LocalizationExtensions.Get(
-                        "providers.gateway.cookie.required",
-                        "Paste a session cookie under Advanced first."),
-                    true);
-                return;
-            }
-
-            _gatewayBusy = true;
-            SetGatewayActionsEnabled(false);
-            try
-            {
-                var draft = await PrepareActiveGatewayProviderAsync("oauth");
-                if (draft == null)
-                    return;
-
-                selector.ConfigureHermesEndpoint(draft.baseUrl, draft.apiKey);
-                selector.SetHermesSessionCookie(cookie);
-                if (_gatewayAdvancedCookie != null)
-                    _gatewayAdvancedCookie.SetValueWithoutNotify(string.Empty);
-                await selector.ReconnectHermes();
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogError("[Providers] Gateway cookie apply failed: " + ex.GetType().Name + ": " + ex.Message);
-                SetGatewayStatusMessage(ex.Message, true);
-            }
-            finally
-            {
-                _gatewayBusy = false;
-                SetGatewayActionsEnabled(true);
-                RefreshGatewayStatus();
-                await RefreshProvidersListAsync();
-            }
-        }
-
         private async Task OnGatewaySignOutClickedAsync()
         {
             var selector = GlobalBackendSelector.Instance;
@@ -2811,10 +2655,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             try
             {
                 await selector.ClearHermesRemoteSession();
-                if (_gatewayPassword != null)
-                    _gatewayPassword.SetValueWithoutNotify(string.Empty);
-                if (_gatewayAdvancedCookie != null)
-                    _gatewayAdvancedCookie.SetValueWithoutNotify(string.Empty);
             }
             catch (Exception ex)
             {

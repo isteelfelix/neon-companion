@@ -59,12 +59,13 @@ Selection is **automatic** from the probe. Stored as `ProviderConfig.authMode` (
 ## Auth flow (mirrors Desktop)
 
 1. **Probe** `GET /api/status` → `auth_required`; when gated, `GET /api/auth/providers`.
-2. **Authenticate → session cookie**
-   - Password provider: one-shot username/password UI → `POST /auth/password-login` → `Set-Cookie`.
-   - Full OAuth (Nous / OIDC): `HermesBrowserOAuthLogin` launches Edge/Chrome with
-     `--user-data-dir=<temp> --remote-debugging-port=<n> --app={base}/login`, polls
-     `Network.getAllCookies` until `hermes_session_*` for the gateway host appear, then closes
-     the window. (Desktop: `openOauthLoginWindow` + partition cookie poll.)
+2. **Authenticate → session cookie** (Desktop: always the login **window**, never Companion fields)
+   - Password **and** OAuth IDP providers: `HermesBrowserOAuthLogin` launches Edge/Chrome with
+     `--user-data-dir=<temp> --remote-debugging-port=<n> --app={base}/login`, user completes
+     login on the gateway page (password form posts to `/auth/password-login` in-page; OAuth
+     redirects through IDP → `/auth/callback`), Companion polls CDP `Network.getAllCookies`
+     until `hermes_session_*` appear, then closes the window.
+   - Desktop: `openOauthLoginWindow` + partition cookie poll — same outcome, Electron jar.
 3. **REST** carries the cookie (`Cookie` header).
 4. **Mint WS ticket:** `POST /api/auth/ws-ticket` → `{"ticket":…,"ttl_seconds":30}`.
 5. **WebSocket** `wss://…/api/ws?ticket=<ticket>`.
@@ -86,11 +87,10 @@ Selection is **automatic** from the probe. Stored as `ProviderConfig.authMode` (
 1. Open **Providers**, set global backend to **Hermes (WebSocket)**.
 2. Add or edit a Hermes provider; set **Gateway URL** only (e.g. `https://your-host`).
 3. Click **Connect / Sign in**.
-4. **Password gateway:** username/password appear → enter them → Connect again → status
-   **Signed in · connected**.
-5. **OAuth (Nous) gateway:** Companion opens an Edge/Chrome app window to `/login` → complete
-   normal Hermes/Nous login → window closes when the session is captured → status
-   **Signed in · connected**. Chat works without pasting cookies.
+4. Companion opens an Edge/Chrome app window to `/login` (password form **or** Nous/OIDC
+   buttons live on that page — not in Companion). Complete normal Hermes login.
+5. Window closes when the session is captured → status **Signed in · connected**. Chat works
+   with **no** cookie paste and **no** Companion username/password fields.
 6. **Token regression:** Advanced → Bearer token against an open gateway → **Connected (token mode)**.
 7. Requirements: Microsoft Edge or Google Chrome installed on the machine (desktop builds).
 

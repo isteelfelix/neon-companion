@@ -359,10 +359,9 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
-        /// Adopt a session cookie obtained from a full browser OAuth sign-in.
-        /// Primary path uses <see cref="HermesBrowserLoginAsync"/> (CDP cookie capture);
-        /// advanced manual paste remains a last-resort fallback only.
-        /// Not persisted. Follow with ConnectHermes / ReconnectHermes.
+        /// Adopt a session cookie obtained from automatic browser OAuth
+        /// (<see cref="HermesBrowserLoginAsync"/> / CDP capture). Not persisted.
+        /// Follow with ConnectHermes / ReconnectHermes.
         /// </summary>
         public void SetHermesSessionCookie(string cookie)
         {

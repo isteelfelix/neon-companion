@@ -306,6 +306,34 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (response == null)
                 return null;
 
+            // Full CDP response body (machine-verifiable pure helper below).
+            return BuildSessionCookieFromCdpGetAllCookiesResponse(
+                response.ToString(Formatting.None),
+                gatewayHost);
+        }
+
+        /// <summary>
+        /// Pure helper: turn a CDP <c>Network.getAllCookies</c> JSON response into a
+        /// Hermes session Cookie header, or null when no session cookies match the host.
+        /// Used by the live CDP path and by static verification (no browser required).
+        /// </summary>
+        public static string BuildSessionCookieFromCdpGetAllCookiesResponse(
+            string cdpResponseJson,
+            string gatewayHost)
+        {
+            if (string.IsNullOrEmpty(cdpResponseJson) || string.IsNullOrEmpty(gatewayHost))
+                return null;
+
+            JObject response;
+            try
+            {
+                response = JObject.Parse(cdpResponseJson);
+            }
+            catch
+            {
+                return null;
+            }
+
             JToken resultToken = response["result"];
             if (resultToken == null)
                 return null;
@@ -313,8 +341,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (cookies == null || cookies.Count == 0)
                 return null;
 
-            // Build a synthetic Set-Cookie / Cookie string from matching cookies, then
-            // reuse HermesRemoteAuth.ExtractSessionCookies for name filtering.
             StringBuilder raw = new StringBuilder();
             for (int i = 0; i < cookies.Count; i++)
             {

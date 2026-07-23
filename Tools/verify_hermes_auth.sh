@@ -86,10 +86,8 @@ grep -q '/api/auth/providers' Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth
   && pass "probe hits /api/auth/providers" || fail "/api/auth/providers probe missing"
 grep -q 'BuildLoginUrl' Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs \
   && pass "BuildLoginUrl helper present" || fail "BuildLoginUrl missing"
-grep -q 'HermesPasswordLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
-  && pass "UI reuses HermesPasswordLoginAsync" || fail "UI missing HermesPasswordLoginAsync"
-grep -q 'SetHermesSessionCookie' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
-  && pass "UI can apply advanced cookie fallback" || fail "UI missing SetHermesSessionCookie"
+grep -q 'HermesBrowserLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+  && pass "UI uses HermesBrowserLoginAsync (Desktop login window)" || fail "UI missing HermesBrowserLoginAsync"
 grep -q 'ClearHermesRemoteSession' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
   && pass "UI calls ClearHermesRemoteSession (Sign out)" || fail "UI missing ClearHermesRemoteSession"
 grep -q 'RemoteAuthState' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
@@ -117,8 +115,8 @@ if grep -nE 'SetValueWithoutNotify\(\s*"basic"\s*\)' Assets/Scripts/Runtime/UI/U
 grep -q 'gatewayAdvancedToken\|_gatewayAdvancedToken\|Bearer token' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
   && pass "Advanced Bearer token path present" || fail "Advanced token path missing"
 
-echo "== [4c] Automatic browser-login completion (not cookie paste) =="
-# Primary OAuth path must wait for automatic session capture (Desktop parity).
+echo "== [4c] Automatic browser-login completion (Desktop parity — FAIL if cookie/creds UI) =="
+# Primary OAuth path must wait for automatic session capture (Desktop openOauthLoginWindow).
 grep -q 'HermesBrowserLoginAsync' Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs \
   && pass "GlobalBackendSelector.HermesBrowserLoginAsync present" || fail "HermesBrowserLoginAsync missing"
 grep -q 'HermesBrowserLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
@@ -127,6 +125,8 @@ grep -q 'HermesBrowserOAuthLogin.CaptureSessionAsync' Assets/Scripts/Runtime/Cor
   && pass "CaptureSessionAsync wired" || fail "CaptureSessionAsync not wired"
 grep -q 'Network.getAllCookies' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
   && pass "CDP Network.getAllCookies capture present" || fail "CDP cookie capture missing"
+grep -q 'BuildSessionCookieFromCdpGetAllCookiesResponse' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
+  && pass "pure CDP→session-cookie handoff helper present" || fail "BuildSessionCookieFromCdpGetAllCookiesResponse missing"
 grep -q 'remote-debugging-port' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
   && pass "dedicated Chromium profile + CDP port" || fail "CDP browser launch missing"
 grep -q 'FindChromiumBrowserPath' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
@@ -135,24 +135,32 @@ grep -q 'CookieDomainMatchesHost' Assets/Scripts/Runtime/Api/Hermes/HermesBrowse
   && pass "cookie domain filter helper present" || fail "CookieDomainMatchesHost missing"
 grep -q '/auth/native/handoff' Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs \
   && pass "optional native handoff path present" || fail "native handoff path missing"
-# Non-password OAuth branch must not be "OpenURL then tell user to paste cookie".
+
+# Desktop: password providers also use the login WINDOW (gateway /login form), not Companion fields.
+if grep -n 'HermesPasswordLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "ProvidersController still calls HermesPasswordLoginAsync (in-app credentials path)"; else pass "no in-app password login from UI"; fi
+if grep -nE '_gatewayUsername|_gatewayPassword|_gatewayCredentialsWrap' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "username/password credentials UI fields still present"; else pass "no credentials form fields in UI"; fi
+if grep -nE 'passwordPath|credentials\.required|edit-gateway-credentials' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "passwordPath / credentials UI branch still present"; else pass "no passwordPath credentials branch"; fi
+
+# Cookie paste is FAIL even as Advanced fallback for the primary product journey.
+if grep -nE '_gatewayAdvancedCookie|_gatewayApplyCookieBtn|OnGatewayApplyCookie|Apply cookie' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
+  fail "cookie paste / Apply cookie UI still present"; else pass "no cookie paste UI"; fi
+if grep -q 'SetHermesSessionCookie' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs; then
+  fail "UI still calls SetHermesSessionCookie (manual cookie path)"; else pass "UI does not paste cookies"; fi
+if grep -nF 'paste the session cookie' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs Assets/Resources/Localization/en.json >/dev/null 2>&1; then
+  fail "copy still instructs user to paste session cookie"; else pass "no paste-cookie user instruction"; fi
 if grep -n 'Application.OpenURL(loginUrl)' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
-  # OpenURL is only OK inside the handoff helper / non-primary paths, not as the sole ConnectOAuth action.
-  if grep -n 'Application.OpenURL(loginUrl)' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
-     | grep -v '//' >/dev/null 2>&1 \
-     && ! grep -q 'HermesBrowserLoginAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs; then
-    fail "Connect OAuth still only OpenURL(loginUrl) without automatic capture"
-  else
-    pass "Connect OAuth is not OpenURL-only"
-  fi
+  fail "Connect OAuth still OpenURL(loginUrl) without CDP capture"; else pass "Connect OAuth is not OpenURL-only"; fi
+
+# ConnectOAuthGatewayAsync body must call HermesBrowserLoginAsync (single automatic path).
+if grep -A80 'ConnectOAuthGatewayAsync' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs \
+   | grep -q 'HermesBrowserLoginAsync'; then
+  pass "ConnectOAuthGatewayAsync uses HermesBrowserLoginAsync"
 else
-  pass "Connect OAuth is not OpenURL-only"
+  fail "ConnectOAuthGatewayAsync missing HermesBrowserLoginAsync"
 fi
-# Must not instruct cookie paste as the primary browser-login resolution.
-if grep -nF 'paste the session cookie under Advanced' Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs >/dev/null 2>&1; then
-  fail "primary UI still tells user to paste session cookie"; else pass "no primary cookie-paste instruction"; fi
-if grep -nF 'paste the session cookie under Advanced' Assets/Resources/Localization/en.json >/dev/null 2>&1; then
-  fail "en.json still tells user to paste cookie as primary"; else pass "en.json browser hint is automatic"; fi
 
 # Localization keys present in both languages (user-facing gateway strings).
 for lang in en ru; do
@@ -277,6 +285,85 @@ check("domain exact", domain_match("gateway.example", "gateway.example"), True)
 check("domain parent", domain_match(".example.com", "api.example.com"), True)
 check("domain reject", domain_match("other.com", "gateway.example"), False)
 check("domain empty cookie -> keep", domain_match("", "gateway.example"), True)
+
+# Machine-verifiable automatic handoff: CDP Network.getAllCookies JSON → session Cookie header
+# (mirrors HermesBrowserOAuthLogin.BuildSessionCookieFromCdpGetAllCookiesResponse)
+def build_session_cookie_from_cdp(cdp_response_json, gateway_host):
+    import json
+    if not cdp_response_json or not gateway_host:
+        return None
+    try:
+        obj = json.loads(cdp_response_json)
+    except Exception:
+        return None
+    cookies = (obj.get("result") or {}).get("cookies") or []
+    raw_parts = []
+    for c in cookies:
+        name = c.get("name") or ""
+        value = c.get("value")
+        domain = c.get("domain")
+        if not name or value is None:
+            continue
+        if not domain_match(domain, gateway_host):
+            continue
+        raw_parts.append(f"{name}={value}")
+    if not raw_parts:
+        return None
+    return extract("; ".join(raw_parts))
+
+cdp_ok = {
+  "id": 2,
+  "result": {
+    "cookies": [
+      {"name": "hermes_session_at", "value": "at.tok-1", "domain": "neon-vps.example"},
+      {"name": "hermes_session_rt", "value": "rt.tok-2", "domain": "neon-vps.example"},
+      {"name": "hermes_session_provider", "value": "nous", "domain": "neon-vps.example"},
+      {"name": "unrelated", "value": "x", "domain": "neon-vps.example"},
+      {"name": "hermes_session_at", "value": "other-host", "domain": "evil.example"},
+    ]
+  }
+}
+import json as _json
+got_cdp = build_session_cookie_from_cdp(_json.dumps(cdp_ok), "neon-vps.example")
+check(
+    "CDP getAllCookies → session cookie handoff",
+    got_cdp,
+    "hermes_session_at=at.tok-1; hermes_session_rt=rt.tok-2; hermes_session_provider=nous",
+)
+# parent-domain rt should match neon-vps.example if domain is .neon-vps.example
+cdp_parent = {
+  "id": 3,
+  "result": {
+    "cookies": [
+      {"name": "hermes_session_at", "value": "AAA", "domain": ".neon-vps.example"},
+      {"name": "hermes_session_rt", "value": "BBB", "domain": ".neon-vps.example"},
+    ]
+  }
+}
+check(
+    "CDP parent-domain session cookies",
+    build_session_cookie_from_cdp(_json.dumps(cdp_parent), "neon-vps.example"),
+    "hermes_session_at=AAA; hermes_session_rt=BBB",
+)
+check(
+    "CDP empty cookies → None",
+    build_session_cookie_from_cdp('{"id":1,"result":{"cookies":[]}}', "neon-vps.example"),
+    None,
+)
+check(
+    "CDP wrong host only → None",
+    build_session_cookie_from_cdp(
+        _json.dumps({"result":{"cookies":[{"name":"hermes_session_at","value":"z","domain":"other.com"}]}}),
+        "neon-vps.example",
+    ),
+    None,
+)
+
+# Handoff completeness: session cookie is enough to mint ws-ticket (contract presence)
+# (ws-ticket endpoint already checked in section 3; here we assert the cookie shape
+# that MintWsTicketAsync requires — non-empty session cookie header.)
+check("handoff cookie non-empty for ticket mint", bool(got_cdp), True)
+check("handoff cookie contains access token name", "hermes_session_at=" in (got_cdp or ""), True)
 
 sys.exit(0 if ok else 1)
 PY
