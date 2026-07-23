@@ -22,6 +22,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Action _playAttentionSound;
 
         private readonly NeonCompanion.Runtime.UI.UITK.ToolCallUiHelper _toolCallUiHelper = new NeonCompanion.Runtime.UI.UITK.ToolCallUiHelper();
+        private static readonly string[] DefaultHermesApprovalChoices = { "once", "session", "always", "deny" };
+        private static readonly string[] SmartDeniedApprovalChoices = { "once", "deny" };
         private NeonCompanion.Runtime.UI.UITK.ApprovalPrompt _currentApprovalPrompt;
         private VisualElement _currentApprovalElement;
         private TaskCompletionSource<bool> _pendingApprovalTcs;
@@ -189,6 +191,18 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             }
         }
 
+        internal void ClearPromptUiForSession(string sessionId)
+        {
+            Dismiss();
+
+            if (!string.IsNullOrEmpty(sessionId))
+                _pendingBySession.Remove(sessionId);
+
+            RemovePromptElements("clarify-choices");
+            RemovePromptElements("clarify-input");
+            RemovePromptElements("secret-input");
+        }
+
         internal async Task<bool> RequestToolApprovalAsync(ToolCallRequest request)
         {
             if (request == null)
@@ -324,15 +338,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (request == null)
                 return;
 
-            bool hasChoices = request.choices != null && request.choices.Length > 0;
-            // A clarify with no choices is auto-answered — no user input needed, so handle it
-            // regardless of which session it belongs to.
-            if (!hasChoices)
-            {
-                _ = AutoRespondToClarify(request, "ok");
-                return;
-            }
-
             if (IsForeground(sessionId))
                 ShowClarifyNow(request);
             else
@@ -347,7 +352,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (request.choices != null && request.choices.Length > 0)
                 ShowClarifyChoices(request);
             else
-                _ = AutoRespondToClarify(request, "ok");
+                ShowClarifyInput(request);
         }
 
         private void ShowClarifyChoices(ClarifyRequest request)
@@ -377,6 +382,32 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _scrollToBottom?.Invoke();
         }
 
+        private void ShowClarifyInput(ClarifyRequest request)
+        {
+            if (_messagesList == null)
+                return;
+
+            var container = new VisualElement();
+            container.AddToClassList("clarify-input");
+            container.style.marginTop = 4;
+            container.style.marginLeft = 40;
+            container.style.flexDirection = FlexDirection.Row;
+            container.style.flexWrap = Wrap.Wrap;
+
+            var field = new TextField();
+            field.AddToClassList("clarify-input__field");
+            field.style.minWidth = 240;
+
+            var submit = new Button(() => OnClarifyInputSubmit(request, container, field));
+            submit.text = LocalizationExtensions.Get("clarify.continue", "Continue");
+            submit.AddToClassList("clarify-input__btn");
+
+            container.Add(field);
+            container.Add(submit);
+            _messagesList.Add(container);
+            _scrollToBottom?.Invoke();
+        }
+
         private void OnClarifyChoiceSelected(ClarifyRequest request, string choice)
         {
             DisableClarifyButtons();
@@ -384,21 +415,20 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _ = SendClarifyResponse(request, choice);
         }
 
+        private void OnClarifyInputSubmit(ClarifyRequest request, VisualElement container, TextField field)
+        {
+            string answer = field != null ? field.value : string.Empty;
+            if (container != null)
+                container.SetEnabled(false);
+            _showSystemMessage?.Invoke("[You] " + (answer ?? string.Empty));
+            _ = SendClarifyResponse(request, answer ?? string.Empty);
+        }
+
         private async Task SendClarifyResponse(ClarifyRequest request, string answer)
         {
             var selector = GlobalBackendSelector.Instance;
             if (selector?.SessionManager == null)
                 return;
-            await selector.SessionManager.RespondToClarify(request.requestId, answer);
-        }
-
-        private async Task AutoRespondToClarify(ClarifyRequest request, string defaultAnswer)
-        {
-            await Task.Delay(100);
-            var selector = GlobalBackendSelector.Instance;
-            if (selector?.SessionManager == null)
-                return;
-            string answer = defaultAnswer ?? "ok";
             await selector.SessionManager.RespondToClarify(request.requestId, answer);
         }
 
@@ -442,7 +472,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             };
 
             // Use the dedicated Hermes approval flow that tracks the full choice.
-            var (approved, choice) = await RequestHermesApprovalAsync(toolReq, request);
+            var approvalDecision = await RequestHermesApprovalAsync(toolReq, request);
+            bool approved = approvalDecision.approved;
+            string choice = approvalDecision.choice;
 
             try
             {
@@ -474,7 +506,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         /// Desktop choices: "once" (run this time), "session" (allow for session),
         /// "always" (permanent), "deny" (reject).
         /// When the backend supplies its own choices (e.g. smart_denied, allow_permanent=false),
-        /// each server-sent choice becomes a button. Otherwise the default triad is used.
+        /// each server-sent choice becomes a button. Otherwise the Desktop default choices are used.
         /// </summary>
         private async Task<(bool approved, string choice)> RequestHermesApprovalAsync(
             ToolCallRequest request, ApprovalRequest hermesRequest)
@@ -483,15 +515,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return (true, "once");
 
             var prompt = new NeonCompanion.Runtime.UI.UITK.ApprovalPrompt();
-            bool hasServerChoices = hermesRequest != null
-                && hermesRequest.choices != null && hermesRequest.choices.Length > 0;
+            string[] choices = EffectiveHermesApprovalChoices(hermesRequest);
 
-            VisualElement approvalElement;
-            if (hasServerChoices)
-                approvalElement = prompt.Create(request, hermesRequest.choices,
-                    hermesRequest.allowPermanent, hermesRequest.smartDenied);
-            else
-                approvalElement = prompt.Create(request);
+            VisualElement approvalElement = prompt.Create(request, choices,
+                hermesRequest == null || hermesRequest.allowPermanent,
+                hermesRequest != null && hermesRequest.smartDenied);
 
             _currentApprovalPrompt = prompt;
             _currentApprovalElement = approvalElement;
@@ -503,24 +531,12 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
             string selectedChoice = null;
 
-            if (hasServerChoices)
+            prompt.OnChoiceSelected += (choice) =>
             {
-                prompt.OnChoiceSelected += (choice) =>
-                {
-                    selectedChoice = choice;
-                    _pendingApprovalTcs = null;
-                    completionSource.TrySetResult(true);
-                };
-            }
-            else
-            {
-                prompt.OnDecision += (approved, alwaysApprove) =>
-                {
-                    selectedChoice = approved ? (alwaysApprove ? "always" : "once") : "deny";
-                    _pendingApprovalTcs = null;
-                    completionSource.TrySetResult(true);
-                };
-            }
+                selectedChoice = choice;
+                _pendingApprovalTcs = null;
+                completionSource.TrySetResult(true);
+            };
 
             await completionSource.Task;
 
@@ -534,6 +550,32 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             string choice = selectedChoice ?? "deny";
             bool approved = !string.Equals(choice, "deny", StringComparison.OrdinalIgnoreCase);
             return (approved, choice);
+        }
+
+        private static string[] EffectiveHermesApprovalChoices(ApprovalRequest request)
+        {
+            if (request != null && request.choices != null && request.choices.Length > 0)
+                return request.choices;
+            if (request != null && request.smartDenied)
+                return SmartDeniedApprovalChoices;
+            return DefaultHermesApprovalChoices;
+        }
+
+        private void RemovePromptElements(string className)
+        {
+            if (_messagesList == null || string.IsNullOrEmpty(className))
+                return;
+
+            var elements = _messagesList.Query<VisualElement>().ToList();
+            for (int i = 0; i < elements.Count; i++)
+            {
+                if (elements[i] != null &&
+                    elements[i].ClassListContains(className) &&
+                    elements[i].parent != null)
+                {
+                    elements[i].RemoveFromHierarchy();
+                }
+            }
         }
 
         // secret.request is NOT an approve/deny choice: the agent is blocked on
@@ -557,9 +599,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
             string label = !string.IsNullOrWhiteSpace(request.prompt)
                 ? request.prompt
-                : (!string.IsNullOrWhiteSpace(request.envVar)
+                : (request.isSudo
+                    ? LocalizationExtensions.Get("sudo.enter_password", "Administrator password")
+                    : (!string.IsNullOrWhiteSpace(request.envVar)
                     ? LocalizationExtensions.Get("secret.enter_value_for", "Enter a value for ") + request.envVar
-                    : LocalizationExtensions.Get("secret.enter_value", "Enter secret value"));
+                    : LocalizationExtensions.Get("secret.enter_value", "Enter secret value")));
             _showSystemMessage?.Invoke("[Hermes] " + label);
             ShowSecretInput(request);
         }
@@ -591,10 +635,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private void OnSecretSubmit(SecretRequest request, VisualElement container, TextField field)
         {
             string value = field != null ? field.value : null;
+            if (field != null)
+                field.value = string.Empty;
             if (container != null)
                 container.SetEnabled(false);
-            // Never echo the secret back into the transcript.
-            _showSystemMessage?.Invoke("[You] " + LocalizationExtensions.Get("secret.submitted", "(secret submitted)"));
+            // Never echo the secret/password back into the transcript.
+            string submitted = request != null && request.isSudo
+                ? LocalizationExtensions.Get("sudo.submitted", "(password submitted)")
+                : LocalizationExtensions.Get("secret.submitted", "(secret submitted)");
+            _showSystemMessage?.Invoke("[You] " + submitted);
             _ = SendSecretResponse(request, value ?? string.Empty);
         }
 

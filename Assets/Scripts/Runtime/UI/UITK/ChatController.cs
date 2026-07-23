@@ -394,6 +394,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _streamingCoordinator?.Abort();
                 _approvalController?.ClearToolProgress();
+                _approvalController?.ClearPromptUiForSession(chat.CurrentSessionId);
                 _streamingCoordinator?.SetSending(false);
                 _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
             }
