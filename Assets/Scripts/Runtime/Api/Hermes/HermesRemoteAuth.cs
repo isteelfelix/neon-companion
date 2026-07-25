@@ -504,8 +504,15 @@ namespace NeonCompanion.Runtime.Api.Hermes
         /// POST /api/auth/ws-ticket. The ticket is returned to the caller and never stored.
         /// Throws <see cref="HermesReauthRequiredException"/> when there is no cookie
         /// ("no_cookie") or the server rejects it ("expired").
+        ///
+        /// <paramref name="profile"/> is the Hermes backend profile the socket should run in.
+        /// Desktop resolves its socket URL through getGatewayWsUrl(profile) — the profile is part
+        /// of ticket resolution, not just a query pair on the upgrade. Appending ?profile= to the
+        /// WebSocket URL alone had no effect: sessions created on a non-default profile still
+        /// landed in the default one. Sent as both a query parameter and a body field because the
+        /// exact placement is not in the public spec; an unknown extra of either kind is ignored.
         /// </summary>
-        public async Task<string> MintWsTicketAsync()
+        public async Task<string> MintWsTicketAsync(string profile = null)
         {
             if (string.IsNullOrEmpty(_baseUrl))
                 throw new InvalidOperationException("HermesRemoteAuth base URL is not configured.");
@@ -518,11 +525,40 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     "No Hermes session — sign in before connecting.");
             }
 
+            string trimmedProfile = string.IsNullOrWhiteSpace(profile) ? null : profile.Trim();
+
+            string ticket = await RequestWsTicketAsync(trimmedProfile);
+            if (ticket != null || trimmedProfile == null)
+                return ticket;
+
+            // The gateway rejected the request itself (a 4xx that is not an auth failure), and the
+            // profile parameter is the only thing in it that can be unexpected. Retry unscoped
+            // rather than let a guess about the parameter's placement break sign-in outright —
+            // the connection then behaves exactly as it did before profiles were plumbed through.
+            Debug.LogWarning("[HermesAuth] Gateway rejected a profile-scoped ws-ticket request; "
+                + "falling back to an unscoped ticket. Sessions will run in the gateway default profile.");
+            return await RequestWsTicketAsync(null);
+        }
+
+        /// <summary>
+        /// One POST /api/auth/ws-ticket attempt. Returns the ticket, or null when the gateway
+        /// rejected the request shape (4xx other than 401/403) so the caller can retry without
+        /// the profile. Auth failures and transport errors still throw.
+        /// </summary>
+        private async Task<string> RequestWsTicketAsync(string trimmedProfile)
+        {
             string url = _baseUrl + "/api/auth/ws-ticket";
+            if (trimmedProfile != null)
+                url += "?profile=" + Uri.EscapeDataString(trimmedProfile);
+
+            // Identity still comes from the cookie; the body carries only the requested scope.
+            string body = trimmedProfile != null
+                ? JsonConvert.SerializeObject(new { profile = trimmedProfile })
+                : "{}";
+
             using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
             {
-                // POST with an empty body — the server reads identity from the cookie only.
-                request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes("{}"));
+                request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
                 request.downloadHandler = new DownloadHandlerBuffer();
                 request.SetRequestHeader("Content-Type", "application/json");
                 request.SetRequestHeader("Cookie", _cookieHeader);
@@ -540,6 +576,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
                         "expired",
                         "Hermes session expired — sign in again.");
                 }
+
+                // A 4xx on a profile-scoped attempt means the request shape was refused, not the
+                // session — signal that to the caller instead of failing the whole connect.
+                if (trimmedProfile != null && code >= 400 && code < 500)
+                    return null;
 
                 if (request.result != UnityWebRequest.Result.Success || code < 200 || code >= 300)
                     throw new Exception("Hermes ws-ticket request failed (" + code + "): " + SafeError(request));

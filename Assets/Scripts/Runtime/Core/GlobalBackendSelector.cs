@@ -324,8 +324,11 @@ namespace NeonCompanion.Runtime.Core
             {
                 if (oauth)
                 {
-                    // Desktop-style: ensure a cookie session, mint a single-use ws-ticket, then
-                    // connect the WS with ?ticket=. The ticket is never stored.
+                    // Desktop-style: ensure a cookie session, mint a single-use ws-ticket for the
+                    // active profile, then connect the WS with ?ticket=. The profile goes into the
+                    // mint (Desktop's getGatewayWsUrl(profile)) — a ticket-authenticated upgrade
+                    // ignores ?profile= on the socket, so without this every session, on every
+                    // profile, was created in the gateway's default one.
                     string ticket = await EnsureOAuthTicketAsync(activeProvider);
                     await SessionManager.Connect(HermesWsUrl, null, ticket, ActiveHermesProfile);
                 }
@@ -343,7 +346,10 @@ namespace NeonCompanion.Runtime.Core
                 if (oauth && !IsOAuthProvider(activeProvider))
                     activeProvider.authMode = "oauth";
 
-                NeonLogger.Log("[Backend] Hermes connected");
+                // The profile is in the log because it is the one thing that silently decides
+                // which scope every session on this socket belongs to.
+                NeonLogger.Log("[Backend] Hermes connected (profile: "
+                    + (ActiveHermesProfile ?? "<gateway default>") + ")");
             }
             catch (HermesReauthRequiredException reauth)
             {
@@ -393,7 +399,7 @@ namespace NeonCompanion.Runtime.Core
                 }
             }
 
-            return await _remoteAuth.MintWsTicketAsync();
+            return await _remoteAuth.MintWsTicketAsync(ActiveHermesProfile);
         }
 
         /// <summary>
@@ -548,7 +554,7 @@ namespace NeonCompanion.Runtime.Core
 
             try
             {
-                return await _remoteAuth.MintWsTicketAsync();
+                return await _remoteAuth.MintWsTicketAsync(ActiveHermesProfile);
             }
             catch (Exception ex)
             {
