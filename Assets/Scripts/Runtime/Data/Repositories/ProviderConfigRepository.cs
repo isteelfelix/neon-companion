@@ -74,6 +74,13 @@ namespace NeonCompanion.Runtime.Data.Repositories
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Write the provider list with the API key stripped (it lives in the secret store).
+        /// The key is the ONLY field this may drop — copy every other field. Fields that were
+        /// silently missing here were wiped on every save: authMode/authProvider/authUsername,
+        /// which cost the Hermes gateway its OAuth flag (so a restart fell back to token mode
+        /// with an empty token and could not restore its cookie), and the whole voice block.
+        /// </summary>
         private void SaveSanitizedProviders(List<ProviderConfig> providers)
         {
             var sanitized = new List<ProviderConfig>();
@@ -93,7 +100,16 @@ namespace NeonCompanion.Runtime.Data.Repositories
                     maxTokens = provider.maxTokens,
                     contextWindow = provider.contextWindow,
                     backendType = provider.backendType,
-                    isEnabled = provider.isEnabled
+                    isEnabled = provider.isEnabled,
+                    authMode = provider.authMode,
+                    authProvider = provider.authProvider,
+                    authUsername = provider.authUsername,
+                    sttProvider = provider.sttProvider,
+                    ttsProvider = provider.ttsProvider,
+                    ttsVoice = provider.ttsVoice,
+                    ttsModel = provider.ttsModel,
+                    ttsSpeed = provider.ttsSpeed,
+                    sttLanguage = provider.sttLanguage
                 });
             }
 

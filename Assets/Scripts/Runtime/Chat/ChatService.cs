@@ -499,7 +499,23 @@ namespace NeonCompanion.Runtime.Chat
                 // Load history from the server (source of truth) and refresh the display->runtime
                 // mapping. Idle in-memory snapshots may point at a runtime id that the gateway has
                 // already closed; using them directly causes "session not found" on prompt.submit.
-                await ResumeHermesSessionAsync(serverId);
+                try
+                {
+                    await ResumeHermesSessionAsync(serverId);
+                }
+                catch (Exception ex)
+                {
+                    // The socket is profile-scoped, so a session listed under a different backend
+                    // profile resolves to "session not found". Name the profile: without it the
+                    // bare stack trace says nothing about which scope the lookup ran in.
+                    string scope = selector != null && !string.IsNullOrEmpty(selector.ActiveHermesProfile)
+                        ? selector.ActiveHermesProfile
+                        : "<gateway default>";
+                    NeonLogger.LogWarning("[ChatService] Hermes resume failed for session " + serverId
+                        + " in profile " + scope + ": " + ex.Message);
+                    ClearCurrentSessionWithoutSaving();
+                    throw;
+                }
                 HermesStream s = GetOrCreateStream(serverId);
                 s.viewModel = _currentChatViewModel;
                 s.session = _currentSession;

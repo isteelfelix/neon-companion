@@ -155,12 +155,12 @@ namespace NeonCompanion.Runtime.Core
 
             var provider = _activeProviderResolver != null ? _activeProviderResolver() : null;
 
-            // Restoring is for OAuth providers only — token mode must never read or write a cookie.
-            // Binding for a sign-out (restore == false) is allowed even after the provider was
-            // switched to token mode, so its stored session is deleted instead of left orphaned.
-            bool eligible = _secretStore != null
-                && IsHermesProviderConfig(provider)
-                && (IsOAuthProvider(provider) || !restore);
+            // Bound for every Hermes provider, not just those flagged oauth. The flag used to be
+            // dropped on every provider save (see ProviderConfigRepository), and gating the
+            // restore on it meant a perfectly good stored cookie was ignored on startup. Binding
+            // is safe in token mode: nothing there ever hands a cookie to _remoteAuth, so there
+            // is nothing to write, and a restore only finds what an OAuth sign-in put there.
+            bool eligible = _secretStore != null && IsHermesProviderConfig(provider);
             if (!eligible)
             {
                 _remoteAuth.ConfigureSessionPersistence(null, null);
@@ -313,7 +313,12 @@ namespace NeonCompanion.Runtime.Core
 
             _shouldReconnect = true;
 
-            bool oauth = IsOAuthProvider(activeProvider);
+            // A held session outranks the config flag: ConfigureHermesEndpoint above may have just
+            // restored a cookie for a provider whose authMode was lost to an earlier save. Without
+            // this the connect fell through to token mode with an empty token, and the gateway
+            // rejected the upgrade with a bare "Unable to connect to the remote server".
+            bool oauth = IsOAuthProvider(activeProvider)
+                || (_remoteAuth != null && _remoteAuth.HasSession);
 
             try
             {
@@ -331,6 +336,13 @@ namespace NeonCompanion.Runtime.Core
                 LastConnectionError = null;
                 _reconnectAttempt = 0;
                 _reconnectDelay = 1f;
+
+                // Repair a config whose authMode was lost: this provider demonstrably speaks
+                // cookie+ticket auth. The resolver hands back the live ChatService instance, so
+                // the next provider save persists the corrected flag.
+                if (oauth && !IsOAuthProvider(activeProvider))
+                    activeProvider.authMode = "oauth";
+
                 NeonLogger.Log("[Backend] Hermes connected");
             }
             catch (HermesReauthRequiredException reauth)

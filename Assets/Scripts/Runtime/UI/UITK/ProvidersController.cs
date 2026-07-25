@@ -152,7 +152,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         // Hermes-only: profiles are a backend concept, other providers never show this row.
         private VisualElement _profileRow;
         private ScrollView _profileStrip;
-        private Label _profileCount;
         private Label _profileStatus;
         private Label _profileMeta;
         private bool _profileFieldsBuilt;
@@ -2066,18 +2065,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _profileRow.AddToClassList("rail__profile");
             _profileRow.style.display = DisplayStyle.None;
 
-            var head = new VisualElement();
-            head.AddToClassList("rail__profile-head");
-
-            var label = new Label(LocalizationExtensions.Get("providers.profile.label", "Профиль Hermes"));
-            label.AddToClassList("rail__profile-label");
-            head.Add(label);
-
-            _profileCount = new Label(string.Empty);
-            _profileCount.AddToClassList("rail__profile-count");
-            head.Add(_profileCount);
-            _profileRow.Add(head);
-
             // Icon strip. Scrollbars stay hidden: the rail is ~208px wide, so overflow is
             // reached by dragging with LMB (OnProfileStripPointer*) or the wheel, not by a
             // scrollbar that would eat a third of the row height.
@@ -2095,9 +2082,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _profileRow.Add(_profileStrip);
 
             // One caption line under the strip: icons alone cannot say which profile is which.
-            // Name and model share the row so this block costs three lines total, not six.
+            // The "Профиль" tag, the active name and its model all share this row — a separate
+            // header row above the chips cost a whole line to say one word.
             var caption = new VisualElement();
             caption.AddToClassList("rail__profile-caption");
+
+            var label = new Label(LocalizationExtensions.Get("providers.profile.label", "Профиль"));
+            label.AddToClassList("rail__profile-label");
+            caption.Add(label);
 
             _profileStatus = new Label(string.Empty);
             _profileStatus.AddToClassList("rail__profile-status");
@@ -2237,13 +2229,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _profileChipByName.Clear();
             _profileStrip.Clear();
             _hoveredProfileName = null;
-
-            if (_profileCount != null)
-            {
-                _profileCount.text = _hermesProfiles.Count > 0
-                    ? _hermesProfiles.Count.ToString()
-                    : string.Empty;
-            }
 
             for (int i = 0; i < _hermesProfiles.Count; i++)
             {
@@ -2401,6 +2386,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             SetProfileMeta(model);
+        }
+
+        /// <summary>
+        /// What to hand the backend for a chip. The gateway's own default profile is addressed by
+        /// sending NO profile at all — that is the state the app boots in (ActiveHermesProfile is
+        /// null until something switches it). Sending the literal name instead meant "switch away
+        /// and back" landed in a different scope than a fresh start, and the sessions listed there
+        /// stopped resuming ("session not found").
+        /// </summary>
+        private string ProfileSwitchTarget(string profileName)
+        {
+            HermesProfile profile = FindProfile(profileName);
+            return profile != null && profile.is_default ? null : profileName;
         }
 
         private bool IsActiveProfile(string profileName)
@@ -2629,7 +2627,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetProfileStatus(LocalizationExtensions.GetFormat(
                     "providers.profile.switching_to", "Переключаем на {0}…", profileName));
 
-                await chat.SwitchHermesProfileAsync(profileName);
+                await chat.SwitchHermesProfileAsync(ProfileSwitchTarget(profileName));
                 if (!_d.IsBound())
                     return;
 
@@ -3067,7 +3065,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return false;
 
             _lastTransportState = TransportState.Connected;
-            if (_d.LoadSessionsAsync != null)
+            // A profile switch reconnects the socket and reloads the list itself, once the new
+            // scope has settled — loading here too would race it with the old scope's request.
+            if (_d.LoadSessionsAsync != null && !_profileSwitchBusy)
                 _ = _d.LoadSessionsAsync();
             return true;
         }

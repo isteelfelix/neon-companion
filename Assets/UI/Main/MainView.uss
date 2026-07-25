@@ -192,11 +192,11 @@
 /* Height follows content: in Hermes mode the model line moves into the profile caption,
    and a fixed 38px would keep reserving room for a line that is no longer there. */
 .rail__footer {
-    min-height: 26px;
+    min-height: 20px;
     flex-shrink: 0;
     border-top-width: 1px;
     border-top-color: var(--line-1);
-    padding-top: 8px;
+    padding-top: 6px;
     flex-direction: row;
     align-items: center;
 }
@@ -230,33 +230,22 @@
 .rail__profile {
     flex-direction: column;
     flex-shrink: 0;
-    padding-top: 6px;
-    padding-bottom: 2px;
-}
-
-.rail__profile-head {
-    flex-direction: row;
-    align-items: center;
-    margin-bottom: 3px;
+    padding-top: 4px;
+    padding-bottom: 0;
 }
 
 .rail__profile-label {
-    flex-grow: 1;
+    flex-shrink: 0;
     font-size: 9px;
     color: var(--text-4);
     letter-spacing: 1px;
     -unity-font-style: bold;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-}
-
-.rail__profile-count {
-    font-size: 9px;
-    color: var(--text-4);
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    margin-right: 6px;
 }
 
 .rail__profile-strip {
-    height: 28px;
+    height: 26px;
     flex-shrink: 0;
 }
 
@@ -322,11 +311,11 @@
     background-color: var(--text-0);
 }
 
-/* Name and model share one row — this block used to cost six lines in the rail. */
+/* Tag, name and model share one row — this block used to cost six lines in the rail. */
 .rail__profile-caption {
     flex-direction: row;
     align-items: center;
-    margin-top: 5px;
+    margin-top: 4px;
 }
 
 .rail__profile-status {
