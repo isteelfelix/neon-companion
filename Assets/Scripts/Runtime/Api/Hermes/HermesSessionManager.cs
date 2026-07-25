@@ -399,15 +399,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         public Task Connect(string url, string token = null)
         {
-            return Connect(url, token, null, null);
+            return Connect(url, token, null);
         }
 
         /// <summary>
-        /// Open the gateway socket. <paramref name="profile"/> is the Hermes backend profile the
-        /// whole connection is scoped to: the gateway reads ?profile=&lt;name&gt; off the URL, so
-        /// session.create and every later RPC on this socket run inside that profile.
+        /// Open the gateway socket. The upgrade carries auth ONLY — no profile. One remote
+        /// gateway serves every backend profile (Desktop buildGatewayWsUrlWithTicket appends
+        /// nothing but the ticket), so the profile is not a property of the socket: it rides in
+        /// the params of <see cref="CreateSession"/> / <see cref="ResumeSession"/>.
         /// </summary>
-        public async Task Connect(string url, string token, string ticket, string profile = null)
+        public async Task Connect(string url, string token, string ticket)
         {
             string wsUrl = url;
             // OAuth remote mode: a single-use ws-ticket authenticates the upgrade (?ticket=).
@@ -420,13 +421,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 string separator = wsUrl.Contains("?") ? "&" : "?";
                 wsUrl = wsUrl + separator + "token=" + Uri.EscapeDataString(token);
-            }
-
-            // Profile rides alongside the auth parameter (both modes) — never replaces it.
-            if (!string.IsNullOrEmpty(profile))
-            {
-                string profileSeparator = wsUrl.Contains("?") ? "&" : "?";
-                wsUrl = wsUrl + profileSeparator + "profile=" + Uri.EscapeDataString(profile);
             }
 
             await _gateway.Connect(wsUrl);
@@ -555,11 +549,29 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         // === Session Lifecycle ===
 
-        public async Task<SessionCreateResponse> CreateSession(string cwd = null, string title = null)
+        /// <summary>
+        /// Blank/whitespace profile means "the gateway's own default" — send null rather than an
+        /// empty string so the param reads as absent on the gateway side.
+        /// </summary>
+        private static string NormalizeProfile(string profile)
+        {
+            return string.IsNullOrWhiteSpace(profile) ? null : profile.Trim();
+        }
+
+        /// <summary>
+        /// Create a session in <paramref name="profile"/> (null = the gateway's own default).
+        /// Passing the profile is load-bearing: one remote gateway serves every profile, so an
+        /// omitted profile silently lands the new chat on the launch (default) profile no matter
+        /// which one the UI shows. Desktop desktopSessionCreateParams sends it the same way.
+        /// </summary>
+        public async Task<SessionCreateResponse> CreateSession(
+            string cwd = null,
+            string title = null,
+            string profile = null)
         {
             var result = await _gateway.Request<SessionCreateResponse>(
                 RpcMethods.SessionCreate,
-                new { cols = 96, cwd, title });
+                new { cols = 96, cwd, title, profile = NormalizeProfile(profile) });
 
             string displaySessionId = !string.IsNullOrEmpty(result.stored_session_id)
                 ? result.stored_session_id
@@ -576,11 +588,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
             return result;
         }
 
-        public async Task<SessionResumeResponse> ResumeSession(string sessionId)
+        /// <summary>
+        /// Resume a session that lives in <paramref name="profile"/> (null = the gateway's own
+        /// default). The lookup runs against that profile's state.db, so resuming a non-default
+        /// session without its profile fails with "session not found".
+        /// </summary>
+        public async Task<SessionResumeResponse> ResumeSession(string sessionId, string profile = null)
         {
             var result = await _gateway.Request<SessionResumeResponse>(
                 RpcMethods.SessionResume,
-                new { session_id = sessionId });
+                new { session_id = sessionId, cols = 96, profile = NormalizeProfile(profile) });
 
             string displaySessionId = !string.IsNullOrEmpty(result.stored_session_id)
                 ? result.stored_session_id

@@ -69,10 +69,11 @@ namespace NeonCompanion.Runtime.Core
         public event Action<string> OnHermesProfileChanged;
 
         /// <summary>
-        /// Switch the active Hermes profile: every later profile-scoped REST call and the socket
-        /// itself target <paramref name="profileName"/>. The old profile's socket is closed and
-        /// replaced, so no traffic can keep flowing on it. Local chat state is dropped by
-        /// ChatService.SwitchHermesProfileAsync — this method never creates a session.
+        /// Switch the active Hermes profile: every later profile-scoped REST call, and every
+        /// later session.create / session.resume, targets <paramref name="profileName"/>. The old
+        /// profile's socket is closed and replaced, so no traffic can keep flowing on it. Local
+        /// chat state is dropped by ChatService.SwitchHermesProfileAsync — this method never
+        /// creates a session.
         /// </summary>
         public async Task SwitchHermesProfileAsync(string profileName)
         {
@@ -87,8 +88,9 @@ namespace NeonCompanion.Runtime.Core
             NeonLogger.Log("[Backend] Hermes profile set to " + (normalized ?? "<gateway default>"));
             OnHermesProfileChanged?.Invoke(normalized);
 
-            // Replace the socket so the WS upgrade carries ?profile=<new> — an old profile's
-            // socket must not survive the switch.
+            // The socket itself is profile-agnostic (the profile rides on session.create /
+            // session.resume), but it is still carrying the old profile's live streams — replace
+            // it so nothing from the profile the user just left keeps arriving.
             if (CurrentMode == BackendMode.Hermes)
                 await ReconnectHermes();
         }
@@ -324,17 +326,16 @@ namespace NeonCompanion.Runtime.Core
             {
                 if (oauth)
                 {
-                    // Desktop-style: ensure a cookie session, mint a single-use ws-ticket for the
-                    // active profile, then connect the WS with ?ticket=. The profile goes into the
-                    // mint (Desktop's getGatewayWsUrl(profile)) — a ticket-authenticated upgrade
-                    // ignores ?profile= on the socket, so without this every session, on every
-                    // profile, was created in the gateway's default one.
+                    // Desktop-style: ensure a cookie session, mint a single-use ws-ticket, then
+                    // connect the WS with ?ticket=. The ticket is never stored. Neither the mint
+                    // nor the upgrade is profile-scoped — one gateway socket serves every profile
+                    // and session.create/session.resume carry the profile themselves.
                     string ticket = await EnsureOAuthTicketAsync(activeProvider);
-                    await SessionManager.Connect(HermesWsUrl, null, ticket, ActiveHermesProfile);
+                    await SessionManager.Connect(HermesWsUrl, null, ticket);
                 }
                 else
                 {
-                    await SessionManager.Connect(HermesWsUrl, HermesToken, null, ActiveHermesProfile);
+                    await SessionManager.Connect(HermesWsUrl, HermesToken, null);
                 }
                 LastConnectionError = null;
                 _reconnectAttempt = 0;
@@ -347,7 +348,7 @@ namespace NeonCompanion.Runtime.Core
                     activeProvider.authMode = "oauth";
 
                 // The profile is in the log because it is the one thing that silently decides
-                // which scope every session on this socket belongs to.
+                // which scope the next created/resumed session belongs to.
                 NeonLogger.Log("[Backend] Hermes connected (profile: "
                     + (ActiveHermesProfile ?? "<gateway default>") + ")");
             }
@@ -399,7 +400,7 @@ namespace NeonCompanion.Runtime.Core
                 }
             }
 
-            return await _remoteAuth.MintWsTicketAsync(ActiveHermesProfile);
+            return await _remoteAuth.MintWsTicketAsync();
         }
 
         /// <summary>
@@ -554,7 +555,7 @@ namespace NeonCompanion.Runtime.Core
 
             try
             {
-                return await _remoteAuth.MintWsTicketAsync(ActiveHermesProfile);
+                return await _remoteAuth.MintWsTicketAsync();
             }
             catch (Exception ex)
             {

@@ -505,9 +505,9 @@ namespace NeonCompanion.Runtime.Chat
                 }
                 catch (Exception ex)
                 {
-                    // The socket is profile-scoped, so a session listed under a different backend
-                    // profile resolves to "session not found". Name the profile: without it the
-                    // bare stack trace says nothing about which scope the lookup ran in.
+                    // session.resume runs in the active backend profile, so a session belonging to
+                    // a different one resolves to "session not found". Name the profile: without
+                    // it the bare stack trace says nothing about which scope the lookup ran in.
                     string scope = selector != null && !string.IsNullOrEmpty(selector.ActiveHermesProfile)
                         ? selector.ActiveHermesProfile
                         : "<gateway default>";
@@ -750,10 +750,13 @@ namespace NeonCompanion.Runtime.Chat
             if (selector?.SessionManager == null)
                 return;
 
-            var response = await selector.SessionManager.CreateSession();
+            // Read the active profile fresh (never a value captured before an await): it decides
+            // which profile the session is created in, and omitting it lands the chat in the
+            // gateway default no matter what the UI shows.
+            string profile = selector.ActiveHermesProfile;
+            var response = await selector.SessionManager.CreateSession(profile: profile);
             string persistentSessionId = GetPersistentHermesSessionId(response);
-            // The socket is profile-scoped, so the new session lives in the active profile.
-            _currentSessionHermesProfile = selector.ActiveHermesProfile;
+            _currentSessionHermesProfile = profile;
 
             // Create local session record
             if (_currentProvider == null)
@@ -827,6 +830,11 @@ namespace NeonCompanion.Runtime.Chat
         /// In Hermes mode the server is the source of truth, so the local view model is rebuilt
         /// entirely from the resume response. The display id remains the persisted DB id, while
         /// providerRuntimeSessionId stores the live id used for prompt.submit.
+        ///
+        /// The session is looked up in the active backend profile: the history list is scoped by
+        /// the same profile (REST /api/sessions?profile=), so a listed session belongs to it.
+        /// Without the profile the gateway searches its default profile's state.db and answers
+        /// "session not found".
         /// </summary>
         public async Task ResumeHermesSessionAsync(string hermesSessionId)
         {
@@ -839,7 +847,8 @@ namespace NeonCompanion.Runtime.Chat
                 return;
             }
 
-            var response = await selector.SessionManager.ResumeSession(hermesSessionId);
+            string profile = selector.ActiveHermesProfile;
+            var response = await selector.SessionManager.ResumeSession(hermesSessionId, profile);
             string displaySessionId = !string.IsNullOrWhiteSpace(response.stored_session_id)
                 ? response.stored_session_id
                 : hermesSessionId;
@@ -907,8 +916,8 @@ namespace NeonCompanion.Runtime.Chat
                 messages = new List<ChatMessage>(_currentChatViewModel.Messages),
                 folder = string.Empty
             };
-            // Resumed over the profile-scoped socket — the chat belongs to the active profile.
-            _currentSessionHermesProfile = selector.ActiveHermesProfile;
+            // session.resume ran in this profile, so the chat belongs to it.
+            _currentSessionHermesProfile = profile;
 
             NeonLogger.Log("Hermes session resumed: " + displaySessionId);
         }
