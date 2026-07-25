@@ -708,7 +708,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             var avatarProfiles = app.Avatars.GetAll();
             string activeId = _deps.GetActiveAvatarId?.Invoke() ?? "neon";
             string prompt = app.AvatarService.GetSystemPrompt(activeId, avatarProfiles);
-            chatService.SystemPrompt = settings.useSystemPrompt ? prompt : null;
+            // Hermes backends own the system prompt (profile soul); never inject the avatar persona prompt.
+            if (ChatService.IsHermesProvider(chatService.CurrentProvider))
+                chatService.SystemPrompt = null;
+            else
+                chatService.SystemPrompt = settings.useSystemPrompt ? prompt : null;
         }
 
         // ============================================================
