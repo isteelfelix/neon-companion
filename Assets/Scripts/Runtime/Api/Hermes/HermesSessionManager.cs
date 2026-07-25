@@ -504,6 +504,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public event Action<string, ClarifyRequest> OnClarifyRequest;
         public event Action<string, ApprovalRequest> OnApprovalRequest;
         public event Action<string, SecretRequest> OnSecretRequest;
+        public event Action<string, string> OnSecretExpire;
         public event Action<string, string> OnSessionTitle;
         // (sid, text) — a background self-improvement review saved to memory/skills. Surfaced as a
         // persistent system line in the transcript (Desktop review.summary parity).
@@ -1288,6 +1289,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
             _gateway.On(GatewayEvents.ApprovalRequest, HandleApprovalRequest);
             _gateway.On(GatewayEvents.SudoRequest, HandleSudoRequest);
             _gateway.On(GatewayEvents.SecretRequest, HandleSecretRequest);
+            _gateway.On(GatewayEvents.SudoExpire, HandleSecretExpire);
+            _gateway.On(GatewayEvents.SecretExpire, HandleSecretExpire);
             _gateway.On(GatewayEvents.SessionTitle, HandleSessionTitle);
             _gateway.On(GatewayEvents.BackgroundComplete, HandleBackgroundComplete);
             _gateway.On(GatewayEvents.ReviewSummary, HandleReviewSummary);
@@ -1999,6 +2002,20 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 prompt = payload.question,
                 isSudo = true
             });
+        }
+
+        // sudo.expire / secret.expire — the server stopped waiting (tui_gateway _block timeout) and
+        // dropped the pending request. Both carry only {request_id}; listeners match on it and tear
+        // down the matching capture UI without answering (TUI createGatewayEventHandler parity).
+        private void HandleSecretExpire(GatewayEvent evt)
+        {
+            if (evt.Payload == null) return;
+            string sid = EventSessionId(evt);
+
+            var payload = evt.Payload.ToObject<ClarifyEventPayload>();
+            if (payload == null || string.IsNullOrEmpty(payload.request_id)) return;
+
+            OnSecretExpire?.Invoke(sid, payload.request_id);
         }
 
         private void HandleSecretRequest(GatewayEvent evt)

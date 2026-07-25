@@ -72,6 +72,13 @@ namespace NeonCompanion.Runtime.Api
         /// </summary>
         event Action<string, SecretRequest> OnSecretRequest;
 
+        /// <summary>
+        /// A pending sudo/secret capture expired server-side (sudo.expire / secret.expire): the
+        /// gateway stopped blocking on it, so the masked input must be torn down WITHOUT sending a
+        /// respond (a late one only resolves to status="expired"). Args: sessionId, requestId.
+        /// </summary>
+        event Action<string, string> OnSecretExpire;
+
         /// <summary>Live auto-title push for a session (session.title). Args: sessionId, title.</summary>
         event Action<string, string> OnSessionTitle;
 

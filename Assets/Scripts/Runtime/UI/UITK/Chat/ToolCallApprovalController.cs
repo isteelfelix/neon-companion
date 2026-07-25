@@ -29,16 +29,28 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private TaskCompletionSource<bool> _pendingApprovalTcs;
         private IChatTransport _hermesTransport;
 
-        // A background session's approval/clarify/secret request, deferred until the user opens it.
+        // A background session's approval/clarify request, deferred until the user opens it.
         private sealed class PendingRequest
         {
             public string sessionId;
             public bool isClarify;
             public ClarifyRequest clarify;
             public ApprovalRequest approval;
-            public SecretRequest secret;
         }
         private readonly Dictionary<string, PendingRequest> _pendingBySession = new Dictionary<string, PendingRequest>();
+
+        // Deferred sudo/secret captures live in their own map: a sudo.request must not evict an
+        // approval that is still blocking the same background session (Desktop keeps one prompt
+        // store per kind), and vice versa.
+        private readonly Dictionary<string, SecretRequest> _pendingSecretBySession = new Dictionary<string, SecretRequest>();
+
+        // The masked capture currently on screen (sudo password or skill secret), its row, and the
+        // session that raised it. Kept so an expire event can match it by request id, a foreground
+        // switch can park it, and every answer path can fire exactly once.
+        private SecretRequest _activeSecretRequest;
+        private string _activeSecretSessionId;
+        private VisualElement _activeSecretElement;
+        private TextField _activeSecretField;
 
         internal event Action OnStopRequested;
         internal event Action<string> OnApproved;
@@ -95,39 +107,65 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             try { _playAttentionSound?.Invoke(); } catch { }
         }
 
-        // Defer a background session's secret request (distinct: needs a text value, not approve/deny).
-        private void StorePendingSecret(string sessionId, SecretRequest secret)
+        // Defer a background session's sudo/secret capture (distinct: needs a masked text value, not
+        // approve/deny). `notify` is false when merely parking the foreground capture on a session
+        // switch — that badges the sidebar without re-playing the attention sound.
+        private void StorePendingSecret(string sessionId, SecretRequest secret, bool notify = true)
         {
             if (string.IsNullOrEmpty(sessionId) || secret == null)
                 return;
-            _pendingBySession[sessionId] = new PendingRequest
-            {
-                sessionId = sessionId,
-                secret = secret
-            };
+            _pendingSecretBySession[sessionId] = secret;
             var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
             chat?.MarkSessionAttention(sessionId);
-            try { _playAttentionSound?.Invoke(); } catch { }
+            if (notify)
+            {
+                try { _playAttentionSound?.Invoke(); } catch { }
+            }
         }
 
         /// <summary>
-        /// Show any deferred approval/clarify for the session the user just opened. Called when the
-        /// foreground session changes.
+        /// Show any deferred approval/clarify/sudo/secret for the session the user just opened.
+        /// Called when the foreground session changes.
         /// </summary>
         public void ShowPendingForSession(string sessionId)
         {
             if (string.IsNullOrEmpty(sessionId))
                 return;
+
+            // The transcript is re-rendered on a foreground switch, which wipes the capture row of
+            // the session being left. Park that request back in the pending map so it reappears when
+            // the user returns — the agent stays blocked on it either way, and the password must
+            // never be carried over to (or answered from) another chat.
+            if (_activeSecretRequest != null &&
+                !string.IsNullOrEmpty(_activeSecretSessionId) &&
+                !string.Equals(_activeSecretSessionId, sessionId, StringComparison.Ordinal))
+            {
+                StorePendingSecret(_activeSecretSessionId, _activeSecretRequest, false);
+                RemoveSecretInput();
+            }
+
+            SecretRequest secret;
+            bool hasSecret = _pendingSecretBySession.TryGetValue(sessionId, out secret);
+            if (hasSecret)
+                _pendingSecretBySession.Remove(sessionId);
+
             PendingRequest p;
-            if (!_pendingBySession.TryGetValue(sessionId, out p))
+            bool hasPrompt = _pendingBySession.TryGetValue(sessionId, out p);
+            if (hasPrompt)
+                _pendingBySession.Remove(sessionId);
+
+            if (!hasSecret && !hasPrompt)
                 return;
-            _pendingBySession.Remove(sessionId);
+
             var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
             chat?.ClearSessionAttention(sessionId);
 
-            if (p.secret != null)
-                ShowSecretNow(p.secret);
-            else if (p.isClarify)
+            if (hasSecret)
+                ShowSecretNow(sessionId, secret);
+
+            if (!hasPrompt)
+                return;
+            if (p.isClarify)
                 ShowClarifyNow(p.clarify);
             else
                 _ = HandleHermesApprovalRequestAsync(p.sessionId, p.approval);
@@ -195,8 +233,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         {
             Dismiss();
 
+            // No respond is sent: this runs on interrupt/stop, and the gateway releases its own
+            // pending sudo/secret prompts for that session (_clear_pending) when the turn is cut.
+            RemoveSecretInput();
+
             if (!string.IsNullOrEmpty(sessionId))
+            {
                 _pendingBySession.Remove(sessionId);
+                _pendingSecretBySession.Remove(sessionId);
+            }
 
             RemovePromptElements("clarify-choices");
             RemovePromptElements("clarify-input");
@@ -302,6 +347,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
                 _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
                 _hermesTransport.OnSecretRequest -= OnHermesSecretRequest;
+                _hermesTransport.OnSecretExpire -= OnHermesSecretExpire;
                 _hermesTransport = null;
             }
         }
@@ -313,7 +359,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _hermesTransport.OnClarifyRequest -= OnHermesClarifyRequest;
                 _hermesTransport.OnApprovalRequest -= OnHermesApprovalRequest;
                 _hermesTransport.OnSecretRequest -= OnHermesSecretRequest;
+                _hermesTransport.OnSecretExpire -= OnHermesSecretExpire;
                 _pendingBySession.Clear();
+                _pendingSecretBySession.Clear();
+                RemoveSecretInput();
             }
 
             if (mode == BackendMode.Hermes)
@@ -325,6 +374,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     _hermesTransport.OnClarifyRequest += OnHermesClarifyRequest;
                     _hermesTransport.OnApprovalRequest += OnHermesApprovalRequest;
                     _hermesTransport.OnSecretRequest += OnHermesSecretRequest;
+                    _hermesTransport.OnSecretExpire += OnHermesSecretExpire;
                 }
             }
             else
@@ -587,15 +637,53 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return;
 
             if (IsForeground(sessionId))
-                ShowSecretNow(request);
+                ShowSecretNow(sessionId, request);
             else
                 StorePendingSecret(sessionId, request);
         }
 
-        private void ShowSecretNow(SecretRequest request)
+        // sudo.expire / secret.expire: the gateway stopped waiting (120s for sudo) and dropped the
+        // pending request. Tear the capture down WITHOUT responding — a late sudo.respond only
+        // resolves to status="expired" — so the user never types a password into a dead prompt.
+        private void OnHermesSecretExpire(string sessionId, string requestId)
+        {
+            if (string.IsNullOrEmpty(requestId))
+                return;
+
+            var chat = _getCurrentChatService != null ? _getCurrentChatService() : null;
+            var expired = new List<string>();
+            foreach (var entry in _pendingSecretBySession)
+            {
+                if (entry.Value != null &&
+                    string.Equals(entry.Value.requestId, requestId, StringComparison.Ordinal))
+                    expired.Add(entry.Key);
+            }
+            for (int i = 0; i < expired.Count; i++)
+            {
+                _pendingSecretBySession.Remove(expired[i]);
+                chat?.ClearSessionAttention(expired[i]);
+            }
+
+            if (_activeSecretRequest == null ||
+                !string.Equals(_activeSecretRequest.requestId, requestId, StringComparison.Ordinal))
+                return;
+
+            bool isSudo = _activeSecretRequest.isSudo;
+            RemoveSecretInput();
+            _showSystemMessage?.Invoke("[Hermes] " + (isSudo
+                ? LocalizationExtensions.Get("sudo.expired", "Password request expired.")
+                : LocalizationExtensions.Get("secret.expired", "Secret request expired.")));
+        }
+
+        private void ShowSecretNow(string sessionId, SecretRequest request)
         {
             if (request == null || _messagesList == null)
                 return;
+
+            // One capture at a time: a newer request supersedes the row still on screen (Desktop
+            // keeps a single sudo/secret slot per session). The superseded one is left unanswered —
+            // the gateway expires it on its own and emits sudo.expire/secret.expire.
+            RemoveSecretInput();
 
             string label = !string.IsNullOrWhiteSpace(request.prompt)
                 ? request.prompt
@@ -605,10 +693,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     ? LocalizationExtensions.Get("secret.enter_value_for", "Enter a value for ") + request.envVar
                     : LocalizationExtensions.Get("secret.enter_value", "Enter secret value")));
             _showSystemMessage?.Invoke("[Hermes] " + label);
-            ShowSecretInput(request);
+            ShowSecretInput(sessionId, request);
         }
 
-        private void ShowSecretInput(SecretRequest request)
+        private void ShowSecretInput(string sessionId, SecretRequest request)
         {
             var container = new VisualElement();
             container.AddToClassList("secret-input");
@@ -618,33 +706,96 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             container.style.flexWrap = Wrap.Wrap;
 
             var field = new TextField();
-            field.isPasswordField = true; // mask the captured secret in the UI
+            field.isPasswordField = true; // mask the captured password/secret in the UI
             field.AddToClassList("secret-input__field");
             field.style.minWidth = 200;
 
-            var submit = new Button(() => OnSecretSubmit(request, container, field));
-            submit.text = LocalizationExtensions.Get("secret.submit", "Submit");
+            // Enter sends, Escape refuses — Desktop submits the dialog's form on Enter and maps
+            // every close path (Esc included) to the empty-value refusal; the TUI binds Esc the same.
+            field.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == UnityEngine.KeyCode.Return || evt.keyCode == UnityEngine.KeyCode.KeypadEnter)
+                {
+                    evt.StopPropagation();
+                    AnswerSecret(request, field.value, false);
+                }
+                else if (evt.keyCode == UnityEngine.KeyCode.Escape)
+                {
+                    evt.StopPropagation();
+                    AnswerSecret(request, string.Empty, true);
+                }
+            }, TrickleDown.TrickleDown);
+
+            var submit = new Button(() => AnswerSecret(request, field.value, false));
+            submit.text = request.isSudo
+                ? LocalizationExtensions.Get("sudo.submit", "Send")
+                : LocalizationExtensions.Get("secret.submit", "Submit");
             submit.AddToClassList("secret-input__btn");
+
+            // Cancel answers with an EMPTY value, which the backend treats as a failed sudo (no
+            // command runs) / skipped secret. Without it the only way out is to leave the agent
+            // blocked until its timeout (Desktop maps every dialog close to the same refusal).
+            var cancel = new Button(() => AnswerSecret(request, string.Empty, true));
+            cancel.text = LocalizationExtensions.Get("secret.cancel", "Cancel");
+            cancel.AddToClassList("secret-input__btn");
 
             container.Add(field);
             container.Add(submit);
+            container.Add(cancel);
             _messagesList.Add(container);
+
+            _activeSecretRequest = request;
+            _activeSecretSessionId = sessionId;
+            _activeSecretElement = container;
+            _activeSecretField = field;
+
+            field.Focus();
             _scrollToBottom?.Invoke();
         }
 
-        private void OnSecretSubmit(SecretRequest request, VisualElement container, TextField field)
+        /// <summary>
+        /// Answer the on-screen capture exactly once (a request id mismatch means it was already
+        /// answered, superseded or expired — sending twice would answer a stranger's prompt).
+        /// `cancelled` sends an empty value: a refusal, never mistaken for consent.
+        /// </summary>
+        private void AnswerSecret(SecretRequest request, string value, bool cancelled)
         {
-            string value = field != null ? field.value : null;
-            if (field != null)
-                field.value = string.Empty;
-            if (container != null)
-                container.SetEnabled(false);
-            // Never echo the secret/password back into the transcript.
-            string submitted = request != null && request.isSudo
-                ? LocalizationExtensions.Get("sudo.submitted", "(password submitted)")
-                : LocalizationExtensions.Get("secret.submitted", "(secret submitted)");
-            _showSystemMessage?.Invoke("[You] " + submitted);
+            if (request == null || _activeSecretRequest == null ||
+                !string.Equals(_activeSecretRequest.requestId, request.requestId, StringComparison.Ordinal))
+                return;
+
+            bool isSudo = request.isSudo;
+            // Drop the row (and with it the captured value) before the await: the password is never
+            // held past the send, and no second click can reach this request.
+            RemoveSecretInput();
+
+            // Never echo the password/secret back into the transcript — it is persisted.
+            string line;
+            if (cancelled)
+                line = isSudo
+                    ? LocalizationExtensions.Get("sudo.cancelled", "(password request cancelled)")
+                    : LocalizationExtensions.Get("secret.cancelled", "(secret request cancelled)");
+            else
+                line = isSudo
+                    ? LocalizationExtensions.Get("sudo.submitted", "(password submitted)")
+                    : LocalizationExtensions.Get("secret.submitted", "(secret submitted)");
+            _showSystemMessage?.Invoke("[You] " + line);
+
             _ = SendSecretResponse(request, value ?? string.Empty);
+        }
+
+        // Tear down the capture row and wipe the typed value out of the field. Never responds.
+        private void RemoveSecretInput()
+        {
+            if (_activeSecretField != null)
+                _activeSecretField.value = string.Empty;
+            if (_activeSecretElement != null && _activeSecretElement.parent != null)
+                _activeSecretElement.RemoveFromHierarchy();
+
+            _activeSecretField = null;
+            _activeSecretElement = null;
+            _activeSecretRequest = null;
+            _activeSecretSessionId = null;
         }
 
         private async Task SendSecretResponse(SecretRequest request, string value)

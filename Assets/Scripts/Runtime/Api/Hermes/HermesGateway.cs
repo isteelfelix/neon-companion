@@ -84,6 +84,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string ApprovalRequest = "approval.request";
         public const string SudoRequest = "sudo.request";
         public const string SecretRequest = "secret.request";
+        // The gateway gave up waiting on a sudo/secret prompt (server-side _block timeout, 120s for
+        // sudo). The pending request is gone: the capture UI must be torn down WITHOUT answering,
+        // since any late sudo.respond/secret.respond now resolves to status="expired".
+        public const string SudoExpire = "sudo.expire";
+        public const string SecretExpire = "secret.expire";
         public const string BackgroundComplete = "background.complete";
         // Self-improvement background review saved something to memory/skills and emitted a
         // persistent summary. Desktop surfaces it as a permanent system line in the transcript.
