@@ -127,6 +127,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _gatewaySection;
         private Label _gatewayBaseUrlLabel;
         private VisualElement _apiKeyFieldRoot;
+        // Model / sampling field roots — hidden for Hermes, where the gateway profile owns them.
+        private VisualElement _modelFieldRoot;
+        private VisualElement _samplingRowRoot;
         private Label _apiKeyFieldLabel;
         private string _apiKeyLabelOpenAi;
         private VisualElement _gatewayStatusRow;
@@ -142,18 +145,31 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _gatewayEventsHooked;
         private HermesAuthProbeResult _lastProbe;
         private string _probedAuthProvider; // auto-detected; never shown as a user field
+        // Last transport state seen, so a Connected edge triggers exactly one reload.
+        private TransportState _lastTransportState = TransportState.Disconnected;
 
-        // Hermes backend-profile selector in the rail footer (created lazily in C#).
+        // Hermes backend-profile strip in the rail footer (created lazily in C#).
         // Hermes-only: profiles are a backend concept, other providers never show this row.
         private VisualElement _profileRow;
-        private NeonDropdown _profilePicker;
+        private ScrollView _profileStrip;
+        private Label _profileCount;
         private Label _profileStatus;
+        private Label _profileMeta;
         private bool _profileFieldsBuilt;
         private bool _profileSwitchBusy;
-        private bool _syncingProfilePicker;
         private string _profilesLoadedForEndpoint;
+        private string _hoveredProfileName;
         private readonly List<HermesProfile> _hermesProfiles = new List<HermesProfile>();
-        private readonly Dictionary<string, string> _profileNameByLabel = new Dictionary<string, string>();
+        private readonly Dictionary<string, VisualElement> _profileChipByName =
+            new Dictionary<string, VisualElement>(StringComparer.Ordinal);
+
+        // Drag-to-scroll state for the profile strip: the rail is far too narrow to ever
+        // fit every chip, so overflow is reached by dragging the strip with LMB.
+        private int _stripPointerId = -1;
+        private float _stripPointerStartX;
+        private float _stripStartOffsetX;
+        private bool _stripDragged;
+        private string _stripPressedProfile;
 
         // Model picker overlay (created lazily)
         private VisualElement _modelPickerOverlay;
@@ -237,8 +253,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.GlobalBackendMode != null)
                 _d.GlobalBackendMode.UnregisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
 
-            if (_profilePicker != null)
-                _profilePicker.UnregisterCallback<ChangeEvent<string>>(OnHermesProfileSelected);
+            if (_profileStrip != null)
+            {
+                _profileStrip.UnregisterCallback<PointerDownEvent>(OnProfileStripPointerDown, TrickleDown.TrickleDown);
+                _profileStrip.UnregisterCallback<PointerMoveEvent>(OnProfileStripPointerMove);
+                _profileStrip.UnregisterCallback<PointerUpEvent>(OnProfileStripPointerUp);
+                _profileStrip.UnregisterCallback<PointerCaptureOutEvent>(OnProfileStripPointerCaptureOut);
+                _profileStrip.UnregisterCallback<WheelEvent>(OnProfileStripWheel);
+            }
 
             UnhookGatewayAuthEvents();
         }
@@ -948,8 +970,49 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
+            // Probe the public endpoints first. This is what separates "unreachable" from
+            // "gated": the old code always opened a bare WebSocket, and a gated gateway rejects
+            // that at the upgrade — so a perfectly healthy server reported "WebSocket: Unable to
+            // connect to the remote server" even while the app was talking to it happily.
+            HermesAuthProbeResult probe = await HermesRemoteAuth.ProbeAsync(draft.baseUrl);
+            if (!_d.IsBound())
+                return;
+
+            if (!probe.Reachable)
+            {
+                SetTestRow(false, LocalizationExtensions.GetFormat(
+                    "providers.test.ws_unreachable",
+                    "Шлюз недоступен: {0}",
+                    probe.Error ?? "unreachable"));
+                if (_d.TriggerAvatarConfused != null) _d.TriggerAvatarConfused();
+                return;
+            }
+
+            bool gated = string.Equals(probe.AuthMode, "oauth", StringComparison.OrdinalIgnoreCase);
+            string ticket = null;
+            if (gated)
+            {
+                var selector = GlobalBackendSelector.Instance;
+                if (selector != null)
+                    ticket = await selector.MintHermesWsTicketAsync(draft.baseUrl);
+                if (!_d.IsBound())
+                    return;
+
+                if (string.IsNullOrEmpty(ticket))
+                {
+                    // Reachable but this client holds no session for it. That is a sign-in
+                    // state, not a transport fault, and saying so is the actionable message.
+                    SetTestRow(false, LocalizationExtensions.Get(
+                        "providers.test.ws_needs_signin",
+                        "Шлюз доступен, но требует входа — нажми «Подключить / Войти»."));
+                    return;
+                }
+            }
+
             string wsUrl = GlobalBackendSelector.BuildHermesWsUrl(draft.baseUrl);
-            if (!string.IsNullOrEmpty(draft.apiKey))
+            if (gated)
+                wsUrl = HermesRemoteAuth.BuildTicketWsUrl(wsUrl, ticket);
+            else if (!string.IsNullOrEmpty(draft.apiKey))
                 wsUrl += (wsUrl.Contains("?") ? "&" : "?") + "token=" + Uri.EscapeDataString(draft.apiKey);
 
             var gateway = new HermesGateway { RequestTimeoutMs = 8000 };
@@ -2003,20 +2066,48 @@ namespace NeonCompanion.Runtime.UI.UITK
             _profileRow.AddToClassList("rail__profile");
             _profileRow.style.display = DisplayStyle.None;
 
+            var head = new VisualElement();
+            head.AddToClassList("rail__profile-head");
+
             var label = new Label(LocalizationExtensions.Get("providers.profile.label", "Профиль Hermes"));
             label.AddToClassList("rail__profile-label");
-            _profileRow.Add(label);
+            head.Add(label);
 
-            _profilePicker = new NeonDropdown();
-            _profilePicker.name = "rail-hermes-profile-picker";
-            _profilePicker.AddToClassList("input");
-            _profilePicker.AddToClassList("rail__profile-picker");
-            _profilePicker.RegisterCallback<ChangeEvent<string>>(OnHermesProfileSelected);
-            _profileRow.Add(_profilePicker);
+            _profileCount = new Label(string.Empty);
+            _profileCount.AddToClassList("rail__profile-count");
+            head.Add(_profileCount);
+            _profileRow.Add(head);
+
+            // Icon strip. Scrollbars stay hidden: the rail is ~208px wide, so overflow is
+            // reached by dragging with LMB (OnProfileStripPointer*) or the wheel, not by a
+            // scrollbar that would eat a third of the row height.
+            _profileStrip = new ScrollView(ScrollViewMode.Horizontal);
+            _profileStrip.name = "rail-hermes-profile-strip";
+            _profileStrip.AddToClassList("rail__profile-strip");
+            _profileStrip.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            _profileStrip.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            _profileStrip.contentContainer.style.flexDirection = FlexDirection.Row;
+            _profileStrip.RegisterCallback<PointerDownEvent>(OnProfileStripPointerDown, TrickleDown.TrickleDown);
+            _profileStrip.RegisterCallback<PointerMoveEvent>(OnProfileStripPointerMove);
+            _profileStrip.RegisterCallback<PointerUpEvent>(OnProfileStripPointerUp);
+            _profileStrip.RegisterCallback<PointerCaptureOutEvent>(OnProfileStripPointerCaptureOut);
+            _profileStrip.RegisterCallback<WheelEvent>(OnProfileStripWheel);
+            _profileRow.Add(_profileStrip);
+
+            // One caption line under the strip: icons alone cannot say which profile is which.
+            // Name and model share the row so this block costs three lines total, not six.
+            var caption = new VisualElement();
+            caption.AddToClassList("rail__profile-caption");
 
             _profileStatus = new Label(string.Empty);
             _profileStatus.AddToClassList("rail__profile-status");
-            _profileRow.Add(_profileStatus);
+            caption.Add(_profileStatus);
+
+            _profileMeta = new Label(string.Empty);
+            _profileMeta.AddToClassList("rail__profile-meta");
+            _profileMeta.style.display = DisplayStyle.None;
+            caption.Add(_profileMeta);
+            _profileRow.Add(caption);
 
             VisualElement parent = footer.parent;
             int idx = parent.IndexOf(footer);
@@ -2038,16 +2129,29 @@ namespace NeonCompanion.Runtime.UI.UITK
                 && selector.CurrentMode == BackendMode.Hermes
                 && ChatService.IsHermesProvider(chat != null ? chat.CurrentProvider : null);
 
+            // Transport events used to be hooked only when the provider editor was built, so a
+            // start that never opened Providers never learned the socket came up. This runs on
+            // every provider-header update and the selector exists by then.
+            HookGatewayAuthEvents();
+
             EnsureProfileSelector();
             if (_profileRow == null)
                 return;
 
             SetDisplay(_profileRow, hermes ? DisplayStyle.Flex : DisplayStyle.None);
+            // For Hermes the rail's model line is folded into the profile caption below the
+            // chips — two model lines under one provider was the bulk of the clutter.
+            SetDisplay(_d.RailProviderModel, hermes ? DisplayStyle.None : DisplayStyle.Flex);
             if (!hermes)
             {
                 _profilesLoadedForEndpoint = null;
                 return;
             }
+
+            // Covers the other half of the startup race: the socket may already be up by the
+            // time this UI binds, so the Connected event has been and gone.
+            if (selector.SessionManager != null && selector.SessionManager.IsConnected)
+                NoteTransportConnected();
 
             string endpoint = selector.HermesRestUrl ?? string.Empty;
             if (string.IsNullOrWhiteSpace(endpoint))
@@ -2061,7 +2165,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (!force && string.Equals(_profilesLoadedForEndpoint, endpoint, StringComparison.Ordinal))
             {
-                SyncProfilePickerValue();
+                SyncProfileSelection();
                 return;
             }
 
@@ -2112,21 +2216,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
             }
 
-            _profileNameByLabel.Clear();
-            var labels = new List<string>();
-            for (int i = 0; i < _hermesProfiles.Count; i++)
-            {
-                HermesProfile profile = _hermesProfiles[i];
-                string label = profile.is_default
-                    ? LocalizationExtensions.GetFormat("providers.profile.default_label", "{0} · по умолчанию", profile.name)
-                    : profile.name;
-                // Two profiles cannot share a name on the gateway, so labels stay unique.
-                _profileNameByLabel[label] = profile.name;
-                labels.Add(label);
-            }
-
-            if (_profilePicker != null)
-                _profilePicker.choices = labels;
+            RebuildProfileChips();
 
             if (_hermesProfiles.Count == 0)
             {
@@ -2134,37 +2224,202 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            SyncProfilePickerValue();
+            SyncProfileSelection();
+        }
+
+        // ── Chip strip ──────────────────────────────────────────────
+
+        private void RebuildProfileChips()
+        {
+            if (_profileStrip == null)
+                return;
+
+            _profileChipByName.Clear();
+            _profileStrip.Clear();
+            _hoveredProfileName = null;
+
+            if (_profileCount != null)
+            {
+                _profileCount.text = _hermesProfiles.Count > 0
+                    ? _hermesProfiles.Count.ToString()
+                    : string.Empty;
+            }
+
+            for (int i = 0; i < _hermesProfiles.Count; i++)
+            {
+                HermesProfile profile = _hermesProfiles[i];
+                string profileName = profile.name;
+
+                var chip = new VisualElement();
+                chip.AddToClassList("rail__profile-chip");
+                chip.userData = profileName;
+
+                var glyph = new Label(BuildProfileGlyph(profileName));
+                glyph.AddToClassList("rail__profile-chip-glyph");
+                // The chip itself must stay the pointer target so press/drag bookkeeping
+                // does not have to walk out of the label.
+                glyph.pickingMode = PickingMode.Ignore;
+                chip.Add(glyph);
+
+                if (profile.is_default)
+                {
+                    var mark = new VisualElement();
+                    mark.AddToClassList("rail__profile-chip-default");
+                    mark.pickingMode = PickingMode.Ignore;
+                    chip.Add(mark);
+                }
+
+                string hoverName = profileName;
+                chip.RegisterCallback<PointerEnterEvent>(_ => OnProfileChipHover(hoverName));
+                chip.RegisterCallback<PointerLeaveEvent>(_ => OnProfileChipHover(null));
+
+                _profileChipByName[profileName] = chip;
+                _profileStrip.Add(chip);
+            }
         }
 
         /// <summary>
-        /// Reflect the active profile in the picker. With no explicit selection the gateway uses
+        /// Reflect the active profile on the strip. With no explicit selection the gateway uses
         /// its default profile, so that one is shown (display only — no switch is triggered).
         /// </summary>
-        private void SyncProfilePickerValue()
+        private void SyncProfileSelection()
         {
-            if (_profilePicker == null)
-                return;
-
             var selector = GlobalBackendSelector.Instance;
             string active = selector != null ? selector.ActiveHermesProfile : null;
             if (string.IsNullOrEmpty(active))
                 active = DefaultHermesProfileName();
 
-            string label = LabelForProfileName(active);
-            _syncingProfilePicker = true;
-            try
+            VisualElement activeChip = null;
+            foreach (var pair in _profileChipByName)
             {
-                _profilePicker.SetValueWithoutNotify(label ?? string.Empty);
-            }
-            finally
-            {
-                _syncingProfilePicker = false;
+                bool isActive = string.Equals(pair.Key, active, StringComparison.Ordinal);
+                ApplyProfileChipStyle(pair.Value, pair.Key, isActive);
+                if (isActive)
+                    activeChip = pair.Value;
             }
 
-            SetProfileStatus(string.IsNullOrEmpty(active)
-                ? string.Empty
-                : LocalizationExtensions.GetFormat("providers.profile.active", "Активный: {0}", active));
+            // A pointer resting on a chip keeps that chip described — a background refresh
+            // must not yank the caption back to the active profile under the user's cursor.
+            ShowProfileCaption(string.IsNullOrEmpty(_hoveredProfileName) ? active : _hoveredProfileName);
+
+            // A freshly switched profile may sit past the right edge of the strip.
+            if (activeChip != null && _profileStrip != null)
+            {
+                VisualElement target = activeChip;
+                _profileStrip.schedule.Execute(() =>
+                {
+                    if (_profileStrip != null && target.panel != null)
+                        _profileStrip.ScrollTo(target);
+                }).ExecuteLater(0);
+            }
+        }
+
+        private void ApplyProfileChipStyle(VisualElement chip, string profileName, bool isActive)
+        {
+            if (chip == null)
+                return;
+
+            chip.EnableInClassList("rail__profile-chip--active", isActive);
+
+            // Hue is per-profile data, so it has to be inline; the ring, size and radius stay in
+            // USS. Active is a filled chip with dark text against dimmed, washed-out siblings —
+            // a tinted 1px border alone was invisible and nobody could tell what was selected.
+            Color hue = ProfileChipColor(profileName);
+            if (isActive)
+            {
+                chip.style.backgroundColor = new StyleColor(hue);
+                chip.style.color = new StyleColor(ReadableOn(hue));
+            }
+            else
+            {
+                chip.style.backgroundColor = new StyleColor(new Color(hue.r, hue.g, hue.b, 0.14f));
+                chip.style.color = new StyleColor(new Color(hue.r, hue.g, hue.b, 0.75f));
+            }
+        }
+
+        // Text colour with enough contrast on a filled chip. Perceptual weights, not a flat
+        // average — the yellows/greens in the palette need dark text, the blues/violets light.
+        private static Color ReadableOn(Color background)
+        {
+            float luminance = 0.299f * background.r + 0.587f * background.g + 0.114f * background.b;
+            return luminance > 0.62f ? new Color(0.05f, 0.05f, 0.07f) : Color.white;
+        }
+
+        /// <summary>
+        /// Paint a chip as active before the switch has actually happened. The round trip drops
+        /// the chat and reloads sessions, so without this the click looks ignored for a second.
+        /// A failure path calls <see cref="SyncProfileSelection"/> and the truth comes back.
+        /// </summary>
+        private void MarkProfilePending(string profileName)
+        {
+            foreach (var pair in _profileChipByName)
+                ApplyProfileChipStyle(pair.Value, pair.Key, string.Equals(pair.Key, profileName, StringComparison.Ordinal));
+        }
+
+        private void OnProfileChipHover(string profileName)
+        {
+            _hoveredProfileName = profileName;
+            if (_profileSwitchBusy)
+                return;
+
+            string shown = profileName;
+            if (string.IsNullOrEmpty(shown))
+            {
+                var selector = GlobalBackendSelector.Instance;
+                shown = selector != null ? selector.ActiveHermesProfile : null;
+                if (string.IsNullOrEmpty(shown))
+                    shown = DefaultHermesProfileName();
+            }
+            ShowProfileCaption(shown);
+        }
+
+        /// <summary>
+        /// Spell out a profile under the strip as "name · model". The default profile is marked
+        /// by the dot on its chip, not by a word here — the row has no space for one.
+        /// </summary>
+        private void ShowProfileCaption(string profileName)
+        {
+            if (string.IsNullOrEmpty(profileName))
+            {
+                SetProfileStatus(string.Empty);
+                return;
+            }
+
+            SetProfileStatus(profileName);
+
+            // For the profile in use, the session's model is the truth; the profile's own model
+            // field is only its default and may have been overridden. A hovered other profile
+            // has no session, so its configured model is all there is to preview.
+            HermesProfile profile = FindProfile(profileName);
+            string model = profile != null ? profile.model : null;
+            if (IsActiveProfile(profileName))
+            {
+                var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+                string sessionModel = chat != null ? chat.CurrentSessionModel : null;
+                if (!string.IsNullOrWhiteSpace(sessionModel))
+                    model = sessionModel;
+            }
+
+            SetProfileMeta(model);
+        }
+
+        private bool IsActiveProfile(string profileName)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            string active = selector != null ? selector.ActiveHermesProfile : null;
+            if (string.IsNullOrEmpty(active))
+                active = DefaultHermesProfileName();
+            return string.Equals(profileName, active, StringComparison.Ordinal);
+        }
+
+        private HermesProfile FindProfile(string profileName)
+        {
+            for (int i = 0; i < _hermesProfiles.Count; i++)
+            {
+                if (string.Equals(_hermesProfiles[i].name, profileName, StringComparison.Ordinal))
+                    return _hermesProfiles[i];
+            }
+            return null;
         }
 
         private string DefaultHermesProfileName()
@@ -2177,54 +2432,202 @@ namespace NeonCompanion.Runtime.UI.UITK
             return _hermesProfiles.Count > 0 ? _hermesProfiles[0].name : null;
         }
 
-        private string LabelForProfileName(string profileName)
-        {
-            if (string.IsNullOrEmpty(profileName))
-                return string.Empty;
-
-            foreach (var pair in _profileNameByLabel)
-            {
-                if (string.Equals(pair.Value, profileName, StringComparison.Ordinal))
-                    return pair.Key;
-            }
-            return profileName;
-        }
-
         private void SetProfileStatus(string text)
         {
+            // The model line belongs to whatever the caption line currently says, so every
+            // status message (loading / failed / switching) drops it; ShowProfileCaption
+            // puts it back right after.
+            SetProfileMeta(null);
+
             if (_profileStatus == null)
                 return;
             _profileStatus.text = text ?? string.Empty;
             SetDisplay(_profileStatus, string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex);
         }
 
-        private void OnHermesProfileSelected(ChangeEvent<string> evt)
+        private void SetProfileMeta(string text)
         {
-            if (_syncingProfilePicker || _profileSwitchBusy || evt == null)
+            if (_profileMeta == null)
+                return;
+            _profileMeta.text = text ?? string.Empty;
+            SetDisplay(_profileMeta, string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex);
+        }
+
+        private static string BuildProfileGlyph(string profileName)
+        {
+            if (string.IsNullOrEmpty(profileName))
+                return "?";
+
+            for (int i = 0; i < profileName.Length; i++)
+            {
+                if (char.IsLetterOrDigit(profileName[i]))
+                    return char.ToUpperInvariant(profileName[i]).ToString();
+            }
+            return "?";
+        }
+
+        // Deterministic per-name hue so a profile keeps the same colour between sessions.
+        // string.GetHashCode() is not stable across runs, hence the explicit hash.
+        private static readonly Color[] ProfileChipPalette =
+        {
+            new Color(0.98f, 0.55f, 0.24f), // orange
+            new Color(0.45f, 0.62f, 0.98f), // blue
+            new Color(0.70f, 0.52f, 0.98f), // violet
+            new Color(0.36f, 0.82f, 0.62f), // green
+            new Color(0.98f, 0.44f, 0.58f), // pink
+            new Color(0.40f, 0.80f, 0.92f), // cyan
+            new Color(0.93f, 0.78f, 0.36f), // amber
+            new Color(0.62f, 0.72f, 0.44f)  // olive
+        };
+
+        private static Color ProfileChipColor(string profileName)
+        {
+            if (string.IsNullOrEmpty(profileName))
+                return ProfileChipPalette[0];
+
+            int hash = 23;
+            for (int i = 0; i < profileName.Length; i++)
+                hash = unchecked(hash * 31 + profileName[i]);
+
+            int index = (hash & 0x7fffffff) % ProfileChipPalette.Length;
+            return ProfileChipPalette[index];
+        }
+
+        // ── Drag-to-scroll ──────────────────────────────────────────
+        // Chips are plain VisualElements, not Buttons: the strip captures the pointer on
+        // press so a drag scrolls instead of clicking, and only a press that never moved
+        // past the threshold counts as a selection.
+
+        private const float StripDragThreshold = 4f;
+
+        private void OnProfileStripPointerDown(PointerDownEvent evt)
+        {
+            if (evt.button != 0 || _profileStrip == null || _profileSwitchBusy)
                 return;
 
-            string label = evt.newValue;
-            if (string.IsNullOrWhiteSpace(label))
+            _stripPointerId = evt.pointerId;
+            _stripPointerStartX = evt.position.x;
+            _stripStartOffsetX = _profileStrip.scrollOffset.x;
+            _stripDragged = false;
+            _stripPressedProfile = ProfileNameFromTarget(evt.target as VisualElement);
+
+            _profileStrip.CapturePointer(evt.pointerId);
+        }
+
+        private void OnProfileStripPointerMove(PointerMoveEvent evt)
+        {
+            if (_profileStrip == null || evt.pointerId != _stripPointerId)
+                return;
+            if (!_profileStrip.HasPointerCapture(evt.pointerId))
                 return;
 
-            string profileName;
-            if (!_profileNameByLabel.TryGetValue(label, out profileName))
-                profileName = label;
+            float delta = evt.position.x - _stripPointerStartX;
+            if (!_stripDragged && Mathf.Abs(delta) >= StripDragThreshold)
+                _stripDragged = true;
+            if (!_stripDragged)
+                return;
 
-            _ = SwitchHermesProfileAsync(profileName);
+            Vector2 offset = _profileStrip.scrollOffset;
+            offset.x = Mathf.Clamp(_stripStartOffsetX - delta, 0f, MaxStripScrollX());
+            _profileStrip.scrollOffset = offset;
+            evt.StopPropagation();
+        }
+
+        private void OnProfileStripPointerUp(PointerUpEvent evt)
+        {
+            if (_profileStrip == null || evt.pointerId != _stripPointerId)
+                return;
+
+            bool wasDrag = _stripDragged;
+            string pressed = _stripPressedProfile;
+
+            if (_profileStrip.HasPointerCapture(evt.pointerId))
+                _profileStrip.ReleasePointer(evt.pointerId);
+            ResetStripDrag();
+
+            if (wasDrag)
+            {
+                // Enter/leave never reached the chips while the strip held the capture, so
+                // the hover caption is stale by now — fall back to the active profile.
+                OnProfileChipHover(null);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(pressed) || _profileSwitchBusy)
+                return;
+
+            if (IsActiveProfile(pressed))
+                return;
+
+            MarkProfilePending(pressed);
+            _ = SwitchHermesProfileAsync(pressed);
+        }
+
+        private void OnProfileStripPointerCaptureOut(PointerCaptureOutEvent evt)
+        {
+            ResetStripDrag();
+        }
+
+        private void OnProfileStripWheel(WheelEvent evt)
+        {
+            if (_profileStrip == null)
+                return;
+
+            float max = MaxStripScrollX();
+            if (max <= 0f)
+                return;
+
+            Vector2 offset = _profileStrip.scrollOffset;
+            offset.x = Mathf.Clamp(offset.x + evt.delta.y * 18f, 0f, max);
+            _profileStrip.scrollOffset = offset;
+            evt.StopPropagation();
+        }
+
+        private void ResetStripDrag()
+        {
+            _stripPointerId = -1;
+            _stripDragged = false;
+            _stripPressedProfile = null;
+        }
+
+        private float MaxStripScrollX()
+        {
+            if (_profileStrip == null)
+                return 0f;
+            float content = _profileStrip.contentContainer.layout.width;
+            float viewport = _profileStrip.contentViewport.layout.width;
+            if (float.IsNaN(content) || float.IsNaN(viewport))
+                return 0f;
+            return Mathf.Max(0f, content - viewport);
+        }
+
+        private string ProfileNameFromTarget(VisualElement target)
+        {
+            VisualElement el = target;
+            while (el != null && el != _profileStrip)
+            {
+                if (el.ClassListContains("rail__profile-chip"))
+                    return el.userData as string;
+                el = el.parent;
+            }
+            return null;
         }
 
         private async Task SwitchHermesProfileAsync(string profileName)
         {
             _profileSwitchBusy = true;
+            // The strip greys out while the switch is in flight — dropping the chat context
+            // twice in a row because of an impatient second click is not recoverable.
+            if (_profileStrip != null)
+                _profileStrip.SetEnabled(false);
             try
             {
                 var chat = await _d.GetChatServiceAsync();
                 if (chat == null || !_d.IsBound())
                     return;
 
-                SetProfileStatus(LocalizationExtensions.Get(
-                    "providers.profile.switching", "Переключаем профиль…"));
+                SetProfileStatus(LocalizationExtensions.GetFormat(
+                    "providers.profile.switching_to", "Переключаем на {0}…", profileName));
 
                 await chat.SwitchHermesProfileAsync(profileName);
                 if (!_d.IsBound())
@@ -2244,18 +2647,24 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (!_d.IsBound())
                     return;
 
-                SyncProfilePickerValue();
+                SyncProfileSelection();
             }
             catch (Exception ex)
             {
                 if (_d.IsBound())
+                {
+                    // Undo the optimistic chip so the strip stops claiming a profile we are not on.
+                    SyncProfileSelection();
                     SetProfileStatus(LocalizationExtensions.Get(
                         "providers.profile.switch_failed", "Не удалось переключить профиль."));
+                }
                 NeonLogger.LogError(ex.ToString());
             }
             finally
             {
                 _profileSwitchBusy = false;
+                if (_profileStrip != null)
+                    _profileStrip.SetEnabled(true);
             }
         }
 
@@ -2438,6 +2847,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _apiKeyLabelOpenAi = _apiKeyFieldLabel.text;
             }
 
+            // Field roots that are meaningless over the Hermes WS transport (see
+            // ApplyHermesGatewayLayout). Resolved here because the UXML shape is stable.
+            _modelFieldRoot = _d.EditModelPreset != null ? _d.EditModelPreset.parent : null;
+            _samplingRowRoot = _d.EditTemperature != null && _d.EditTemperature.parent != null
+                ? _d.EditTemperature.parent.parent
+                : null;
+
             _gatewayFieldsBuilt = true;
             _gatewaySection = new VisualElement();
             _gatewaySection.name = "edit-gateway-section";
@@ -2530,6 +2946,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Hermes primary path hides the API-key field; token lives under Advanced.
             SetDisplay(_apiKeyFieldRoot, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
 
+            // Default model, temperature and max-tokens are dead over Hermes: HermesSessionManager
+            // sends none of them — the gateway profile owns the model and the sampling. Showing
+            // them invited people to configure settings that do nothing.
+            SetDisplay(_modelFieldRoot, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
+            SetDisplay(_samplingRowRoot, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
+            // Only force it shut for Hermes — for OpenAI the preset logic owns this wrap.
+            if (isHermes)
+                SetDisplay(_d.EditModelCustomWrap, DisplayStyle.None);
+
             if (_gatewayBaseUrlLabel != null)
             {
                 _gatewayBaseUrlLabel.text = isHermes
@@ -2609,9 +3034,42 @@ namespace NeonCompanion.Runtime.UI.UITK
             _gatewayEventsHooked = false;
         }
 
+        /// <summary>
+        /// The transport reaching Connected is the only signal that profile-scoped REST calls
+        /// and the session list will actually answer. Startup connects in the background, so
+        /// without reloading here the rail stays empty until the user pokes something.
+        /// </summary>
         private void OnGatewayConnectionStateChanged(TransportState state)
         {
             RefreshGatewayStatus();
+
+            if (state != TransportState.Connected)
+            {
+                _lastTransportState = state;
+                return;
+            }
+            if (_d.IsBound == null || !_d.IsBound())
+                return;
+
+            if (NoteTransportConnected())
+                RefreshHermesProfileSelector(true);
+        }
+
+        /// <summary>
+        /// Record that the transport is up and, on the rising edge, reload the session list.
+        /// Called both from the state event and from <see cref="RefreshHermesProfileSelector"/>,
+        /// because a startup connect can finish before the UI ever subscribes — in that case no
+        /// event is coming and the rail would sit empty forever. Returns true on the edge only.
+        /// </summary>
+        private bool NoteTransportConnected()
+        {
+            if (_lastTransportState == TransportState.Connected)
+                return false;
+
+            _lastTransportState = TransportState.Connected;
+            if (_d.LoadSessionsAsync != null)
+                _ = _d.LoadSessionsAsync();
+            return true;
         }
 
         private void OnGatewaySelectorError(string message)

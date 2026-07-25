@@ -250,7 +250,17 @@ namespace NeonCompanion.Runtime.Core
                 chatService.SetActiveProviderWithoutSession(activeProvider);
 
                 if (desiredMode == BackendMode.Hermes)
+                {
+                    // Restores the endpoint AND the persisted cookie session for it.
                     backendSelector.ConfigureHermesEndpoint(activeProvider.baseUrl, activeProvider.apiKey);
+
+                    // Nothing used to drive the socket on startup, so a restored session sat
+                    // unused until the user opened Providers and pressed Connect by hand — and
+                    // until then no profiles and no sessions could load. Fire the connect off
+                    // without awaiting: a slow or dead gateway must not hold up the UI, which
+                    // picks profiles/sessions up from the transport's Connected event.
+                    _ = backendSelector.ConnectHermes();
+                }
 
                 startupSettings.backendMode = desiredMode == BackendMode.Hermes ? "hermes" : "openai";
                 startupSettings.activeProviderId = activeProvider.id;

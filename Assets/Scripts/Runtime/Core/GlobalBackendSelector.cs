@@ -516,6 +516,36 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
+        /// Mint a WS-upgrade ticket for the currently held session so a diagnostic connect (the
+        /// provider editor's Test button) can pass a gated gateway's upgrade check. Returns null
+        /// when there is no session, or when <paramref name="rawBaseUrl"/> names a different
+        /// gateway than the session belongs to — a ticket is only valid where the cookie was
+        /// issued. Never throws; the caller reports "needs sign-in" on null.
+        /// </summary>
+        public async Task<string> MintHermesWsTicketAsync(string rawBaseUrl)
+        {
+            if (_remoteAuth == null || !_remoteAuth.HasSession)
+                return null;
+
+            string requested = HermesRemoteAuth.NormalizeBaseUrl(rawBaseUrl);
+            string current = HermesRemoteAuth.NormalizeBaseUrl(HermesRestUrl);
+            if (string.IsNullOrEmpty(requested) || string.IsNullOrEmpty(current))
+                return null;
+            if (!string.Equals(requested, current, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            try
+            {
+                return await _remoteAuth.MintWsTicketAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[Backend] ws-ticket for connection test failed: " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Sign out of the remote (cookie) session: forget the in-memory cookie AND its persisted
         /// copy, drop the cached password for the active provider, and disconnect the transport.
         /// Token mode is untouched. Safe to call in any mode. Stops the reconnect loop so a

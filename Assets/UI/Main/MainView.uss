@@ -189,8 +189,10 @@
     display: none;
 }
 
+/* Height follows content: in Hermes mode the model line moves into the profile caption,
+   and a fixed 38px would keep reserving room for a line that is no longer there. */
 .rail__footer {
-    height: 38px;
+    min-height: 26px;
     flex-shrink: 0;
     border-top-width: 1px;
     border-top-color: var(--line-1);
@@ -221,29 +223,131 @@
     text-overflow: ellipsis;
 }
 
-/* Hermes backend profile selector (created in C#, sits under the provider indicator) */
+/* Hermes backend profile strip (created in C#, sits under the provider indicator).
+   A dropdown does not work here: the rail is ~208px of usable width, and the row is
+   the last element of the rail, so the popup opened past the bottom of the window.
+   Icon chips + drag-to-scroll instead — see ProvidersController.EnsureProfileSelector. */
 .rail__profile {
     flex-direction: column;
     flex-shrink: 0;
-    padding-top: 8px;
+    padding-top: 6px;
     padding-bottom: 2px;
 }
 
-.rail__profile-label {
-    font-size: 10px;
-    color: var(--text-3);
-    margin-bottom: 4px;
+.rail__profile-head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 3px;
 }
 
-.rail__profile-picker {
-    width: 100%;
+.rail__profile-label {
+    flex-grow: 1;
+    font-size: 9px;
+    color: var(--text-4);
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.rail__profile-count {
+    font-size: 9px;
+    color: var(--text-4);
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+}
+
+.rail__profile-strip {
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.rail__profile-strip:disabled {
+    opacity: 0.45;
+}
+
+.rail__profile-chip {
+    width: 26px;
+    height: 26px;
+    /* Never squeeze: overflow is what the drag-scroll exists for. */
+    flex-shrink: 0;
+    margin-right: 5px;
+    border-radius: var(--r-md);
+    /* Border width is constant so the active ring cannot shift the glyph. */
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+    align-items: center;
+    justify-content: center;
+    opacity: 0.62;
+}
+
+/* Kept apart from the geometry above: Unity drops a whole rule block when one
+   property in it is invalid, and the chips must not lose their size over a
+   transition tweak. */
+.rail__profile-chip {
+    transition-property: border-color, scale;
+    transition-duration: 120ms, 120ms;
+}
+
+.rail__profile-chip:hover {
+    border-color: var(--line-3);
+    opacity: 0.85;
+}
+
+/* The active profile: full opacity, bright ring, filled background (set inline from the
+   profile's hue). The previous 1px translucent ring was invisible on a dark rail. */
+.rail__profile-chip--active {
+    border-color: var(--accent-text);
+    opacity: 1;
+}
+
+/* Separate block for the same reason as the transition above — the ring is what actually
+   marks the active profile and must survive on its own. */
+.rail__profile-chip--active {
+    scale: 1.08 1.08;
+}
+
+/* Colour comes from the chip (inline, per profile) — `color` is inherited in USS. */
+.rail__profile-chip-glyph {
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.rail__profile-chip-default {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--text-0);
+}
+
+/* Name and model share one row — this block used to cost six lines in the rail. */
+.rail__profile-caption {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 5px;
 }
 
 .rail__profile-status {
+    font-size: 11px;
+    color: var(--text-1);
+    flex-shrink: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* Profile names are short ids, model names are not — the model yields the space. */
+.rail__profile-meta {
+    flex-shrink: 1;
     font-size: 10px;
     color: var(--text-3);
-    white-space: normal;
-    margin-top: 4px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    margin-left: 5px;
 }
 
 .rail__footer-model {
