@@ -138,6 +138,44 @@ namespace NeonCompanion.Runtime.Core
                 && string.Equals(provider.authMode, "oauth", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Point the remote auth at the secure-store slot for the active OAuth provider+endpoint and,
+        /// when <paramref name="restore"/> is set, load a previously persisted session cookie so a
+        /// restart resumes without a fresh browser sign-in. Detaches persistence for token-mode /
+        /// non-Hermes providers, so their cookies are never stored.
+        ///
+        /// Called from ConfigureHermesEndpoint (which every connect path runs first, including the
+        /// startup restore in AppBootstrap), so the restored session reports Authenticated/HasSession
+        /// before the first ConnectHermes.
+        /// </summary>
+        private void SyncRemoteSessionPersistence(bool restore)
+        {
+            if (_remoteAuth == null)
+                return;
+
+            var provider = _activeProviderResolver != null ? _activeProviderResolver() : null;
+
+            // Restoring is for OAuth providers only — token mode must never read or write a cookie.
+            // Binding for a sign-out (restore == false) is allowed even after the provider was
+            // switched to token mode, so its stored session is deleted instead of left orphaned.
+            bool eligible = _secretStore != null
+                && IsHermesProviderConfig(provider)
+                && (IsOAuthProvider(provider) || !restore);
+            if (!eligible)
+            {
+                _remoteAuth.ConfigureSessionPersistence(null, null);
+                return;
+            }
+
+            // Key on provider id + endpoint so two Hermes providers (or one provider re-pointed at a
+            // different host) never read each other's session.
+            string secretKey = HermesRemoteAuth.BuildSessionSecretKey(provider.id, HermesRestUrl);
+            _remoteAuth.ConfigureSessionPersistence(_secretStore, secretKey);
+
+            if (restore && !_remoteAuth.HasSession && _remoteAuth.TryRestoreSession())
+                NeonLogger.Log("[Backend] Restored persisted Hermes session for " + provider.displayName);
+        }
+
         // === Reconnect ===
 
         private int _reconnectAttempt;
@@ -402,7 +440,8 @@ namespace NeonCompanion.Runtime.Core
 
         /// <summary>
         /// Adopt a session cookie obtained from automatic browser OAuth
-        /// (<see cref="HermesBrowserLoginAsync"/> / CDP capture). Not persisted.
+        /// (<see cref="HermesBrowserLoginAsync"/> / CDP capture). Stored in the secure secret store
+        /// for the active OAuth provider+endpoint so it survives a restart.
         /// Follow with ConnectHermes / ReconnectHermes.
         /// </summary>
         public void SetHermesSessionCookie(string cookie)
@@ -413,7 +452,7 @@ namespace NeonCompanion.Runtime.Core
         /// <summary>
         /// Desktop-equivalent browser OAuth: open gateway /login in a dedicated Chromium/Edge
         /// window, wait until session cookies appear (CDP cookie jar poll, mirrors
-        /// openOauthLoginWindow), adopt the cookie, mint ws-ticket via reconnect.
+        /// openOauthLoginWindow), adopt + securely persist the cookie, mint ws-ticket via reconnect.
         /// Returns true when signed in and reconnect was attempted.
         /// </summary>
         public async Task<bool> HermesBrowserLoginAsync(string baseUrl = null)
@@ -477,15 +516,18 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
-        /// Sign out of the remote (cookie) session: forget the in-memory cookie, drop the cached
-        /// password for the active provider, and disconnect the transport. Token mode is untouched.
-        /// Safe to call in any mode. Stops the reconnect loop so a deliberate sign-out does not
-        /// immediately reconnect.
+        /// Sign out of the remote (cookie) session: forget the in-memory cookie AND its persisted
+        /// copy, drop the cached password for the active provider, and disconnect the transport.
+        /// Token mode is untouched. Safe to call in any mode. Stops the reconnect loop so a
+        /// deliberate sign-out does not immediately reconnect.
         /// </summary>
         public async Task ClearHermesRemoteSession()
         {
             StopReconnect();
 
+            // Bind (without restoring) first so Clear() deletes the stored session even when this
+            // sign-out is the first thing that touches persistence for the active provider.
+            SyncRemoteSessionPersistence(false);
             _remoteAuth?.Clear();
 
             var activeProvider = _activeProviderResolver != null ? _activeProviderResolver() : null;
@@ -551,6 +593,10 @@ namespace NeonCompanion.Runtime.Core
 
             if (apiKey != null)
                 SetToken(apiKey);
+
+            // The endpoint identity is part of the session secret key, so (re)bind persistence and
+            // pick up a stored session for this provider+endpoint.
+            SyncRemoteSessionPersistence(true);
         }
 
         /// <summary>
@@ -680,6 +726,10 @@ namespace NeonCompanion.Runtime.Core
             RestClient = new HermesRestClient(HermesRestUrl, HermesToken, _remoteAuth);
             // Keep the selected profile across a transport rebuild (mode toggle / re-setup).
             RestClient.ActiveProfile = ActiveHermesProfile;
+
+            // A fresh HermesRemoteAuth starts with no cookie; adopt the persisted one for the active
+            // provider (when there is one already) so the first connect needs no sign-in.
+            SyncRemoteSessionPersistence(true);
         }
 
         private void CleanupHermes()

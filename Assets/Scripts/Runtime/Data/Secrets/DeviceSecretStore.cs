@@ -120,7 +120,19 @@ namespace NeonCompanion.Runtime.Data.Secrets
         public void DeleteSecretsExcept(HashSet<string> retainedIds)
         {
             var collection = LoadCollection();
-            collection.items.RemoveAll(secret => retainedIds == null || !retainedIds.Contains(secret.id));
+            collection.items.RemoveAll(secret =>
+            {
+                if (secret == null)
+                    return true;
+
+                // App-scoped secrets (Hermes token / cached password / persisted session cookie)
+                // are not owned by the provider list — pruning them here would sign the user out
+                // of the gateway every time any provider is saved.
+                if (SecretIds.IsAppScoped(secret.id))
+                    return false;
+
+                return retainedIds == null || !retainedIds.Contains(secret.id);
+            });
             SaveCollection(collection);
         }
 

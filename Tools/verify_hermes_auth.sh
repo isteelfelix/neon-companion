@@ -404,6 +404,187 @@ sys.exit(0 if ok else 1)
 PY
 [ $? -eq 0 ] || FAIL=1
 
+echo "== [6] Session persistence across restarts (secure store only) =="
+AUTH="Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs"
+SEL="Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs"
+REST="Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.cs"
+
+# Persistence API present on the auth object.
+grep -q 'ConfigureSessionPersistence' "$AUTH" \
+  && pass "ConfigureSessionPersistence hook" || fail "ConfigureSessionPersistence missing"
+grep -q 'TryRestoreSession' "$AUTH" \
+  && pass "TryRestoreSession present" || fail "TryRestoreSession missing"
+grep -q 'BuildSessionSecretKey' "$AUTH" \
+  && pass "endpoint-scoped secret key helper" || fail "BuildSessionSecretKey missing"
+grep -q 'ISecretStore' "$AUTH" \
+  && pass "persists via ISecretStore abstraction" || fail "ISecretStore not used for session"
+
+# Restore must set Authenticated/HasSession so ConnectHermes needs no fresh sign-in.
+if sed -n '/public bool TryRestoreSession/,/^        }/p' "$AUTH" | grep -q 'HermesAuthState.Authenticated'; then
+  pass "restored session reports Authenticated"; else fail "TryRestoreSession does not set Authenticated"; fi
+
+# Sign-out AND rejected-session paths must delete the stored copy.
+if sed -n '/public void Clear()/,/^        }/p' "$AUTH" | grep -q 'ForgetPersistedSession'; then
+  pass "Clear() deletes persisted session"; else fail "Clear() does not delete persisted session"; fi
+if sed -n '/public void MarkReauthRequired/,/^        }/p' "$AUTH" | grep -q 'ForgetPersistedSession'; then
+  pass "MarkReauthRequired deletes persisted session"; else fail "401/403 path keeps persisted session"; fi
+
+# Refresh semantics: rotating access/refresh cookies are captured and re-persisted.
+grep -q 'AdoptRefreshedCookies' "$AUTH" \
+  && pass "AdoptRefreshedCookies present" || fail "AdoptRefreshedCookies missing"
+grep -q 'MergeCookieHeaders' "$AUTH" \
+  && pass "cookie merge helper present" || fail "MergeCookieHeaders missing"
+grep -q 'AdoptRefreshedCookies(request.GetResponseHeader("Set-Cookie"))' "$REST" \
+  && pass "REST adopts refreshed Set-Cookie" || fail "REST ignores refreshed Set-Cookie"
+
+# Wiring: bound + restored before the first connect; sign-out binds before clearing.
+if sed -n '/public void ConfigureHermesEndpoint/,/^        }/p' "$SEL" | grep -q 'SyncRemoteSessionPersistence(true)'; then
+  pass "endpoint config restores session before connect"; else fail "ConfigureHermesEndpoint does not restore session"; fi
+if sed -n '/public async Task ClearHermesRemoteSession/,/^        }/p' "$SEL" | grep -q 'SyncRemoteSessionPersistence(false)'; then
+  pass "sign-out binds persistence before Clear"; else fail "sign-out may orphan the stored session"; fi
+if sed -n '/private void SyncRemoteSessionPersistence/,/^        }/p' "$SEL" | grep -q 'BuildSessionSecretKey(provider.id, HermesRestUrl)'; then
+  pass "secret key scoped to provider id + endpoint"; else fail "session key not provider/endpoint scoped"; fi
+if sed -n '/private void SyncRemoteSessionPersistence/,/^        }/p' "$SEL" | grep -q 'ConfigureSessionPersistence(null, null)'; then
+  pass "token-mode / non-Hermes providers get no cookie persistence"; else fail "persistence not detached for token mode"; fi
+
+# The stored session must survive provider-list rewrites (SaveAllAsync prunes secrets).
+STORE="Assets/Scripts/Runtime/Data/Secrets/DeviceSecretStore.cs"
+grep -q 'SecretIds.AppScopedPrefix + "session_"' "$AUTH" \
+  && pass "session key uses the app-scoped secret namespace" || fail "session key outside app-scoped namespace"
+if sed -n '/public void DeleteSecretsExcept/,/^        }/p' "$STORE" | grep -q 'SecretIds.IsAppScoped'; then
+  pass "provider-list prune keeps app-scoped secrets"; else fail "provider save would prune the stored session"; fi
+
+# No plaintext leaks: no PlayerPrefs, no settings JSON field, no cookie/key in logs or URLs.
+# (comment lines are stripped — the docs mention PlayerPrefs as a non-goal)
+if grep -hn 'PlayerPrefs' "$AUTH" "$SEL" "$REST" | grep -vE '^[0-9]+:\s*(//|\*)' >/dev/null 2>&1; then
+  fail "PlayerPrefs used for Hermes auth state"; else pass "no PlayerPrefs"; fi
+if grep -nE '(cookie|Cookie|session_at|session_rt)' Assets/Scripts/Runtime/Data/Models/AppSettings.cs >/dev/null 2>&1; then
+  fail "cookie field added to AppSettings JSON"; else pass "no cookie in AppSettings"; fi
+if grep -nE '(Debug\.Log[A-Za-z]*|NeonLogger\.Log[A-Za-z]*)\([^)]*(CookieHeader|_cookieHeader|_sessionSecretKey|secretKey)' "$AUTH" "$SEL" "$REST" >/dev/null 2>&1; then
+  fail "cookie or secret key may be logged"; else pass "cookie/secret key not logged"; fi
+if grep -nE '(\?|&)(cookie|session)=' "$AUTH" "$SEL" "$REST" >/dev/null 2>&1; then
+  fail "session material in a URL query"; else pass "no session material in URLs"; fi
+# Tickets stay single-use: never handed to the secret store.
+if grep -nE 'SetSecret\([^)]*[Tt]icket|ticket[^)]*SetSecret' "$AUTH" "$SEL" "$REST" >/dev/null 2>&1; then
+  fail "ws-ticket appears to be persisted"; else pass "ws-ticket never persisted"; fi
+
+echo "== [7] Persistence pure helpers (key derivation + cookie merge) =="
+python3 - <<'PY'
+import hashlib, re, sys
+
+ok = True
+def check(desc, got, want):
+    global ok
+    if got == want: print(f"  PASS: {desc}")
+    else: ok = False; print(f"  FAIL: {desc}  got={got!r} want={want!r}")
+
+NAMES = [
+ "__Host-hermes_session_at","__Secure-hermes_session_at","hermes_session_at",
+ "__Host-hermes_session_rt","__Secure-hermes_session_rt","hermes_session_rt",
+ "__Host-hermes_session_provider","__Secure-hermes_session_provider","hermes_session_provider",
+]
+
+def strip_prefix(name):
+    for p in ("__Host-", "__Secure-"):
+        if name.startswith(p):
+            return name[len(p):]
+    return name
+
+# mirrors HermesRemoteAuth.ExtractSessionCookies
+def extract(header):
+    built = ""
+    for name in NAMES:
+        m = re.search(r"(?:^|[,;\s])" + re.escape(name) + r"=([^;,\s]+)", header or "")
+        if not m: continue
+        base = strip_prefix(name)
+        if re.search(r"(?:^|[;\s])(?:__Host-|__Secure-)?" + re.escape(base) + r"=", built):
+            continue
+        seg = name + "=" + m.group(1)
+        built = seg if not built else built + "; " + seg
+    return built or None
+
+# mirrors HermesRemoteAuth.NormalizeBaseUrl
+def normalize_base_url(raw):
+    if raw is None or raw.strip() == "":
+        return None
+    return raw.strip().rstrip("/") or None
+
+# mirrors HermesRemoteAuth.BuildSessionSecretKey
+def build_session_secret_key(provider_id, raw_base_url):
+    normalized = normalize_base_url(raw_base_url)
+    identity = (provider_id or "").strip() + "|" + (normalized.lower() if normalized else "")
+    return "hermes_session_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
+
+# mirrors HermesRemoteAuth.MergeCookieHeaders
+def parse_pairs(header):
+    names, values = [], []
+    for part in (header or "").split(";"):
+        part = part.strip()
+        if not part: continue
+        eq = part.find("=")
+        if eq <= 0 or eq == len(part) - 1: continue
+        names.append(part[:eq].strip()); values.append(part[eq+1:].strip())
+    return names, values
+
+def merge_cookie_headers(existing, incoming_header):
+    incoming = extract(incoming_header)
+    if not incoming: return existing
+    if not existing: return incoming
+    names, values = parse_pairs(existing)
+    fresh_names, fresh_values = parse_pairs(incoming)
+    for fn, fv in zip(fresh_names, fresh_values):
+        base = strip_prefix(fn)
+        idx = next((j for j, n in enumerate(names) if strip_prefix(n) == base), -1)
+        if idx >= 0:
+            names[idx], values[idx] = fn, fv
+        else:
+            names.append(fn); values.append(fv)
+    return "; ".join(f"{n}={v}" for n, v in zip(names, values))
+
+# --- key derivation: stable, scoped, non-colliding, opaque ---
+k1 = build_session_secret_key("prov-1", "https://gateway.example")
+check("key shape (prefix + 32 hex)", bool(re.fullmatch(r"hermes_session_[0-9a-f]{32}", k1)), True)
+check("key stable across calls", build_session_secret_key("prov-1", "https://gateway.example"), k1)
+check("trailing slash normalized", build_session_secret_key("prov-1", "https://gateway.example/"), k1)
+check("host case normalized", build_session_secret_key("prov-1", "https://Gateway.Example"), k1)
+check("whitespace normalized", build_session_secret_key(" prov-1 ", "  https://gateway.example  "), k1)
+check("different provider id -> different key",
+      build_session_secret_key("prov-2", "https://gateway.example") != k1, True)
+check("different host -> different key",
+      build_session_secret_key("prov-1", "https://other.example") != k1, True)
+check("different scheme -> different key",
+      build_session_secret_key("prov-1", "http://gateway.example") != k1, True)
+check("host not readable in key", "gateway.example" in k1, False)
+check("empty identity still keyed", bool(re.fullmatch(r"hermes_session_[0-9a-f]{32}", build_session_secret_key(None, None))), True)
+
+# --- persisted bundle survives a round trip through extraction (restore path) ---
+stored = "hermes_session_at=at.tok-1; hermes_session_rt=rt.tok-2; hermes_session_provider=nous"
+check("restore round-trip", extract(stored), stored)
+check("restore rejects junk payload", extract("garbage-not-a-cookie"), None)
+check("restore rejects empty payload", extract(""), None)
+
+# --- refresh merge: rotated values replace in place, untouched ones are kept ---
+check("rotated access+refresh replace in place",
+      merge_cookie_headers(stored,
+          "hermes_session_at=at.NEW; Path=/; HttpOnly; Secure, hermes_session_rt=rt.NEW; Path=/; HttpOnly"),
+      "hermes_session_at=at.NEW; hermes_session_rt=rt.NEW; hermes_session_provider=nous")
+check("partial refresh keeps unmentioned cookies",
+      merge_cookie_headers(stored, "hermes_session_rt=rt.ONLY; Path=/"),
+      "hermes_session_at=at.tok-1; hermes_session_rt=rt.ONLY; hermes_session_provider=nous")
+check("prefixed variant replaces bare form (not appended)",
+      merge_cookie_headers("hermes_session_at=OLD", "__Host-hermes_session_at=NEW; Secure; HttpOnly"),
+      "__Host-hermes_session_at=NEW")
+check("new cookie appended",
+      merge_cookie_headers("hermes_session_at=A", "hermes_session_rt=R; Path=/"),
+      "hermes_session_at=A; hermes_session_rt=R")
+check("no session cookies in response -> unchanged",
+      merge_cookie_headers(stored, "csrftoken=xyz; Path=/"), stored)
+check("empty Set-Cookie -> unchanged", merge_cookie_headers(stored, ""), stored)
+
+sys.exit(0 if ok else 1)
+PY
+[ $? -eq 0 ] || FAIL=1
+
 echo
 if [ "$FAIL" -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "CHECKS FAILED"; fi
 exit $FAIL

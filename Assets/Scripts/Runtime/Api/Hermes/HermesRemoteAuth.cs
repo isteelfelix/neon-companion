@@ -19,16 +19,23 @@
 // public GET /api/status reports auth_required; when gated, GET /api/auth/providers
 // lists providers (supports_password) for the sign-in path.
 //
-// The session cookie lives in memory only. Tickets are single-use and MUST NOT be
-// persisted (they are minted fresh per connect). Passwords are never logged.
+// The session cookie is held in memory and — when a secret store is attached via
+// ConfigureSessionPersistence — mirrored into the platform secure store (DPAPI / Android
+// Keystore / device-obfuscation fallback) under an endpoint-scoped key, so a Companion
+// restart resumes the session instead of forcing a fresh browser sign-in. Every state
+// transition writes through: adopt/refresh saves, Clear/MarkReauthRequired deletes.
+// Tickets are single-use and MUST NOT be persisted (they are minted fresh per connect).
+// Passwords are never logged; neither is the cookie or its secret key.
 //
 // C# 9 (Unity 6) compatible: no switch expressions, no target-typed new,
 // no `is not`, no tuple deconstruction. HTTP via UnityWebRequest.
 
 using System;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Data.Secrets;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -147,10 +154,19 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private const int TicketTimeoutSeconds = 15;
         private const int ProbeTimeoutSeconds = 8;
 
+        // Secret-store id prefix for a persisted session cookie. The suffix is a hash of the
+        // provider identity + endpoint so multiple gateways/providers never collide. Built on the
+        // app-scoped prefix so a provider-list rewrite does not prune the session (SecretIds).
+        private const string SessionSecretKeyPrefix = SecretIds.AppScopedPrefix + "session_";
+
         private string _baseUrl;
-        // In-memory only. Never written to disk / secret store — a session cookie is a bearer
-        // credential and tickets minted from it are single-use.
+        // The live session cookie. Mirrored to _sessionStore (secure storage) when persistence
+        // is configured; never written to settings JSON, PlayerPrefs, URLs or logs.
         private string _cookieHeader;
+
+        // Secure persistence target. Null => memory-only (token mode / no store attached).
+        private ISecretStore _sessionStore;
+        private string _sessionSecretKey;
 
         public HermesAuthState State { get; private set; } = HermesAuthState.NoSession;
         public string LastAuthError { get; private set; }
@@ -178,9 +194,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
         }
 
         /// <summary>
-        /// Adopt a session cookie obtained out-of-band (e.g. copied from a browser after a full
-        /// OAuth sign-in). Accepts either a raw Set-Cookie string or a plain "name=value; name=value"
-        /// Cookie header; session cookies are extracted either way. Not persisted.
+        /// Adopt a session cookie obtained out-of-band (e.g. captured from the browser login window
+        /// after a full OAuth sign-in). Accepts either a raw Set-Cookie string or a plain
+        /// "name=value; name=value" Cookie header; session cookies are extracted either way.
+        /// Written through to secure storage when persistence is configured, replacing any session
+        /// previously stored for that endpoint.
         /// </summary>
         public void SetSessionCookie(string cookie)
         {
@@ -192,27 +210,148 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 State = HermesAuthState.Authenticated;
                 LastAuthError = null;
+                // A new sign-in replaces whatever was stored for this endpoint.
+                PersistSession();
             }
         }
 
-        /// <summary>Forget the session entirely (logout / mode switch).</summary>
+        /// <summary>Forget the session entirely (logout / mode switch), including the stored copy.</summary>
         public void Clear()
         {
             _cookieHeader = null;
             State = HermesAuthState.NoSession;
             LastAuthError = null;
+            ForgetPersistedSession();
         }
 
         /// <summary>
         /// Drop the cookie and flag that the user must sign in again. Called on any 401 from a
         /// cookie-authenticated call. <paramref name="reason"/> is a stable key: "no_cookie",
-        /// "expired", or "invalid_credentials".
+        /// "expired", or "invalid_credentials". The persisted copy is deleted too — a rejected
+        /// session must not be restored on the next start (that would loop the reauth prompt).
         /// </summary>
         public void MarkReauthRequired(string reason)
         {
             _cookieHeader = null;
             State = HermesAuthState.ReauthRequired;
             LastAuthError = reason;
+            ForgetPersistedSession();
+        }
+
+        // === Secure persistence ===
+
+        /// <summary>
+        /// Attach (or detach) secure persistence for the session cookie. Pass the app's
+        /// <see cref="ISecretStore"/> and an endpoint-scoped key from
+        /// <see cref="BuildSessionSecretKey"/>; pass nulls to go memory-only (token mode).
+        /// Changing the target does not touch either the live cookie or previously stored data.
+        /// </summary>
+        public void ConfigureSessionPersistence(ISecretStore store, string secretKey)
+        {
+            _sessionStore = !string.IsNullOrEmpty(secretKey) ? store : null;
+            _sessionSecretKey = _sessionStore != null ? secretKey : null;
+        }
+
+        /// <summary>True when a secret store + key are attached.</summary>
+        public bool HasSessionPersistence
+        {
+            get { return _sessionStore != null && !string.IsNullOrEmpty(_sessionSecretKey); }
+        }
+
+        /// <summary>
+        /// Load a previously persisted session cookie into memory (app start). No-op when a
+        /// session is already held or nothing usable is stored. Returns true when a session is
+        /// available afterwards, in which case <see cref="State"/> is Authenticated and
+        /// <see cref="HasSession"/> is true — callers can connect without a fresh sign-in.
+        /// </summary>
+        public bool TryRestoreSession()
+        {
+            if (!string.IsNullOrEmpty(_cookieHeader))
+                return true;
+            if (!HasSessionPersistence)
+                return false;
+
+            string stored = _sessionStore.GetSecret(_sessionSecretKey);
+            string extracted = ExtractSessionCookies(stored);
+            if (string.IsNullOrEmpty(extracted))
+            {
+                // Present but unreadable (rotated device key / corrupt payload) — drop it so we
+                // do not retry a dead value forever. Never log the value itself.
+                if (!string.IsNullOrEmpty(stored))
+                    ForgetPersistedSession();
+                return false;
+            }
+
+            _cookieHeader = extracted;
+            State = HermesAuthState.Authenticated;
+            LastAuthError = null;
+            return true;
+        }
+
+        /// <summary>
+        /// Adopt refreshed session cookies from a response's Set-Cookie header. Hermes rotates the
+        /// refresh cookie (and re-issues the access cookie) when it renews a session, so the stored
+        /// bundle has to follow. No-op without a live session or when nothing changed. Returns true
+        /// when the held cookie was updated.
+        /// </summary>
+        public bool AdoptRefreshedCookies(string setCookieHeader)
+        {
+            if (string.IsNullOrEmpty(_cookieHeader) || string.IsNullOrEmpty(setCookieHeader))
+                return false;
+
+            string merged = MergeCookieHeaders(_cookieHeader, setCookieHeader);
+            if (string.IsNullOrEmpty(merged) || string.Equals(merged, _cookieHeader, StringComparison.Ordinal))
+                return false;
+
+            _cookieHeader = merged;
+            State = HermesAuthState.Authenticated;
+            LastAuthError = null;
+            PersistSession();
+            return true;
+        }
+
+        /// <summary>
+        /// Stable secret-store id for one provider+endpoint pair. The identity is hashed so the
+        /// gateway host never lands in the secrets file as readable text and the id stays a short
+        /// fixed-length token. Same provider id + same normalized base URL => same key.
+        /// </summary>
+        public static string BuildSessionSecretKey(string providerId, string rawBaseUrl)
+        {
+            string normalized = NormalizeBaseUrl(rawBaseUrl);
+            string identity = (providerId ?? "").Trim() + "|" +
+                              (normalized != null ? normalized.ToLowerInvariant() : "");
+
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(identity));
+                var sb = new StringBuilder(SessionSecretKeyPrefix, SessionSecretKeyPrefix.Length + 32);
+                // 16 bytes of SHA-256 is plenty to keep distinct providers/hosts apart.
+                for (int i = 0; i < 16; i++)
+                    sb.Append(hash[i].ToString("x2"));
+                return sb.ToString();
+            }
+        }
+
+        // Mirror the live cookie into secure storage (or delete it when there is none).
+        private void PersistSession()
+        {
+            if (!HasSessionPersistence)
+                return;
+
+            if (string.IsNullOrEmpty(_cookieHeader))
+            {
+                _sessionStore.DeleteSecret(_sessionSecretKey);
+                return;
+            }
+
+            _sessionStore.SetSecret(_sessionSecretKey, _cookieHeader);
+        }
+
+        private void ForgetPersistedSession()
+        {
+            if (!HasSessionPersistence)
+                return;
+            _sessionStore.DeleteSecret(_sessionSecretKey);
         }
 
         // === Public probe (Desktop probeRemoteAuthMode) ===
@@ -354,6 +493,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 _cookieHeader = extracted;
                 State = HermesAuthState.Authenticated;
                 LastAuthError = null;
+                PersistSession();
             }
         }
 
@@ -403,6 +543,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
                 if (request.result != UnityWebRequest.Result.Success || code < 200 || code >= 300)
                     throw new Exception("Hermes ws-ticket request failed (" + code + "): " + SafeError(request));
+
+                // Minting is the first cookie-authenticated call of every connect/reconnect, so it
+                // is where the server most often hands back a renewed access + rotated refresh
+                // cookie. Keep the stored bundle in step. The ticket itself is never stored.
+                AdoptRefreshedCookies(request.GetResponseHeader("Set-Cookie"));
 
                 string ticket = ParseTicket(request.downloadHandler != null ? request.downloadHandler.text : "");
                 if (string.IsNullOrEmpty(ticket))
@@ -565,6 +710,88 @@ namespace NeonCompanion.Runtime.Api.Hermes
             }
 
             return sb.Length > 0 ? sb.ToString() : null;
+        }
+
+        /// <summary>
+        /// Merge session cookies from a Set-Cookie (or Cookie) header into an existing Cookie
+        /// header, keyed on the cookie base name so a rotated value replaces the old one in place
+        /// (and a prefixed variant replaces its bare form rather than being sent alongside it).
+        /// Cookies the response does not mention are kept — a refresh may re-issue only some of
+        /// them. Returns the existing header unchanged when the incoming header has no session
+        /// cookies.
+        /// </summary>
+        public static string MergeCookieHeaders(string existingCookieHeader, string incomingHeader)
+        {
+            string incoming = ExtractSessionCookies(incomingHeader);
+            if (string.IsNullOrEmpty(incoming))
+                return existingCookieHeader;
+            if (string.IsNullOrEmpty(existingCookieHeader))
+                return incoming;
+
+            var names = new System.Collections.Generic.List<string>();
+            var values = new System.Collections.Generic.List<string>();
+            ParseCookiePairs(existingCookieHeader, names, values);
+
+            var freshNames = new System.Collections.Generic.List<string>();
+            var freshValues = new System.Collections.Generic.List<string>();
+            ParseCookiePairs(incoming, freshNames, freshValues);
+
+            for (int i = 0; i < freshNames.Count; i++)
+            {
+                string freshBase = StripCookiePrefix(freshNames[i]);
+                int existingIndex = -1;
+                for (int j = 0; j < names.Count; j++)
+                {
+                    if (string.Equals(StripCookiePrefix(names[j]), freshBase, StringComparison.Ordinal))
+                    {
+                        existingIndex = j;
+                        break;
+                    }
+                }
+
+                if (existingIndex >= 0)
+                {
+                    names[existingIndex] = freshNames[i];
+                    values[existingIndex] = freshValues[i];
+                }
+                else
+                {
+                    names.Add(freshNames[i]);
+                    values.Add(freshValues[i]);
+                }
+            }
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (sb.Length > 0)
+                    sb.Append("; ");
+                sb.Append(names[i]).Append('=').Append(values[i]);
+            }
+            return sb.ToString();
+        }
+
+        // Split a "name=value; name=value" Cookie header into parallel name/value lists.
+        private static void ParseCookiePairs(
+            string cookieHeader,
+            System.Collections.Generic.List<string> names,
+            System.Collections.Generic.List<string> values)
+        {
+            if (string.IsNullOrEmpty(cookieHeader))
+                return;
+
+            string[] parts = cookieHeader.Split(';');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string part = parts[i].Trim();
+                if (part.Length == 0)
+                    continue;
+                int eq = part.IndexOf('=');
+                if (eq <= 0 || eq == part.Length - 1)
+                    continue;
+                names.Add(part.Substring(0, eq).Trim());
+                values.Add(part.Substring(eq + 1).Trim());
+            }
         }
 
         // True if a cookie whose base (name without __Host-/__Secure- prefix) matches the base of

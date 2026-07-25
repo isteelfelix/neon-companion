@@ -457,6 +457,12 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     throw new Exception(error);
                 }
 
+                // The gateway may renew the session on any authenticated call (rotating refresh
+                // cookie). Adopt + re-persist the new bundle so the next start still has a valid
+                // session. Values are never logged.
+                if (IsOAuthMode)
+                    _remoteAuth.AdoptRefreshedCookies(request.GetResponseHeader("Set-Cookie"));
+
                 return request.downloadHandler != null ? request.downloadHandler.text : "";
             }
         }
