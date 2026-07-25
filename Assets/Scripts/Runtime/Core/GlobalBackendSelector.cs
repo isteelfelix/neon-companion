@@ -56,6 +56,48 @@ namespace NeonCompanion.Runtime.Core
         public HermesGateway Gateway { get; private set; }
         public HermesSessionManager SessionManager { get; private set; }
 
+        // === Hermes backend profile ===
+
+        /// <summary>
+        /// Active Hermes backend profile (gateway config profile). Backend identity ONLY: it is
+        /// never an avatar profile and never the provider id — a single Hermes provider/gateway
+        /// hosts many profiles, each with its own sessions. Null = the gateway's own default.
+        /// </summary>
+        public string ActiveHermesProfile { get; private set; }
+
+        /// <summary>Raised after the active Hermes profile changed (argument = new profile).</summary>
+        public event Action<string> OnHermesProfileChanged;
+
+        /// <summary>
+        /// Switch the active Hermes profile: every later profile-scoped REST call and the socket
+        /// itself target <paramref name="profileName"/>. The old profile's socket is closed and
+        /// replaced, so no traffic can keep flowing on it. Local chat state is dropped by
+        /// ChatService.SwitchHermesProfileAsync — this method never creates a session.
+        /// </summary>
+        public async Task SwitchHermesProfileAsync(string profileName)
+        {
+            string normalized = NormalizeProfile(profileName);
+            if (string.Equals(ActiveHermesProfile, normalized, StringComparison.Ordinal))
+                return;
+
+            ActiveHermesProfile = normalized;
+            if (RestClient != null)
+                RestClient.ActiveProfile = normalized;
+
+            NeonLogger.Log("[Backend] Hermes profile set to " + (normalized ?? "<gateway default>"));
+            OnHermesProfileChanged?.Invoke(normalized);
+
+            // Replace the socket so the WS upgrade carries ?profile=<new> — an old profile's
+            // socket must not survive the switch.
+            if (CurrentMode == BackendMode.Hermes)
+                await ReconnectHermes();
+        }
+
+        private static string NormalizeProfile(string profileName)
+        {
+            return string.IsNullOrWhiteSpace(profileName) ? null : profileName.Trim();
+        }
+
         // === Remote (OAuth/basic-auth) auth ===
 
         // Desktop-style cookie session + ws-ticket auth. Non-null once SetupHermes ran; only
@@ -242,11 +284,11 @@ namespace NeonCompanion.Runtime.Core
                     // Desktop-style: ensure a cookie session, mint a single-use ws-ticket, then
                     // connect the WS with ?ticket=. The ticket is never stored.
                     string ticket = await EnsureOAuthTicketAsync(activeProvider);
-                    await SessionManager.Connect(HermesWsUrl, null, ticket);
+                    await SessionManager.Connect(HermesWsUrl, null, ticket, ActiveHermesProfile);
                 }
                 else
                 {
-                    await SessionManager.Connect(HermesWsUrl, HermesToken);
+                    await SessionManager.Connect(HermesWsUrl, HermesToken, null, ActiveHermesProfile);
                 }
                 LastConnectionError = null;
                 _reconnectAttempt = 0;
@@ -636,6 +678,8 @@ namespace NeonCompanion.Runtime.Core
 
             _remoteAuth = new HermesRemoteAuth(HermesRestUrl);
             RestClient = new HermesRestClient(HermesRestUrl, HermesToken, _remoteAuth);
+            // Keep the selected profile across a transport rebuild (mode toggle / re-setup).
+            RestClient.ActiveProfile = ActiveHermesProfile;
         }
 
         private void CleanupHermes()

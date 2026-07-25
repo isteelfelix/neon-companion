@@ -646,6 +646,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 ProviderModel        = _root.Q<Label>("provider-model"),
                 RailProviderName     = _root.Q<Label>("rail-provider-name"),
                 RailProviderModel    = _root.Q<Label>("rail-provider-model"),
+                RailFooter           = _root.Q<VisualElement>(className: "rail__footer"),
                 Root                 = _root,
                 GetAppAsync          = GetAppAsync,
                 GetChatServiceAsync  = GetChatServiceAsync,

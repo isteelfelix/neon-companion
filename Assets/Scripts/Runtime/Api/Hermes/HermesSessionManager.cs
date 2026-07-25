@@ -399,10 +399,15 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         public Task Connect(string url, string token = null)
         {
-            return Connect(url, token, null);
+            return Connect(url, token, null, null);
         }
 
-        public async Task Connect(string url, string token, string ticket)
+        /// <summary>
+        /// Open the gateway socket. <paramref name="profile"/> is the Hermes backend profile the
+        /// whole connection is scoped to: the gateway reads ?profile=&lt;name&gt; off the URL, so
+        /// session.create and every later RPC on this socket run inside that profile.
+        /// </summary>
+        public async Task Connect(string url, string token, string ticket, string profile = null)
         {
             string wsUrl = url;
             // OAuth remote mode: a single-use ws-ticket authenticates the upgrade (?ticket=).
@@ -415,6 +420,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 string separator = wsUrl.Contains("?") ? "&" : "?";
                 wsUrl = wsUrl + separator + "token=" + Uri.EscapeDataString(token);
+            }
+
+            // Profile rides alongside the auth parameter (both modes) — never replaces it.
+            if (!string.IsNullOrEmpty(profile))
+            {
+                string profileSeparator = wsUrl.Contains("?") ? "&" : "?";
+                wsUrl = wsUrl + profileSeparator + "profile=" + Uri.EscapeDataString(profile);
             }
 
             await _gateway.Connect(wsUrl);

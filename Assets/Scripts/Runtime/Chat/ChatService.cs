@@ -37,6 +37,11 @@ namespace NeonCompanion.Runtime.Chat
         private ProviderConfig _currentProvider;
         private string _lastProviderChangeHash;
 
+        // Hermes backend profile the open session belongs to (backend identity only — never an
+        // avatar profile or a provider id). Captured when the session is created/opened so a
+        // profile switch can tell whether the open chat still belongs to the selected profile.
+        private string _currentSessionHermesProfile;
+
         // Hermes streaming state — multiplexed per display/persisted session id so several
         // sessions can stream in parallel. Each session owns its ChatViewModel/messages and
         // streaming buffers, independent of which session the UI currently views (the foreground).
@@ -486,6 +491,7 @@ namespace NeonCompanion.Runtime.Chat
                 // Live re-attach: reuse the in-memory stream (it may still be generating).
                 _currentChatViewModel = existing.viewModel;
                 _currentSession = existing.session;
+                _currentSessionHermesProfile = selector != null ? selector.ActiveHermesProfile : null;
                 ApplyGenerationSettings();
             }
             else
@@ -730,6 +736,8 @@ namespace NeonCompanion.Runtime.Chat
 
             var response = await selector.SessionManager.CreateSession();
             string persistentSessionId = GetPersistentHermesSessionId(response);
+            // The socket is profile-scoped, so the new session lives in the active profile.
+            _currentSessionHermesProfile = selector.ActiveHermesProfile;
 
             // Create local session record
             if (_currentProvider == null)
@@ -883,6 +891,8 @@ namespace NeonCompanion.Runtime.Chat
                 messages = new List<ChatMessage>(_currentChatViewModel.Messages),
                 folder = string.Empty
             };
+            // Resumed over the profile-scoped socket — the chat belongs to the active profile.
+            _currentSessionHermesProfile = selector.ActiveHermesProfile;
 
             NeonLogger.Log("Hermes session resumed: " + displaySessionId);
         }
@@ -1140,6 +1150,58 @@ namespace NeonCompanion.Runtime.Chat
             {
                 Debug.LogWarning("[ChatService] Failed to delete Hermes session: " + ex.Message);
             }
+        }
+
+        /// <summary>Hermes backend profile currently selected, or null for the gateway default.</summary>
+        public string ActiveHermesProfile
+        {
+            get
+            {
+                var selector = GlobalBackendSelector.Instance;
+                return selector != null ? selector.ActiveHermesProfile : null;
+            }
+        }
+
+        /// <summary>
+        /// Switch the Hermes backend profile — a FULL context switch. All profile-scoped REST
+        /// traffic and the WebSocket are retargeted at <paramref name="profileName"/>, and the
+        /// open chat is dropped locally when it belongs to another profile (server sessions are
+        /// left untouched: switching back lists and opens them again). No session is created —
+        /// the caller refreshes the session list and shows the existing empty/new-chat state.
+        /// </summary>
+        public async Task SwitchHermesProfileAsync(string profileName)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector == null)
+                return;
+
+            string normalized = string.IsNullOrWhiteSpace(profileName) ? null : profileName.Trim();
+            if (string.Equals(selector.ActiveHermesProfile, normalized, StringComparison.Ordinal))
+                return;
+
+            // Every in-memory stream belongs to the old profile's socket, which is about to be
+            // replaced — drop them (and the open chat) instead of leaving orphaned generations.
+            if (!string.Equals(_currentSessionHermesProfile, normalized, StringComparison.Ordinal))
+                DropHermesSessionStateLocally();
+
+            await selector.SwitchHermesProfileAsync(normalized);
+        }
+
+        /// <summary>
+        /// Forget the open Hermes chat and every per-session stream WITHOUT touching the server:
+        /// no session.close, no delete, no session.create. Used on a profile switch.
+        /// </summary>
+        private void DropHermesSessionStateLocally()
+        {
+            foreach (var kv in _hermesStreams)
+            {
+                ClearStreamPendingState(kv.Value);
+                ClearSessionAttention(kv.Key);
+            }
+            _hermesStreams.Clear();
+
+            ClearCurrentSessionWithoutSaving();
+            _currentSessionHermesProfile = null;
         }
 
         public bool CancelCurrentGeneration()

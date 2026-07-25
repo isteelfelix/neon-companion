@@ -56,6 +56,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Label ProviderModel;
             public Label RailProviderName;
             public Label RailProviderModel;
+            // Rail footer row (lower-left active-provider indicator) — host of the Hermes
+            // backend-profile selector, which is created in C# next to it.
+            public VisualElement RailFooter;
             // Root element for modal overlay
             public VisualElement Root;
             // Services
@@ -140,6 +143,18 @@ namespace NeonCompanion.Runtime.UI.UITK
         private HermesAuthProbeResult _lastProbe;
         private string _probedAuthProvider; // auto-detected; never shown as a user field
 
+        // Hermes backend-profile selector in the rail footer (created lazily in C#).
+        // Hermes-only: profiles are a backend concept, other providers never show this row.
+        private VisualElement _profileRow;
+        private NeonDropdown _profilePicker;
+        private Label _profileStatus;
+        private bool _profileFieldsBuilt;
+        private bool _profileSwitchBusy;
+        private bool _syncingProfilePicker;
+        private string _profilesLoadedForEndpoint;
+        private readonly List<HermesProfile> _hermesProfiles = new List<HermesProfile>();
+        private readonly Dictionary<string, string> _profileNameByLabel = new Dictionary<string, string>();
+
         // Model picker overlay (created lazily)
         private VisualElement _modelPickerOverlay;
         private VisualElement _modelPickerDialog;
@@ -221,6 +236,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.GlobalBackendMode != null)
                 _d.GlobalBackendMode.UnregisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
+
+            if (_profilePicker != null)
+                _profilePicker.UnregisterCallback<ChangeEvent<string>>(OnHermesProfileSelected);
 
             UnhookGatewayAuthEvents();
         }
@@ -1938,6 +1956,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.RailProviderModel != null)
                 _d.RailProviderModel.text = model;
             SyncTopbarModelPicker(model);
+            RefreshHermesProfileSelector();
         }
 
         public void ClearProviderHeader()
@@ -1957,6 +1976,286 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _d.TopbarModelPicker.choices = new List<string>();
                 _d.TopbarModelPicker.SetValueWithoutNotify(empty);
+            }
+            RefreshHermesProfileSelector();
+        }
+
+        // ============================================================
+        // Hermes backend profile selector (rail footer)
+        // ============================================================
+        // Hermes profiles are BACKEND profiles: one gateway hosts several, each with its own
+        // sessions/model/skills. Selecting one is a full context switch (see
+        // ChatService.SwitchHermesProfileAsync). Non-Hermes providers never see this row.
+
+        private void EnsureProfileSelector()
+        {
+            if (_profileFieldsBuilt)
+                return;
+
+            VisualElement footer = _d.RailFooter;
+            if (footer == null || footer.parent == null)
+                return;
+
+            _profileFieldsBuilt = true;
+
+            _profileRow = new VisualElement();
+            _profileRow.name = "rail-hermes-profile";
+            _profileRow.AddToClassList("rail__profile");
+            _profileRow.style.display = DisplayStyle.None;
+
+            var label = new Label(LocalizationExtensions.Get("providers.profile.label", "Профиль Hermes"));
+            label.AddToClassList("rail__profile-label");
+            _profileRow.Add(label);
+
+            _profilePicker = new NeonDropdown();
+            _profilePicker.name = "rail-hermes-profile-picker";
+            _profilePicker.AddToClassList("input");
+            _profilePicker.AddToClassList("rail__profile-picker");
+            _profilePicker.RegisterCallback<ChangeEvent<string>>(OnHermesProfileSelected);
+            _profileRow.Add(_profilePicker);
+
+            _profileStatus = new Label(string.Empty);
+            _profileStatus.AddToClassList("rail__profile-status");
+            _profileRow.Add(_profileStatus);
+
+            VisualElement parent = footer.parent;
+            int idx = parent.IndexOf(footer);
+            if (idx >= 0)
+                parent.Insert(idx + 1, _profileRow);
+            else
+                parent.Add(_profileRow);
+        }
+
+        /// <summary>
+        /// Show and refresh the backend-profile selector next to the active-provider indicator.
+        /// The list is fetched once per gateway endpoint; pass <paramref name="force"/> to refetch.
+        /// </summary>
+        public void RefreshHermesProfileSelector(bool force = false)
+        {
+            var selector = GlobalBackendSelector.Instance;
+            var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
+            bool hermes = selector != null
+                && selector.CurrentMode == BackendMode.Hermes
+                && ChatService.IsHermesProvider(chat != null ? chat.CurrentProvider : null);
+
+            EnsureProfileSelector();
+            if (_profileRow == null)
+                return;
+
+            SetDisplay(_profileRow, hermes ? DisplayStyle.Flex : DisplayStyle.None);
+            if (!hermes)
+            {
+                _profilesLoadedForEndpoint = null;
+                return;
+            }
+
+            string endpoint = selector.HermesRestUrl ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(endpoint))
+            {
+                // No gateway configured yet — retry once the provider supplies its URL.
+                _profilesLoadedForEndpoint = null;
+                SetProfileStatus(LocalizationExtensions.Get(
+                    "providers.profile.unavailable", "Гейтвей недоступен."));
+                return;
+            }
+
+            if (!force && string.Equals(_profilesLoadedForEndpoint, endpoint, StringComparison.Ordinal))
+            {
+                SyncProfilePickerValue();
+                return;
+            }
+
+            _profilesLoadedForEndpoint = endpoint;
+            _ = LoadHermesProfilesAsync();
+        }
+
+        private async Task LoadHermesProfilesAsync()
+        {
+            var selector = GlobalBackendSelector.Instance;
+            if (selector == null || selector.RestClient == null)
+            {
+                SetProfileStatus(LocalizationExtensions.Get(
+                    "providers.profile.unavailable", "Гейтвей недоступен."));
+                return;
+            }
+
+            SetProfileStatus(LocalizationExtensions.Get("providers.profile.loading", "Загрузка профилей…"));
+
+            HermesProfilesResponse response;
+            try
+            {
+                response = await selector.RestClient.GetProfiles();
+            }
+            catch (Exception ex)
+            {
+                // Refetch on the next refresh — the gateway may just not be reachable yet.
+                _profilesLoadedForEndpoint = null;
+                if (!_d.IsBound())
+                    return;
+                SetProfileStatus(LocalizationExtensions.Get(
+                    "providers.profile.failed", "Не удалось загрузить профили."));
+                NeonLogger.LogWarning("[Providers] Hermes profiles fetch failed: " + ex.Message);
+                return;
+            }
+
+            if (!_d.IsBound())
+                return;
+
+            _hermesProfiles.Clear();
+            if (response != null && response.profiles != null)
+            {
+                for (int i = 0; i < response.profiles.Length; i++)
+                {
+                    HermesProfile profile = response.profiles[i];
+                    if (profile != null && !string.IsNullOrWhiteSpace(profile.name))
+                        _hermesProfiles.Add(profile);
+                }
+            }
+
+            _profileNameByLabel.Clear();
+            var labels = new List<string>();
+            for (int i = 0; i < _hermesProfiles.Count; i++)
+            {
+                HermesProfile profile = _hermesProfiles[i];
+                string label = profile.is_default
+                    ? LocalizationExtensions.GetFormat("providers.profile.default_label", "{0} · по умолчанию", profile.name)
+                    : profile.name;
+                // Two profiles cannot share a name on the gateway, so labels stay unique.
+                _profileNameByLabel[label] = profile.name;
+                labels.Add(label);
+            }
+
+            if (_profilePicker != null)
+                _profilePicker.choices = labels;
+
+            if (_hermesProfiles.Count == 0)
+            {
+                SetProfileStatus(LocalizationExtensions.Get("providers.profile.empty", "Профилей нет."));
+                return;
+            }
+
+            SyncProfilePickerValue();
+        }
+
+        /// <summary>
+        /// Reflect the active profile in the picker. With no explicit selection the gateway uses
+        /// its default profile, so that one is shown (display only — no switch is triggered).
+        /// </summary>
+        private void SyncProfilePickerValue()
+        {
+            if (_profilePicker == null)
+                return;
+
+            var selector = GlobalBackendSelector.Instance;
+            string active = selector != null ? selector.ActiveHermesProfile : null;
+            if (string.IsNullOrEmpty(active))
+                active = DefaultHermesProfileName();
+
+            string label = LabelForProfileName(active);
+            _syncingProfilePicker = true;
+            try
+            {
+                _profilePicker.SetValueWithoutNotify(label ?? string.Empty);
+            }
+            finally
+            {
+                _syncingProfilePicker = false;
+            }
+
+            SetProfileStatus(string.IsNullOrEmpty(active)
+                ? string.Empty
+                : LocalizationExtensions.GetFormat("providers.profile.active", "Активный: {0}", active));
+        }
+
+        private string DefaultHermesProfileName()
+        {
+            for (int i = 0; i < _hermesProfiles.Count; i++)
+            {
+                if (_hermesProfiles[i].is_default)
+                    return _hermesProfiles[i].name;
+            }
+            return _hermesProfiles.Count > 0 ? _hermesProfiles[0].name : null;
+        }
+
+        private string LabelForProfileName(string profileName)
+        {
+            if (string.IsNullOrEmpty(profileName))
+                return string.Empty;
+
+            foreach (var pair in _profileNameByLabel)
+            {
+                if (string.Equals(pair.Value, profileName, StringComparison.Ordinal))
+                    return pair.Key;
+            }
+            return profileName;
+        }
+
+        private void SetProfileStatus(string text)
+        {
+            if (_profileStatus == null)
+                return;
+            _profileStatus.text = text ?? string.Empty;
+            SetDisplay(_profileStatus, string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex);
+        }
+
+        private void OnHermesProfileSelected(ChangeEvent<string> evt)
+        {
+            if (_syncingProfilePicker || _profileSwitchBusy || evt == null)
+                return;
+
+            string label = evt.newValue;
+            if (string.IsNullOrWhiteSpace(label))
+                return;
+
+            string profileName;
+            if (!_profileNameByLabel.TryGetValue(label, out profileName))
+                profileName = label;
+
+            _ = SwitchHermesProfileAsync(profileName);
+        }
+
+        private async Task SwitchHermesProfileAsync(string profileName)
+        {
+            _profileSwitchBusy = true;
+            try
+            {
+                var chat = await _d.GetChatServiceAsync();
+                if (chat == null || !_d.IsBound())
+                    return;
+
+                SetProfileStatus(LocalizationExtensions.Get(
+                    "providers.profile.switching", "Переключаем профиль…"));
+
+                await chat.SwitchHermesProfileAsync(profileName);
+                if (!_d.IsBound())
+                    return;
+
+                // Full context switch: the chat that belonged to the old profile was dropped
+                // locally (never deleted, never recreated) — fall back to the empty/new-chat
+                // state and list only the selected profile's sessions.
+                if (_d.SetCurrentSessionId != null)
+                    _d.SetCurrentSessionId(chat.CurrentSessionId ?? string.Empty);
+                if (_d.SetCurrentSessionTitle != null)
+                    _d.SetCurrentSessionTitle(string.Empty);
+                if (_d.RenderMessages != null)
+                    _d.RenderMessages();
+                if (_d.LoadSessionsAsync != null)
+                    await _d.LoadSessionsAsync();
+                if (!_d.IsBound())
+                    return;
+
+                SyncProfilePickerValue();
+            }
+            catch (Exception ex)
+            {
+                if (_d.IsBound())
+                    SetProfileStatus(LocalizationExtensions.Get(
+                        "providers.profile.switch_failed", "Не удалось переключить профиль."));
+                NeonLogger.LogError(ex.ToString());
+            }
+            finally
+            {
+                _profileSwitchBusy = false;
             }
         }
 

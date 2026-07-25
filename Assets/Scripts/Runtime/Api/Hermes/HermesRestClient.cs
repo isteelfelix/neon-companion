@@ -41,6 +41,26 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public int tool_call_count;
     }
 
+    // Hermes backend profile (config profile on the gateway) — NOT a Companion AvatarProfile and
+    // not a provider: one gateway hosts several profiles, each with its own sessions/model/skills.
+    [Serializable]
+    public class HermesProfile
+    {
+        public string name;
+        public bool is_default;
+        public string model;
+        public string provider;
+        public string path;
+        public int skill_count;
+        public bool has_env;
+    }
+
+    [Serializable]
+    public class HermesProfilesResponse
+    {
+        public HermesProfile[] profiles;
+    }
+
     [Serializable]
     public class ModelOptionProvider
     {
@@ -179,6 +199,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
     public class HermesRestClient
     {
+        // Profile list itself is gateway-wide: it must never be scoped to a profile.
+        private const string ProfilesPath = "/api/profiles";
         private const int DefaultRequestTimeoutSeconds = 30;
         private const int StatusRequestTimeoutSeconds = 15;
         private const int StartupRequestTimeoutSeconds = 60;
@@ -189,6 +211,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
         // session cookie instead of a Bearer token, and a 401 flags the session for reauth.
         // Null => legacy token mode (unchanged).
         private HermesRemoteAuth _remoteAuth;
+        // Hermes backend profile every profile-scoped request targets (?profile=<name>).
+        // Null/empty => no profile parameter is sent and the gateway applies its default.
+        private string _activeProfile;
 
         public HermesRestClient(string baseUrl, string token = null, HermesRemoteAuth remoteAuth = null)
         {
@@ -210,6 +235,25 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public void SetRemoteAuth(HermesRemoteAuth remoteAuth)
         {
             _remoteAuth = remoteAuth;
+        }
+
+        /// <summary>
+        /// Hermes backend profile all profile-scoped REST calls target. Backend identity only —
+        /// unrelated to Companion avatar profiles or provider ids. Empty = gateway default.
+        /// Survives <see cref="Configure"/> so an endpoint/token update cannot silently reset it.
+        /// </summary>
+        public string ActiveProfile
+        {
+            get { return _activeProfile; }
+            set { _activeProfile = string.IsNullOrWhiteSpace(value) ? null : value.Trim(); }
+        }
+
+        // === Profiles ===
+
+        // Desktop hermes.ts: listProfiles. Gateway-wide — never scoped to a profile.
+        public async Task<HermesProfilesResponse> GetProfiles()
+        {
+            return await Get<HermesProfilesResponse>(ProfilesPath, StatusRequestTimeoutSeconds);
         }
 
         private bool IsOAuthMode
@@ -355,9 +399,27 @@ namespace NeonCompanion.Runtime.Api.Hermes
             return await SendRaw(method, path, body, timeoutSeconds);
         }
 
+        /// <summary>
+        /// Append the active profile to a profile-scoped path (sessions, status, model, skills,
+        /// toolsets, config, cron…). The profile list is gateway-wide and an explicit caller
+        /// profile (cron jobs) already wins, so both are left untouched.
+        /// </summary>
+        private string ApplyProfile(string path)
+        {
+            if (string.IsNullOrEmpty(_activeProfile) || string.IsNullOrEmpty(path))
+                return path;
+            if (path.StartsWith(ProfilesPath, StringComparison.Ordinal))
+                return path;
+            if (path.IndexOf("profile=", StringComparison.Ordinal) >= 0)
+                return path;
+
+            string separator = path.IndexOf('?') >= 0 ? "&" : "?";
+            return path + separator + "profile=" + EscapeQueryValue(_activeProfile);
+        }
+
         private async Task<string> SendRaw(string method, string path, object body, int timeoutSeconds)
         {
-            string url = _baseUrl + path;
+            string url = _baseUrl + ApplyProfile(path);
             using (UnityWebRequest request = CreateRequest(url, method, body))
             {
                 request.timeout = timeoutSeconds;
