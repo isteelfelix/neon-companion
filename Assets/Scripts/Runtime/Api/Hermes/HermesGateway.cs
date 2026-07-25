@@ -121,6 +121,15 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SessionResume = "session.resume";
         public const string SessionClose = "session.close";
         public const string SessionList = "session.list";
+        // Re-attach an ALREADY-LIVE session to this socket. The gateway stores one transport per
+        // live session, so after a reconnect its events go to the dead socket until something
+        // rebinds it — session.activate is that rebind, and unlike session.resume it neither
+        // rebuilds the agent nor closes the previously focused session.
+        public const string SessionActivate = "session.activate";
+        // In-memory snapshot of the sessions this gateway process still has agents for. Live
+        // status ONLY (Desktop use-background-sync) — the durable history catalog stays REST
+        // /api/sessions?profile=…, which is profile-scoped; active_list is not.
+        public const string SessionActiveList = "session.active_list";
         public const string SessionInterrupt = "session.interrupt";
         public const string SessionSteer = "session.steer";
         public const string PromptSubmit = "prompt.submit";
@@ -220,6 +229,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             SetState(ConnectionState.Connecting);
 
+            // A previous socket that failed/closed WITHOUT Close() (receive-loop error, remote
+            // teardown) leaves its loop running. It reads the _socket FIELD, so once this connect
+            // installs the replacement both loops would consume the new socket and dispatch every
+            // event twice — duplicated deltas/tool rows in the UI. Retire it before swapping.
+            _receiveCts?.Cancel();
+            _receiveCts = null;
+            _receiveLoop = null;
+
             try
             {
                 _socket = new ClientWebSocket();
@@ -253,7 +270,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 SetState(ConnectionState.Open);
 
                 _receiveCts = new CancellationTokenSource();
-                _receiveLoop = ReceiveLoop(_receiveCts.Token);
+                // Bind the loop to THIS socket instance, not the field: a later reconnect swaps
+                // the field, and a loop still reading it would keep pushing events into the UI
+                // on behalf of a socket the app already replaced.
+                _receiveLoop = ReceiveLoop(_socket, _receiveCts.Token);
             }
             catch (Exception ex)
             {
@@ -400,29 +420,36 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         // === Receive Loop ===
 
-        private async Task ReceiveLoop(CancellationToken ct)
+        private async Task ReceiveLoop(ClientWebSocket socket, CancellationToken ct)
         {
             var buffer = new byte[65536];
             var sb = new StringBuilder();
 
             try
             {
-                while (!ct.IsCancellationRequested && _socket?.State == WebSocketState.Open)
+                while (!ct.IsCancellationRequested && socket.State == WebSocketState.Open)
                 {
                     sb.Clear();
                     WebSocketReceiveResult result;
 
                     do
                     {
-                        result = await _socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                        result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            SetState(ConnectionState.Closed);
+                            if (ReferenceEquals(_socket, socket))
+                                SetState(ConnectionState.Closed);
                             return;
                         }
                         sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                     }
                     while (!result.EndOfMessage);
+
+                    // A frame that arrived on a socket this gateway has already replaced belongs
+                    // to a dead connection: dropping it is what keeps a retired socket from
+                    // resolving pending calls or mutating the UI behind the live one.
+                    if (!ReferenceEquals(_socket, socket))
+                        return;
 
                     HandleMessage(sb.ToString());
                 }
@@ -434,12 +461,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
             catch (WebSocketException ex)
             {
                 Debug.LogWarning("[HermesGateway] WebSocket error: " + ex.Message);
-                SetState(ConnectionState.Error);
+                if (ReferenceEquals(_socket, socket))
+                    SetState(ConnectionState.Error);
             }
             catch (Exception ex)
             {
                 Debug.LogError("[HermesGateway] Receive loop error: " + ex.Message);
-                SetState(ConnectionState.Error);
+                if (ReferenceEquals(_socket, socket))
+                    SetState(ConnectionState.Error);
             }
         }
 

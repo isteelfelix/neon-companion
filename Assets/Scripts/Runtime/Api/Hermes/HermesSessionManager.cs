@@ -17,37 +17,90 @@ namespace NeonCompanion.Runtime.Api.Hermes
     [Serializable]
     public class SessionCreateResponse
     {
+        /// <summary>Runtime id — the one prompt.submit/session.* RPCs and stream events use.</summary>
         public string session_id;
+        /// <summary>Persisted DB key. session.create is the only response that names it this way.</summary>
         public string stored_session_id;
-        public SessionInfo info;
+        /// <summary>
+        /// Live runtime state (model/provider/cwd/…) — NOT the stored session row. The gateway
+        /// returns the same shape here as on the session.info event.
+        /// </summary>
+        public SessionRuntimeInfo info;
+        public SessionMessage[] messages;
         public int message_count;
     }
 
     [Serializable]
     public class SessionResumeResponse
     {
+        /// <summary>Runtime id bound by this resume/activate.</summary>
         public string session_id;
-        public string stored_session_id;
+        /// <summary>
+        /// Persisted key the gateway actually bound. session.resume/session.activate report it as
+        /// session_key (never stored_session_id); after auto-compression it is the continuation
+        /// TIP, which differs from the id that was asked for.
+        /// </summary>
+        public string session_key;
+        /// <summary>Id the gateway resolved the request to (tip of the compression chain).</summary>
         public string resumed;
+        /// <summary>Kept for gateways that answer resume with the create-style field name.</summary>
+        public string stored_session_id;
         public SessionMessage[] messages;
         public int message_count;
-        public SessionInfo info;
+        public SessionRuntimeInfo info;
+        /// <summary>True when a turn is still generating on the backend right now.</summary>
+        public bool running;
+        /// <summary>idle | starting | working | waiting.</summary>
+        public string status;
+        public long started_at;
+        /// <summary>The turn in flight when this payload was built (null when idle).</summary>
+        public SessionInflight inflight;
+        /// <summary>A prompt accepted but not yet started (arrives while the session is busy).</summary>
+        public SessionQueued queued;
+    }
+
+    /// <summary>Backend snapshot of the in-flight turn (gateway _inflight_snapshot).</summary>
+    [Serializable]
+    public class SessionInflight
+    {
+        public string user;
+        public string assistant;
+        public bool streaming;
+    }
+
+    /// <summary>Backend snapshot of an accepted-but-not-started prompt (gateway _queued_prompt_snapshot).</summary>
+    [Serializable]
+    public class SessionQueued
+    {
+        public string user;
+    }
+
+    /// <summary>
+    /// One row of session.active_list: a session this gateway process still holds an agent for.
+    /// Live status only — it is NOT profile-scoped and must never stand in for the REST history.
+    /// </summary>
+    [Serializable]
+    public class LiveSessionStatus
+    {
+        /// <summary>Runtime id.</summary>
+        public string id;
+        /// <summary>Persisted key.</summary>
+        public string session_key;
+        /// <summary>idle | starting | working | waiting.</summary>
+        public string status;
+        public bool current;
+        public string model;
+        public string title;
+        public string preview;
+        public int message_count;
+        public double last_active;
+        public double started_at;
     }
 
     [Serializable]
-    public class SessionInfo
+    public class LiveSessionListResponse
     {
-        public string id;
-        public string title;
-        public string model;
-        public bool is_active;
-        public int message_count;
-        public int input_tokens;
-        public int output_tokens;
-        public int tool_call_count;
-        public long started_at;
-        public long last_active;
-        public string preview;
+        public LiveSessionStatus[] sessions;
     }
 
     [Serializable]
@@ -67,6 +120,15 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string cwd;
         public bool? running;
         public UsageStats usage;
+        /// <summary>
+        /// The gateway's LIVE session_key for this runtime id. Auto-compression rotates it (the
+        /// parent conversation ends and a continuation row takes over) while the runtime id stays
+        /// put, so it is the only signal that a chat's persisted key moved.
+        /// </summary>
+        public string stored_session_id;
+        public string title;
+        public string reasoning_effort;
+        public bool? fast;
     }
 
     [Serializable]
@@ -209,6 +271,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
     public class HermesSessionManager : IChatTransport
     {
+        /// <summary>Terminal width shipped on session.create/resume/activate (Desktop sends 96).</summary>
+        private const int SessionCols = 96;
+
+        /// <summary>
+        /// Surface tag persisted as the session's DB `source` (Desktop sends "desktop"). It must
+        /// be a stable explicit value: the gateway only falls back to env-resolved platform
+        /// detection when the field is absent, and REST history does not filter on it.
+        /// </summary>
+        private const string SessionSource = "companion";
+
         private readonly HermesGateway _gateway;
         private readonly HermesClientBridge _clientBridge;
         private bool _disposed;
@@ -218,6 +290,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
         // only drives RuntimeInfo and the foreground-only handlers (clarify/approval/terminal).
         public string ActiveSessionId { get; private set; }
         public string StoredSessionId { get; private set; }
+
+        /// <summary>
+        /// Workspace the foreground session last reported (session.info cwd). A backend path, not
+        /// a device path. New chats are created in it so they open where the user was working,
+        /// which is what Desktop's resolveNewSessionCwd does; null = let the gateway choose.
+        /// </summary>
+        public string LastKnownCwd { get; private set; }
 
         // Per-session generation state, keyed by the display/persisted session id. Runtime ids
         // from Hermes are translated at the transport boundary.
@@ -333,6 +412,61 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 _runtimeByDisplaySession[runtimeSessionId] = runtimeSessionId;
         }
 
+        /// <summary>
+        /// Point a SECOND persisted key at an existing chat. Auto-compression ends a conversation
+        /// and continues it under a new key; the chat keeps its canonical id (its transcript and
+        /// sidebar row), and the rotated key is aliased onto it so later events/resumes that name
+        /// the tip land in the same chat instead of opening a duplicate.
+        /// </summary>
+        private void RememberStoredAlias(string storedSessionId, string displaySessionId)
+        {
+            if (string.IsNullOrEmpty(storedSessionId) || string.IsNullOrEmpty(displaySessionId))
+                return;
+            if (storedSessionId == displaySessionId)
+                return;
+
+            _displayByRuntimeSession[storedSessionId] = displaySessionId;
+
+            string runtime;
+            if (_runtimeByDisplaySession.TryGetValue(displaySessionId, out runtime) && !string.IsNullOrEmpty(runtime))
+                _runtimeByDisplaySession[storedSessionId] = runtime;
+        }
+
+        /// <summary>
+        /// Reconcile a payload that carries BOTH ids (session.info, session.activate,
+        /// session.active_list). Keeps the chat's canonical display id and only re-points the
+        /// runtime id used by prompt.submit — a rotated stored key becomes an alias, never a new
+        /// chat. Returns the display id the pair belongs to.
+        /// </summary>
+        private string ReconcileSessionIds(string runtimeSessionId, string storedSessionId)
+        {
+            bool hasRuntime = !string.IsNullOrEmpty(runtimeSessionId);
+            bool hasStored = !string.IsNullOrEmpty(storedSessionId);
+            if (!hasRuntime && !hasStored)
+                return null;
+
+            // A known runtime id already names its chat; otherwise the stored key does (that is
+            // the reconnect case, where the gateway minted a fresh runtime id while we were away).
+            string display = null;
+            if (hasRuntime && _displayByRuntimeSession.ContainsKey(runtimeSessionId))
+                display = _displayByRuntimeSession[runtimeSessionId];
+            else if (hasStored && _displayByRuntimeSession.ContainsKey(storedSessionId))
+                display = _displayByRuntimeSession[storedSessionId];
+            else if (hasStored && _runtimeByDisplaySession.ContainsKey(storedSessionId))
+                display = storedSessionId;
+            else if (hasRuntime && _runtimeByDisplaySession.ContainsKey(runtimeSessionId))
+                display = runtimeSessionId;
+            else
+                display = hasStored ? storedSessionId : runtimeSessionId;
+
+            if (hasRuntime)
+                RememberSessionIds(runtimeSessionId, display);
+            if (hasStored)
+                RememberStoredAlias(storedSessionId, display);
+
+            return display;
+        }
+
         private void ForgetSessionIds(string sessionId)
         {
             if (string.IsNullOrEmpty(sessionId))
@@ -377,6 +511,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public event Action<string, string> OnError;
         public event Action<TransportState> OnStateChanged;
         public event Action<string> OnRuntimeInfoChanged;
+
+        /// <summary>
+        /// (sid, activate payload) — a session that was STILL RUNNING on the gateway has been
+        /// re-attached after a reconnect. The payload carries the backend's own view of the turn
+        /// in flight (inflight/queued/running), which is authoritative: listeners should reconcile
+        /// their partial bubble with it instead of starting a second one.
+        /// </summary>
+        public event Action<string, SessionResumeResponse> OnSessionRehydrated;
 
         public event Action<TerminalExecuteRequest> OnTerminalExecute;
         public event Action<TerminalReadRequest> OnTerminalReadRequest;
@@ -440,16 +582,53 @@ namespace NeonCompanion.Runtime.Api.Hermes
             await readyTcs.Task;
 
             NeonLogger.Log("[Hermes] Connected and ready");
+
+            // A reconnect keeps the backend's sessions alive but leaves their event transport
+            // bound to the socket that just died. Re-attach the ones this client tracks; failures
+            // (older gateway, nothing live) are non-fatal and must never block the connect.
+            try
+            {
+                await RehydrateActiveSessions();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[Hermes] Active-session rehydration skipped: " + ex.Message);
+            }
         }
 
+        /// <summary>
+        /// Tear down the TRANSPORT only. session.close destroys the backend session (the gateway
+        /// pops it and finalizes its agent), so sending it because a socket is being replaced —
+        /// reconnect, endpoint change, profile switch, mode toggle — would kill a conversation
+        /// that is still generating server-side. Desktop closes a session only on an explicit user
+        /// close/delete, and reattaches everything else with session.activate after reconnect.
+        /// The id maps survive on purpose: they are what <see cref="RehydrateActiveSessions"/>
+        /// rebinds against. Use <see cref="CloseSession"/> for a real close.
+        /// </summary>
         public async Task Disconnect()
         {
-            if (ActiveSessionId != null)
-            {
-                try { await CloseSession(); }
-                catch (Exception ex) { Debug.LogWarning("[Hermes] Close session on disconnect: " + ex.Message); }
-            }
             await _gateway.Close();
+        }
+
+        /// <summary>
+        /// Forget every local session mapping WITHOUT touching the server: no session.close, no
+        /// delete. Used on a Hermes profile switch, where the sessions being left must keep
+        /// running (switching back must list and open them again) but their ids must not be
+        /// reused against the profile being switched to.
+        /// </summary>
+        public void DropLocalSessionState()
+        {
+            _busyBySession.Clear();
+            _awaitingBySession.Clear();
+            _runtimeBySession.Clear();
+            _runtimeByDisplaySession.Clear();
+            _displayByRuntimeSession.Clear();
+            _unscopedStreamSessionId = null;
+            ActiveSessionId = null;
+            StoredSessionId = null;
+            // Workspaces are per-profile: carrying one over would create the next chat in a
+            // directory that belongs to the profile the user just left.
+            LastKnownCwd = null;
         }
 
         // === IChatTransport: Messaging ===
@@ -567,11 +746,41 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public async Task<SessionCreateResponse> CreateSession(
             string cwd = null,
             string title = null,
-            string profile = null)
+            string profile = null,
+            string model = null,
+            string provider = null,
+            string reasoningEffort = null,
+            bool? fast = null)
         {
-            var result = await _gateway.Request<SessionCreateResponse>(
-                RpcMethods.SessionCreate,
-                new { cols = 96, cwd, title, profile = NormalizeProfile(profile) });
+            // Desktop desktopSessionCreateParams. Every optional field is OMITTED rather than sent
+            // empty: the gateway treats presence as intent (a "fast" key pins the service tier,
+            // an absent one inherits the profile; an empty cwd would not be an explicit workspace
+            // choice), so a blanket payload would silently override profile defaults.
+            var payload = new Dictionary<string, object>
+            {
+                { "cols", SessionCols },
+                { "source", SessionSource }
+            };
+            if (!string.IsNullOrWhiteSpace(cwd))
+                payload["cwd"] = cwd.Trim();
+            if (!string.IsNullOrWhiteSpace(title))
+                payload["title"] = title.Trim();
+            string normalizedProfile = NormalizeProfile(profile);
+            if (!string.IsNullOrEmpty(normalizedProfile))
+                payload["profile"] = normalizedProfile;
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                payload["model"] = model.Trim();
+                // provider is only meaningful alongside a model (the gateway resolves it at build).
+                if (!string.IsNullOrWhiteSpace(provider))
+                    payload["provider"] = provider.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(reasoningEffort))
+                payload["reasoning_effort"] = reasoningEffort.Trim();
+            if (fast.HasValue)
+                payload["fast"] = fast.Value;
+
+            var result = await _gateway.Request<SessionCreateResponse>(RpcMethods.SessionCreate, payload);
 
             string displaySessionId = !string.IsNullOrEmpty(result.stored_session_id)
                 ? result.stored_session_id
@@ -581,8 +790,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             ActiveSessionId = displaySessionId;
             StoredSessionId = displaySessionId;
 
-            if (result.info != null)
-                ApplySessionInfo(result.info);
+            ApplyRuntimeInfo(displaySessionId, result.info, null);
 
             NeonLogger.Log("[Hermes] Session created: " + result.session_id);
             return result;
@@ -595,23 +803,216 @@ namespace NeonCompanion.Runtime.Api.Hermes
         /// </summary>
         public async Task<SessionResumeResponse> ResumeSession(string sessionId, string profile = null)
         {
-            var result = await _gateway.Request<SessionResumeResponse>(
-                RpcMethods.SessionResume,
-                new { session_id = sessionId, cols = 96, profile = NormalizeProfile(profile) });
+            var payload = new Dictionary<string, object>
+            {
+                { "session_id", sessionId },
+                { "cols", SessionCols },
+                { "source", SessionSource }
+            };
+            string normalizedProfile = NormalizeProfile(profile);
+            if (!string.IsNullOrEmpty(normalizedProfile))
+                payload["profile"] = normalizedProfile;
 
-            string displaySessionId = !string.IsNullOrEmpty(result.stored_session_id)
-                ? result.stored_session_id
-                : sessionId;
-            RememberSessionIds(result.session_id, displaySessionId);
+            var result = await _gateway.Request<SessionResumeResponse>(RpcMethods.SessionResume, payload);
+
+            string displaySessionId = AdoptResumePayload(sessionId, result);
 
             ActiveSessionId = displaySessionId;
             StoredSessionId = displaySessionId;
 
-            if (result.info != null)
-                ApplySessionInfo(result.info);
-
-            NeonLogger.Log("[Hermes] Session resumed: " + sessionId);
+            NeonLogger.Log("[Hermes] Session resumed: " + sessionId
+                + (displaySessionId == sessionId ? "" : " (chat " + displaySessionId + ")"));
             return result;
+        }
+
+        /// <summary>
+        /// Bind a session.resume / session.activate payload to a chat and return its display id.
+        ///
+        /// The canonical key is the one the caller asked for (the sidebar row / persisted chat) —
+        /// or, when that id is itself an alias of an already-open chat, that chat. The key the
+        /// gateway reports back (session_key, else resumed) may be the post-compression tip; it is
+        /// aliased onto the same chat so events naming it route correctly, while the runtime id
+        /// used by prompt.submit is re-pointed to the freshly bound one.
+        /// </summary>
+        private string AdoptResumePayload(string requestedSessionId, SessionResumeResponse result)
+        {
+            if (result == null)
+                return DisplaySessionIdFor(requestedSessionId);
+
+            string displaySessionId = DisplaySessionIdFor(requestedSessionId);
+            if (string.IsNullOrEmpty(displaySessionId))
+            {
+                displaySessionId = FirstNonEmpty(result.session_key, result.stored_session_id, result.resumed, result.session_id);
+            }
+
+            RememberSessionIds(result.session_id, displaySessionId);
+            RememberStoredAlias(result.session_key, displaySessionId);
+            RememberStoredAlias(result.stored_session_id, displaySessionId);
+            RememberStoredAlias(result.resumed, displaySessionId);
+
+            ApplyRuntimeInfo(displaySessionId, result.info, null);
+
+            // The gateway reports whether a turn is still generating on this session. Trust it:
+            // a resume/activate during a live turn must keep the busy state instead of presenting
+            // an idle chat whose Send button then races the running generation.
+            SetBusy(displaySessionId, result.running);
+            SetAwaiting(displaySessionId, result.running);
+
+            return displaySessionId;
+        }
+
+        /// <summary>
+        /// Re-attach an already-live session to the current socket. Unlike session.resume this
+        /// neither rebuilds the agent nor reloads the transcript — it rebinds the backend's
+        /// per-session event transport to this connection and reports the live turn — and unlike
+        /// session.close it leaves every other session running. Returns null when the gateway
+        /// predates the method or the session is no longer live there.
+        /// </summary>
+        public async Task<SessionResumeResponse> ActivateSession(string sessionId)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                return null;
+
+            string runtimeSid = RuntimeSessionIdFor(sessionId);
+            try
+            {
+                // Bounded well under the 30s default: activate never builds an agent, and it runs
+                // on the connect path, where a hung gateway must not stall the whole reconnect.
+                var result = await _gateway.Request<SessionResumeResponse>(
+                    RpcMethods.SessionActivate,
+                    new { session_id = runtimeSid, cols = SessionCols },
+                    timeoutMs: 10000);
+                if (result == null)
+                    return null;
+
+                AdoptResumePayload(sessionId, result);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                // Missing method (older gateway) and "session not found" (the runtime id died with
+                // the previous backend) are both non-fatal: the caller falls back to a full resume.
+                Debug.LogWarning("[Hermes] session.activate failed for " + runtimeSid + ": " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// The gateway's in-memory snapshot of sessions it still holds agents for. This is LIVE
+        /// STATUS ONLY and is not profile-scoped — the durable, profile-scoped history catalog
+        /// stays REST /api/sessions?profile=…. Returns null when the gateway does not expose the
+        /// method, so callers can leave their current state untouched.
+        /// </summary>
+        public async Task<List<LiveSessionStatus>> ListActiveSessions()
+        {
+            try
+            {
+                // Short timeout: this is an opportunistic read on the connect path (see
+                // ActivateSession) — falling back to "unknown" beats delaying the reconnect.
+                var response = await _gateway.Request<LiveSessionListResponse>(
+                    RpcMethods.SessionActiveList,
+                    new { },
+                    timeoutMs: 5000);
+                if (response == null || response.sessions == null)
+                    return null;
+                return new List<LiveSessionStatus>(response.sessions);
+            }
+            catch (Exception ex)
+            {
+                if (!HermesGateway.IsMissingRpcMethod(ex))
+                    Debug.LogWarning("[Hermes] session.active_list failed: " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// After a reconnect, restore the live state of sessions this client already knows and
+        /// re-point the backend's event transport at the new socket.
+        ///
+        /// Events emitted while the socket was down cannot be replayed, so a running turn would
+        /// otherwise stay dark until the user clicked the chat. Only sessions already mapped
+        /// locally are touched: session.active_list also reports sessions belonging to other
+        /// clients and other profiles, and adopting those would fabricate chats. No transcript is
+        /// synthesized — session.activate reports the in-flight turn, and the caller decides how
+        /// to reconcile it with what is already on screen.
+        /// </summary>
+        public async Task<List<SessionResumeResponse>> RehydrateActiveSessions()
+        {
+            var rehydrated = new List<SessionResumeResponse>();
+            List<LiveSessionStatus> live = await ListActiveSessions();
+            // null = the gateway does not expose the method. Leave every mapping as it is; the
+            // stale-runtime-id retry on prompt.submit remains the fallback, exactly as before.
+            if (live == null)
+                return rehydrated;
+
+            var stillLive = new HashSet<string>();
+
+            for (int i = 0; i < live.Count; i++)
+            {
+                LiveSessionStatus item = live[i];
+                if (item == null)
+                    continue;
+
+                // "Known" means this client has a chat bound to that persisted key or runtime id.
+                // A fresh session belonging to somebody else's window is skipped entirely.
+                bool known = (!string.IsNullOrEmpty(item.session_key)
+                        && (_runtimeByDisplaySession.ContainsKey(item.session_key)
+                            || _displayByRuntimeSession.ContainsKey(item.session_key)))
+                    || (!string.IsNullOrEmpty(item.id) && _displayByRuntimeSession.ContainsKey(item.id));
+                if (!known)
+                    continue;
+
+                string sid = ReconcileSessionIds(item.id, item.session_key);
+                if (string.IsNullOrEmpty(sid))
+                    continue;
+                stillLive.Add(sid);
+
+                // Rebind the backend's transport for this session to the new socket. Without it
+                // the gateway keeps publishing the live turn into the dead connection.
+                SessionResumeResponse activated = await ActivateSession(sid);
+
+                // Applied AFTER the activate: its own `running` flag cannot express a session
+                // parked on an approval/clarify prompt, which the live status reports as
+                // "waiting" — and that still has to read as busy so the composer stays gated.
+                bool waiting = string.Equals(item.status, "waiting", StringComparison.OrdinalIgnoreCase);
+                bool working = waiting || string.Equals(item.status, "working", StringComparison.OrdinalIgnoreCase);
+                SetBusy(sid, working);
+                SetAwaiting(sid, working);
+
+                SessionRuntimeInfo runtime;
+                if (_runtimeBySession.TryGetValue(sid, out runtime) && runtime != null)
+                    runtime.running = working;
+                OnRuntimeInfoChanged?.Invoke(sid);
+
+                if (activated != null)
+                {
+                    rehydrated.Add(activated);
+                    OnSessionRehydrated?.Invoke(sid, activated);
+                }
+            }
+
+            PruneDeadRuntimeBindings(stillLive);
+            return rehydrated;
+        }
+
+        /// <summary>
+        /// Drop the runtime-id bindings of chats the gateway no longer has a live session for
+        /// (it reports idle ones too, so absence means the session really is gone from this
+        /// process). This is bookkeeping ONLY — no session.close, no delete, and the chat's
+        /// runtime info stays: the next send simply resumes the conversation from its persisted
+        /// key instead of submitting against an id that would answer "session not found".
+        /// </summary>
+        private void PruneDeadRuntimeBindings(HashSet<string> stillLive)
+        {
+            var dead = new List<string>();
+            foreach (var pair in _runtimeByDisplaySession)
+            {
+                if (!stillLive.Contains(DisplaySessionIdFor(pair.Key)))
+                    dead.Add(pair.Key);
+            }
+
+            for (int i = 0; i < dead.Count; i++)
+                ForgetSessionIds(dead[i]);
         }
 
         public async Task CloseSession(string sessionId = null)
@@ -956,23 +1357,75 @@ namespace NeonCompanion.Runtime.Api.Hermes
             return sid;
         }
 
-        private void ApplySessionInfo(SessionInfo info)
+        /// <summary>
+        /// Merge a runtime-info payload into a session's live state. session.info is emitted as a
+        /// PARTIAL patch (a heartbeat may carry only running, or only usage), so every field is
+        /// applied only when the payload actually names it — assigning the deserialized object
+        /// wholesale would blank the model/provider/cwd and zero the token counters on the next
+        /// bare heartbeat. Stored session metadata (title/preview/counters from REST) is a
+        /// separate concern and is never written here.
+        /// </summary>
+        private void ApplyRuntimeInfo(string sessionId, SessionRuntimeInfo info, JToken raw)
         {
-            if (info == null || string.IsNullOrEmpty(ActiveSessionId))
+            if (string.IsNullOrEmpty(sessionId) || info == null)
                 return;
 
-            _runtimeBySession[ActiveSessionId] = new SessionRuntimeInfo
+            string sid = DisplaySessionIdFor(sessionId);
+            SessionRuntimeInfo current;
+            if (!_runtimeBySession.TryGetValue(sid, out current) || current == null)
             {
-                model = info.model,
-                running = info.is_active,
-                usage = new UsageStats
-                {
-                    input = info.input_tokens,
-                    output = info.output_tokens,
-                    total = info.input_tokens + info.output_tokens,
-                    calls = info.tool_call_count
-                }
-            };
+                current = new SessionRuntimeInfo();
+                _runtimeBySession[sid] = current;
+            }
+
+            if (!string.IsNullOrEmpty(info.model))
+                current.model = info.model;
+            if (!string.IsNullOrEmpty(info.provider))
+                current.provider = info.provider;
+            if (!string.IsNullOrEmpty(info.cwd))
+                current.cwd = info.cwd;
+            if (!string.IsNullOrEmpty(info.title))
+                current.title = info.title;
+            if (!string.IsNullOrEmpty(info.reasoning_effort))
+                current.reasoning_effort = info.reasoning_effort;
+            if (info.fast.HasValue)
+                current.fast = info.fast;
+            if (info.running.HasValue)
+                current.running = info.running;
+
+            JToken usageToken = raw != null && raw.Type == JTokenType.Object ? raw["usage"] : null;
+            if (usageToken != null && usageToken.Type == JTokenType.Object)
+                current.usage = MergeUsage(usageToken, current.usage);
+            else if (info.usage != null)
+                current.usage = MergeUsage(info.usage, current.usage);
+
+            OnRuntimeInfoChanged?.Invoke(sid);
+        }
+
+        /// <summary>
+        /// Merge a deserialized usage snapshot, treating zero as "not reported". The gateway ships
+        /// a usage object on every runtime-info payload but leaves it empty for a session whose
+        /// agent has not been built yet, and it omits the context fields unless a turn has run —
+        /// both deserialize to zeros here, which would otherwise wipe counters and the context
+        /// gauge that session.context_breakdown just filled in. Counters only ever grow, so
+        /// ignoring zeros cannot hide a real value.
+        /// </summary>
+        private static UsageStats MergeUsage(UsageStats incoming, UsageStats current)
+        {
+            if (incoming == null)
+                return current;
+            if (current == null)
+                return incoming;
+
+            if (incoming.input != 0) current.input = incoming.input;
+            if (incoming.output != 0) current.output = incoming.output;
+            if (incoming.total != 0) current.total = incoming.total;
+            if (incoming.calls != 0) current.calls = incoming.calls;
+            if (incoming.context_max != 0) current.context_max = incoming.context_max;
+            if (incoming.context_used != 0) current.context_used = incoming.context_used;
+            if (incoming.context_percent != 0f) current.context_percent = incoming.context_percent;
+            if (incoming.cost_usd != 0f) current.cost_usd = incoming.cost_usd;
+            return current;
         }
 
         private void HandleSessionInfo(GatewayEvent evt)
@@ -984,19 +1437,27 @@ namespace NeonCompanion.Runtime.Api.Hermes
             var info = evt.Payload.ToObject<SessionRuntimeInfo>();
             if (info == null) return;
 
-            SessionRuntimeInfo previous;
-            _runtimeBySession.TryGetValue(sid, out previous);
-            JToken usageToken = evt.Payload.Type == JTokenType.Object ? evt.Payload["usage"] : null;
-            if (usageToken != null && usageToken.Type == JTokenType.Object)
-                info.usage = MergeUsage(usageToken, previous != null ? previous.usage : null);
-            else if (info.usage == null && previous != null)
-                info.usage = previous.usage;
+            // stored_session_id is the gateway's live session_key. When auto-compression rotates
+            // it the runtime id is unchanged, so this is the only notice that the chat's persisted
+            // key moved — alias it onto the same chat rather than letting the tip look like a new
+            // conversation (and keep the runtime id prompt.submit uses in sync).
+            // Only a SCOPED event can reconcile: an unscoped one was routed by the stream pin, so
+            // its stored key must not be allowed to re-key whichever chat happens to be focused.
+            if (!string.IsNullOrEmpty(evt.SessionId) && !string.IsNullOrEmpty(info.stored_session_id))
+            {
+                string reconciled = ReconcileSessionIds(evt.SessionId, info.stored_session_id);
+                if (!string.IsNullOrEmpty(reconciled))
+                    sid = reconciled;
+            }
 
-            _runtimeBySession[sid] = info;
-            OnRuntimeInfoChanged?.Invoke(sid);
+            ApplyRuntimeInfo(sid, info, evt.Payload);
+
             // cwd is a foreground/workspace concern — only the viewed session drives it.
             if (sid == ActiveSessionId && !string.IsNullOrEmpty(info.cwd))
+            {
                 _clientBridge.SetWorkspace(info.cwd);
+                LastKnownCwd = info.cwd;
+            }
             if (info.running.HasValue)
             {
                 SetBusy(sid, info.running.Value);
@@ -1114,7 +1575,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 _runtimeBySession[sid] = rt;
             }
 
-            rt.usage = usage;
+            // session.usage answers with the cumulative counters only — merging keeps the context
+            // gauge that session.context_breakdown filled in instead of zeroing it.
+            rt.usage = MergeUsage(usage, rt.usage);
             OnRuntimeInfoChanged?.Invoke(sid);
         }
 
@@ -1674,8 +2137,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 // Connection-level error: null session id signals "fail every in-flight stream"
                 // so ChatService unblocks all pending generations, not just the foreground one.
+                // Busy/awaiting are re-established from the gateway by the reconnect's
+                // rehydration; the id maps are deliberately KEPT, because that is what the
+                // rehydration rebinds against.
                 _busyBySession.Clear();
                 _awaitingBySession.Clear();
+                // The pin belongs to the turn that was streaming on the dead socket. Releasing it
+                // stops a post-reconnect unscoped event from being attributed to that turn.
+                _unscopedStreamSessionId = null;
                 OnError?.Invoke(null, "Hermes connection lost (" + state + ")");
             }
         }

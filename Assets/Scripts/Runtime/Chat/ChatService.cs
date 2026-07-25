@@ -65,6 +65,10 @@ namespace NeonCompanion.Runtime.Chat
             public string lastError;
             public string pendingUserContent;
             public bool interrupted;
+            // The socket died mid-turn and the partial assistant bubble is still on screen. The
+            // backend may well be generating into it, so the bubble is KEPT (not orphaned) until
+            // either a rehydrate re-adopts it or a genuinely new turn starts and releases it.
+            public bool transportSuspended;
         }
 
         private readonly Dictionary<string, HermesStream> _hermesStreams =
@@ -125,6 +129,10 @@ namespace NeonCompanion.Runtime.Chat
                 _chatTransport.OnToolUpdate -= HandleHermesToolUpdate;
                 _chatTransport.OnReasoningDelta -= HandleHermesReasoningDelta;
                 _chatTransport.OnError -= HandleHermesError;
+
+                HermesSessionManager previousManager = _chatTransport as HermesSessionManager;
+                if (previousManager != null)
+                    previousManager.OnSessionRehydrated -= HandleHermesSessionRehydrated;
             }
 
             // Per-session streams belong to the previous transport/connection — drop them so a
@@ -144,7 +152,74 @@ namespace NeonCompanion.Runtime.Chat
                 _chatTransport.OnToolUpdate += HandleHermesToolUpdate;
                 _chatTransport.OnReasoningDelta += HandleHermesReasoningDelta;
                 _chatTransport.OnError += HandleHermesError;
+
+                HermesSessionManager manager = _chatTransport as HermesSessionManager;
+                if (manager != null)
+                    manager.OnSessionRehydrated += HandleHermesSessionRehydrated;
             }
+        }
+
+        /// <summary>
+        /// A session that was still generating on the gateway has been re-attached after a
+        /// reconnect. Events emitted while the socket was down are NOT replayed, so the local
+        /// bubble is stale: the payload's inflight snapshot is the backend's own view of the turn
+        /// so far. Reset the live bubble to it and let the resumed stream append — a fresh bubble
+        /// would show the pre-drop text twice once message.complete delivers the full reply.
+        /// Never synthesizes a completed message: an idle session is just released.
+        /// </summary>
+        private void HandleHermesSessionRehydrated(string sessionId, SessionResumeResponse payload)
+        {
+            if (string.IsNullOrEmpty(sessionId) || payload == null)
+                return;
+
+            HermesStream stream = GetStream(sessionId);
+            if (stream == null)
+                return;
+
+            string assistantSoFar = payload.inflight != null ? payload.inflight.assistant : null;
+            bool stillRunning = payload.running || (payload.inflight != null && payload.inflight.streaming);
+
+            if (!stillRunning)
+            {
+                // The turn ended while we were disconnected. Leave whatever is on screen alone —
+                // it is refreshed from the server transcript on the next resume of this chat —
+                // but release the suspended bubble so the next turn opens its own.
+                stream.active = false;
+                if (stream.transportSuspended)
+                {
+                    stream.transportSuspended = false;
+                    stream.streamingMessage = null;
+                    stream.buffer = null;
+                    stream.reasoning = null;
+                }
+                return;
+            }
+
+            // Re-adopts the suspended bubble when there is one (EnsureStreamingMessage reuses a
+            // non-null streamingMessage), so the resumed turn continues in place.
+            if (!EnsureStreamingMessage(sessionId))
+                return;
+
+            stream = GetStream(sessionId);
+            if (stream == null || stream.streamingMessage == null)
+                return;
+
+            stream.transportSuspended = false;
+            stream.active = true;
+            stream.lastError = null;
+            stream.lastActivityTime = DateTime.UtcNow;
+
+            if (assistantSoFar != null)
+            {
+                stream.buffer = new System.Text.StringBuilder(assistantSoFar);
+                stream.streamingMessage.content = assistantSoFar;
+                stream.streamingMessage.segments = new List<ChatMessageSegment>
+                {
+                    new ChatMessageSegment { kind = ChatMessageSegment.TextKind, text = assistantSoFar }
+                };
+            }
+
+            RaiseSessionStatesChanged();
         }
 
         public float Temperature { get; set; } = 0.7f;
@@ -750,11 +825,22 @@ namespace NeonCompanion.Runtime.Chat
             if (selector?.SessionManager == null)
                 return;
 
-            // Read the active profile fresh (never a value captured before an await): it decides
-            // which profile the session is created in, and omitting it lands the chat in the
-            // gateway default no matter what the UI shows.
+            // Treat this line as the create linearization point and read every selector-backed
+            // value here — never one captured before an await. The profile decides which
+            // profile's state.db the chat is created in (omitting it lands the chat in the gateway
+            // default no matter what the UI shows), and the model/cwd ride as PER-SESSION
+            // overrides, never a profile default (Desktop desktopSessionCreateParams).
+            //
+            // provider/reasoning_effort/fast are deliberately absent: Companion has no UI state
+            // for them, and the gateway treats a present key as an explicit override — sending
+            // placeholders would overwrite the profile's own settings. The gateway resolves the
+            // provider from the model at agent-build time.
             string profile = selector.ActiveHermesProfile;
-            var response = await selector.SessionManager.CreateSession(profile: profile);
+            string createModel = CurrentSessionModel;
+            var response = await selector.SessionManager.CreateSession(
+                cwd: selector.SessionManager.LastKnownCwd,
+                profile: profile,
+                model: createModel);
             string persistentSessionId = GetPersistentHermesSessionId(response);
             _currentSessionHermesProfile = profile;
 
@@ -847,11 +933,19 @@ namespace NeonCompanion.Runtime.Chat
                 return;
             }
 
-            string profile = selector.ActiveHermesProfile;
+            // Prefer the profile the session is already known to belong to (re-resuming the open
+            // chat), and otherwise the selected profile: the history list is fetched with
+            // ?profile=<active>, so a row in it belongs to that profile's state.db. Resuming
+            // against the wrong one searches a different database and answers "session not found".
+            string profile = ResolveResumeProfile(hermesSessionId, selector);
             var response = await selector.SessionManager.ResumeSession(hermesSessionId, profile);
-            string displaySessionId = !string.IsNullOrWhiteSpace(response.stored_session_id)
-                ? response.stored_session_id
-                : hermesSessionId;
+            // The resume payload names the persisted key session_key (never stored_session_id) and
+            // it may be the post-compression TIP rather than the id we asked for. The session
+            // manager owns that reconciliation: ask it which chat the resume actually bound to,
+            // so a rotated key keeps its canonical transcript instead of opening a second chat.
+            string displaySessionId = selector.SessionManager.DisplaySessionIdFor(hermesSessionId);
+            if (string.IsNullOrWhiteSpace(displaySessionId))
+                displaySessionId = hermesSessionId;
 
             if (_currentProvider == null)
                 _currentProvider = await ResolveProviderAsync();
@@ -920,6 +1014,26 @@ namespace NeonCompanion.Runtime.Chat
             _currentSessionHermesProfile = profile;
 
             NeonLogger.Log("Hermes session resumed: " + displaySessionId);
+        }
+
+        /// <summary>
+        /// Backend profile a resume must run against. The open chat carries the profile it was
+        /// created/resumed in; anything else comes from the profile-scoped history list, so the
+        /// currently selected profile is the right scope for it.
+        /// </summary>
+        private string ResolveResumeProfile(string hermesSessionId, GlobalBackendSelector selector)
+        {
+            string active = selector != null ? selector.ActiveHermesProfile : null;
+
+            if (!string.IsNullOrWhiteSpace(_currentSessionHermesProfile) &&
+                _currentSession != null &&
+                (string.Equals(_currentSession.providerSessionId, hermesSessionId, StringComparison.Ordinal) ||
+                 string.Equals(_currentSession.sessionId, hermesSessionId, StringComparison.Ordinal)))
+            {
+                return _currentSessionHermesProfile;
+            }
+
+            return active;
         }
 
         private static bool ShouldFetchRichHermesHistory(SessionResumeResponse response)
@@ -1225,6 +1339,14 @@ namespace NeonCompanion.Runtime.Chat
             }
             _hermesStreams.Clear();
 
+            // The transport's id maps are part of that local state: they survive a reconnect on
+            // purpose (that is what active-session rehydration rebinds against), so a profile
+            // switch has to clear them explicitly or the sessions of the profile being left would
+            // be re-attached under the new one. No server call — those sessions keep running.
+            var sessionManager = GlobalBackendSelector.Instance?.SessionManager;
+            if (sessionManager != null)
+                sessionManager.DropLocalSessionState();
+
             ClearCurrentSessionWithoutSaving();
             _currentSessionHermesProfile = null;
         }
@@ -1477,7 +1599,9 @@ namespace NeonCompanion.Runtime.Chat
             {
                 if (!submitAcknowledged && stream.viewModel != null && stream.viewModel.Messages != null)
                     stream.viewModel.Messages.Remove(localUserMessage);
-                ClearStreamPendingState(stream);
+                // A turn cut short by the socket dropping (transportSuspended) keeps its partial
+                // bubble so the reconnect can continue in it; every other failure clears fully.
+                ClearStreamPendingState(stream, stream.transportSuspended);
                 throw;
             }
             finally
@@ -1803,16 +1927,26 @@ namespace NeonCompanion.Runtime.Chat
             stream.baselineTotal = usage.total;
         }
 
-        private static void ClearStreamPendingState(HermesStream stream)
+        /// <summary>
+        /// Release a session's pending generation state. <paramref name="keepSuspendedBubble"/>
+        /// keeps the partial assistant message and its buffers when the turn was cut short by the
+        /// socket dropping rather than by the generation ending: the backend is probably still
+        /// producing into it, so the reconnect's rehydrate must be able to re-adopt that bubble
+        /// instead of leaving it orphaned and opening a second one.
+        /// </summary>
+        private static void ClearStreamPendingState(HermesStream stream, bool keepSuspendedBubble = false)
         {
             if (stream == null)
                 return;
             stream.complete?.TrySetResult(false);
             stream.complete = null;
             stream.active = false;
-            stream.streamingMessage = null;
-            stream.buffer = null;
-            stream.reasoning = null;
+            if (!keepSuspendedBubble)
+            {
+                stream.streamingMessage = null;
+                stream.buffer = null;
+                stream.reasoning = null;
+            }
             stream.usageBaselineKnown = false;
             stream.baselineOutput = 0;
             stream.baselineTotal = 0;
@@ -1821,6 +1955,7 @@ namespace NeonCompanion.Runtime.Chat
             stream.lastError = null;
             stream.pendingUserContent = null;
             stream.interrupted = false;
+            stream.transportSuspended = keepSuspendedBubble && stream.streamingMessage != null;
             stream.lastActivityTime = default(DateTime);
         }
 
@@ -1968,6 +2103,18 @@ namespace NeonCompanion.Runtime.Chat
 
         private void HandleHermesStreamStarted(string sessionId)
         {
+            // message.start means a NEW turn, so a bubble left suspended by a dropped socket
+            // belongs to a turn that is over: release it (it stays in the transcript with the
+            // text it had) instead of letting the new turn append into it.
+            HermesStream suspended = GetStream(sessionId);
+            if (suspended != null && suspended.transportSuspended)
+            {
+                suspended.transportSuspended = false;
+                suspended.streamingMessage = null;
+                suspended.buffer = null;
+                suspended.reasoning = null;
+            }
+
             EnsureStreamingMessage(sessionId);
             TouchHermesStream(sessionId);
             // A session began producing output — refresh the sidebar "working" indicator.
@@ -2068,6 +2215,8 @@ namespace NeonCompanion.Runtime.Chat
                 s.reasoning = null;
                 s.lastError = null;
                 s.pendingUserContent = null;
+                // The turn is genuinely over, so there is no bubble left for a reconnect to adopt.
+                s.transportSuspended = false;
 
                 // Signal the waiting SendViaTransport that generation is done.
                 s.complete?.TrySetResult(true);
@@ -2256,8 +2405,13 @@ namespace NeonCompanion.Runtime.Chat
                         continue;
                     st.lastError = error;
                     st.active = false;
-                    st.streamingMessage = null;
-                    st.buffer = null;
+                    // Keep the partial assistant bubble and its buffer: losing the socket says
+                    // nothing about the backend turn, which usually keeps generating. Dropping
+                    // the reference here orphaned the bubble in the transcript, so the reconnect's
+                    // continuation opened a SECOND one and message.complete then repeated the
+                    // whole reply. It is released by a genuinely new turn (message.start) if the
+                    // rehydrate does not re-adopt it first.
+                    st.transportSuspended = st.streamingMessage != null;
                     st.pendingUserContent = null;
                     st.interrupted = false;
                     st.complete?.TrySetResult(false);

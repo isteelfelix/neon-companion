@@ -90,7 +90,9 @@ namespace NeonCompanion.Runtime.Core
 
             // The socket itself is profile-agnostic (the profile rides on session.create /
             // session.resume), but it is still carrying the old profile's live streams — replace
-            // it so nothing from the profile the user just left keeps arriving.
+            // it so nothing from the profile the user just left keeps arriving. The sessions
+            // themselves are NOT closed: replacing the transport is a local operation, so
+            // switching back lists and reopens them exactly as they were left.
             if (CurrentMode == BackendMode.Hermes)
                 await ReconnectHermes();
         }

@@ -75,16 +75,16 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | RPC | Desktop | Companion | Priority |
 |---|---|---|---|
 | `session.create` | YES | YES (`RpcMethods.SessionCreate`) | P0 |
-| `session.resume` | YES (`{session_id, cols}`) | YES (does not send `cols`) | P0 |
+| `session.resume` | YES (`{session_id, cols, source, profile?}`) | YES — sends `cols`, `source`, and the session's `profile` | P0 |
 | `session.close` | YES | YES | P0 |
 | `session.interrupt` | YES | YES | P0 |
 | `session.steer` | YES | **NO** | P1 |
-| `session.active_list` | YES (live sessions across profiles) | PARTIAL — companion uses `session.list` (`HermesSessionManager.ListSessions`); method name diverges | P2 |
+| `session.active_list` | YES (live sessions across profiles) | YES (`ListActiveSessions`) — live status only, for post-reconnect rehydration; REST `/api/sessions?profile=` stays the history catalog. Missing-method → null, state untouched | P2 |
 | `session.usage` | YES | **NO** (usage derived from `session.info`/`message.complete`) | P2 |
 | `session.title` | YES | **NO** | P2 |
 | `session.cwd.set` | YES | **NO** | P2 |
 | `session.context_breakdown` | YES | **NO** | P2 |
-| `session.activate` | YES | **NO** | P2 |
+| `session.activate` | YES | YES (`ActivateSession`) — rebinds a live session's event transport to the new socket after a reconnect; failure falls back to a full `session.resume` | P2 |
 | `prompt.submit` | YES (**`PROMPT_SUBMIT_REQUEST_TIMEOUT_MS` = 1 800 000**) | PARTIAL — sends it, but with the default 30 s timeout (§3) | **P0** |
 | `prompt.submit` (rewind) | `truncate_before_user_ordinal` param (`use-prompt-actions/rewind.ts`) | **NO** | P2 |
 | `slash.exec` | YES | YES (inline string, `SwitchModelAsync`) | P1 |
@@ -141,7 +141,9 @@ Desktop constants in `hermes.ts:75-116`; shared client defaults in `json-rpc-gat
 
 **Companion:** `HermesSessionManager` keeps a **bidirectional** map — `_runtimeByDisplaySession` (display/stored → runtime) and `_displayByRuntimeSession` (runtime → display), populated in `RememberSessionIds` from `session.create`/`session.resume` responses (`session_id` = runtime, `stored_session_id` = display). Outbound RPC translates via `RuntimeSessionIdFor`; inbound events translate via `DisplaySessionIdFor` (`EventSessionId`). **Status: YES** — mapping direction matches Desktop; this is companion's strongest parity area (tracker H-07).
 
-Residual gap: companion never persists the stored↔runtime map across reconnects, and `EventSessionId` lacks the unscoped-stream pin (§1) — the *mapping* is correct, the *routing on unscoped events* is not.
+**Id rotation.** `session.resume`/`session.activate` do NOT return `stored_session_id`: the persisted key arrives as `session_key` (fallback `resumed`), and auto-compression makes it the continuation *tip* rather than the id that was asked for. `AdoptResumePayload` keeps the chat's canonical display id and aliases the rotated key onto it (`RememberStoredAlias`), re-pointing only the runtime id used by `prompt.submit`. The `session.info` event carries the live `stored_session_id`, which is the only in-band notice that a chat's key moved (`ReconcileSessionIds`).
+
+**Across reconnects.** The map now survives transport teardown on purpose — `Disconnect()` closes the socket only, never `session.close` — so `RehydrateActiveSessions()` can re-attach the still-live sessions. Bindings the gateway no longer lists are pruned locally (bookkeeping only; the backend session is untouched). A profile switch drops the whole map via `DropLocalSessionState()`, again without any server call.
 
 ---
 
