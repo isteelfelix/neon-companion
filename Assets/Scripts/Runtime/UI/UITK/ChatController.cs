@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
+using NeonCompanion.Runtime.Api.Models;
 using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Api.Tools;
 using NeonCompanion.Runtime.Avatar;
