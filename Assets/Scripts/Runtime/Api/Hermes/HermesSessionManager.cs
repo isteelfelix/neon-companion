@@ -267,6 +267,15 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public int Count;
     }
 
+    // agent.terminal.output / terminal.close. Both are one-way pushes keyed by the backend
+    // background process id; `chunk` is only present on output.
+    [Serializable]
+    public class AgentTerminalPayload
+    {
+        public string process_id;
+        public string chunk;
+    }
+
     // === HermesSessionManager ===
 
     public class HermesSessionManager : IChatTransport
@@ -305,6 +314,12 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private readonly Dictionary<string, SessionRuntimeInfo> _runtimeBySession = new Dictionary<string, SessionRuntimeInfo>();
         private readonly Dictionary<string, string> _runtimeByDisplaySession = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _displayByRuntimeSession = new Dictionary<string, string>();
+
+        // Backlogs for agent.terminal.output, keyed by owning chat + backend process id.
+        private readonly AgentTerminalStream _agentTerminals = new AgentTerminalStream();
+        // terminal.respond is a companion-only extension; upstream answers -32601. Latch the first
+        // rejection so a chatty terminal.execute bridge cannot spam the console every command.
+        private bool _terminalRespondUnsupported;
 
         // Unscoped-stream pin (Desktop gateway-events.ts resolveGatewayEventSessionId). Holds the
         // display session id that last received an unscoped message.start, and is released on that
@@ -474,6 +489,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
             string display = DisplaySessionIdFor(sessionId);
             string runtime = RuntimeSessionIdFor(sessionId);
+            // The chat is gone, so its background processes have no view to stream into.
+            _agentTerminals.ForgetSession(display);
             _runtimeByDisplaySession.Remove(display);
             _runtimeByDisplaySession.Remove(runtime);
             _displayByRuntimeSession.Remove(runtime);
@@ -523,6 +540,22 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         public event Action<TerminalExecuteRequest> OnTerminalExecute;
         public event Action<TerminalReadRequest> OnTerminalReadRequest;
+
+        /// <summary>
+        /// (sid, processId, chunk) — live output of a backend `terminal(background=true)` process,
+        /// already routed to the chat that owns it. The same chunk is appended to
+        /// <see cref="AgentTerminals"/>, so a view that mounts later can replay the backlog.
+        /// </summary>
+        public event Action<string, string, string> OnAgentTerminalOutput;
+
+        /// <summary>
+        /// (sid, processId) — the agent dropped a background process's read-only view via the
+        /// close_terminal tool. The process keeps running; only the view/backlog goes away.
+        /// </summary>
+        public event Action<string, string> OnAgentTerminalClose;
+
+        /// <summary>Backlogs for the agent terminals streamed by this transport.</summary>
+        public AgentTerminalStream AgentTerminals { get { return _agentTerminals; } }
 
         // === Constructor ===
 
@@ -624,6 +657,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
             _runtimeBySession.Clear();
             _runtimeByDisplaySession.Clear();
             _displayByRuntimeSession.Clear();
+            // Agent-terminal backlogs are keyed by chat id; the ids being dropped must not be
+            // reused against the profile being switched to.
+            _agentTerminals.Clear();
             _unscopedStreamSessionId = null;
             ActiveSessionId = null;
             StoredSessionId = null;
@@ -1134,8 +1170,17 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 new { request_id = requestId, answer });
         }
 
+        /// <summary>
+        /// Answer a companion-only terminal.execute. The upstream gateway has no terminal.respond
+        /// method and rejects the call with -32601; that is a protocol mismatch, not a failure, so
+        /// it is swallowed (once, loudly) instead of surfacing as a bridge error. Every other
+        /// failure still propagates to the caller.
+        /// </summary>
         public async Task RespondToTerminal(string requestId, ProcessResult result, long? durationMs = null)
         {
+            if (_terminalRespondUnsupported)
+                return;
+
             var payload = new Dictionary<string, object>
             {
                 { "request_id", requestId },
@@ -1147,7 +1192,20 @@ namespace NeonCompanion.Runtime.Api.Hermes
             if (durationMs.HasValue)
                 payload["duration_ms"] = durationMs.Value;
 
-            await _gateway.Request<object>(RpcMethods.TerminalRespond, payload);
+            try
+            {
+                await _gateway.Request<object>(RpcMethods.TerminalRespond, payload);
+            }
+            catch (Exception ex)
+            {
+                if (!HermesGateway.IsMissingRpcMethod(ex))
+                    throw;
+
+                _terminalRespondUnsupported = true;
+                Debug.LogWarning(
+                    "[Hermes] terminal.respond is not supported by this backend; the terminal.execute "
+                    + "bridge is disabled for this connection (upstream uses read_terminal instead).");
+            }
         }
 
         /// <summary>
@@ -1296,6 +1354,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
             _gateway.On(GatewayEvents.ReviewSummary, HandleReviewSummary);
             _gateway.On(GatewayEvents.TerminalExecute, HandleTerminalExecute);
             _gateway.On(GatewayEvents.TerminalReadRequest, HandleTerminalReadRequest);
+            _gateway.On(GatewayEvents.AgentTerminalOutput, HandleAgentTerminalOutput);
+            _gateway.On(GatewayEvents.TerminalClose, HandleTerminalClose);
             _gateway.On(GatewayEvents.Error, HandleError);
             // subagent.* has no dedicated per-type registration; a wildcard lets any subagent
             // subtype be handled by prefix (Desktop matches on the SubagentPrefix) so none is
@@ -1917,6 +1977,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         private void HandleTerminalExecute(GatewayEvent evt)
         {
+            // Companion-only extension. Once the backend has rejected terminal.respond there is
+            // nowhere to deliver the result, so don't run the command at all.
+            if (_terminalRespondUnsupported) return;
             if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
             var payload = evt.Payload.ToObject<TerminalExecutePayload>();
@@ -1963,6 +2026,70 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 Start = start,
                 Count = count
             });
+        }
+
+        // Live chunk from a backend `terminal(background=true)` process. Unlike terminal.execute
+        // this is NOT gated on the focused chat: the backend routes it to the session that owns the
+        // process, and Companion multiplexes every session over one socket, so gating on the
+        // foreground would silently drop a background chat's output. Desktop keys purely on
+        // process_id (it has one global tab list); Companion keeps the owning session too so the
+        // backlog can be scoped per chat.
+        private void HandleAgentTerminalOutput(GatewayEvent evt)
+        {
+            if (evt == null || evt.Payload == null) return;
+
+            var payload = ReadAgentTerminalPayload(evt);
+            if (payload == null || string.IsNullOrEmpty(payload.process_id)) return;
+            if (string.IsNullOrEmpty(payload.chunk)) return;
+
+            string sid = ResolveAgentTerminalSession(evt, payload.process_id);
+            if (string.IsNullOrEmpty(sid)) return;
+
+            _agentTerminals.Append(sid, payload.process_id, payload.chunk);
+            OnAgentTerminalOutput?.Invoke(sid, payload.process_id, payload.chunk);
+        }
+
+        // close_terminal tool: drop the read-only view of a background process WITHOUT killing it.
+        // The backend emits an empty session_id when the process is already gone, so the owner is
+        // resolved from the process id we bound on the first chunk.
+        private void HandleTerminalClose(GatewayEvent evt)
+        {
+            if (evt == null || evt.Payload == null) return;
+
+            var payload = ReadAgentTerminalPayload(evt);
+            if (payload == null || string.IsNullOrEmpty(payload.process_id)) return;
+
+            string sid = ResolveAgentTerminalSession(evt, payload.process_id);
+            bool hadBuffer = _agentTerminals.Close(sid, payload.process_id);
+            NeonLogger.Log("[Hermes] terminal.close for process " + payload.process_id
+                + " (session " + (string.IsNullOrEmpty(sid) ? "<none>" : sid)
+                + (hadBuffer ? ", buffer dropped)" : ", nothing buffered)"));
+            OnAgentTerminalClose?.Invoke(sid, payload.process_id);
+        }
+
+        private AgentTerminalPayload ReadAgentTerminalPayload(GatewayEvent evt)
+        {
+            try
+            {
+                return evt.Payload.ToObject<AgentTerminalPayload>();
+            }
+            catch (Exception ex)
+            {
+                // A malformed payload must never kill the dispatch loop — every other event on the
+                // socket would go with it.
+                Debug.LogWarning("[Hermes] Invalid " + evt.Type + " payload: " + ex.Message);
+                return null;
+            }
+        }
+
+        // An explicit session_id (translated runtime -> display) always wins and re-binds the
+        // process, which is what makes a reconnect's freshly minted runtime id follow the same
+        // chat. Unscoped events fall back to the process's remembered owner, and only a
+        // never-before-seen process falls through to the focused chat.
+        private string ResolveAgentTerminalSession(GatewayEvent evt, string processId)
+        {
+            string scoped = string.IsNullOrEmpty(evt.SessionId) ? null : DisplaySessionIdFor(evt.SessionId);
+            return _agentTerminals.ResolveOwner(processId, scoped, ActiveSessionId);
         }
 
         private void HandleApprovalRequest(GatewayEvent evt)
@@ -2144,6 +2271,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     ts = TransportState.Disconnected;
                     break;
             }
+            // A fresh socket may be a different gateway (profile switch, upgraded backend), so the
+            // terminal.respond capability latch has to be re-probed instead of staying disabled.
+            // Agent-terminal backlogs are deliberately KEPT: the backend processes outlive the
+            // socket, and their chunks resume against the same chat once the ids are rebound.
+            if (ts == TransportState.Connected)
+                _terminalRespondUnsupported = false;
+
             OnStateChanged?.Invoke(ts);
 
             // When the WebSocket drops mid-generation, ChatService is blocked on
@@ -2172,6 +2306,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         {
             if (_disposed) return;
             _disposed = true;
+            _agentTerminals.Clear();
             _clientBridge?.Dispose();
             _gateway?.Dispose();
         }

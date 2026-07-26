@@ -55,12 +55,12 @@ Desktop event union: `GatewayEventName` in `json-rpc-gateway.ts:1-23`. Additiona
 | `moa.reference` / `moa.aggregating` | stream (MoA presets) | **NO** | P2 |
 | `review.summary` | stream | **NO** | P2 |
 | `browser.progress` | unscoped-pin set (`gateway-events.ts:20-39`) | **NO** | P2 |
-| `agent.terminal.output` | stream | **NO** | P2 |
-| `terminal.read.request` | stream + `terminal.read.respond` | PARTIAL — companion uses its own `terminal.execute`/`terminal.respond` pair (divergent method names, see §2) | P1 |
-| `terminal.close` | stream | **NO** | P2 |
+| `agent.terminal.output` | stream (keyed by `process_id` only) | YES (`HandleAgentTerminalOutput`) — buffered per owning chat in `AgentTerminalStream`, surfaced as `OnAgentTerminalOutput`; no agent-terminal tabs yet | P2 |
+| `terminal.read.request` | stream + `terminal.read.respond` | YES (`HandleTerminalReadRequest` → `terminal.read.respond`); `terminal.execute`/`terminal.respond` remains a companion-only superset, see §2 | P1 |
+| `terminal.close` | stream | YES (`HandleTerminalClose`) — drops the process's backlog, fires `OnAgentTerminalClose`; process is not killed | P2 |
 | `reaction` / `vibe` / `compacting` | stream (UI affect) | **NO** (UI-only, non-goal) | P3 |
 
-**Companion-only events (remote-client extension, NOT in Desktop union):** `client.ping` (→ `client.pong`), `file.transfer.start` / `.chunk` / `.finish` (`HermesGateway.cs:82-86`). These belong to companion's remote client bridge (`HermesClientBridge` + `FileTransfer*`); Desktop is an in-process host and has no equivalent, so keep them but treat as a **companion contract superset**, not a parity gap.
+**Companion-only events (remote-client extension, NOT in Desktop union):** `client.ping` (→ `client.pong`), `file.transfer.start` / `.chunk` / `.finish`, and `terminal.execute` (→ `terminal.respond`). These belong to companion's remote client bridge (`HermesClientBridge` + `FileTransfer*` + the `TerminalController` execute bridge); Desktop is an in-process host and has no equivalent, so keep them but treat as a **companion contract superset**, not a parity gap. Upstream `tui_gateway` serves none of them and answers unknown methods with `-32601`, so every superset responder must degrade to a no-op on that code rather than surfacing an error — `RpcException.Code` now carries it (`HermesGateway.IsMissingRpcMethod`).
 
 ### Highest-value event gaps (P0/P1)
 1. **Unscoped stream pin absent.** Desktop `resolveGatewayEventSessionId` (`gateway-events.ts:79-128`) pins every unscoped stream event to the session that last received `message.start`, so a mid-turn chat switch cannot steal live deltas/tool events. Companion `EventSessionId` (`HermesSessionManager.cs:616-621`) resolves `evt.SessionId ?? ActiveSessionId` with **no pin and no `subagent.*` drop** → live output can be misattributed to whichever session is focused.
@@ -96,7 +96,8 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | `clarify.respond` | YES (`{request_id, answer}`) | YES | P1 |
 | `secret.respond` | YES | **NO** | P1 |
 | `sudo.respond` | YES | **NO** (event handled, no responder) | P1 |
-| `terminal.read.respond` | YES | PARTIAL — companion `terminal.respond` (divergent name/shape) | P1 |
+| `terminal.read.respond` | YES | YES (`RespondToTerminalRead`, `{request_id, text}`) | P1 |
+| `terminal.respond` | — | YES (companion extension, answers `terminal.execute`). Upstream has no such method and replies `-32601`; the responder treats that as "not supported", latches it, and stops running the bridge for that connection | P2 |
 | `model.options` | YES | YES (inline string, `GetModelOptionsAsync`) | P2 |
 | `commands.catalog` / `complete.path` / `complete.slash` | YES (composer completions) | **NO** | P2 |
 | `config.get` / `config.set` | YES | **NO** (companion uses REST/slash) | P2 |

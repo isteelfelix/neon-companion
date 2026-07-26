@@ -44,6 +44,21 @@ namespace NeonCompanion.Runtime.Api.Hermes
         [JsonProperty("code")] public int Code;
     }
 
+    /// <summary>
+    /// A JSON-RPC error frame surfaced as an exception. Carries the numeric code so callers can
+    /// tell "this backend predates the method" (-32601) from a real failure without parsing text —
+    /// the message stays exactly what the backend sent, so existing error UI is unchanged.
+    /// </summary>
+    public class RpcException : Exception
+    {
+        public int Code { get; private set; }
+
+        public RpcException(int code, string message) : base(message)
+        {
+            Code = code;
+        }
+    }
+
     [Serializable]
     public class GatewayEvent
     {
@@ -94,11 +109,24 @@ namespace NeonCompanion.Runtime.Api.Hermes
         // persistent summary. Desktop surfaces it as a permanent system line in the transcript.
         public const string ReviewSummary = "review.summary";
         public const string SessionTitle = "session.title";
+        // COMPANION-ONLY EXTENSION. The upstream tui_gateway never emits terminal.execute and has
+        // no terminal.respond method (unknown methods answer -32601), so this is a compatibility
+        // path for gateways that do speak it: the handler stays wired, and the reply degrades to a
+        // no-op when the backend rejects it. The upstream terminal contract is the three events
+        // below plus terminal.read.respond.
         public const string TerminalExecute = "terminal.execute";
         // read_terminal tool: backend asks the client to serialize its live terminal buffer.
         // The Python side BLOCKS on the matching terminal.read.respond RPC, so this must always
         // be answered (empty text = no live pane). Desktop gateway-event.ts handles it the same.
         public const string TerminalReadRequest = "terminal.read.request";
+        // Live stdout/stderr of a backend `terminal(background=true)` process, pushed chunk by
+        // chunk (tui_gateway _wire_agent_terminal_output). session_id names the session that owns
+        // the process, payload is {process_id, chunk}. Fire-and-forget: nothing is answered.
+        public const string AgentTerminalOutput = "agent.terminal.output";
+        // close_terminal tool: drop the read-only view of a background process. The process is NOT
+        // killed — only the view/buffer goes away. Payload is {process_id}; session_id may be empty
+        // when the process is already gone, so the process id is the authoritative key.
+        public const string TerminalClose = "terminal.close";
         public const string ClientPing = "client.ping";
         public const string FileTransferStart = "file.transfer.start";
         public const string FileTransferChunk = "file.transfer.chunk";
@@ -144,6 +172,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string ApprovalRespond = "approval.respond";
         public const string SudoRespond = "sudo.respond";
         public const string SecretRespond = "secret.respond";
+        // Companion-only reply to GatewayEvents.TerminalExecute — see the note there. Upstream
+        // answers -32601; callers must treat that as "not supported", not as a failure.
         public const string TerminalRespond = "terminal.respond";
         public const string TerminalReadRespond = "terminal.read.respond";
         public const string ImageAttach = "image.attach";
@@ -212,6 +242,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
         {
             if (error == null)
                 return false;
+            // The code is authoritative when the backend answered with an error frame; the string
+            // sniff below stays for transports/proxies that only relay a message.
+            var rpcError = error as RpcException;
+            if (rpcError != null && rpcError.Code == -32601)
+                return true;
             var message = error.Message;
             if (string.IsNullOrEmpty(message))
                 return false;
@@ -499,7 +534,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 {
                     call.Cts.Cancel();
                     if (frame.Error != null)
-                        call.Tcs.TrySetException(new Exception(frame.Error.Message ?? "RPC error"));
+                        call.Tcs.TrySetException(new RpcException(frame.Error.Code, frame.Error.Message ?? "RPC error"));
                     else
                         call.Tcs.TrySetResult(frame.Result);
                 }
