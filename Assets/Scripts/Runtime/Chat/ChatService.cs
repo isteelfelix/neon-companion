@@ -1445,7 +1445,7 @@ namespace NeonCompanion.Runtime.Chat
         /// server-side (prompt.submit <c>truncate_before_user_ordinal</c>), then
         /// <paramref name="text"/> is submitted in its place — so an edited or repeated turn does
         /// not leave the superseded exchange in the backend's context.
-        /// Returns false when the backend is not Hermes or the index is not a user turn, so the
+        /// Returns false for a non-Hermes backend or when the index is not a user turn, so the
         /// caller can fall back to its own regenerate path.
         /// </summary>
         public async Task<bool> RewindHermesTurnAsync(
