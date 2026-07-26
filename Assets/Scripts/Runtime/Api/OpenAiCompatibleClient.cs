@@ -352,6 +352,9 @@ namespace NeonCompanion.Runtime.Api
 
         private static string ParseErrorMessage(UnityWebRequest webRequest)
         {
+            string message = null;
+            string type = null;
+            string code = null;
             if (!string.IsNullOrEmpty(webRequest.downloadHandler?.text))
             {
                 try
@@ -359,13 +362,35 @@ namespace NeonCompanion.Runtime.Api
                     var errorResponse = JsonUtility.FromJson<OpenAiErrorResponse>(webRequest.downloadHandler.text);
                     if (errorResponse?.error != null && !string.IsNullOrEmpty(errorResponse.error.message))
                     {
-                        return errorResponse.error.message;
+                        message = errorResponse.error.message;
+                        type = errorResponse.error.type;
+                        code = errorResponse.error.code;
                     }
                 }
                 catch { /* ignore */ }
             }
 
-            return webRequest.error ?? "Unknown error";
+            if (string.IsNullOrWhiteSpace(message))
+                message = webRequest.error ?? "Unknown error";
+
+            var details = new List<string>();
+            if (webRequest.responseCode > 0)
+                details.Add("HTTP " + webRequest.responseCode);
+            if (!string.IsNullOrWhiteSpace(type))
+                details.Add(type);
+            if (!string.IsNullOrWhiteSpace(code) &&
+                !string.Equals(code, type, StringComparison.OrdinalIgnoreCase))
+            {
+                details.Add(code);
+            }
+
+            string requestId = webRequest.GetResponseHeader("x-request-id");
+            if (!string.IsNullOrWhiteSpace(requestId))
+                details.Add("request " + requestId);
+
+            return details.Count == 0
+                ? message
+                : message + " (" + string.Join(", ", details.ToArray()) + ")";
         }
 
         private static void AppendMessagesJson(StringBuilder sb, List<AiChatMessage> messages)
@@ -1222,24 +1247,6 @@ namespace NeonCompanion.Runtime.Api
                         fallbackResponse = ParseResponse(finalStreamingText);
                         fallback = fallbackResponse?.content;
                     }
-                    if (string.IsNullOrWhiteSpace(fallback))
-                    {
-                        fallbackResponse = await SendMessageAsync(
-                            provider,
-                            new AiChatRequest
-                            {
-                                model = request.model,
-                                providerSessionId = responseProviderSessionId,
-                                temperature = request.temperature,
-                                maxTokens = request.maxTokens,
-                                systemPrompt = request.systemPrompt,
-                                messages = request.messages,
-                                tools = request.tools
-                            },
-                            cancellationToken);
-                        fallback = fallbackResponse?.content;
-                    }
-
                     if (!string.IsNullOrWhiteSpace(fallback))
                     {
                         emittedAnyToken = true;
@@ -2133,6 +2140,7 @@ namespace NeonCompanion.Runtime.Api
         {
             public string message;
             public string type;
+            public string code;
         }
     }
 }

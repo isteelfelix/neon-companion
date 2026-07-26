@@ -8,6 +8,7 @@
 - **Hermes REST v2 read surface** — `HermesRestClient` now mirrors Desktop read endpoints for status, model info/options, config, skills, toolsets, and cron jobs, with bearer-auth GET/POST/PATCH/DELETE helpers and a typed missing-endpoint exception for 404 `No such API endpoint` capability gaps.
 
 ### Fixed
+- Audited and documented the complete OpenAI-compatible chat path; stopped advertising an incomplete generic function-tool loop, removed duplicate completion replay after an empty successful stream, and preserved structured OpenAI error diagnostics and request IDs.
 - All runtime version labels now use Unity Player Settings through `Application.version`; removed stale hardcoded splash/version-file values and aligned mobile Build Profiles.
 
 ## [0.4.0] - 2026-06-10

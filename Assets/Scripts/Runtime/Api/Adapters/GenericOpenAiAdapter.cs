@@ -14,7 +14,9 @@ namespace NeonCompanion.Runtime.Api.Adapters
                 SupportsModelSwitch = false,
                 SupportsInventory = false,
                 SupportsToolProgress = false,
-                SupportsFunctionTools = true,
+                // The generic HTTP path can parse tool calls but does not execute them
+                // and submit tool results, so advertising tools would leave the turn incomplete.
+                SupportsFunctionTools = false,
                 UsesMaxCompletionTokens = false,
                 RequiresTemperatureOmission = false,
                 ForceNonStreaming = false,
