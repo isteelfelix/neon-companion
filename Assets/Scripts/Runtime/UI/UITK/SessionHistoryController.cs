@@ -139,6 +139,40 @@ namespace NeonCompanion.Runtime.UI.UITK
             RenderSessionList(_lastRenderedSessions, _lastRenderedProviders);
         }
 
+        /// <summary>
+        /// Apply a live auto-title push (Hermes session.title) to the already-rendered list, so the
+        /// sidebar renames itself mid-turn without a REST round-trip. A chat that is not in the
+        /// cached list yet (its first turn is what triggered the titler) is picked up by a refetch.
+        /// </summary>
+        public void ApplySessionTitle(string sessionId, string title)
+        {
+            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrWhiteSpace(title)) return;
+            if (!_d.IsBound()) return;
+
+            if (string.Equals(_d.GetCurrentSessionId(), sessionId, StringComparison.Ordinal))
+            {
+                _d.SetCurrentSession(sessionId, title);
+                if (_d.TopbarTitle != null && _d.ChatPanel != null && _d.ChatPanel.style.display != DisplayStyle.None)
+                    _d.TopbarTitle.text = _d.GetChatTitle();
+            }
+
+            ChatSession cached = _lastRenderedSessions != null
+                ? _lastRenderedSessions.Find(s => s != null && string.Equals(s.sessionId, sessionId, StringComparison.Ordinal))
+                : null;
+
+            if (cached == null)
+            {
+                _ = RefreshSessionsFromCacheAsync();
+                return;
+            }
+
+            if (string.Equals(cached.title, title, StringComparison.Ordinal))
+                return;
+
+            cached.title = title;
+            RerenderStatus();
+        }
+
         public void RenderSessionList(List<ChatSession> allSessions, List<ProviderConfig> providers)
         {
             if (_d.SessionsList == null && _d.HistorySessionsList == null) return;

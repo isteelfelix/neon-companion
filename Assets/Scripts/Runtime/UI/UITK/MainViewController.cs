@@ -314,6 +314,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_chatService != null && _sessionStatesSubscribed)
             {
                 _chatService.OnSessionStatesChanged -= OnSessionStatesChanged;
+                _chatService.OnSessionTitleChanged -= OnSessionTitleChanged;
                 _sessionStatesSubscribed = false;
             }
 
@@ -326,6 +327,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (!_isBound) return;
             _sessionHistoryController.RerenderStatus();
+        }
+
+        /// <summary>
+        /// The gateway auto-titled a Hermes chat (session.title). Patch the sidebar in place instead
+        /// of waiting for the next history reload — the push is the only notice the title changed.
+        /// </summary>
+        private void OnSessionTitleChanged(string sessionId, string title)
+        {
+            if (!_isBound) return;
+            _sessionHistoryController.ApplySessionTitle(sessionId, title);
         }
 
         private void OnBackendModeChangedForNav(Core.BackendMode mode)
@@ -1496,6 +1507,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (!_sessionStatesSubscribed)
             {
                 _chatService.OnSessionStatesChanged += OnSessionStatesChanged;
+                _chatService.OnSessionTitleChanged += OnSessionTitleChanged;
                 _sessionStatesSubscribed = true;
             }
 

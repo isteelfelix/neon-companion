@@ -670,7 +670,38 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
         // === IChatTransport: Messaging ===
 
-        public async Task SendMessage(string sessionId, string text)
+        public Task SendMessage(string sessionId, string text)
+        {
+            return SubmitPrompt(sessionId, text, false, 0, false);
+        }
+
+        /// <summary>
+        /// Rewind: <c>prompt.submit</c> carrying <c>truncate_before_user_ordinal</c>, which makes the
+        /// backend drop that user turn plus everything after it before running the new text. Desktop
+        /// <c>runRewindSubmit</c> interrupts a live turn first (a submit into a running agent comes
+        /// back as "session busy"); an idle session is submitted into directly, because interrupting
+        /// an idle agent can leave a stale interrupt flag that cancels the fresh turn.
+        /// </summary>
+        public async Task RewindAndSubmit(string sessionId, string text, int truncateBeforeUserOrdinal)
+        {
+            if (string.IsNullOrEmpty(sessionId))
+                throw new InvalidOperationException("No session id");
+            if (truncateBeforeUserOrdinal < 0)
+                throw new ArgumentOutOfRangeException("truncateBeforeUserOrdinal");
+
+            string displaySessionId = DisplaySessionIdFor(sessionId);
+            if (IsSessionBusy(displaySessionId))
+                await Interrupt(sessionId);
+
+            await SubmitPrompt(sessionId, text, true, truncateBeforeUserOrdinal, true);
+        }
+
+        private async Task SubmitPrompt(
+            string sessionId,
+            string text,
+            bool truncate,
+            int truncateBeforeUserOrdinal,
+            bool allowBusy)
         {
             if (string.IsNullOrEmpty(sessionId))
                 throw new InvalidOperationException("No session id");
@@ -678,8 +709,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
             string displaySessionId = DisplaySessionIdFor(sessionId);
             string runtimeSessionId = RuntimeSessionIdFor(sessionId);
 
-            if (IsSessionBusy(displaySessionId))
+            if (!allowBusy && IsSessionBusy(displaySessionId))
                 throw new InvalidOperationException("Session is busy. Wait for the current response to finish.");
+
+            // The ordinal key is omitted entirely for a normal submit: the gateway treats a present
+            // truncate_before_user_ordinal as an explicit rewind, so a placeholder would drop turns.
+            object payload = truncate
+                ? (object)new { session_id = runtimeSessionId, text, truncate_before_user_ordinal = truncateBeforeUserOrdinal }
+                : (object)new { session_id = runtimeSessionId, text };
 
             try
             {
@@ -689,7 +726,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 // (Desktop PROMPT_SUBMIT_REQUEST_TIMEOUT_MS = 1_800_000).
                 await _gateway.Request<object>(
                     RpcMethods.PromptSubmit,
-                    new { session_id = runtimeSessionId, text },
+                    payload,
                     HermesGateway.PromptSubmitTimeoutMs);
             }
             catch
@@ -1571,6 +1608,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
             OnComplete?.Invoke(sid, finalText);
             SetBusy(sid, false);
             SetAwaiting(sid, false);
+
+            // message.complete carries the cumulative counters but not the post-turn prompt size,
+            // so the context gauge would keep drifting on its local estimate until the chat is
+            // reopened. session.context_breakdown is the exact source; ask for it once the turn has
+            // settled, and only for the session the gauge actually renders. Fire-and-forget —
+            // RequestContextBreakdown swallows its own failures and leaves the last good numbers.
+            if (string.Equals(sid, ActiveSessionId, StringComparison.Ordinal))
+                _ = RequestContextBreakdown(sid);
         }
 
         private void HandleReasoningDelta(GatewayEvent evt)
@@ -1658,12 +1703,25 @@ namespace NeonCompanion.Runtime.Api.Hermes
             }
 
             UsageStats usage = rt.usage ?? new UsageStats();
+
+            // Zero means "not reported", exactly as in MergeUsage. A session whose agent has not
+            // been built yet answers session.context_breakdown with an all-zero snapshot
+            // (tui_gateway falls back to the usage mirror, which has no context fields until a turn
+            // has run) — writing those through would blank a gauge that session.info or
+            // message.complete had already filled in.
             if (breakdown.context_max > 0)
                 usage.context_max = breakdown.context_max;
-            if (breakdown.context_used >= 0)
-                usage.context_used = breakdown.context_used;
-            if (breakdown.context_percent >= 0)
+
+            // The backend derives context_used from the compressor's measured prompt size and only
+            // falls back to the summed category estimate when it has none; mirror that ordering so
+            // a pre-first-turn breakdown still shows its estimate instead of nothing.
+            int contextUsed = breakdown.context_used > 0 ? breakdown.context_used : breakdown.estimated_total;
+            if (contextUsed > 0)
+                usage.context_used = contextUsed;
+
+            if (breakdown.context_percent > 0f)
                 usage.context_percent = breakdown.context_percent;
+
             rt.usage = usage;
             OnRuntimeInfoChanged?.Invoke(sid);
         }

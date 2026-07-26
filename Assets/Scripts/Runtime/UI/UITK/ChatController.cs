@@ -1076,7 +1076,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (streaming)
                     {
                         _streamingCoordinator.Begin();
-                        await chat.RegenerateAsync(_streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
+                        await RegenerateOrRewindAsync(chat, _streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
                         _streamingCoordinator.ClearThinkingBubble();
                         _approvalController?.ClearToolProgress();
                         _approvalController?.Dismiss();
@@ -1087,7 +1087,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                         try
                         {
                             var app = _d.GetAppAsync().Result;
-                            var client = app?.AiClient as OpenAiCompatibleClient;
+                            // Hermes turns never touch the HTTP client, so its LastStreamUsage would
+                            // be another provider's leftovers — same guard as the send path.
+                            var client = chat.IsHermesActive ? null : app?.AiClient as OpenAiCompatibleClient;
                             if (client != null)
                             {
                                 var usage = client.LastStreamUsage;
@@ -1125,7 +1127,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     }
                     else
                     {
-                        await chat.RegenerateAsync();
+                        await RegenerateOrRewindAsync(chat, null, null);
                     }
 
                     _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
@@ -1150,6 +1152,51 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 NeonLogger.LogError(ex.ToString());
             }
+        }
+
+        /// <summary>
+        /// Re-run the trailing user turn. In Hermes the transcript lives on the gateway, so the turn
+        /// is rewound there (prompt.submit <c>truncate_before_user_ordinal</c>) instead of being
+        /// replayed through ChatViewModel's OpenAI HTTP path — which the WebSocket-only backend does
+        /// not serve, and which would leave the superseded exchange in the agent's context. Falls
+        /// back to the local regenerate when no user turn can be resolved.
+        /// </summary>
+        private async Task RegenerateOrRewindAsync(
+            ChatService chat,
+            Action<string> onToken,
+            Action<ToolProgressInfo> onToolProgress)
+        {
+            if (chat.IsHermesActive)
+            {
+                var messages = chat.CurrentChatViewModel?.Messages;
+                int lastUserIndex = LastUserMessageIndex(messages);
+                if (lastUserIndex >= 0)
+                {
+                    string text = messages[lastUserIndex].content;
+                    if (await chat.RewindHermesTurnAsync(lastUserIndex, text, onToken, onToolProgress))
+                        return;
+                }
+            }
+
+            await chat.RegenerateAsync(onToken, onToolProgress);
+        }
+
+        private static int LastUserMessageIndex(IReadOnlyList<ChatMessage> messages)
+        {
+            if (messages == null)
+                return -1;
+
+            for (int i = messages.Count - 1; i >= 0; i--)
+            {
+                ChatMessage message = messages[i];
+                if (message != null &&
+                    string.Equals(ChatMessageListRenderer.NormalizeRole(message.role), "user", StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         // ===== Context Window Indicator (U-36) =====

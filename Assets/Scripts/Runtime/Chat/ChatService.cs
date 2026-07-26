@@ -89,6 +89,18 @@ namespace NeonCompanion.Runtime.Chat
             try { OnSessionStatesChanged?.Invoke(); } catch { }
         }
 
+        /// <summary>
+        /// A Hermes session was auto-titled (session.title). Args: sessionId, title. The push is the
+        /// only in-band notice that a chat's name changed — the REST catalog is only refetched on an
+        /// explicit history reload — so the sidebar follows this event instead of polling.
+        /// </summary>
+        public event Action<string, string> OnSessionTitleChanged;
+
+        // Titles pushed by session.title that the REST session catalog has not returned yet. The
+        // gateway DB stays the source of truth: an entry is dropped as soon as the server row
+        // carries a title of its own (see GetHermesSessionsAsDisplayAsync).
+        private readonly Dictionary<string, string> _hermesSessionTitles = new Dictionary<string, string>();
+
         /// <summary>True if the session has a pending approval/clarify awaiting the user.</summary>
         public bool SessionNeedsAttention(string sessionId)
         {
@@ -128,6 +140,7 @@ namespace NeonCompanion.Runtime.Chat
                 _chatTransport.OnComplete -= HandleHermesComplete;
                 _chatTransport.OnToolUpdate -= HandleHermesToolUpdate;
                 _chatTransport.OnReasoningDelta -= HandleHermesReasoningDelta;
+                _chatTransport.OnSessionTitle -= HandleHermesSessionTitle;
                 _chatTransport.OnError -= HandleHermesError;
 
                 HermesSessionManager previousManager = _chatTransport as HermesSessionManager;
@@ -140,6 +153,9 @@ namespace NeonCompanion.Runtime.Chat
             foreach (var kv in _hermesStreams)
                 ClearStreamPendingState(kv.Value);
             _hermesStreams.Clear();
+            // Pushed titles are keyed by the previous connection's session ids (a mode/profile
+            // switch drops the whole session map), so they must not leak into the next catalog.
+            _hermesSessionTitles.Clear();
 
             _chatTransport = transport;
 
@@ -151,6 +167,7 @@ namespace NeonCompanion.Runtime.Chat
                 _chatTransport.OnComplete += HandleHermesComplete;
                 _chatTransport.OnToolUpdate += HandleHermesToolUpdate;
                 _chatTransport.OnReasoningDelta += HandleHermesReasoningDelta;
+                _chatTransport.OnSessionTitle += HandleHermesSessionTitle;
                 _chatTransport.OnError += HandleHermesError;
 
                 HermesSessionManager manager = _chatTransport as HermesSessionManager;
@@ -220,6 +237,31 @@ namespace NeonCompanion.Runtime.Chat
             }
 
             RaiseSessionStatesChanged();
+        }
+
+        /// <summary>
+        /// The gateway's async titler named a session (session.title). The event carries the
+        /// STORED/display id, which is the key the sidebar renders by, so it can be applied
+        /// directly. Kept as an overlay until the REST catalog returns the same row with a title.
+        /// </summary>
+        private void HandleHermesSessionTitle(string sessionId, string title)
+        {
+            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrWhiteSpace(title))
+                return;
+
+            _hermesSessionTitles[sessionId] = title;
+
+            HermesStream stream = GetStream(sessionId);
+            if (stream != null && stream.session != null)
+                stream.session.title = title;
+
+            if (_currentSession != null &&
+                string.Equals(_currentSession.providerSessionId, sessionId, StringComparison.Ordinal))
+            {
+                _currentSession.title = title;
+            }
+
+            try { OnSessionTitleChanged?.Invoke(sessionId, title); } catch { }
         }
 
         public float Temperature { get; set; } = 0.7f;
@@ -374,6 +416,18 @@ namespace NeonCompanion.Runtime.Chat
                 string title = !string.IsNullOrWhiteSpace(hs.title)
                     ? hs.title
                     : (!string.IsNullOrWhiteSpace(hs.preview) ? hs.preview : "Hermes session");
+
+                // A session.title push can land before the row is persisted/refetched — show it
+                // rather than the preview fallback, then let go once the server carries a name of
+                // its own (it, not this client, decides what a chat is called).
+                string pushedTitle;
+                if (_hermesSessionTitles.TryGetValue(hs.id, out pushedTitle))
+                {
+                    if (string.IsNullOrWhiteSpace(hs.title))
+                        title = pushedTitle;
+                    else
+                        _hermesSessionTitles.Remove(hs.id);
+                }
 
                 list.Add(new ChatSession
                 {
@@ -1385,6 +1439,68 @@ namespace NeonCompanion.Runtime.Chat
             SaveCurrentSession();
         }
 
+        /// <summary>
+        /// Rewind to a user turn and re-run it on the gateway (Hermes only). The turn at
+        /// <paramref name="messageIndex"/> and everything after it are dropped locally and
+        /// server-side (prompt.submit <c>truncate_before_user_ordinal</c>), then
+        /// <paramref name="text"/> is submitted in its place — so an edited or repeated turn does
+        /// not leave the superseded exchange in the backend's context.
+        /// Returns false when the backend is not Hermes or the index is not a user turn, so the
+        /// caller can fall back to its own regenerate path.
+        /// </summary>
+        public async Task<bool> RewindHermesTurnAsync(
+            int messageIndex,
+            string text,
+            Action<string> onStreamToken = null,
+            Action<ToolProgressInfo> onToolProgress = null)
+        {
+            if (_chatTransport == null || string.IsNullOrWhiteSpace(text))
+                return false;
+            if (_currentChatViewModel == null || _currentChatViewModel.Messages == null)
+                return false;
+
+            List<ChatMessage> messages = _currentChatViewModel.Messages;
+            int ordinal = UserTurnOrdinal(messages, messageIndex);
+            if (ordinal < 0)
+                return false;
+
+            // The turn is being resubmitted, so its local copy goes with the rest of the tail:
+            // SendViaTransport re-adds the user bubble optimistically and the new reply streams
+            // into a fresh one. Dropping it here keeps the transcript in step with the truncation
+            // the gateway is about to perform.
+            while (messages.Count > messageIndex)
+                messages.RemoveAt(messages.Count - 1);
+
+            await SendViaTransport(text, null, onStreamToken, onToolProgress, ordinal);
+            return true;
+        }
+
+        /// <summary>
+        /// Zero-based position of the message at <paramref name="messageIndex"/> among the
+        /// transcript's user turns — the gateway's <c>truncate_before_user_ordinal</c>
+        /// (Desktop <c>visibleUserOrdinal</c>), which counts user turns and not transcript rows.
+        /// Returns -1 when that message is missing or is not a user turn.
+        /// </summary>
+        public static int UserTurnOrdinal(IReadOnlyList<ChatMessage> messages, int messageIndex)
+        {
+            if (messages == null || messageIndex < 0 || messageIndex >= messages.Count)
+                return -1;
+
+            ChatMessage target = messages[messageIndex];
+            if (target == null || !string.Equals(target.role, "user", StringComparison.OrdinalIgnoreCase))
+                return -1;
+
+            int ordinal = 0;
+            for (int i = 0; i < messageIndex; i++)
+            {
+                ChatMessage message = messages[i];
+                if (message != null && string.Equals(message.role, "user", StringComparison.OrdinalIgnoreCase))
+                    ordinal++;
+            }
+
+            return ordinal;
+        }
+
         public Task SendMessageAsync(string message, Action<string> onStreamToken = null)
         {
             return SendMessageAsync(message, null, onStreamToken, null);
@@ -1483,8 +1599,11 @@ namespace NeonCompanion.Runtime.Chat
         /// Send a message via Hermes WebSocket transport. The send is pinned to the foreground
         /// session's id and streams into that session's own context — switching the UI to another
         /// session does not disturb or misroute this generation.
+        /// <paramref name="truncateBeforeUserOrdinal"/> turns the submit into a rewind: the named
+        /// user turn and everything after it are dropped server-side first (see
+        /// <see cref="RewindHermesTurnAsync"/>). Null submits a plain new turn.
         /// </summary>
-        private async Task SendViaTransport(string message, IReadOnlyList<ChatAttachment> attachments = null, Action<string> onStreamToken = null, Action<ToolProgressInfo> onToolProgress = null)
+        private async Task SendViaTransport(string message, IReadOnlyList<ChatAttachment> attachments = null, Action<string> onStreamToken = null, Action<ToolProgressInfo> onToolProgress = null, int? truncateBeforeUserOrdinal = null)
         {
             if (_chatTransport == null)
                 return;
@@ -1559,7 +1678,7 @@ namespace NeonCompanion.Runtime.Chat
                 // Send via WebSocket — this returns after RPC ack.
                 try
                 {
-                    await _chatTransport.SendMessage(sid, message);
+                    await SubmitViaTransport(sid, message, truncateBeforeUserOrdinal);
                 }
                 catch (Exception ex)
                 {
@@ -1589,7 +1708,7 @@ namespace NeonCompanion.Runtime.Chat
                         stream.viewModel.Messages.Add(localUserMessage);
                     }
 
-                    await _chatTransport.SendMessage(sid, message);
+                    await SubmitViaTransport(sid, message, truncateBeforeUserOrdinal);
                 }
                 submitAcknowledged = true;
 
@@ -1609,6 +1728,18 @@ namespace NeonCompanion.Runtime.Chat
                 if (stream.complete == completion)
                     stream.complete = null;
             }
+        }
+
+        /// <summary>
+        /// One prompt.submit: a plain new turn, or a rewind when an ordinal is supplied. Kept in one
+        /// place so the stale-session retry inside SendViaTransport cannot silently resubmit a
+        /// rewind as an append.
+        /// </summary>
+        private Task SubmitViaTransport(string sid, string message, int? truncateBeforeUserOrdinal)
+        {
+            return truncateBeforeUserOrdinal.HasValue
+                ? _chatTransport.RewindAndSubmit(sid, message, truncateBeforeUserOrdinal.Value)
+                : _chatTransport.SendMessage(sid, message);
         }
 
         private void RaiseCurrentProviderChanged()

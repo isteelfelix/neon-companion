@@ -25,6 +25,16 @@ namespace NeonCompanion.Runtime.Api
         /// <summary>Send a user message to a specific session. Response arrives via events.</summary>
         Task SendMessage(string sessionId, string text);
 
+        /// <summary>
+        /// Rewind and re-run a user turn (<c>prompt.submit</c> with
+        /// <c>truncate_before_user_ordinal</c>): the backend drops that user turn and everything
+        /// after it, then runs <paramref name="text"/> in its place. The ordinal is the zero-based
+        /// position of the turn among the session's user messages (Desktop <c>visibleUserOrdinal</c>),
+        /// NOT a transcript index. A live turn is interrupted first — the backend rejects a submit
+        /// into a running agent as "session busy".
+        /// </summary>
+        Task RewindAndSubmit(string sessionId, string text, int truncateBeforeUserOrdinal);
+
         /// <summary>Attach an image to the given session before submitting a prompt.</summary>
         Task AttachImageBytes(string sessionId, string contentBase64);
 

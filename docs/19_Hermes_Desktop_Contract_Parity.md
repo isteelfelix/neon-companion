@@ -1,6 +1,6 @@
 # 19 — Hermes Desktop Contract Parity
 
-**Status:** Contract freeze (P1) + implementation P2–P5. P2 gateway timeouts/events, P3 session-manager routing + agent event plumbing, P5 secret UI + `thinking.delta` routing are now in code (see the ✅ markers in §1 and §10).
+**Status:** Contract freeze (P1) + implementation P2–P6. P2 gateway timeouts/events, P3 session-manager routing + agent event plumbing, P5 secret/sudo capture UI + `thinking.delta` routing, P6 session management (title / usage / context breakdown / rewind) are now in code (see the ✅ markers in §1 and §10, and §11 for P6).
 **Goal:** Bring neon-companion's Hermes agent plumbing up to the current **Hermes Desktop** contracts. Desktop is the source of truth for connections, gateway events/RPC, tool/agent wrapping, timeouts, and session identity. This is **not** a UI port of the Electron/React app.
 
 ## Sources of truth (read-only reference, `/opt/hermes`)
@@ -50,7 +50,7 @@ Desktop event union: `GatewayEventName` in `json-rpc-gateway.ts:1-23`. Additiona
 | `background.complete` | union | YES (`HandleBackgroundComplete`, P3; log-only, no background panel) | P2 |
 | `error` | union + handler + stream end | YES (`HandleError`) | P0 |
 | `skin.changed` | union | **NO** (avatar/skin — likely non-goal) | P3 |
-| `session.title` | stream handler | PARTIAL — `HandleSessionTitle` → `OnSessionTitle` fired (P3); no UI consumer wired yet | P2 |
+| `session.title` | stream handler | YES (`HandleSessionTitle` → `OnSessionTitle` → `ChatService.OnSessionTitleChanged` → `SessionHistoryController.ApplySessionTitle`; sidebar + topbar rename live, P6) | P2 |
 | `subagent.spawn_requested` / `subagent.start` / `subagent.*` | stream; **dropped when unscoped** (`gateway-events.ts:55-57`) | YES (wildcard → `HandleSubagentEvent`, P3; unscoped dropped, scoped logged under owning session) | P1 |
 | `moa.reference` / `moa.aggregating` | stream (MoA presets) | **NO** | P2 |
 | `review.summary` | stream | **NO** | P2 |
@@ -80,13 +80,13 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | `session.interrupt` | YES | YES | P0 |
 | `session.steer` | YES | **NO** | P1 |
 | `session.active_list` | YES (live sessions across profiles) | YES (`ListActiveSessions`) — live status only, for post-reconnect rehydration; REST `/api/sessions?profile=` stays the history catalog. Missing-method → null, state untouched | P2 |
-| `session.usage` | YES | **NO** (usage derived from `session.info`/`message.complete`) | P2 |
-| `session.title` | YES | **NO** | P2 |
-| `session.cwd.set` | YES | **NO** | P2 |
-| `session.context_breakdown` | YES | **NO** | P2 |
+| `session.usage` | YES | YES (`RequestSessionUsage`, 5 s timeout; merged zero-safe — see §11) | P2 |
+| `session.title` | YES (rename RPC) | **NO** — the *event* is consumed (§1); the RPC is a user-driven rename and Companion's sidebar has no rename action to call it from | P2 |
+| `session.cwd.set` | YES (`use-cwd-actions.ts`, workspace picker) | **NO / N-A** — Companion has no working-directory surface at all: `LastKnownCwd` is read-only, learned from `session.info` and replayed into `session.create`. Adding the RPC without a picker would be dead code (§11) | P2 |
+| `session.context_breakdown` | YES (categories panel) | PARTIAL — `RequestContextBreakdown` is called on session switch and after each `message.complete` for the foreground chat; only `context_max`/`context_used` are applied, because the context bar is the sole consumer. `categories[]` is parsed but intentionally unrendered (§11) | P2 |
 | `session.activate` | YES | YES (`ActivateSession`) — rebinds a live session's event transport to the new socket after a reconnect; failure falls back to a full `session.resume` | P2 |
 | `prompt.submit` | YES (**`PROMPT_SUBMIT_REQUEST_TIMEOUT_MS` = 1 800 000**) | PARTIAL — sends it, but with the default 30 s timeout (§3) | **P0** |
-| `prompt.submit` (rewind) | `truncate_before_user_ordinal` param (`use-prompt-actions/rewind.ts`) | **NO** | P2 |
+| `prompt.submit` (rewind) | `truncate_before_user_ordinal` param (`use-prompt-actions/rewind.ts`) | YES (`RewindAndSubmit`; drives regenerate and edit-and-regenerate, §11) | P2 |
 | `slash.exec` | YES | YES (inline string, `SwitchModelAsync`) | P1 |
 | `image.attach` | YES | **NO** | P2 |
 | `image.attach_bytes` | YES | YES (`RpcMethods.ImageAttachBytes`) | P1 |
@@ -109,7 +109,7 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | `client.pong` | — | YES | P1 |
 | `file.transfer.ack/complete/start/chunk/finish` | — | YES (companion extension) | P2 |
 
-**Key RPC gaps:** `prompt.submit` timeout (P0, §3), `session.steer` (P1), `secret.respond` + `sudo.respond` (P1), rewind `truncate_before_user_ordinal` (P2). `session.list` vs Desktop `session.active_list` is a **name divergence** to reconcile — confirm which the backend actually serves for a remote client.
+**Key RPC gaps:** `session.list` vs Desktop `session.active_list` is a **name divergence** to reconcile — confirm which the backend actually serves for a remote client.
 
 ---
 
@@ -241,12 +241,99 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 5. `secret.respond` / `sudo.respond` RPC responders (`RespondToSecret` / `RespondToSudo`) — **P2/P3**. ✅
 6. **Secret UI (P5):** `OnSecretRequest` surfaced on `IChatTransport`; `ToolCallApprovalController` shows a masked text-input prompt and answers with `secret.respond {request_id, value}` (never routed through the approve/deny responder). Per-session multiplexing preserved (foreground shows inline; background defers via `StorePendingSecret` + attention badge). ✅
 
+7. **Session management (P6):** `session.title` consumed live by the sidebar/topbar; `session.usage` + `session.context_breakdown` applied zero-safely; `prompt.submit` rewind via `truncate_before_user_ordinal`. See §11. ✅
+
 **Still missing / partial (ranked):**
-1. `sudo.request` password-capture UI — **P1**. Currently surfaced as an approve/deny `OnApprovalRequest` (`type="sudo"`) and answered via `RespondToApproval`; `RespondToSudo(password)` exists but no password prompt is wired.
-2. `session.title` UI consumer — **P2**. `OnSessionTitle` is fired but no view updates the sidebar title live (avoids a MainViewController refactor).
-3. `session.steer` RPC — **P1**.
-4. `session.list` vs `session.active_list` reconciliation, rewind `truncate_before_user_ordinal` — **P2**.
-5. OAuth ticket mint + reauth surface — **P2** (only if target is OAuth-gated).
-6. Desktop REST mutators and host-only surfaces: config writes/schema/defaults, skill/toolset toggles/config, MCP/catalog, profiles/providers, messaging, audio, memory/learning, ops/update/gateway lifecycle — **P3/out of scope** until Companion grows matching flows.
+1. `session.list` vs `session.active_list` reconciliation — **P2**.
+2. `session.cwd.set`, `session.title` (rename RPC), `moa.*` / `review.summary` / `browser.progress` stream events — **P2**, all blocked on a Companion surface that does not exist rather than on the protocol (§11).
+3. OAuth ticket mint + reauth surface — **P2** (only if target is OAuth-gated).
+4. Desktop REST mutators and host-only surfaces: config writes/schema/defaults, skill/toolset toggles/config, MCP/catalog, profiles/providers, messaging, audio, memory/learning, ops/update/gateway lifecycle — **P3/out of scope** until Companion grows matching flows.
+
+---
+
+## 11. Session management parity (P6)
+
+### `session.title` — live sidebar rename ✅
+
+The gateway's titler runs *after* the first turn persists and announces the result once, on the
+`session.title` stream event; the REST catalog (`/api/sessions`) is only refetched on an explicit
+history reload, so before this the sidebar kept showing the preview fallback until the user
+navigated away and back.
+
+Chain: `HandleSessionTitle` (payload `session_id` is the STORED/display id — the key the sidebar
+renders by) → `IChatTransport.OnSessionTitle` → `ChatService.HandleHermesSessionTitle` →
+`ChatService.OnSessionTitleChanged` → `MainViewController.OnSessionTitleChanged` →
+`SessionHistoryController.ApplySessionTitle`, which patches the cached row and re-renders (no REST
+round-trip); a chat not in the cache yet triggers one refetch. The topbar follows when the renamed
+chat is the open one.
+
+`ChatService` keeps the pushed title in `_hermesSessionTitles` as an **overlay only**: the entry is
+used while the server row still has no title of its own and dropped the moment the catalog returns
+one, so the gateway DB stays the source of truth. The map is cleared on transport swap, because a
+mode/profile switch drops the whole session id map with it.
+
+### `session.usage` / `session.context_breakdown` — no zeroing ✅
+
+Both RPCs answer with **partial** objects. `session.usage` for a session whose agent has not been
+built yet returns `{calls, input, output, total}` and no context fields at all; the agent-less
+branch of `session.context_breakdown` returns an all-zero snapshot (`tui_gateway/server.py`
+`session.context_breakdown`, `_session_usage_snapshot` fallback). Deserialized into `UsageStats`
+those absent fields land as `0`.
+
+The rule everywhere is therefore **zero means "not reported"**: `MergeUsage` already ignored zeros,
+and `ApplyContextBreakdown` now does too (it previously wrote `context_used`/`context_percent`
+through on `>= 0`, which is every int, so an agent-less breakdown blanked a gauge that
+`session.info`/`message.complete` had filled in). `context_used` also falls back to
+`estimated_total`, mirroring the backend's own ordering (measured prompt tokens when the compressor
+has them, summed category estimate otherwise).
+
+`message.complete` carries the cumulative counters but not the post-turn prompt size, so
+`HandleMessageComplete` now asks for one `session.context_breakdown` when the completed turn belongs
+to the **foreground** session — the only session whose gauge is on screen. Fire-and-forget; a
+failure leaves the last good numbers.
+
+**Deliberately not consumed:** `categories[]` (Desktop renders them in `context-usage-panel.tsx`;
+Companion has no such panel, so the array is parsed and returned but nothing is faked for it),
+`context_percent` (the context bar computes its own from used/max), and `credits_lines` from
+`session.usage` (no billing surface).
+
+### `prompt.submit` rewind — `truncate_before_user_ordinal` ✅
+
+Companion already had the message action this hangs off: the transcript context menu's **Edit →
+Save & Regenerate**, plus the composer's **Regenerate** button. Both funnel through
+`ChatController.RegenerateLastAsync`, which in Hermes mode used to call
+`ChatViewModel.RegenerateAsync` — the OpenAI HTTP path, which the WebSocket-only backend does not
+serve and which would in any case leave the superseded exchange in the agent's context.
+
+`RegenerateOrRewindAsync` now routes Hermes turns to `ChatService.RewindHermesTurnAsync` →
+`IChatTransport.RewindAndSubmit` → `prompt.submit {session_id, text, truncate_before_user_ordinal}`.
+The ordinal is Desktop's `visibleUserOrdinal`: the zero-based position of the turn among the
+transcript's **user messages**, not a transcript row index (`ChatService.UserTurnOrdinal`). A live
+turn is interrupted first and an idle one is not, matching `runRewindSubmit` — interrupting an idle
+agent can leave a stale interrupt flag that cancels the fresh turn. The key is **omitted** for a
+normal submit, since the gateway treats its presence as an explicit rewind.
+
+Known limitations:
+
+- The ordinal is computed from Companion's local transcript. If that has drifted from the server's
+  (e.g. server-side auto-compression rewrote the history), the backend rejects the submit and the
+  error surfaces through the normal turn-failure path rather than silently truncating the wrong
+  turn. Desktop has the same dependency on its local message list.
+- The local truncation is optimistic and is **not** rolled back if the submit is rejected — same as
+  Desktop's `applyRewindOptimistic`, and same as the pre-existing regenerate path, which already
+  dropped the trailing assistant message before calling out. In Hermes the gateway DB is the source
+  of truth, so reopening the chat re-syncs the transcript.
+- Rewind is Hermes-only. The OpenAI backend has no server-side transcript, so
+  `RegenerateOrRewindAsync` falls through to the existing `ChatViewModel.RegenerateAsync` there.
+
+### `session.cwd.set` — not implemented, and why
+
+Desktop's `use-cwd-actions.ts` drives this from a workspace picker in the session header. Companion
+has **no working-directory surface of any kind**: `HermesSessionManager.LastKnownCwd` is read-only,
+learned from `session.info` and replayed into the next `session.create` so a new chat lands where
+the last one did. There is nothing to call the RPC from, and no UI was invented for it — adding the
+method alone would be dead code. If a workspace picker is ever added, this is a one-method change
+(`session.cwd.set {session_id, cwd}` returns the updated `SessionRuntimeInfo`, and Desktop treats
+"unknown method" as "staged locally", not as an error).
 
 _No changes were made under `/opt/hermes` (read-only reference)._
