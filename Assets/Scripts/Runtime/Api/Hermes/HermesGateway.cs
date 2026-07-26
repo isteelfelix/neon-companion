@@ -191,6 +191,12 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string ImageAttachBytes = "image.attach_bytes";
         public const string SessionUsage = "session.usage";
         public const string SessionContextBreakdown = "session.context_breakdown";
+        // Composer completion trio. The gateway routes all three to its worker pool, so they may
+        // take seconds on a large repo; older gateways answer -32601 and callers must degrade to
+        // "no suggestions" rather than surfacing an error.
+        public const string CommandsCatalog = "commands.catalog";
+        public const string CompleteSlash = "complete.slash";
+        public const string CompletePath = "complete.path";
     }
 
     // === HermesGateway ===

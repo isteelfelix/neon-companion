@@ -651,6 +651,73 @@
     margin-bottom: 0;
 }
 
+/* Composer completion popover — slash commands (commands.catalog / complete.slash) and
+   @path references (complete.path). Created in C# as the composer's first child: USS has no
+   z-index, so an in-flow block above the input is how it stacks over the transcript. */
+.composer__suggestions {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    background-color: var(--bg-1);
+    overflow: hidden;
+}
+
+.composer__suggestions-list {
+    max-height: 190px;
+}
+
+.composer__suggestions-list .unity-scroller--vertical {
+    width: 8px;
+}
+
+.composer__suggestion {
+    flex-direction: row;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 6px;
+}
+
+.composer__suggestion:hover {
+    background-color: var(--bg-3);
+}
+
+.composer__suggestion--active {
+    background-color: var(--accent-soft);
+}
+
+.composer__suggestion-label {
+    flex-shrink: 0;
+    color: var(--text-0);
+    font-size: 13px;
+    margin-right: 10px;
+}
+
+.composer__suggestion--active .composer__suggestion-label {
+    color: var(--accent-text);
+}
+
+/* Descriptions are secondary: they may be long, so they take the leftover width and
+   ellipsize instead of pushing the command name out of view. */
+.composer__suggestion-meta {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    color: var(--text-3);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -unity-text-align: middle-right;
+}
+
+.composer__suggestion-group {
+    color: var(--text-4);
+    font-size: 10px;
+    padding: 6px 10px 2px 10px;
+}
+
 /* Composer image preview strip */
 .composer__previews {
     flex-direction: row;

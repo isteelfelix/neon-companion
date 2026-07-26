@@ -99,7 +99,7 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | `terminal.read.respond` | YES | YES (`RespondToTerminalRead`, `{request_id, text}`) | P1 |
 | `terminal.respond` | — | YES (companion extension, answers `terminal.execute`). Upstream has no such method and replies `-32601`; the responder treats that as "not supported", latches it, and stops running the bridge for that connection | P2 |
 | `model.options` | YES | YES (inline string, `GetModelOptionsAsync`) | P2 |
-| `commands.catalog` / `complete.path` / `complete.slash` | YES (composer completions) | **NO** | P2 |
+| `commands.catalog` / `complete.path` / `complete.slash` | YES (composer completions) | YES (`ChatComposerCompletionController`) — bare `/` reads the categorized catalog, later keystrokes `complete.slash` (honouring `replace_from` for arg-stage items), `@…` reads `complete.path` with `session_id` (cwd left to the gateway). 8 s bound, stale answers dropped, missing method → no suggestions | P2 |
 | `config.get` / `config.set` | YES | **NO** (companion uses REST/slash) | P2 |
 | `reload.env` / `reload.mcp` | YES | **NO** | P3 |
 | `process.list` / `process.kill` | YES | **NO** | P3 |

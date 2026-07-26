@@ -84,6 +84,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Deps _d;
         private ChatNotificationManager _notifications;
         private ChatInputManager _inputManager;
+        private ChatComposerCompletionController _completionController;
         private ChatAttachmentManager _attachmentManager;
         private ChatService _currentChatService;
         private ChatStreamingCoordinator _streamingCoordinator;
@@ -149,6 +150,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 },
                 StartNewSessionAsync);
             _inputManager.OnSubmit += _ => OnSendClicked();
+            _completionController = new ChatComposerCompletionController(
+                _d.MessageInput,
+                _d.Composer,
+                _d.GetChatServiceAsync);
             _attachmentManager = new ChatAttachmentManager(
                 _d.Composer,
                 _d.MessageInput,
@@ -245,6 +250,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.MessageInput != null)
             {
+                // Before the input manager: both register a trickle-down KeyDownEvent handler on
+                // the same field, and registration order decides who sees Enter first. The
+                // completion popover must be able to claim it (accept the suggestion) before the
+                // composer reads it as send.
+                _completionController?.RegisterCallbacks();
                 _inputManager.RegisterCallbacks();
                 _d.MessageInput.RegisterValueChangedCallback(OnComposerTextChangedForAvatar);
             }
@@ -326,6 +336,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _inputManager?.UnregisterCallbacks();
+            _completionController?.UnregisterCallbacks();
 
             _messageListRenderer?.UnregisterCallbacks();
 
