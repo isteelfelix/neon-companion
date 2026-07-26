@@ -222,8 +222,15 @@ public interface IChatTransport : IDisposable
 
     // Session-aware messaging
     Task SendMessage(string sessionId, string text);
-    Task AttachImageBytes(string sessionId, string contentBase64);
     Task Interrupt(string sessionId);
+
+    // Attachments — staged on the session just before prompt.submit (docs/19 §12).
+    // The image calls return the GATEWAY-side path (the handle DetachImage takes);
+    // AttachFile returns the @file: ref that goes into the prompt text.
+    Task<string> AttachImageBytes(string sessionId, string contentBase64, string filename);
+    Task<string> AttachImagePath(string sessionId, string path);
+    Task<string> AttachFile(string sessionId, string path, string name, string dataUrl);
+    Task DetachImage(string sessionId, string path);
 
     // Events — all carry sessionId for multiplexed routing
     event Action<string> OnStreamStarted;                    // sessionId

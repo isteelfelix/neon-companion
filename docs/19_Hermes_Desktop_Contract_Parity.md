@@ -88,10 +88,10 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | `prompt.submit` | YES (**`PROMPT_SUBMIT_REQUEST_TIMEOUT_MS` = 1 800 000**) | PARTIAL — sends it, but with the default 30 s timeout (§3) | **P0** |
 | `prompt.submit` (rewind) | `truncate_before_user_ordinal` param (`use-prompt-actions/rewind.ts`) | YES (`RewindAndSubmit`; drives regenerate and edit-and-regenerate, §11) | P2 |
 | `slash.exec` | YES | YES (inline string, `SwitchModelAsync`) | P1 |
-| `image.attach` | YES | **NO** | P2 |
-| `image.attach_bytes` | YES | YES (`RpcMethods.ImageAttachBytes`) | P1 |
-| `image.detach` | YES | **NO** | P2 |
-| `file.attach` | YES | PARTIAL — companion has its own `file.transfer.*` protocol instead | P2 |
+| `image.attach` | YES (local mode, path-based) | YES (`AttachImagePath`) — compatibility fallback only, used when a gateway answers `image.attach_bytes` with `-32601` (§12) | P2 |
+| `image.attach_bytes` | YES | YES (`AttachImageBytes`, now with the `filename` extension hint) — the default path, since Companion rarely shares a filesystem with the gateway (§12) | P1 |
+| `image.detach` | YES (chip removal) | YES (`DetachImage`) — rollback for a send that never reached the agent; Companion stages at submit time, so there is no chip-removal case to detach from (§12) | P2 |
+| `file.attach` | YES | YES (`AttachFile`, `data_url` upload; the returned `ref_text` is prefixed to the prompt). Unrelated to the companion-only `file.transfer.*` protocol, which is agent-initiated and stays as-is (§12) | P2 |
 | `approval.respond` | YES (`{session_id, choice}`) | YES | P1 |
 | `clarify.respond` | YES (`{request_id, answer}`) | YES | P1 |
 | `secret.respond` | YES | **NO** | P1 |
@@ -243,6 +243,8 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 
 7. **Session management (P6):** `session.title` consumed live by the sidebar/topbar; `session.usage` + `session.context_breakdown` applied zero-safely; `prompt.submit` rewind via `truncate_before_user_ordinal`. See §11. ✅
 
+8. **Attachments (P7):** `image.attach_bytes` (with the `filename` hint) + `image.attach` fallback, `file.attach` with `ref_text` prefixed to the prompt, `image.detach` rollback for an unsubmitted send. See §12. ✅
+
 **Still missing / partial (ranked):**
 1. `session.list` vs `session.active_list` reconciliation — **P2**.
 2. `session.cwd.set`, `session.title` (rename RPC), `moa.*` / `review.summary` / `browser.progress` stream events — **P2**, all blocked on a Companion surface that does not exist rather than on the protocol (§11).
@@ -335,5 +337,77 @@ the last one did. There is nothing to call the RPC from, and no UI was invented 
 method alone would be dead code. If a workspace picker is ever added, this is a one-method change
 (`session.cwd.set {session_id, cwd}` returns the updated `SessionRuntimeInfo`, and Desktop treats
 "unknown method" as "staged locally", not as an error).
+
+---
+
+## 12. Attachment parity (image / file)
+
+### What the gateway actually does
+
+`tui_gateway/server.py` queues attachments on the **runtime session dict**, and
+`_run_prompt_submit` pops `session["attached_images"]` when a turn starts. Two consequences drive
+everything below: an attach is bound to one runtime session (the display id has to be translated
+first, `HermesSessionManager.AttachTargetRuntimeId`), and anything staged for a prompt that never
+runs stays queued and rides along with the **next** turn.
+
+| Method | Payload | Answer |
+| --- | --- | --- |
+| `image.attach` | `{session_id, path}` | `{attached, path, count, remainder, text, …meta}` — path must exist on the GATEWAY |
+| `image.attach_bytes` | `{session_id, content_base64, filename?}` | same shape plus `bytes` |
+| `image.detach` | `{session_id, path}` | `{detached, count}` — `path` is the GATEWAY path the attach returned |
+| `file.attach` | `{session_id, path, name?, data_url?}` | `{attached, name, path, ref_path, ref_text, uploaded}` |
+
+### What Companion sends now
+
+Attachments are staged in `ChatService.StageAttachmentsAsync` immediately before `prompt.submit`,
+split by `ChatAttachment.kind` exactly as Desktop's `uploadComposerAttachment` splits on its own
+kind field:
+
+- **image** → `image.attach_bytes` with `filename`. The hint matters: without it the gateway sniffs
+  magic bytes and falls back to `.png`, so before this change a dropped `.txt`/`.pdf` — which
+  Companion also routed through `attach_bytes` — was written into the gateway's images dir as a
+  bogus PNG and handed to the vision pipeline. On `-32601` (a gateway older than the byte upload)
+  the call retries as path-based `image.attach`, which only resolves when the gateway shares this
+  device's filesystem.
+- **file** → `file.attach` with a `data:<media-type>;base64,…` upload, and the returned `ref_text`
+  (`@file:<workspace-relative>`) is prefixed to the submitted prompt, newline-joined and separated
+  from the user's text by a blank line — Desktop `buildContextText`. Staging alone puts nothing in
+  front of the agent; the ref in the turn text is what makes the file readable. An image-only turn
+  with no text falls back to Desktop's `"What do you see in this image?"` rather than submitting an
+  empty prompt.
+
+The transcript bubble still shows the user's own text plus its attachment chips — the refs travel in
+the submitted prompt only.
+
+### Failure, retry and reconnect
+
+- **Per-attachment vs per-send.** `IsAttachmentLevelFailure` splits them: a gateway refusal
+  (`attached=false`), a rejected payload (`RpcException`) or a missing method drops that one
+  attachment with a warning and the turn still goes out; a dead socket, a busy session or a stale
+  session id propagates, because silently sending the text as though nothing were attached is worse
+  than failing.
+- **Stale session.** Staging now sits INSIDE the existing "session not found → resume and retry
+  once" block. It has to: attach is session-scoped, so a stale id fails at the attach, before the
+  submit. After the resume the attachments are staged again against the session that actually runs
+  the turn — the resumed runtime session queues nothing of its own.
+- **Rollback.** If the send fails before `prompt.submit` is acknowledged, every image staged for it
+  is handed back via `image.detach` (`DetachStagedImagesAsync`) before the optimistic bubble is
+  removed. Nothing consumed them, so without this a later turn would carry them — the duplicate-send
+  case. Best-effort by design: the failure that killed the send usually kills the detach too, and a
+  session that is gone cannot leak anything. Once the submit is acknowledged nothing is detached,
+  because the gateway has already popped the queue.
+- **Cancel.** Interrupt happens after the submit, so the images are already consumed; there is
+  nothing to take back.
+
+### Deliberately unchanged
+
+`file.transfer.start/chunk/finish` is a **different protocol for a different direction**: the agent
+asks the client for a file (`direction=from_client`) and `FileTransferSender` streams it back
+chunked with a SHA-256 check. It is companion-only, has no Desktop counterpart, and is untouched —
+it never competes with `file.attach`, which is the user attaching something to their own turn.
+
+Desktop also detaches when the user removes an image chip from the composer
+(`use-composer-actions.ts removeAttachment`), because Desktop eagerly uploads on drop. Companion
+stages at submit time, so a removed chip was never on the gateway and there is nothing to detach.
 
 _No changes were made under `/opt/hermes` (read-only reference)._

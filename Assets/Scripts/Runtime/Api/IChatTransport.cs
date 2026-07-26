@@ -35,8 +35,34 @@ namespace NeonCompanion.Runtime.Api
         /// </summary>
         Task RewindAndSubmit(string sessionId, string text, int truncateBeforeUserOrdinal);
 
-        /// <summary>Attach an image to the given session before submitting a prompt.</summary>
-        Task AttachImageBytes(string sessionId, string contentBase64);
+        /// <summary>
+        /// Attach an image to the given session from raw bytes (<c>image.attach_bytes</c>) before
+        /// submitting a prompt. <paramref name="filename"/> is an extension hint for the backend's
+        /// sniffing. Returns the BACKEND-side path the image was queued under — the handle
+        /// <see cref="DetachImage"/> takes — or null when there was nothing to send.
+        /// </summary>
+        Task<string> AttachImageBytes(string sessionId, string contentBase64, string filename);
+
+        /// <summary>
+        /// Attach an image the backend can read itself by path (<c>image.attach</c>). Only usable
+        /// when backend and client share a filesystem; it is the fallback for backends that
+        /// predate the byte-upload variant. Returns the backend-side path.
+        /// </summary>
+        Task<string> AttachImagePath(string sessionId, string path);
+
+        /// <summary>
+        /// Stage a non-image file (<c>file.attach</c>) and return the <c>@file:</c> reference that
+        /// resolves on the backend — that ref, not the client path, is what belongs in the prompt.
+        /// <paramref name="dataUrl"/> uploads the bytes for backends that cannot see the path.
+        /// </summary>
+        Task<string> AttachFile(string sessionId, string path, string name, string dataUrl);
+
+        /// <summary>
+        /// Remove an image previously queued on the session (<c>image.detach</c>). Attachments are
+        /// only consumed when a prompt actually runs, so anything staged for a send that failed
+        /// must be detached or it rides along with the next turn.
+        /// </summary>
+        Task DetachImage(string sessionId, string path);
 
         /// <summary>Interrupt the generation of a specific session.</summary>
         Task Interrupt(string sessionId);

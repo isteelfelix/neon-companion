@@ -7,7 +7,10 @@
 - **Desktop-style Remote Hermes gateway UX** — Providers editor primary path is Gateway URL + Connect / Sign in (auto-probe `/api/status` + `/api/auth/providers`), with Signed in / Needs sign-in / Connected status and Sign out. Gated gateways complete login in the browser window (password form and OAuth IDP live on gateway `/login`); Bearer token only under Advanced. Reuses P8 cookie + ws-ticket plumbing; token mode preserved.
 - **Hermes REST v2 read surface** — `HermesRestClient` now mirrors Desktop read endpoints for status, model info/options, config, skills, toolsets, and cron jobs, with bearer-auth GET/POST/PATCH/DELETE helpers and a typed missing-endpoint exception for 404 `No such API endpoint` capability gaps.
 
+- **Desktop-parity attachment path** — non-image files now go out through `file.attach` (data-URL upload) with the returned `@file:` ref prefixed to the prompt, images through `image.attach_bytes` with the `filename` extension hint, with path-based `image.attach` as the fallback for older gateways. Attachments are staged against the session that actually runs the turn (re-staged after a stale-session resume) and taken back with `image.detach` when the send never reaches the agent, so a failed turn cannot resend them. The agent-initiated `file.transfer.*` protocol is unchanged.
+
 ### Fixed
+- Attachments of any kind were uploaded as images: a dropped text/PDF file was written into the gateway's images dir as a bogus PNG (no `filename` hint meant magic-byte sniffing fell back to `.png`) and handed to the vision pipeline instead of being staged as a readable file.
 - Audited and documented the complete OpenAI-compatible chat path; stopped advertising an incomplete generic function-tool loop, removed duplicate completion replay after an empty successful stream, and preserved structured OpenAI error diagnostics and request IDs.
 - All runtime version labels now use Unity Player Settings through `Application.version`; removed stale hardcoded splash/version-file values and aligned mobile Build Profiles.
 
