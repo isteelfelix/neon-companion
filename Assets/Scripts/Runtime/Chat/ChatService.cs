@@ -1650,35 +1650,19 @@ namespace NeonCompanion.Runtime.Chat
             stream.viewModel.Messages.Add(localUserMessage);
 
             bool submitAcknowledged = false;
+            // Images queued on the gateway for THIS send. The backend only clears them when a
+            // prompt actually runs, so a send that never reaches the agent has to take them back
+            // or they ride along with the next turn.
+            var stagedImages = new List<StagedImage>();
             try
             {
-                // Attach images to the Hermes session first, then submit text normally.
-                if (attachments != null && attachments.Count > 0)
-                {
-                    foreach (var att in attachments)
-                    {
-                        if (att == null || string.IsNullOrEmpty(att.path))
-                            continue;
-                        string b64 = null;
-                        try
-                        {
-                            byte[] fileBytes = System.IO.File.ReadAllBytes(att.path);
-                            b64 = System.Convert.ToBase64String(fileBytes);
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning("[ChatService] Failed to read attachment: " + ex.Message);
-                        }
-
-                        if (!string.IsNullOrEmpty(b64))
-                            await _chatTransport.AttachImageBytes(sid, b64);
-                    }
-                }
-
-                // Send via WebSocket — this returns after RPC ack.
+                // Stage attachments onto the gateway session first, then submit the text with the
+                // refs the gateway handed back. Staging is INSIDE the stale-session retry because
+                // it is itself session-scoped: a dead session fails the attach before the submit.
                 try
                 {
-                    await SubmitViaTransport(sid, message, truncateBeforeUserOrdinal);
+                    string refText = await StageAttachmentsAsync(sid, attachments, stagedImages);
+                    await SubmitViaTransport(sid, ComposePromptText(message, refText, attachments), truncateBeforeUserOrdinal);
                 }
                 catch (Exception ex)
                 {
@@ -1708,7 +1692,12 @@ namespace NeonCompanion.Runtime.Chat
                         stream.viewModel.Messages.Add(localUserMessage);
                     }
 
-                    await SubmitViaTransport(sid, message, truncateBeforeUserOrdinal);
+                    // Re-stage against the session we actually landed on. Whatever the stale
+                    // session held is unreachable, and the resumed runtime session queues
+                    // nothing of its own — skipping this would submit a turn whose images and
+                    // @file: refs point at a session other than the one now running the agent.
+                    string retryRefText = await StageAttachmentsAsync(sid, attachments, stagedImages);
+                    await SubmitViaTransport(sid, ComposePromptText(message, retryRefText, attachments), truncateBeforeUserOrdinal);
                 }
                 submitAcknowledged = true;
 
@@ -1716,8 +1705,14 @@ namespace NeonCompanion.Runtime.Chat
             }
             catch
             {
-                if (!submitAcknowledged && stream.viewModel != null && stream.viewModel.Messages != null)
-                    stream.viewModel.Messages.Remove(localUserMessage);
+                if (!submitAcknowledged)
+                {
+                    // The prompt never reached the agent, so nothing consumed these. Take them
+                    // back before the bubble goes, so a retry does not send them twice.
+                    await DetachStagedImagesAsync(stagedImages);
+                    if (stream.viewModel != null && stream.viewModel.Messages != null)
+                        stream.viewModel.Messages.Remove(localUserMessage);
+                }
                 // A turn cut short by the socket dropping (transportSuspended) keeps its partial
                 // bubble so the reconnect can continue in it; every other failure clears fully.
                 ClearStreamPendingState(stream, stream.transportSuspended);
@@ -1740,6 +1735,242 @@ namespace NeonCompanion.Runtime.Chat
             return truncateBeforeUserOrdinal.HasValue
                 ? _chatTransport.RewindAndSubmit(sid, message, truncateBeforeUserOrdinal.Value)
                 : _chatTransport.SendMessage(sid, message);
+        }
+
+        // === Attachment staging (Desktop uploadComposerAttachment / buildContextText) ===
+
+        /// <summary>An image queued on a specific gateway session, so it can be taken back.</summary>
+        private sealed class StagedImage
+        {
+            public string sessionId;
+            public string path;
+        }
+
+        /// <summary>
+        /// Text Desktop submits for an image-only turn, so the backend never gets an empty prompt
+        /// alongside a vision attachment.
+        /// </summary>
+        private const string ImageOnlyPromptText = "What do you see in this image?";
+
+        /// <summary>Non-image attachments are staged as files; everything else is a vision image.</summary>
+        private static bool IsFileAttachment(ChatAttachment attachment)
+        {
+            return attachment != null && string.Equals(attachment.kind, "file", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasImageAttachment(IReadOnlyList<ChatAttachment> attachments)
+        {
+            if (attachments == null)
+                return false;
+
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                if (attachments[i] != null && !IsFileAttachment(attachments[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Desktop buildContextText: gateway-side refs first, then the user's own text. The refs
+        /// have to travel in the prompt because <c>file.attach</c> only stages the bytes — nothing
+        /// puts them in front of the agent unless the turn mentions them.
+        /// </summary>
+        private static string ComposePromptText(string message, string refText, IReadOnlyList<ChatAttachment> attachments)
+        {
+            string text = message == null ? string.Empty : message;
+
+            string composed;
+            if (string.IsNullOrEmpty(refText))
+                composed = text;
+            else if (string.IsNullOrWhiteSpace(text))
+                composed = refText;
+            else
+                composed = refText + "\n\n" + text;
+
+            if (string.IsNullOrWhiteSpace(composed) && HasImageAttachment(attachments))
+                return ImageOnlyPromptText;
+
+            return composed;
+        }
+
+        /// <summary>
+        /// Stage every attachment onto <paramref name="sid"/> and return the newline-joined
+        /// <c>@file:</c> refs the gateway handed back (null when there are none). Images are queued
+        /// on the session for the next prompt.submit and recorded in
+        /// <paramref name="stagedImages"/> so a failed send can take them back.
+        ///
+        /// A "session not found" failure propagates: the caller's retry re-resolves the session and
+        /// stages again. Everything else (unreadable file, gateway refusal, a backend too old for
+        /// the method) is logged and skipped, so one bad attachment cannot swallow the message.
+        /// </summary>
+        private async Task<string> StageAttachmentsAsync(
+            string sid,
+            IReadOnlyList<ChatAttachment> attachments,
+            List<StagedImage> stagedImages)
+        {
+            if (_chatTransport == null || attachments == null || attachments.Count == 0)
+                return null;
+
+            List<string> refTexts = null;
+
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                ChatAttachment attachment = attachments[i];
+                if (attachment == null || string.IsNullOrEmpty(attachment.path))
+                    continue;
+
+                string contentBase64 = ReadAttachmentBase64(attachment.path);
+                if (string.IsNullOrEmpty(contentBase64))
+                    continue;
+
+                if (IsFileAttachment(attachment))
+                {
+                    string refText = await StageFileAttachmentAsync(sid, attachment, contentBase64);
+                    if (!string.IsNullOrEmpty(refText))
+                    {
+                        if (refTexts == null)
+                            refTexts = new List<string>();
+                        refTexts.Add(refText);
+                    }
+
+                    continue;
+                }
+
+                string gatewayPath = await StageImageAttachmentAsync(sid, attachment, contentBase64);
+                if (!string.IsNullOrEmpty(gatewayPath))
+                    stagedImages.Add(new StagedImage { sessionId = sid, path = gatewayPath });
+            }
+
+            return refTexts == null ? null : string.Join("\n", refTexts);
+        }
+
+        /// <summary>
+        /// True when a staging failure is about THIS attachment and the turn can still go out
+        /// without it (gateway refusal, rejected payload, a method the backend does not have).
+        /// Session- and connection-level failures are not: a stale session has to reach the retry,
+        /// and a dead socket or a busy session has to surface instead of quietly dropping the
+        /// image and sending the text as if nothing were attached.
+        /// </summary>
+        private static bool IsAttachmentLevelFailure(Exception ex)
+        {
+            if (ex == null || IsSessionNotFoundError(ex))
+                return false;
+
+            return ex is AttachmentRejectedException
+                || ex is RpcException
+                || HermesGateway.IsMissingRpcMethod(ex);
+        }
+
+        private static string ReadAttachmentBase64(string path)
+        {
+            try
+            {
+                return Convert.ToBase64String(System.IO.File.ReadAllBytes(path));
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("[Hermes] Failed to read attachment '" + path + "': " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// image.attach_bytes, falling back to the path-based image.attach on a backend that
+        /// predates it. The fallback only resolves when the backend shares this device's
+        /// filesystem — on a remote gateway it fails and the image is skipped with a warning
+        /// rather than submitting a prompt that talks about an image nobody has.
+        /// </summary>
+        private async Task<string> StageImageAttachmentAsync(string sid, ChatAttachment attachment, string contentBase64)
+        {
+            try
+            {
+                return await _chatTransport.AttachImageBytes(sid, contentBase64, attachment.name);
+            }
+            catch (Exception ex)
+            {
+                if (!IsAttachmentLevelFailure(ex))
+                    throw;
+                if (!HermesGateway.IsMissingRpcMethod(ex))
+                {
+                    NeonLogger.LogWarning("[Hermes] Image attach failed for '" + attachment.path + "': " + ex.Message);
+                    return null;
+                }
+            }
+
+            try
+            {
+                return await _chatTransport.AttachImagePath(sid, attachment.path);
+            }
+            catch (Exception ex)
+            {
+                if (!IsAttachmentLevelFailure(ex))
+                    throw;
+                NeonLogger.LogWarning("[Hermes] Image attach (path) failed for '" + attachment.path + "': " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// file.attach — the non-image path. The bytes are uploaded as a data URL because the
+        /// gateway usually cannot see this device's filesystem; it prefers a path it can already
+        /// resolve and only materializes the upload otherwise.
+        /// </summary>
+        private async Task<string> StageFileAttachmentAsync(string sid, ChatAttachment attachment, string contentBase64)
+        {
+            string mediaType = string.IsNullOrWhiteSpace(attachment.mediaType)
+                ? "application/octet-stream"
+                : attachment.mediaType.Trim();
+            string dataUrl = "data:" + mediaType + ";base64," + contentBase64;
+            string name = string.IsNullOrWhiteSpace(attachment.name)
+                ? System.IO.Path.GetFileName(attachment.path)
+                : attachment.name;
+
+            try
+            {
+                return await _chatTransport.AttachFile(sid, attachment.path, name, dataUrl);
+            }
+            catch (Exception ex)
+            {
+                if (!IsAttachmentLevelFailure(ex))
+                    throw;
+                // A backend older than client protocol v2 has no file.attach at all. Nothing else
+                // stages a non-image file, so the only honest outcome is to drop it and say so.
+                NeonLogger.LogWarning(HermesGateway.IsMissingRpcMethod(ex)
+                    ? "[Hermes] Backend does not support file attachments (file.attach); skipped '" + name + "'."
+                    : "[Hermes] File attach failed for '" + name + "': " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Take back images queued for a send that never ran. Best-effort: the same failure that
+        /// killed the send (dead socket, vanished session) usually kills the detach too, and a
+        /// session that is gone cannot leak anything anyway.
+        /// </summary>
+        private async Task DetachStagedImagesAsync(List<StagedImage> stagedImages)
+        {
+            if (_chatTransport == null || stagedImages == null || stagedImages.Count == 0)
+                return;
+
+            for (int i = 0; i < stagedImages.Count; i++)
+            {
+                StagedImage staged = stagedImages[i];
+                if (staged == null)
+                    continue;
+
+                try
+                {
+                    await _chatTransport.DetachImage(staged.sessionId, staged.path);
+                }
+                catch (Exception ex)
+                {
+                    NeonLogger.LogWarning("[Hermes] Image detach failed for '" + staged.path + "': " + ex.Message);
+                }
+            }
+
+            stagedImages.Clear();
         }
 
         private void RaiseCurrentProviderChanged()

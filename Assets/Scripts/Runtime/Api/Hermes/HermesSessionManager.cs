@@ -224,6 +224,64 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public string status;
     }
 
+    /// <summary>
+    /// The gateway accepted the call but refused THIS attachment (unreadable image, unsupported
+    /// type, staging failure). Distinct from a session- or connection-level failure so callers can
+    /// drop the one attachment and still send the turn, instead of losing the whole message.
+    /// </summary>
+    public class AttachmentRejectedException : Exception
+    {
+        public AttachmentRejectedException(string message) : base(message) { }
+    }
+
+    /// <summary>
+    /// Reply to image.attach / image.attach_bytes. Both methods answer with the same shape on
+    /// purpose (see the gateway's image.attach_bytes docstring), so one DTO covers them.
+    /// <c>path</c> is the GATEWAY-side path the image was queued under — it is the key
+    /// image.detach expects, not the client path that was uploaded.
+    /// </summary>
+    [Serializable]
+    public class ImageAttachResponse
+    {
+        public bool attached;
+        public string path;
+        public string name;
+        public string text;
+        /// <summary>Set when the gateway refused the attach without raising an RPC error.</summary>
+        public string message;
+        public int count;
+        public int bytes;
+        public int width;
+        public int height;
+        public int token_estimate;
+    }
+
+    [Serializable]
+    public class ImageDetachResponse
+    {
+        public bool detached;
+        public int count;
+    }
+
+    /// <summary>
+    /// Reply to file.attach. Non-image files are staged as readable artifacts rather than vision
+    /// tiles, so what matters is <c>ref_text</c> — the rewritten <c>@file:</c> reference that
+    /// resolves on the GATEWAY. Submitting the client-side path instead would hand a remote
+    /// gateway a path that only exists on this device.
+    /// </summary>
+    [Serializable]
+    public class FileAttachResponse
+    {
+        public bool attached;
+        public string name;
+        public string path;
+        public string ref_path;
+        public string ref_text;
+        /// <summary>True when the bytes were copied into the session workspace.</summary>
+        public bool uploaded;
+        public string message;
+    }
+
     [Serializable]
     public class SecretEventPayload
     {
@@ -740,21 +798,133 @@ namespace NeonCompanion.Runtime.Api.Hermes
             SetAwaiting(displaySessionId, true);
         }
 
-        public async Task AttachImageBytes(string sessionId, string contentBase64)
+        /// <summary>
+        /// Resolve and validate the runtime session an attachment call must target. Attachments are
+        /// queued on the RUNTIME session dict (the gateway pops session["attached_images"] at
+        /// prompt.submit), so the display id has to be translated here or the image lands on a
+        /// different session — or none at all — for the same chat.
+        /// </summary>
+        private string AttachTargetRuntimeId(string sessionId, bool requireIdle)
         {
             if (string.IsNullOrEmpty(sessionId))
                 throw new InvalidOperationException("No session id");
 
-            string runtimeSessionId = RuntimeSessionIdFor(sessionId);
-            if (IsSessionBusy(DisplaySessionIdFor(sessionId)))
+            if (requireIdle && IsSessionBusy(DisplaySessionIdFor(sessionId)))
                 throw new InvalidOperationException("Session is busy. Wait for the current response to finish.");
 
+            return RuntimeSessionIdFor(sessionId);
+        }
+
+        /// <summary>
+        /// Upload image bytes to the session (image.attach_bytes). This is the path a client that
+        /// does NOT share a filesystem with the gateway must use — the local path means nothing
+        /// there. <paramref name="filename"/> is only an extension hint (Desktop sends it too):
+        /// without it the gateway sniffs magic bytes and falls back to .png, which would silently
+        /// mislabel anything it cannot recognise. Returns the gateway-side path, the handle
+        /// <see cref="DetachImage"/> needs.
+        /// </summary>
+        public async Task<string> AttachImageBytes(string sessionId, string contentBase64, string filename)
+        {
+            string runtimeSessionId = AttachTargetRuntimeId(sessionId, true);
             if (string.IsNullOrEmpty(contentBase64))
+                return null;
+
+            var payload = new Dictionary<string, object>
+            {
+                { "session_id", runtimeSessionId },
+                { "content_base64", contentBase64 }
+            };
+            if (!string.IsNullOrWhiteSpace(filename))
+                payload["filename"] = filename.Trim();
+
+            var result = await _gateway.Request<ImageAttachResponse>(RpcMethods.ImageAttachBytes, payload);
+            return RequireAttached(result, filename);
+        }
+
+        /// <summary>
+        /// Attach an image the gateway can open itself (image.attach). Only meaningful when the
+        /// gateway shares this device's filesystem; it is the compatibility fallback for gateways
+        /// that predate image.attach_bytes. Returns the gateway-side path.
+        /// </summary>
+        public async Task<string> AttachImagePath(string sessionId, string path)
+        {
+            string runtimeSessionId = AttachTargetRuntimeId(sessionId, true);
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            var result = await _gateway.Request<ImageAttachResponse>(
+                RpcMethods.ImageAttach,
+                new { session_id = runtimeSessionId, path });
+            return RequireAttached(result, path);
+        }
+
+        /// <summary>
+        /// Stage a non-image file (file.attach) and return the <c>@file:</c> ref that resolves on
+        /// the gateway. <paramref name="dataUrl"/> carries the bytes for the remote case (the path
+        /// exists only on this device); the gateway prefers a path it can already see and only
+        /// materialises the upload when it cannot.
+        /// </summary>
+        public async Task<string> AttachFile(string sessionId, string path, string name, string dataUrl)
+        {
+            string runtimeSessionId = AttachTargetRuntimeId(sessionId, true);
+            if (string.IsNullOrWhiteSpace(path) && string.IsNullOrWhiteSpace(dataUrl))
+                return null;
+
+            var payload = new Dictionary<string, object> { { "session_id", runtimeSessionId } };
+            if (!string.IsNullOrWhiteSpace(path))
+                payload["path"] = path;
+            if (!string.IsNullOrWhiteSpace(name))
+                payload["name"] = name;
+            if (!string.IsNullOrWhiteSpace(dataUrl))
+                payload["data_url"] = dataUrl;
+
+            var result = await _gateway.Request<FileAttachResponse>(RpcMethods.FileAttach, payload);
+            if (result == null || !result.attached || string.IsNullOrEmpty(result.ref_text))
+            {
+                throw new AttachmentRejectedException(
+                    !string.IsNullOrEmpty(result != null ? result.message : null)
+                        ? result.message
+                        : "Could not attach " + (name ?? path));
+            }
+
+            return result.ref_text;
+        }
+
+        /// <summary>
+        /// Drop an image queued on the session (image.detach). The gateway only clears
+        /// attached_images when a prompt actually runs, so an attach whose submit never happened
+        /// would otherwise ride along with the NEXT turn — this is what keeps a failed or
+        /// abandoned send from resending its images.
+        /// </summary>
+        public async Task DetachImage(string sessionId, string path)
+        {
+            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrWhiteSpace(path))
                 return;
 
-            await _gateway.Request<object>(
-                RpcMethods.ImageAttachBytes,
-                new { session_id = runtimeSessionId, content_base64 = contentBase64 });
+            // No idle guard: a detach must still work while a turn is running (the user can pull a
+            // chip off the composer mid-turn), and it never touches the live prompt.
+            string runtimeSessionId = RuntimeSessionIdFor(sessionId);
+            await _gateway.Request<ImageDetachResponse>(
+                RpcMethods.ImageDetach,
+                new { session_id = runtimeSessionId, path });
+        }
+
+        /// <summary>
+        /// The gateway can answer an attach with <c>attached=false</c> plus a reason instead of an
+        /// RPC error (clipboard/unsupported cases). Treat that as a failure so callers do not
+        /// submit a prompt that references an image the backend never queued.
+        /// </summary>
+        private static string RequireAttached(ImageAttachResponse result, string label)
+        {
+            if (result == null || !result.attached)
+            {
+                throw new AttachmentRejectedException(
+                    !string.IsNullOrEmpty(result != null ? result.message : null)
+                        ? result.message
+                        : "Could not attach " + (string.IsNullOrEmpty(label) ? "image" : label));
+            }
+
+            return result.path;
         }
 
         public async Task Interrupt(string sessionId)

@@ -178,6 +178,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string TerminalReadRespond = "terminal.read.respond";
         public const string ImageAttach = "image.attach";
         public const string ImageDetach = "image.detach";
+        // Non-image attachment staging (Desktop uploadComposerAttachment). Gateways older than
+        // client protocol v2 do not have it and answer -32601; callers must degrade, not fail.
+        public const string FileAttach = "file.attach";
         public const string ClientRegister = "client.register";
         public const string ClientPong = "client.pong";
         public const string FileTransferAck = "file.transfer.ack";
