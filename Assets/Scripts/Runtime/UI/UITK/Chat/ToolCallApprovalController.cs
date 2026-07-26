@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Chat;
@@ -250,19 +251,31 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         internal async Task<bool> RequestToolApprovalAsync(ToolCallRequest request)
         {
+            return await RequestToolApprovalAsync(request, CancellationToken.None);
+        }
+
+        internal async Task<bool> RequestToolApprovalAsync(ToolCallRequest request, CancellationToken cancellationToken)
+        {
             if (request == null)
                 return true;
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Dangerous tools (code execution, shell, file writes) can never be bypassed: neither
             // "auto" permission mode nor a saved "always" entry applies. They always prompt.
             bool dangerous = NeonCompanion.Runtime.Api.Tools.ToolExecutor.IsDangerousTool(request.toolName);
 
             var settings = await GetSettingsAsync();
+            cancellationToken.ThrowIfCancellationRequested();
             if (!dangerous && settings != null && string.Equals(settings.toolPermissionMode, "auto", StringComparison.OrdinalIgnoreCase))
                 return true;
 
             if (!dangerous && await IsToolAlwaysApprovedAsync(request.toolName))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return true;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
 
             var prompt = new NeonCompanion.Runtime.UI.UITK.ApprovalPrompt();
             var approvalElement = prompt.Create(request);
@@ -284,14 +297,25 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 completionSource.TrySetResult(true);
             };
 
-            await completionSource.Task;
+            var cancellationRegistration = cancellationToken.Register(() => completionSource.TrySetCanceled());
+            try
+            {
+                await completionSource.Task;
+            }
+            finally
+            {
+                cancellationRegistration.Dispose();
+                if (approvalElement != null && approvalElement.parent != null)
+                    approvalElement.RemoveFromHierarchy();
 
-            if (approvalElement != null && approvalElement.parent != null)
-                approvalElement.RemoveFromHierarchy();
-
-            _currentApprovalPrompt = null;
-            _currentApprovalElement = null;
-            _pendingApprovalTcs = null;
+                if (_currentApprovalElement == approvalElement)
+                {
+                    _currentApprovalPrompt = null;
+                    _currentApprovalElement = null;
+                }
+                if (_pendingApprovalTcs == completionSource)
+                    _pendingApprovalTcs = null;
+            }
 
             if (always && approved && !dangerous)
                 await SaveAlwaysApprovedToolAsync(request.toolName);

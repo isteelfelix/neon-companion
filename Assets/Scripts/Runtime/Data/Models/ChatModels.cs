@@ -32,6 +32,48 @@ namespace NeonCompanion.Runtime.Data.Models
     }
 
     /// <summary>
+    /// Serializable Responses API item kept with a transcript message. The API layer maps its
+    /// wire objects to this small, stable DTO so JSON history does not depend on polymorphic SDK
+    /// types or a provider-specific response schema.
+    /// </summary>
+    [Serializable]
+    public class ChatResponseContentPart
+    {
+        public string type;
+        public string text;
+        public string refusal;
+    }
+
+    [Serializable]
+    public class ChatResponseItem
+    {
+        public string id;
+        public string type;
+        public string role;
+        public string status;
+        public string content;
+        public string callId;
+        public string name;
+        public string arguments;
+        public string encryptedContent;
+        public string output;
+        public string summary;
+        public List<ChatResponseContentPart> contentParts = new List<ChatResponseContentPart>();
+        public List<ChatResponseContentPart> summaryParts = new List<ChatResponseContentPart>();
+    }
+
+    /// <summary>Per-response token accounting returned by Responses; zero means not supplied.</summary>
+    [Serializable]
+    public class ChatResponseUsage
+    {
+        public int inputTokens;
+        public int outputTokens;
+        public int reasoningTokens;
+        public int cachedInputTokens;
+        public int totalTokens;
+    }
+
+    /// <summary>
     /// Live tool-card update (tool.start / progress / generating / complete).
     /// Desktop keys rows by tool_id and merges progress/result in place; Companion mirrors that.
     /// </summary>
@@ -72,6 +114,11 @@ namespace NeonCompanion.Runtime.Data.Models
         public float responseTimeSeconds;
         // Model reasoning/thinking text (expandable in UI)
         public string reasoning;
+        // Responses API identity and canonical output, retained for continuation/reload.
+        public string responseId;
+        public string previousResponseId;
+        public List<ChatResponseItem> responseItems = new List<ChatResponseItem>();
+        public ChatResponseUsage responseUsage;
         // Voice: local file path to recorded/synthesised audio (null = text-only message)
         public string audioPath;
         public float audioDurationSecs;
@@ -86,6 +133,10 @@ namespace NeonCompanion.Runtime.Data.Models
         public string providerSessionId;
         public string providerRuntimeSessionId;
         public string selectedModel;
+        // Last completed Responses id. Kept separately to continue a loaded session without
+        // recovering it from presentation-only message text.
+        public string lastResponseId;
+        public ChatResponseUsage usage;
         public string title;
         public List<ChatMessage> messages = new List<ChatMessage>();
         public long updatedAtUnix;

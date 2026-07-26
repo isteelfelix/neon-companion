@@ -1531,8 +1531,8 @@ namespace NeonCompanion.Runtime.Chat
                 return;
             }
 
-            // A Hermes provider must never use the OpenAI HTTP path: that POSTs to
-            // {baseUrl}/chat/completions, which the WebSocket-only Hermes server rejects with
+            // A Hermes provider must never use the OpenAI-compatible HTTP path: that POSTs to
+            // {baseUrl}/responses, which the WebSocket-only Hermes server rejects with
             // HTTP 405. If the transport is missing (e.g. backend mode was never switched to
             // Hermes), bring it up on demand and route through it instead of POSTing.
             if (_currentProvider == null)
@@ -3068,6 +3068,7 @@ namespace NeonCompanion.Runtime.Chat
                 return;
 
             _currentSession.messages = new List<ChatMessage>(_currentChatViewModel.Messages);
+            SyncResponsesSessionState(_currentSession);
             _currentSession.updatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             _currentSession.providerId = _currentProvider?.id ?? _currentSession.providerId;
             _currentSession.providerSessionId = _currentChatViewModel.ProviderSessionId;
@@ -3090,6 +3091,48 @@ namespace NeonCompanion.Runtime.Chat
                 .ToList();
 
             _sessionRepository.SaveAll(sessions);
+        }
+
+        /// <summary>
+        /// Response ids and token totals are derived from the persisted transcript, rather than
+        /// kept as mutable counters. This keeps regenerate/delete/edit operations from double
+        /// counting a completed turn and leaves legacy histories (which have no Responses data)
+        /// valid.
+        /// </summary>
+        private static void SyncResponsesSessionState(ChatSession session)
+        {
+            if (session == null)
+                return;
+
+            session.lastResponseId = null;
+            ChatResponseUsage total = new ChatResponseUsage();
+            bool hasUsage = false;
+
+            if (session.messages != null)
+            {
+                for (int i = 0; i < session.messages.Count; i++)
+                {
+                    ChatMessage message = session.messages[i];
+                    if (message == null)
+                        continue;
+
+                    if (!string.IsNullOrWhiteSpace(message.responseId))
+                        session.lastResponseId = message.responseId;
+
+                    ChatResponseUsage usage = message.responseUsage;
+                    if (usage == null)
+                        continue;
+
+                    total.inputTokens += usage.inputTokens;
+                    total.outputTokens += usage.outputTokens;
+                    total.reasoningTokens += usage.reasoningTokens;
+                    total.cachedInputTokens += usage.cachedInputTokens;
+                    total.totalTokens += usage.totalTokens;
+                    hasUsage = true;
+                }
+            }
+
+            session.usage = hasUsage ? total : null;
         }
 
         /// <summary>

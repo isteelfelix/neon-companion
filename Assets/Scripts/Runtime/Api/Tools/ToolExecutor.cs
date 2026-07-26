@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using NeonCompanion.Runtime.Localization;
 
 namespace NeonCompanion.Runtime.Api.Tools
@@ -32,6 +33,21 @@ namespace NeonCompanion.Runtime.Api.Tools
 
         public static string Execute(string toolName, Dictionary<string, string> parameters)
         {
+            return Execute(toolName, parameters, CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Runs a local tool off the Unity main thread. Cancellation kills child processes and
+        /// prevents a cancelled Responses tool turn from continuing in the background.
+        /// </summary>
+        public static Task<string> ExecuteAsync(string toolName, Dictionary<string, string> parameters, CancellationToken cancellationToken)
+        {
+            return Task.Run(() => Execute(toolName, parameters, cancellationToken), cancellationToken);
+        }
+
+        private static string Execute(string toolName, Dictionary<string, string> parameters, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(toolName))
                 return LocalizationExtensions.Get("tool.error.unknown", "Error: Unknown tool");
 
@@ -46,9 +62,9 @@ namespace NeonCompanion.Runtime.Api.Tools
                 case "search_files":
                     return ExecuteSearchFiles(parameters);
                 case "execute_code":
-                    return ExecuteCode(parameters);
+                    return ExecuteCode(parameters, cancellationToken);
                 case "run_command":
-                    return ExecuteRunCommand(parameters);
+                    return ExecuteRunCommand(parameters, cancellationToken);
                 default:
                     return LocalizationExtensions.Get("tool.error.unknown", "Error: Unknown tool '") + toolName + "'";
             }
@@ -224,7 +240,7 @@ namespace NeonCompanion.Runtime.Api.Tools
             }
         }
 
-        private static string ExecuteCode(Dictionary<string, string> parameters)
+        private static string ExecuteCode(Dictionary<string, string> parameters, CancellationToken cancellationToken)
         {
             if (parameters == null || !parameters.ContainsKey("code"))
                 return LocalizationExtensions.Get("tool.error.code_required", "Error: 'code' parameter is required for execute_code");
@@ -240,7 +256,11 @@ namespace NeonCompanion.Runtime.Api.Tools
                 scriptPath = Path.Combine(tempDir, "neon_exec_" + Guid.NewGuid().ToString("N") + ".py");
                 File.WriteAllText(scriptPath, code);
 
-                return ExecutePythonScript(scriptPath);
+                return ExecutePythonScript(scriptPath, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -255,7 +275,7 @@ namespace NeonCompanion.Runtime.Api.Tools
             }
         }
 
-        private static string ExecuteRunCommand(Dictionary<string, string> parameters)
+        private static string ExecuteRunCommand(Dictionary<string, string> parameters, CancellationToken cancellationToken)
         {
             if (parameters == null || !parameters.ContainsKey("command"))
                 return LocalizationExtensions.Get("tool.error.command_required", "Error: 'command' parameter is required for run_command");
@@ -283,13 +303,17 @@ namespace NeonCompanion.Runtime.Api.Tools
                     // -EncodedCommand (base64 UTF-16LE) avoids all quoting/escaping issues:
                     // backslash paths, embedded quotes, and Unicode pass through verbatim.
                     string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(prelude + command));
-                    return ExecuteProcess("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + encoded, true, timeoutMs, true);
+                    return ExecuteProcess("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + encoded, true, timeoutMs, true, cancellationToken);
                 }
                 else
                 {
                     string escaped = command.Replace("\\", "\\\\").Replace("\"", "\\\"");
-                    return ExecuteProcess("/bin/bash", "-c \"" + escaped + "\"", true, timeoutMs, true);
+                    return ExecuteProcess("/bin/bash", "-c \"" + escaped + "\"", true, timeoutMs, true, cancellationToken);
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -297,7 +321,7 @@ namespace NeonCompanion.Runtime.Api.Tools
             }
         }
 
-        private static string ExecutePythonScript(string scriptPath)
+        private static string ExecutePythonScript(string scriptPath, CancellationToken cancellationToken)
         {
             string[] fileNames = new string[] { "python3", "python", "py" };
             string lastError = null;
@@ -311,7 +335,11 @@ namespace NeonCompanion.Runtime.Api.Tools
 
                 try
                 {
-                    return ExecuteProcess(fileName, arguments);
+                    return ExecuteProcess(fileName, arguments, false, CodeTimeoutMs, false, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -323,7 +351,7 @@ namespace NeonCompanion.Runtime.Api.Tools
             return string.IsNullOrEmpty(lastError) ? prefix : prefix + ": " + lastError;
         }
 
-        private static string ExecuteProcess(string fileName, string arguments, bool utf8 = false, int timeoutMs = CodeTimeoutMs, bool includeExitCode = false)
+        private static string ExecuteProcess(string fileName, string arguments, bool utf8 = false, int timeoutMs = CodeTimeoutMs, bool includeExitCode = false, CancellationToken cancellationToken = default(CancellationToken))
         {
             int exitCode = 0;
             var stdout = new StringBuilder();
@@ -382,7 +410,18 @@ namespace NeonCompanion.Runtime.Api.Tools
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                bool exited = process.WaitForExit(timeoutMs);
+                var wait = Stopwatch.StartNew();
+                bool exited = false;
+                while (!(exited = process.WaitForExit(100)))
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        try { process.Kill(); } catch { }
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                    if (wait.ElapsedMilliseconds >= timeoutMs)
+                        break;
+                }
                 if (!exited)
                 {
                     try { process.Kill(); } catch { }

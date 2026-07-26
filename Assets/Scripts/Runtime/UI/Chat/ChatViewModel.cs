@@ -41,16 +41,23 @@ namespace NeonCompanion.Runtime.UI.Chat
 
         public void AddUserMessage(string content, IReadOnlyList<ChatAttachment> attachments = null)
         {
-            Messages.Add(new ChatMessage
+            ChatMessage message = new ChatMessage
             {
                 role = "user",
                 content = content,
                 attachments = CloneAttachments(attachments),
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            };
+            message.responseItems.Add(new ChatResponseItem
+            {
+                type = "message",
+                role = "user",
+                content = content
             });
+            Messages.Add(message);
         }
 
-        public async Task AddAssistantMessage(AiChatResponse response)
+        public async Task AddAssistantMessage(AiChatResponse response, DateTime? startedAtUtc = null)
         {
             var chatMsg = new ChatMessage
             {
@@ -59,6 +66,8 @@ namespace NeonCompanion.Runtime.UI.Chat
                 model = response?.model ?? string.Empty,
                 unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             };
+
+            ApplyResponsesMetadata(chatMsg, response, FindLatestResponseId(), startedAtUtc);
 
             if (response != null && response.tool_calls != null && response.tool_calls.Count > 0)
             {
@@ -120,28 +129,31 @@ namespace NeonCompanion.Runtime.UI.Chat
         {
             try
             {
+                DateTime requestStartedAtUtc = DateTime.UtcNow;
                 var requestMessages = new List<AiChatMessage>();
-                int currentAttachmentMessageIndex = FindCurrentUserMessageAttachmentIndex();
                 for (int i = 0; i < Messages.Count; i++)
                 {
                     var message = Messages[i];
                     bool hasText = !string.IsNullOrWhiteSpace(message?.content);
                     bool canSendAttachments = message != null && string.Equals(message.role, "user", StringComparison.OrdinalIgnoreCase);
-                    bool shouldSendAttachments = canSendAttachments && i == currentAttachmentMessageIndex;
-                    bool hasAttachments = shouldSendAttachments && message.attachments != null && message.attachments.Count > 0;
-                    bool hasHistoricalAttachments = canSendAttachments && !shouldSendAttachments && message.attachments != null && message.attachments.Count > 0;
+                    bool hasAttachments = canSendAttachments && message.attachments != null && message.attachments.Count > 0;
                     bool hasToolCalls = message != null && message.tool_calls != null && message.tool_calls.Count > 0;
                     bool hasToolCallRef = !string.IsNullOrEmpty(message?.tool_call_id);
-                    if (string.IsNullOrWhiteSpace(message?.role) || (!hasText && !hasAttachments && !hasHistoricalAttachments && !hasToolCalls && !hasToolCallRef))
+                    if (string.IsNullOrWhiteSpace(message?.role) || (!hasText && !hasAttachments && !hasToolCalls && !hasToolCallRef))
                         continue;
 
                     requestMessages.Add(new AiChatMessage
                     {
                         role = message.role,
-                        content = hasText ? message.content : (hasHistoricalAttachments ? "[image]" : message.content),
-                        attachments = shouldSendAttachments ? ToAiAttachments(message.attachments) : new List<AiChatAttachment>(),
+                        content = message.content,
+                        // Manual Responses history must replay every prior user input, including
+                        // the real file/image bytes, not a presentation placeholder.
+                        attachments = canSendAttachments ? ToAiAttachments(message.attachments) : new List<AiChatAttachment>(),
                         tool_call_id = message.tool_call_id,
-                        tool_calls = CloneToolCalls(message.tool_calls)
+                        tool_calls = CloneToolCalls(message.tool_calls),
+                        responseOutput = string.Equals(message.role, "assistant", StringComparison.OrdinalIgnoreCase)
+                            ? ToResponsesOutputItems(message.responseItems)
+                            : null
                     });
                 }
 
@@ -167,6 +179,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                         model = string.Empty,
                         unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                     };
+                    string previousResponseId = FindLatestResponseId();
                     Messages.Add(streamMsg);
 
                     var buf = new System.Text.StringBuilder();
@@ -196,6 +209,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                         AppendTextSegment(streamMsg, response.content);
                     }
                     streamMsg.model = response?.model ?? streamMsg.model;
+                    ApplyResponsesMetadata(streamMsg, response, previousResponseId, requestStartedAtUtc);
                     if (response != null && response.tool_calls != null && response.tool_calls.Count > 0)
                     {
                         streamMsg.tool_calls = CloneToolCalls(response.tool_calls);
@@ -206,7 +220,7 @@ namespace NeonCompanion.Runtime.UI.Chat
                 {
                     var response = await _aiClient.SendMessageAsync(_provider, request, CancellationToken);
                     ProviderSessionId = response?.providerSessionId ?? ProviderSessionId;
-                    await AddAssistantMessage(response);
+                    await AddAssistantMessage(response, requestStartedAtUtc);
                 }
             }
             catch
@@ -230,20 +244,215 @@ namespace NeonCompanion.Runtime.UI.Chat
             }
         }
 
-        private int FindCurrentUserMessageAttachmentIndex()
+        private string FindLatestResponseId()
         {
-            if (Messages == null || Messages.Count == 0)
-                return -1;
+            if (Messages == null)
+                return null;
 
-            int index = Messages.Count - 1;
-            ChatMessage message = Messages[index];
-            if (message == null)
-                return -1;
-            if (!string.Equals(message.role, "user", StringComparison.OrdinalIgnoreCase))
-                return -1;
-            if (message.attachments != null && message.attachments.Count > 0)
-                return index;
-            return -1;
+            for (int i = Messages.Count - 1; i >= 0; i--)
+            {
+                ChatMessage message = Messages[i];
+                if (message != null && !string.IsNullOrWhiteSpace(message.responseId))
+                    return message.responseId;
+            }
+
+            return null;
+        }
+
+        private static void ApplyResponsesMetadata(
+            ChatMessage message,
+            AiChatResponse response,
+            string previousResponseId,
+            DateTime? startedAtUtc)
+        {
+            if (message == null || response == null)
+                return;
+
+            message.responseId = response.id;
+            message.previousResponseId = previousResponseId;
+            message.responseUsage = ToChatResponseUsage(response.usage);
+            message.responseItems = ToChatResponseItems(response.responseOutput);
+            message.reasoning = ExtractReasoning(response.responseOutput);
+
+            if (message.responseUsage != null)
+            {
+                message.tokenCount = message.responseUsage.outputTokens;
+                if (message.tokenCount <= 0 && message.responseUsage.totalTokens > message.responseUsage.inputTokens)
+                    message.tokenCount = message.responseUsage.totalTokens - message.responseUsage.inputTokens;
+            }
+
+            if (startedAtUtc.HasValue)
+            {
+                double elapsed = (DateTime.UtcNow - startedAtUtc.Value).TotalSeconds;
+                message.responseTimeSeconds = elapsed > 0d ? (float)elapsed : 0f;
+            }
+        }
+
+        private static ChatResponseUsage ToChatResponseUsage(ResponsesUsage usage)
+        {
+            if (usage == null)
+                return null;
+
+            ChatResponseUsage result = new ChatResponseUsage();
+            result.inputTokens = usage.input_tokens;
+            result.outputTokens = usage.output_tokens;
+            result.totalTokens = usage.total_tokens;
+            result.cachedInputTokens = usage.input_tokens_details != null
+                ? usage.input_tokens_details.cached_tokens
+                : 0;
+            result.reasoningTokens = usage.output_tokens_details != null
+                ? usage.output_tokens_details.reasoning_tokens
+                : 0;
+            return result;
+        }
+
+        private static List<ChatResponseItem> ToChatResponseItems(IReadOnlyList<ResponsesOutputItem> output)
+        {
+            List<ChatResponseItem> result = new List<ChatResponseItem>();
+            if (output == null)
+                return result;
+
+            for (int i = 0; i < output.Count; i++)
+            {
+                ResponsesOutputItem item = output[i];
+                if (item == null)
+                    continue;
+
+                ChatResponseItem copy = new ChatResponseItem();
+                copy.id = item.id;
+                copy.type = item.type;
+                copy.role = item.role;
+                copy.status = item.status;
+                copy.callId = item.call_id;
+                copy.name = item.name;
+                copy.arguments = item.arguments;
+                copy.encryptedContent = item.encrypted_content;
+                copy.content = JoinResponseParts(item.content);
+                copy.summary = JoinResponseParts(item.summary);
+                copy.contentParts = ToChatResponseContentParts(item.content);
+                copy.summaryParts = ToChatResponseContentParts(item.summary);
+                result.Add(copy);
+            }
+
+            return result;
+        }
+
+        private static List<ResponsesOutputItem> ToResponsesOutputItems(IReadOnlyList<ChatResponseItem> items)
+        {
+            List<ResponsesOutputItem> result = new List<ResponsesOutputItem>();
+            if (items == null)
+                return result;
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                ChatResponseItem item = items[i];
+                if (item == null)
+                    continue;
+
+                ResponsesOutputItem copy = new ResponsesOutputItem();
+                copy.id = item.id;
+                copy.type = item.type;
+                copy.role = item.role;
+                copy.status = item.status;
+                copy.call_id = item.callId;
+                copy.name = item.name;
+                copy.arguments = item.arguments;
+                copy.encrypted_content = item.encryptedContent;
+                copy.content = ToResponsesContentParts(item.contentParts);
+                copy.summary = ToResponsesContentParts(item.summaryParts);
+                result.Add(copy);
+            }
+
+            return result;
+        }
+
+        private static ResponsesContentPart[] ToResponsesContentParts(IReadOnlyList<ChatResponseContentPart> parts)
+        {
+            if (parts == null || parts.Count == 0)
+                return null;
+
+            ResponsesContentPart[] result = new ResponsesContentPart[parts.Count];
+            for (int i = 0; i < parts.Count; i++)
+            {
+                ChatResponseContentPart part = parts[i];
+                if (part == null)
+                    continue;
+                result[i] = new ResponsesContentPart
+                {
+                    type = part.type,
+                    text = part.text,
+                    refusal = part.refusal
+                };
+            }
+            return result;
+        }
+
+        private static string ExtractReasoning(IReadOnlyList<ResponsesOutputItem> output)
+        {
+            if (output == null)
+                return null;
+
+            System.Text.StringBuilder builder = new System.Text.StringBuilder();
+            for (int i = 0; i < output.Count; i++)
+            {
+                ResponsesOutputItem item = output[i];
+                if (item == null || !string.Equals(item.type, "reasoning", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string summary = JoinResponseParts(item.summary);
+                if (string.IsNullOrWhiteSpace(summary))
+                    continue;
+                if (builder.Length > 0)
+                    builder.AppendLine();
+                builder.Append(summary);
+            }
+
+            return builder.Length > 0 ? builder.ToString() : null;
+        }
+
+        private static string JoinResponseParts(IReadOnlyList<ResponsesContentPart> parts)
+        {
+            if (parts == null)
+                return null;
+
+            System.Text.StringBuilder builder = new System.Text.StringBuilder();
+            for (int i = 0; i < parts.Count; i++)
+            {
+                ResponsesContentPart part = parts[i];
+                if (part == null)
+                    continue;
+                string value = !string.IsNullOrWhiteSpace(part.text) ? part.text : part.refusal;
+                if (string.IsNullOrWhiteSpace(value))
+                    continue;
+                if (builder.Length > 0)
+                    builder.AppendLine();
+                builder.Append(value);
+            }
+
+            return builder.Length > 0 ? builder.ToString() : null;
+        }
+
+        private static List<ChatResponseContentPart> ToChatResponseContentParts(IReadOnlyList<ResponsesContentPart> parts)
+        {
+            List<ChatResponseContentPart> result = new List<ChatResponseContentPart>();
+            if (parts == null)
+                return result;
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                ResponsesContentPart part = parts[i];
+                if (part == null)
+                    continue;
+
+                result.Add(new ChatResponseContentPart
+                {
+                    type = part.type,
+                    text = part.text,
+                    refusal = part.refusal
+                });
+            }
+
+            return result;
         }
 
         private static void AppendTextSegment(ChatMessage message, string text)
@@ -721,8 +930,8 @@ namespace NeonCompanion.Runtime.UI.Chat
             if (string.IsNullOrEmpty(baseUrl))
                 return string.Empty;
 
-            if (baseUrl.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
-                baseUrl = baseUrl.Substring(0, baseUrl.Length - "/chat/completions".Length).TrimEnd('/');
+            if (baseUrl.EndsWith("/responses", StringComparison.OrdinalIgnoreCase))
+                baseUrl = baseUrl.Substring(0, baseUrl.Length - "/responses".Length).TrimEnd('/');
             if (baseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
                 baseUrl = baseUrl.Substring(0, baseUrl.Length - 3).TrimEnd('/');
 

@@ -14,9 +14,7 @@ namespace NeonCompanion.Runtime.Api.Adapters
                 SupportsModelSwitch = false,
                 SupportsInventory = false,
                 SupportsToolProgress = false,
-                // The generic HTTP path can parse tool calls but does not execute them
-                // and submit tool results, so advertising tools would leave the turn incomplete.
-                SupportsFunctionTools = false,
+                SupportsFunctionTools = true,
                 UsesMaxCompletionTokens = false,
                 RequiresTemperatureOmission = false,
                 ForceNonStreaming = false,
@@ -37,8 +35,13 @@ namespace NeonCompanion.Runtime.Api.Adapters
         public string[] BuildDiscoveryEndpoints(string baseUrl)
         {
             var normalized = NormalizeBaseUrl(baseUrl);
-            if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            if (normalized.EndsWith("/responses", StringComparison.OrdinalIgnoreCase))
             {
+                normalized = normalized.Substring(0, normalized.Length - "/responses".Length);
+            }
+            else if (normalized.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            {
+                // Accept saved legacy URLs as input, but never send generation requests there.
                 normalized = normalized.Substring(0, normalized.Length - "/chat/completions".Length);
             }
             return new string[] { normalized + "/models" };

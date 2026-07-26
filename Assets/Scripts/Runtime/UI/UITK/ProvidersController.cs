@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Hermes;
+using NeonCompanion.Runtime.Api.Models;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -942,11 +943,74 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
                 }
 
+                var startedAt = DateTimeOffset.UtcNow;
                 var result = await app.AiClient.TestConnectionAsync(draft);
-                SetTestRow(result.Success, result.Message);
+                if (!result.Success)
+                {
+                    SetTestRow(false, result.Message);
+                    return;
+                }
 
-                if (result.Success && result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
+                if (result.DiscoveredModels != null && result.DiscoveredModels.Count > 0)
                     SyncModelPresetFromDiscovery(result.DiscoveredModels, GetCurrentModelValue());
+
+                string model = SelectResponsesProbeModel(draft, result.DiscoveredModels);
+                if (string.IsNullOrWhiteSpace(model))
+                {
+                    SetTestRow(false, LocalizationExtensions.Get(
+                        "providers.test.model_required",
+                        "The server returned no model for a Responses API test."));
+                    return;
+                }
+
+                // A reachable /models endpoint is not enough. The configured model must produce
+                // a real completed Responses object before the provider is marked connected.
+                AiChatResponse probe;
+                try
+                {
+                    probe = await app.AiClient.SendMessageAsync(draft, new AiChatRequest
+                    {
+                        model = model,
+                        temperature = 0f,
+                        maxTokens = 128,
+                        messages = new List<AiChatMessage>
+                        {
+                            new AiChatMessage { role = "user", content = "Reply with OK." }
+                        }
+                    }, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    bool missingResponses = ex.Message != null &&
+                                            (ex.Message.IndexOf("404", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                             ex.Message.IndexOf("not found", StringComparison.OrdinalIgnoreCase) >= 0);
+                    SetTestRow(false, missingResponses
+                        ? LocalizationExtensions.Get(
+                            "providers.test.responses_not_supported",
+                            "The server does not support the Responses API. Update the server.")
+                        : ex.Message);
+                    return;
+                }
+
+                bool hasOutput = probe != null &&
+                                 ((!string.IsNullOrWhiteSpace(probe.content)) ||
+                                  (probe.responseOutput != null && probe.responseOutput.Count > 0));
+                bool completed = probe != null &&
+                                 string.Equals(probe.status, "completed", StringComparison.OrdinalIgnoreCase) &&
+                                 !string.IsNullOrWhiteSpace(probe.id) &&
+                                 hasOutput;
+                if (!completed)
+                {
+                    SetTestRow(false, LocalizationExtensions.Get(
+                        "providers.test.responses_incomplete",
+                        "The server did not complete a Responses API request."));
+                    return;
+                }
+
+                long elapsedMs = (long)(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds;
+                SetTestRow(true, LocalizationExtensions.Get(
+                    "providers.test.responses_ok",
+                    "OK · Responses API · {0} ms").Replace("{0}", elapsedMs.ToString()));
             }
             catch (Exception ex)
             {
@@ -958,6 +1022,23 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 if (_d.TestProviderBtn != null) _d.TestProviderBtn.SetEnabled(true);
             }
+        }
+
+        private static string SelectResponsesProbeModel(ProviderConfig draft, IReadOnlyList<string> discoveredModels)
+        {
+            if (draft != null && !string.IsNullOrWhiteSpace(draft.defaultModel))
+                return draft.defaultModel.Trim();
+
+            if (discoveredModels == null)
+                return null;
+
+            for (int i = 0; i < discoveredModels.Count; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(discoveredModels[i]))
+                    return discoveredModels[i].Trim();
+            }
+
+            return null;
         }
 
         private async Task TestHermesConnectionAsync(ProviderConfig draft)

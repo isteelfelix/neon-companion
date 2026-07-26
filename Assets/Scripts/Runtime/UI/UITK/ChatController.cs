@@ -537,7 +537,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
-            var pendingAttachments = _attachmentManager.CloneCurrent();
+            List<ChatAttachment> pendingAttachments = _attachmentManager.CloneCurrent();
             string message = ChatAttachmentManager.StripAttachmentTokens(composerText, pendingAttachments);
             _d.MessageInput.value = string.Empty;
             ClearPendingComposerAttachments();
@@ -570,6 +570,18 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
                 }
 
+                List<ChatAttachment> persistedAttachments;
+                string attachmentError;
+                if (!ChatAttachmentManager.TryPersistAttachments(pendingAttachments, out persistedAttachments, out attachmentError))
+                {
+                    RestoreComposerDraft(message, pendingAttachments);
+                    _d.ShowSystemMessage(string.IsNullOrWhiteSpace(attachmentError)
+                        ? LocalizationExtensions.Get("system.chat.attachment_failed", "Не удалось добавить вложение к сообщению.")
+                        : attachmentError);
+                    return;
+                }
+                pendingAttachments = persistedAttachments;
+
                 bool streaming = _d.UseStreaming();
                 chat.UseStreaming = streaming;
 
@@ -591,48 +603,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _approvalController?.Dismiss();
                     DismissSessionPicker();
 
-                    // Finalize stats with real usage from client.
-                    // Hermes persists per-session usage server-side in ChatService (and reading the
-                    // shared OpenAI client here could write a stale figure onto another session's
-                    // last message after a mid-stream switch), so only do this for the OpenAI path.
+                    // Responses usage belongs to the completed response returned to ChatViewModel.
+                    // Do not read mutable client-wide usage here: it can belong to another session.
                     _streamingCoordinator.PauseStatsSchedule();
-                    try
-                    {
-                        var app = _d.GetAppAsync().Result;
-                        var client = chat.IsHermesActive ? null : app?.AiClient as OpenAiCompatibleClient;
-                        if (client != null)
-                        {
-                            var usage = client.LastStreamUsage;
-                            int completionTokens = MessageCompletionTokenCount(usage);
-                            if (completionTokens > 0)
-                            {
-                                double elapsed = (DateTime.UtcNow - _streamingCoordinator.StartTime).TotalSeconds;
-                                if (elapsed < 0)
-                                    elapsed = 0;
-                                _streamingCoordinator.SetFinalStats(completionTokens, elapsed);
-                                // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
-                                try
-                                {
-                                    var vm = chat.CurrentChatViewModel;
-                                    if (vm != null && vm.Messages != null && vm.Messages.Count > 0)
-                                    {
-                                        var last = vm.Messages[vm.Messages.Count - 1];
-                                        if (last != null && string.Equals(ChatMessageListRenderer.NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
-                                        {
-                                            last.tokenCount = _streamingCoordinator.EstimatedTokens;
-                                            last.responseTimeSeconds = (float)elapsed;
-                                        }
-                                    }
-                                }
-                                catch { }
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // keep estimate if client not available or no usage chunk
-                    }
-
                     _streamingCoordinator.Abort();
                 }
                 else
@@ -1082,47 +1055,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                         _approvalController?.Dismiss();
                         DismissSessionPicker();
 
-                        // Finalize stats with real usage from client
+                        // Responses usage is persisted by ChatViewModel from this response only.
                         _streamingCoordinator.PauseStatsSchedule();
-                        try
-                        {
-                            var app = _d.GetAppAsync().Result;
-                            // Hermes turns never touch the HTTP client, so its LastStreamUsage would
-                            // be another provider's leftovers — same guard as the send path.
-                            var client = chat.IsHermesActive ? null : app?.AiClient as OpenAiCompatibleClient;
-                            if (client != null)
-                            {
-                                var usage = client.LastStreamUsage;
-                                int completionTokens = MessageCompletionTokenCount(usage);
-                                if (completionTokens > 0)
-                                {
-                                    double elapsed = (DateTime.UtcNow - _streamingCoordinator.StartTime).TotalSeconds;
-                                    if (elapsed < 0)
-                                        elapsed = 0;
-                                    _streamingCoordinator.SetFinalStats(completionTokens, elapsed);
-                                    // Persist precise usage to the message model so it survives re-renders and reloads (U-28)
-                                    try
-                                    {
-                                        var vm = chat.CurrentChatViewModel;
-                                        if (vm != null && vm.Messages != null && vm.Messages.Count > 0)
-                                        {
-                                            var last = vm.Messages[vm.Messages.Count - 1];
-                                            if (last != null && string.Equals(ChatMessageListRenderer.NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
-                                            {
-                                                last.tokenCount = _streamingCoordinator.EstimatedTokens;
-                                                last.responseTimeSeconds = (float)elapsed;
-                                            }
-                                        }
-                                    }
-                                    catch { }
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            // keep estimate if no real usage
-                        }
-
                         _streamingCoordinator.Abort();
                     }
                     else
@@ -1200,15 +1134,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         // ===== Context Window Indicator (U-36) =====
-
-        private static int MessageCompletionTokenCount(UsageData usage)
-        {
-            if (usage.completion_tokens > 0)
-                return usage.completion_tokens;
-            if (usage.total_tokens > 0 && usage.prompt_tokens > 0 && usage.total_tokens > usage.prompt_tokens)
-                return usage.total_tokens - usage.prompt_tokens;
-            return 0;
-        }
 
         private void OnBackendModeChanged(BackendMode mode)
         {
@@ -1315,7 +1240,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             catch { }
             if (used <= 0)
-                used = ChatContextWindowEstimator.EstimateSessionTokens(_d.GetAppAsync, _d.GetChatServiceAsync);
+                used = ChatContextWindowEstimator.EstimateSessionTokens(_d.GetChatServiceAsync);
             float ratio = (float)used / contextWindow;
             ratio = Mathf.Clamp01(ratio);
 
@@ -1426,11 +1351,12 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private async Task ProcessAgentToolLoopAsync(ChatService chat, bool originalStreaming)
         {
-            if (chat == null || chat.CurrentChatViewModel == null)
+            // Hermes owns its tool lifecycle through the gateway/transport. Only Responses function
+            // calls are executed locally here.
+            if (chat == null || chat.IsHermesActive || chat.CurrentChatViewModel == null)
                 return;
 
             int iterations = 0;
-            bool streamingMode = originalStreaming;
 
             // Force non-streaming for tool resolution turns to keep approval UX simple and avoid nested streams
             chat.UseStreaming = false;
@@ -1444,56 +1370,88 @@ namespace NeonCompanion.Runtime.UI.UITK
                         break;
 
                     var last = vm.Messages[vm.Messages.Count - 1];
-                    if (last == null ||
-                        !string.Equals(last.role, "assistant", StringComparison.OrdinalIgnoreCase) ||
-                        last.tool_calls == null ||
-                        last.tool_calls.Count == 0)
+                    List<ToolCall> toolCalls = GetResponsesFunctionCalls(last);
+                    if (toolCalls.Count == 0)
                     {
                         break;
                     }
 
                     iterations++;
 
-                    bool executedAny = false;
-                    for (int i = 0; i < last.tool_calls.Count; i++)
+                    bool appendedOutput = false;
+                    for (int i = 0; i < toolCalls.Count; i++)
                     {
-                        var tc = last.tool_calls[i];
-                        if (tc == null || tc.function == null)
+                        vm.CancellationToken.ThrowIfCancellationRequested();
+
+                        ToolCall toolCall = toolCalls[i];
+                        if (toolCall == null || toolCall.function == null || string.IsNullOrWhiteSpace(toolCall.id))
                             continue;
 
-                        var parameters = ToolExecutorHelper.ParseToolArguments(tc.function.arguments);
+                        // A call_id is an idempotency boundary: never execute the same tool call
+                        // twice if the server repeats an already-resolved output in the transcript.
+                        if (HasToolOutput(vm.Messages, toolCall.id))
+                            continue;
 
-                        var request = new ToolCallRequest
+                        Dictionary<string, string> parameters;
+                        string argumentError;
+                        string result;
+                        if (!ToolExecutorHelper.TryParseToolArguments(toolCall.function.arguments, out parameters, out argumentError))
                         {
-                            id = !string.IsNullOrEmpty(tc.id) ? tc.id : Guid.NewGuid().ToString("N"),
-                            toolName = tc.function.name ?? string.Empty,
-                            description = tc.function.name ?? LocalizationExtensions.Get("tool.default", "tool"),
-                            parameters = parameters
-                        };
+                            result = "Invalid tool arguments: " + (argumentError ?? "invalid JSON.");
+                        }
+                        else
+                        {
+                            var request = new ToolCallRequest
+                            {
+                                id = toolCall.id,
+                                toolName = toolCall.function.name ?? string.Empty,
+                                description = toolCall.function.name ?? LocalizationExtensions.Get("tool.default", "tool"),
+                                parameters = parameters
+                            };
 
-                        bool approved = await _approvalController.RequestToolApprovalAsync(request);
-                        if (!approved)
-                        {
-                            _d.ShowSystemMessage(LocalizationExtensions.Get("tool.approval.denied", "Tool execution denied."));
-                            return;
+                            bool approved = _approvalController != null &&
+                                await _approvalController.RequestToolApprovalAsync(request, vm.CancellationToken);
+                            if (!approved)
+                            {
+                                result = "Tool execution was denied by the user.";
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    result = await ToolExecutor.ExecuteAsync(toolCall.function.name, parameters, vm.CancellationToken);
+                                }
+                                catch (OperationCanceledException)
+                                {
+                                    throw;
+                                }
+                                catch (Exception ex)
+                                {
+                                    result = "Tool execution failed: " + ex.Message;
+                                }
+                            }
                         }
 
-                        string result = ToolExecutor.Execute(tc.function.name, parameters);
-                        if (result != null && result.Length > 10000)
-                            result = result.Substring(0, 10000) + "\n... [truncated]";
-
-                        vm.Messages.Add(new ChatMessage
+                        var outputMessage = new ChatMessage
                         {
                             role = "tool",
                             content = result ?? string.Empty,
-                            tool_call_id = tc.id ?? string.Empty,
+                            // Responses requires call_id (not the output item id) for pairing.
+                            tool_call_id = toolCall.id,
                             unixTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                        };
+                        outputMessage.responseItems.Add(new ChatResponseItem
+                        {
+                            type = "function_call_output",
+                            callId = toolCall.id,
+                            output = outputMessage.content
                         });
+                        vm.Messages.Add(outputMessage);
 
-                        executedAny = true;
+                        appendedOutput = true;
                     }
 
-                    if (!executedAny)
+                    if (!appendedOutput)
                         break;
 
                     // Continue generation with tool results in history (no new user message)
@@ -1526,6 +1484,65 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 chat.UseStreaming = originalStreaming;
             }
+        }
+
+        private static List<ToolCall> GetResponsesFunctionCalls(ChatMessage message)
+        {
+            var result = new List<ToolCall>();
+            if (message == null || !string.Equals(message.role, "assistant", StringComparison.OrdinalIgnoreCase))
+                return result;
+
+            if (message.responseItems != null)
+            {
+                for (int i = 0; i < message.responseItems.Count; i++)
+                {
+                    ChatResponseItem item = message.responseItems[i];
+                    if (item == null || !string.Equals(item.type, "function_call", StringComparison.OrdinalIgnoreCase) ||
+                        string.IsNullOrWhiteSpace(item.callId) || string.IsNullOrWhiteSpace(item.name))
+                    {
+                        continue;
+                    }
+
+                    result.Add(new ToolCall
+                    {
+                        id = item.callId,
+                        type = "function",
+                        function = new ToolCallFunction
+                        {
+                            name = item.name,
+                            arguments = item.arguments ?? "{}"
+                        }
+                    });
+                }
+            }
+
+            if (result.Count > 0 || message.tool_calls == null)
+                return result;
+
+            for (int i = 0; i < message.tool_calls.Count; i++)
+            {
+                ToolCall legacy = message.tool_calls[i];
+                if (legacy != null && legacy.function != null && !string.IsNullOrWhiteSpace(legacy.id))
+                    result.Add(legacy);
+            }
+            return result;
+        }
+
+        private static bool HasToolOutput(IReadOnlyList<ChatMessage> messages, string callId)
+        {
+            if (messages == null || string.IsNullOrWhiteSpace(callId))
+                return false;
+
+            for (int i = 0; i < messages.Count; i++)
+            {
+                ChatMessage message = messages[i];
+                if (message != null && string.Equals(message.role, "tool", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(message.tool_call_id, callId, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         // ===== Message selection (U-31/U-32) — event handlers for ChatSelectionManager =====

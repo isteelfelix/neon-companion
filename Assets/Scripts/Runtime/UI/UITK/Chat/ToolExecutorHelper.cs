@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace NeonCompanion.Runtime.UI.UITK.Chat
 {
@@ -6,61 +8,40 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
     {
         internal static Dictionary<string, string> ParseToolArguments(string argumentsJson)
         {
-            var result = new Dictionary<string, string>();
+            Dictionary<string, string> result;
+            TryParseToolArguments(argumentsJson, out result, out _);
+            return result;
+        }
+
+        internal static bool TryParseToolArguments(string argumentsJson, out Dictionary<string, string> result, out string error)
+        {
+            result = new Dictionary<string, string>();
+            error = null;
             if (string.IsNullOrWhiteSpace(argumentsJson))
-                return result;
+                return true;
 
             try
             {
-                int start = argumentsJson.IndexOf('{');
-                int end = argumentsJson.LastIndexOf('}');
-                if (start < 0 || end <= start)
-                    return result;
-
-                string obj = argumentsJson.Substring(start, end - start + 1);
-                int pos = 0;
-                while (pos < obj.Length)
+                var obj = JObject.Parse(argumentsJson);
+                foreach (var property in obj.Properties())
                 {
-                    int keyStart = obj.IndexOf('"', pos);
-                    if (keyStart < 0)
-                        break;
-                    int keyEnd = obj.IndexOf('"', keyStart + 1);
-                    if (keyEnd < 0)
-                        break;
-                    string key = obj.Substring(keyStart + 1, keyEnd - keyStart - 1);
-                    pos = keyEnd + 1;
-
-                    int colon = obj.IndexOf(':', pos);
-                    if (colon < 0)
-                        break;
-                    pos = colon + 1;
-
-                    while (pos < obj.Length && char.IsWhiteSpace(obj[pos]))
-                        pos++;
-
-                    if (pos >= obj.Length || obj[pos] != '"')
-                    {
-                        pos++;
-                        continue;
-                    }
-
-                    int valStart = pos + 1;
-                    int valEnd = obj.IndexOf('"', valStart);
-                    if (valEnd < 0)
-                        break;
-
-                    string val = obj.Substring(valStart, valEnd - valStart);
-                    val = val.Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\\"", "\"").Replace("\\\\", "\\");
-                    result[key] = val;
-                    pos = valEnd + 1;
+                    if (property.Value == null || property.Value.Type == JTokenType.Null)
+                        result[property.Name] = string.Empty;
+                    else if (property.Value.Type == JTokenType.String ||
+                             property.Value.Type == JTokenType.Integer ||
+                             property.Value.Type == JTokenType.Float ||
+                             property.Value.Type == JTokenType.Boolean)
+                        result[property.Name] = property.Value.ToString();
+                    else
+                        result[property.Name] = property.Value.ToString(Formatting.None);
                 }
+                return true;
             }
-            catch
+            catch (JsonException ex)
             {
-                // Return any arguments parsed before malformed input was encountered.
+                error = ex.Message;
+                return false;
             }
-
-            return result;
         }
     }
 }

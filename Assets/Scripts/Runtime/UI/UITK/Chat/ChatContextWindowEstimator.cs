@@ -1,8 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Chat;
-using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 
 namespace NeonCompanion.Runtime.UI.UITK.Chat
@@ -10,29 +8,21 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
     internal static class ChatContextWindowEstimator
     {
         internal static int EstimateSessionTokens(
-            Func<Task<CompanionApp>> getAppAsync,
             Func<Task<ChatService>> getChatServiceAsync)
         {
-            try
-            {
-                var app = getAppAsync().Result;
-                var client = app != null ? app.AiClient as OpenAiCompatibleClient : null;
-                if (client != null)
-                {
-                    var usage = client.LastStreamUsage;
-                    if (usage.prompt_tokens > 0)
-                        return usage.prompt_tokens;
-                }
-            }
-            catch
-            {
-                // Fall back to the character-based estimate below.
-            }
-
             var chat = getChatServiceAsync().Result;
             var vm = chat != null ? chat.CurrentChatViewModel : null;
             if (vm == null || vm.Messages.Count == 0)
                 return 0;
+
+            // Responses usage is stored on the exact completed message. Reading a mutable
+            // client-wide stream counter here can show another session's context after a switch.
+            for (int i = vm.Messages.Count - 1; i >= 0; i--)
+            {
+                ChatResponseUsage usage = vm.Messages[i] != null ? vm.Messages[i].responseUsage : null;
+                if (usage != null && usage.inputTokens > 0)
+                    return usage.inputTokens;
+            }
 
             int totalChars = 0;
             for (int i = 0; i < vm.Messages.Count; i++)

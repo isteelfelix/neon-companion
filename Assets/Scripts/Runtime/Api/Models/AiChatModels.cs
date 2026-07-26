@@ -89,6 +89,7 @@ namespace NeonCompanion.Runtime.Api.Models
         public List<AiChatAttachment> attachments = new List<AiChatAttachment>();
         public string tool_call_id;
         public List<ToolCall> tool_calls;
+        public List<ResponsesOutputItem> responseOutput;
     }
 
     [Serializable]
@@ -97,9 +98,17 @@ namespace NeonCompanion.Runtime.Api.Models
         public string id;
         public string model;
         public string providerSessionId;
+        // Responses API lifecycle status (for example: completed, failed, incomplete).
+        public string status;
         public string content;
         public DateTime receivedAtUtc = DateTime.UtcNow;
         public List<ToolCall> tool_calls;
         public List<AiChatAttachment> attachments;
+        // Preserve the complete Responses output so a later turn can resend typed items
+        // instead of reconstructing context from display text alone.
+        public List<ResponsesOutputItem> responseOutput;
+        public ResponsesUsage usage;
+        public ResponsesApiError error;
+        public ResponsesIncompleteDetails incompleteDetails;
     }
 }

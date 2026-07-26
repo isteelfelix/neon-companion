@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
@@ -217,6 +218,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 // Check file exists
                 if (!System.IO.File.Exists(clipboard))
                     return Task.CompletedTask;
+                if (!ResponsesAttachmentPayloadBuilder.IsSupportedPath(clipboard))
+                    return Task.CompletedTask;
 
                 string fileName = System.IO.Path.GetFileName(clipboard);
                 _pendingComposerAttachments.Add(new ChatAttachment
@@ -257,6 +260,12 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _showSystemMessage(LocalizationExtensions.Get("chat.paste.image_failed", "Не удалось извлечь изображение из буфера."));
                 return;
             }
+            if (!ResponsesAttachmentPayloadBuilder.IsSupportedPath(tempPath))
+            {
+                try { System.IO.File.Delete(tempPath); } catch { }
+                _showSystemMessage(LocalizationExtensions.Get("chat.paste.image_failed", "Не удалось извлечь изображение из буфера."));
+                return;
+            }
 
             string fileName = "clipboard-" + DateTime.Now.ToString("HHmmss") + ".png";
             _pendingComposerAttachments.Add(new ChatAttachment
@@ -291,6 +300,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 var filePicker = app.Services.GetRequired<IFilePickerService>();
                 string path = await filePicker.PickImagePathAsync();
                 if (string.IsNullOrEmpty(path)) return;
+                if (!ResponsesAttachmentPayloadBuilder.IsSupportedPath(path))
+                {
+                    _showSystemMessage(LocalizationExtensions.Get("system.chat.attachment_failed", "Не удалось добавить вложение к сообщению."));
+                    return;
+                }
 
                 string fileName = System.IO.Path.GetFileName(path);
                 _pendingComposerAttachments.Add(new ChatAttachment
@@ -441,13 +455,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 if (!System.IO.File.Exists(path))
                     continue;
 
+                if (!ResponsesAttachmentPayloadBuilder.IsSupportedPath(path))
+                    continue;
+
                 string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
-                if (!IsSupportedFile(ext))
-                    continue;
-
-                if (IsImageExtension(ext) && !IsFileSizeOk(path))
-                    continue;
-
                 bool isImage = IsImageExtension(ext);
                 _pendingComposerAttachments.Add(new ChatAttachment
                 {
@@ -536,6 +547,53 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         }
 
         // ===== Static helpers =====
+
+        /// <summary>
+        /// Copies selected files to app-owned storage before they enter persisted chat history.
+        /// Callers should send and persist the returned list, never the original arbitrary paths.
+        /// </summary>
+        internal static bool TryPersistAttachments(IReadOnlyList<ChatAttachment> attachments, out List<ChatAttachment> persisted, out string error)
+        {
+            persisted = new List<ChatAttachment>();
+            error = null;
+            if (attachments == null)
+                return true;
+
+            var createdPaths = new List<string>();
+            for (int i = 0; i < attachments.Count; i++)
+            {
+                var attachment = attachments[i];
+                if (attachment == null)
+                    continue;
+
+                string copiedPath;
+                if (!ResponsesAttachmentPayloadBuilder.TryPersist(attachment.path, attachment.name, Application.persistentDataPath, out copiedPath, out error))
+                {
+                    for (int j = 0; j < createdPaths.Count; j++)
+                    {
+                        try { System.IO.File.Delete(createdPaths[j]); } catch { }
+                    }
+                    persisted.Clear();
+                    return false;
+                }
+
+                if (!string.Equals(
+                        System.IO.Path.GetFullPath(attachment.path),
+                        System.IO.Path.GetFullPath(copiedPath),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    createdPaths.Add(copiedPath);
+                }
+                persisted.Add(new ChatAttachment
+                {
+                    kind = attachment.kind,
+                    name = attachment.name,
+                    path = copiedPath,
+                    mediaType = attachment.mediaType
+                });
+            }
+            return true;
+        }
 
         /// <summary>
         /// Strips attachment tokens from composer text based on the given attachment list.
@@ -684,20 +742,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         // ===== File type helpers =====
 
-        private static bool IsSupportedFile(string ext)
-        {
-            // Images
-            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
-                return true;
-            // Documents
-            if (ext == ".pdf" || ext == ".txt" || ext == ".md" || ext == ".json" || ext == ".xml" || ext == ".csv")
-                return true;
-            // Code
-            if (ext == ".cs" || ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" || ext == ".cpp" || ext == ".h" || ext == ".csproj")
-                return true;
-            return false;
-        }
-
         private static string GuessFileMediaType(string path)
         {
             string ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
@@ -715,19 +759,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private static bool IsImageExtension(string ext)
         {
             return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp";
-        }
-
-        private static bool IsFileSizeOk(string path, long maxSizeBytes = 10 * 1024 * 1024)
-        {
-            try
-            {
-                var info = new System.IO.FileInfo(path);
-                return info.Length <= maxSizeBytes;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         internal static string GuessImageMediaType(string path)
