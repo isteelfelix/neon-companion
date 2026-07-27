@@ -63,12 +63,17 @@
     border-bottom-color: var(--line-1);
 }
 
-.terminal-tabs__list {
+.terminal-tabs__scroll {
     flex-grow: 1;
     min-width: 0;
+    height: 28px;
+    flex-shrink: 1;
+}
+
+.terminal-tabs__list {
+    height: 28px;
     flex-direction: row;
     align-items: center;
-    overflow: hidden;
 }
 
 .terminal-tabs__add {
@@ -94,14 +99,16 @@
 }
 
 .terminal-tab {
+    width: 54px;
     height: 28px;
-    min-width: 0;
-    max-width: 128px;
-    flex-grow: 1;
-    flex-shrink: 1;
+    min-width: 54px;
+    max-width: 54px;
+    flex-grow: 0;
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
-    padding: 0 4px 0 8px;
+    justify-content: space-between;
+    padding: 0 4px 0 7px;
     margin-right: 4px;
     border-width: 1px;
     border-color: rgba(0, 0, 0, 0);
@@ -126,22 +133,27 @@
     border-left-color: var(--warn);
 }
 
-.terminal-tab__label {
-    flex-grow: 1;
-    min-width: 0;
-    font-size: 10px;
-    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    -unity-text-align: middle-left;
+.terminal-tab__icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    background-image: url("project://database/Assets/UI/Icons/terminal.svg");
+    -unity-background-image-tint-color: var(--text-3);
+}
+
+.terminal-tab:hover .terminal-tab__icon {
+    -unity-background-image-tint-color: var(--text-1);
+}
+
+.terminal-tab--active .terminal-tab__icon {
+    -unity-background-image-tint-color: var(--accent-text);
 }
 
 .terminal-tab__close {
     width: 18px;
     height: 18px;
     flex-shrink: 0;
-    margin-left: 3px;
+    margin-left: 2px;
     padding: 0;
     border-width: 0;
     border-radius: 4px;

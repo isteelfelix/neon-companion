@@ -30,8 +30,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             public string Id;
             public string ProcessId;
             public bool ReadOnly;
-            public Button Button;
-            public Label Title;
+            public VisualElement Button;
             public VisualElement Host;
             public TerminalController Pane;
         }
@@ -52,10 +51,18 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
 
         private bool _isWorkspace;
         private VisualElement _tabBar;
+        private ScrollView _tabStrip;
         private VisualElement _tabList;
         private VisualElement _paneHost;
         private readonly List<TerminalTab> _tabs = new List<TerminalTab>();
         private TerminalTab _activeTab;
+        private TerminalTab _pressedTab;
+        private int _tabStripPointerId = -1;
+        private float _tabStripPointerStartX;
+        private float _tabStripStartOffsetX;
+        private bool _tabStripDragged;
+
+        private const float TabStripDragThreshold = 4f;
 
         // ---- Lifecycle ------------------------------------------------------------
 
@@ -76,10 +83,22 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             add.text = "+";
             add.tooltip = LocalizationExtensions.Get("terminal.new", "New terminal");
             add.AddToClassList("terminal-tabs__add");
-            _tabList = new VisualElement();
+
+            _tabStrip = new ScrollView(ScrollViewMode.Horizontal);
+            _tabStrip.name = "terminal-tab-strip";
+            _tabStrip.AddToClassList("terminal-tabs__scroll");
+            _tabStrip.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            _tabStrip.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            _tabStrip.RegisterCallback<PointerDownEvent>(OnTabStripPointerDown, TrickleDown.TrickleDown);
+            _tabStrip.RegisterCallback<PointerMoveEvent>(OnTabStripPointerMove);
+            _tabStrip.RegisterCallback<PointerUpEvent>(OnTabStripPointerUp);
+            _tabStrip.RegisterCallback<PointerCaptureOutEvent>(OnTabStripPointerCaptureOut);
+            _tabStrip.RegisterCallback<WheelEvent>(OnTabStripWheel);
+
+            _tabList = _tabStrip.contentContainer;
             _tabList.name = "terminal-tab-list";
             _tabList.AddToClassList("terminal-tabs__list");
-            _tabBar.Add(_tabList);
+            _tabBar.Add(_tabStrip);
             _tabBar.Add(add);
 
             _paneHost = new VisualElement();
@@ -142,20 +161,30 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             if (readOnly && !string.IsNullOrEmpty(initialOutput))
                 tab.Pane.AppendReadOnlyOutput(initialOutput);
 
-            var button = new Button(() => SelectTab(tab));
+            var button = new VisualElement();
             button.AddToClassList("terminal-tab");
+            button.focusable = true;
+            button.userData = tab;
             if (readOnly)
                 button.AddToClassList("terminal-tab--agent");
 
-            var title = new Label(readOnly
+            string title = readOnly
                 ? LocalizationExtensions.Get("terminal.agent", "agent") + " " + ShortId(processId)
-                : LocalizationExtensions.Get("terminal.shell", "shell") + " " + NextShellNumber());
-            title.AddToClassList("terminal-tab__label");
-            tab.Title = title;
-            button.tooltip = readOnly
+                : LocalizationExtensions.Get("terminal.shell", "shell") + " " + NextShellNumber();
+            button.tooltip = title + " — " + (readOnly
                 ? LocalizationExtensions.Get("terminal.agent_readonly", "Agent output (read-only)")
-                : LocalizationExtensions.Get("terminal.switch", "Switch terminal");
+                : LocalizationExtensions.Get("terminal.switch", "Switch terminal"));
+            button.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.Space)
+                    return;
+                SelectTab(tab);
+                evt.StopPropagation();
+            });
             tab.Button = button;
+
+            var icon = new VisualElement();
+            icon.AddToClassList("terminal-tab__icon");
 
             var close = new Button();
             close.text = "×";
@@ -166,7 +195,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 evt.StopPropagation();
                 CloseTab(tab);
             });
-            button.Add(title);
+            button.Add(icon);
             button.Add(close);
             _tabList.Add(button);
             _tabs.Add(tab);
@@ -206,6 +235,130 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             }
             _activeTab = tab;
             tab.Pane.SetVisible(true);
+            if (_tabStrip != null)
+                _tabStrip.schedule.Execute(() => _tabStrip.ScrollTo(tab.Button));
+        }
+
+        private void OnTabStripPointerDown(PointerDownEvent evt)
+        {
+            if (evt.button != 0 || _tabStrip == null)
+                return;
+
+            VisualElement target = evt.target as VisualElement;
+            if (HasClassInParents(target, "terminal-tab__close"))
+                return;
+
+            TerminalTab tab = TabFromTarget(target);
+            if (tab == null)
+                return;
+
+            _pressedTab = tab;
+            _tabStripPointerId = evt.pointerId;
+            _tabStripPointerStartX = evt.position.x;
+            _tabStripStartOffsetX = _tabStrip.scrollOffset.x;
+            _tabStripDragged = false;
+            _tabStrip.CapturePointer(evt.pointerId);
+        }
+
+        private void OnTabStripPointerMove(PointerMoveEvent evt)
+        {
+            if (_tabStrip == null || evt.pointerId != _tabStripPointerId)
+                return;
+            if (!_tabStrip.HasPointerCapture(evt.pointerId))
+                return;
+
+            float delta = evt.position.x - _tabStripPointerStartX;
+            if (!_tabStripDragged && Mathf.Abs(delta) >= TabStripDragThreshold)
+                _tabStripDragged = true;
+            if (!_tabStripDragged)
+                return;
+
+            Vector2 offset = _tabStrip.scrollOffset;
+            offset.x = Mathf.Clamp(_tabStripStartOffsetX - delta, 0f, MaxTabStripScrollX());
+            _tabStrip.scrollOffset = offset;
+            evt.StopPropagation();
+        }
+
+        private void OnTabStripPointerUp(PointerUpEvent evt)
+        {
+            if (_tabStrip == null || evt.pointerId != _tabStripPointerId)
+                return;
+
+            bool wasDrag = _tabStripDragged;
+            TerminalTab pressed = _pressedTab;
+            if (_tabStrip.HasPointerCapture(evt.pointerId))
+                _tabStrip.ReleasePointer(evt.pointerId);
+            ResetTabStripDrag();
+
+            if (!wasDrag && pressed != null)
+                SelectTab(pressed);
+            evt.StopPropagation();
+        }
+
+        private void OnTabStripPointerCaptureOut(PointerCaptureOutEvent evt)
+        {
+            ResetTabStripDrag();
+        }
+
+        private void OnTabStripWheel(WheelEvent evt)
+        {
+            if (_tabStrip == null)
+                return;
+
+            float max = MaxTabStripScrollX();
+            if (max <= 0f)
+                return;
+
+            Vector2 offset = _tabStrip.scrollOffset;
+            float wheelDelta = Mathf.Abs(evt.delta.x) > Mathf.Abs(evt.delta.y)
+                ? evt.delta.x
+                : evt.delta.y;
+            offset.x = Mathf.Clamp(offset.x + wheelDelta * 18f, 0f, max);
+            _tabStrip.scrollOffset = offset;
+            evt.StopPropagation();
+        }
+
+        private void ResetTabStripDrag()
+        {
+            _tabStripPointerId = -1;
+            _tabStripDragged = false;
+            _pressedTab = null;
+        }
+
+        private float MaxTabStripScrollX()
+        {
+            if (_tabStrip == null)
+                return 0f;
+            float content = _tabStrip.contentContainer.layout.width;
+            float viewport = _tabStrip.contentViewport.layout.width;
+            if (float.IsNaN(content) || float.IsNaN(viewport))
+                return 0f;
+            return Mathf.Max(0f, content - viewport);
+        }
+
+        private TerminalTab TabFromTarget(VisualElement target)
+        {
+            VisualElement current = target;
+            while (current != null && current != _tabStrip)
+            {
+                TerminalTab tab = current.userData as TerminalTab;
+                if (tab != null)
+                    return tab;
+                current = current.parent;
+            }
+            return null;
+        }
+
+        private static bool HasClassInParents(VisualElement target, string className)
+        {
+            VisualElement current = target;
+            while (current != null)
+            {
+                if (current.ClassListContains(className))
+                    return true;
+                current = current.parent;
+            }
+            return false;
         }
 
         private void CloseTab(TerminalTab tab)
@@ -650,6 +803,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         {
             if (_isWorkspace)
             {
+                if (_tabStrip != null)
+                {
+                    _tabStrip.UnregisterCallback<PointerDownEvent>(OnTabStripPointerDown, TrickleDown.TrickleDown);
+                    _tabStrip.UnregisterCallback<PointerMoveEvent>(OnTabStripPointerMove);
+                    _tabStrip.UnregisterCallback<PointerUpEvent>(OnTabStripPointerUp);
+                    _tabStrip.UnregisterCallback<PointerCaptureOutEvent>(OnTabStripPointerCaptureOut);
+                    _tabStrip.UnregisterCallback<WheelEvent>(OnTabStripWheel);
+                }
                 for (int i = _tabs.Count - 1; i >= 0; i--)
                 {
                     if (_tabs[i].Pane != null)
