@@ -615,9 +615,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _approvalController?.Dismiss();
                     DismissSessionPicker();
 
-                    // Responses usage belongs to the completed response returned to ChatViewModel.
-                    // Do not read mutable client-wide usage here: it can belong to another session.
-                    _streamingCoordinator.PauseStatsSchedule();
+                    FinalizeStreamStats(chat, sendSid);
                     _streamingCoordinator.Abort();
                 }
                 else
@@ -1055,6 +1053,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     bool streaming = _d.UseStreaming();
                     chat.UseStreaming = streaming;
+                    string regenerateSid = chat.CurrentSessionId;
 
                     _d.RenderMessages(chat.CurrentChatViewModel?.Messages);
 
@@ -1067,8 +1066,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         _approvalController?.Dismiss();
                         DismissSessionPicker();
 
-                        // Responses usage is persisted by ChatViewModel from this response only.
-                        _streamingCoordinator.PauseStatsSchedule();
+                        FinalizeStreamStats(chat, regenerateSid);
                         _streamingCoordinator.Abort();
                     }
                     else
@@ -1292,6 +1290,37 @@ namespace NeonCompanion.Runtime.UI.UITK
             return string.IsNullOrWhiteSpace(message)
                 ? LocalizationExtensions.Get("chat.send.failed", "Could not send message.")
                 : message;
+        }
+
+        /// <summary>
+        /// Settle the live stats footer on the figures the finished turn persisted, so the bubble
+        /// stops showing the running <c>~estimate</c> the moment generation ends — including when
+        /// no re-render follows. The numbers are read from the message model (ChatService writes
+        /// them for Hermes, ChatViewModel for Responses) rather than from client-wide mutable
+        /// usage, which can belong to another session after a mid-stream switch.
+        /// </summary>
+        private void FinalizeStreamStats(ChatService chat, string streamSid)
+        {
+            _streamingCoordinator.PauseStatsSchedule();
+
+            if (chat == null)
+                return;
+            // A Hermes turn that finished after the user switched away belongs to another
+            // transcript; the foreground message list is not its result.
+            if (chat.IsHermesActive && !string.Equals(chat.CurrentSessionId, streamSid, StringComparison.Ordinal))
+                return;
+
+            List<ChatMessage> messages = chat.CurrentChatViewModel?.Messages;
+            if (messages == null || messages.Count == 0)
+                return;
+
+            ChatMessage last = messages[messages.Count - 1];
+            if (last == null || last.tokenCount <= 0)
+                return;
+            if (!string.Equals(ChatMessageListRenderer.NormalizeRole(last.role), "assistant", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _streamingCoordinator.SetFinalStats(last.tokenCount, last.responseTimeSeconds);
         }
 
         public void RenderMessages(IReadOnlyList<ChatMessage> messages)

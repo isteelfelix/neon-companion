@@ -281,11 +281,28 @@ namespace NeonCompanion.Runtime.UI.Chat
                     message.tokenCount = message.responseUsage.totalTokens - message.responseUsage.inputTokens;
             }
 
+            // Responses `usage` is optional: OpenAI reports it on response.completed, most
+            // OpenAI-compatible servers never send it. Without a fallback the bubble's stats
+            // footer loses its token figure (ChatMessageListRenderer then prints elapsed time
+            // only). Estimate from the produced text instead — the same "exact when reported,
+            // estimate otherwise" rule the Hermes path applies in ChatService.
+            if (message.tokenCount <= 0)
+                message.tokenCount = EstimateTokenCount(message.content);
+
             if (startedAtUtc.HasValue)
             {
                 double elapsed = (DateTime.UtcNow - startedAtUtc.Value).TotalSeconds;
                 message.responseTimeSeconds = elapsed > 0d ? (float)elapsed : 0f;
             }
+        }
+
+        /// <summary>Rough output-token estimate (~4 chars/token), same heuristic as ChatService.</summary>
+        private static int EstimateTokenCount(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return 0;
+
+            return Math.Max(1, (text.Length + 3) / 4);
         }
 
         private static ChatResponseUsage ToChatResponseUsage(ResponsesUsage usage)

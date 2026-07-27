@@ -2330,6 +2330,10 @@ namespace NeonCompanion.Runtime.Chat
             {
                 stream.streamingMessage.responseTimeSeconds =
                     (float)Math.Max(0, (DateTime.UtcNow - stream.startTime).TotalSeconds);
+                // No message.complete means no gateway usage for this turn; keep the footer's
+                // token figure on the text that did arrive instead of dropping it to 0.
+                if (stream.streamingMessage.tokenCount <= 0)
+                    stream.streamingMessage.tokenCount = EstimateTokenCount(stream.streamingMessage.content);
 
                 if (stream.streamingMessage.segments != null)
                 {
@@ -2372,6 +2376,10 @@ namespace NeonCompanion.Runtime.Chat
                 }
 
                 stream.streamingMessage.responseTimeSeconds = (float)(DateTime.UtcNow - stream.startTime).TotalSeconds;
+                // Interrupted turns never reach message.complete, so the gateway reports no usage
+                // for them; estimate from the partial text so the footer keeps a token figure.
+                if (stream.streamingMessage.tokenCount <= 0)
+                    stream.streamingMessage.tokenCount = EstimateTokenCount(stream.streamingMessage.content);
             }
 
             stream.active = false;
