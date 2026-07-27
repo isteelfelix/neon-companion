@@ -22,6 +22,31 @@ Unity 6 still defaults to C# 9 for broad compatibility. These features will **fa
 
 The project uses `System.Threading.Tasks` for async — **not** UniTask. Do not introduce UniTask.
 
+Additional C# constraints:
+- `[Serializable]` requires `using System;`; do not use `[UnityEngine.Serializable]`.
+- Remove `async` when a method has no `await`; return `Task.CompletedTask` where appropriate.
+- Declare loop-index copies outside nested `if`/`for` blocks before capturing them in closures.
+- Use `UnityWebRequest`, never `HttpClient`.
+
+## Unity UI Toolkit / USS Constraints
+
+Unity USS supports flex layout, standard sizing and spacing, borders, backgrounds,
+text styling, transforms, transitions, positioning, supported pseudo-classes, and
+custom properties.
+
+Do not use unsupported web CSS features:
+- `z-index`, `gap`, `line-height`, `pointer-events`, `box-shadow`
+- `@media`, `@keyframes`, `::before`, `::after`
+- `!important`, `calc()`, grid layout, `float`, or `clear`
+
+USS caveats:
+- One invalid property can cause Unity to ignore an entire USS rule block.
+- Use margins on children instead of `gap`.
+- Use `visibility: hidden` when pointer interaction must be suppressed.
+- Vertical elements in a flex-row must be siblings in a column parent, not children of the row.
+- Prefer creating new UI elements dynamically in C# instead of modifying UXML.
+- Initialize runtime-hidden elements with `style.display = DisplayStyle.None`.
+
 ## Architecture
 
 ```
