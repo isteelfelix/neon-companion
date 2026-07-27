@@ -69,6 +69,10 @@ namespace NeonCompanion.Runtime.Chat
             // backend may well be generating into it, so the bubble is KEPT (not orphaned) until
             // either a rehydrate re-adopts it or a genuinely new turn starts and releases it.
             public bool transportSuspended;
+            // The assistant bubble the last finished turn wrote into. Kept after streamingMessage
+            // is released so SendViaTransport can run the media pipeline over it once the turn is
+            // done (MEDIA: markers only make sense against the final text).
+            public ChatMessage completedMessage;
         }
 
         private readonly Dictionary<string, HermesStream> _hermesStreams =
@@ -1024,6 +1028,7 @@ namespace NeonCompanion.Runtime.Chat
                     {
                         JToken historyJson = await rest.GetSessionMessages(displaySessionId);
                         richHistory = BuildMessagesFromServerHistory(historyJson);
+                        await ApplyHistoryMediaAsync(richHistory);
                     }
                 }
                 catch (Exception ex)
@@ -1702,6 +1707,10 @@ namespace NeonCompanion.Runtime.Chat
                 submitAcknowledged = true;
 
                 await WaitForHermesCompletionAsync(sid, stream, completion);
+
+                // The turn's final text is settled now, so any `MEDIA:<path>` the agent emitted can
+                // be turned into a real attachment before the caller re-renders the transcript.
+                await ApplyCompletedTurnMediaAsync(stream);
             }
             catch
             {
@@ -2093,6 +2102,8 @@ namespace NeonCompanion.Runtime.Chat
                 if (!HistoryContainsCompletedPendingTurn(history, stream.pendingUserContent))
                     return false;
 
+                await ApplyHistoryMediaAsync(history);
+
                 if (stream.viewModel != null)
                 {
                     stream.viewModel.Messages.Clear();
@@ -2383,6 +2394,7 @@ namespace NeonCompanion.Runtime.Chat
             }
 
             stream.active = false;
+            stream.completedMessage = stream.streamingMessage;
             stream.streamingMessage = null;
             stream.buffer = null;
             stream.reasoning = null;
@@ -2580,6 +2592,7 @@ namespace NeonCompanion.Runtime.Chat
             {
                 bool isForeground = s.viewModel == _currentChatViewModel;
                 s.active = false;
+                s.completedMessage = s.streamingMessage;
                 s.streamingMessage = null;
                 s.buffer = null;
                 s.reasoning = null;
@@ -2598,6 +2611,57 @@ namespace NeonCompanion.Runtime.Chat
             // Generation finished — refresh the sidebar "working" indicator.
             RaiseSessionStatesChanged();
             // Server is the source of truth in Hermes mode — no local persistence.
+        }
+
+        /// <summary>
+        /// Resolve the `MEDIA:&lt;path&gt;` markers of the turn that just finished into real
+        /// attachments (inline image or file chip). Gateway-local paths are fetched over the
+        /// gateway's authenticated download route — see <see cref="ChatMediaPipeline"/>.
+        /// </summary>
+        private async Task ApplyCompletedTurnMediaAsync(HermesStream stream)
+        {
+            if (stream == null)
+                return;
+
+            ChatMessage message = stream.completedMessage;
+            stream.completedMessage = null;
+            if (message == null)
+                return;
+
+            try
+            {
+                await ChatMediaPipeline.ApplyMediaMarkersAsync(message, _currentProvider);
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("[Hermes] Media marker resolution failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Same pass over a transcript rebuilt from server history, so reloading a session keeps
+        /// showing the images and files the agent sent instead of falling back to raw paths.
+        /// </summary>
+        private async Task ApplyHistoryMediaAsync(List<ChatMessage> history)
+        {
+            if (history == null)
+                return;
+
+            for (int i = 0; i < history.Count; i++)
+            {
+                ChatMessage message = history[i];
+                if (message == null || !string.Equals(message.role, "assistant", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    await ChatMediaPipeline.ApplyMediaMarkersAsync(message, _currentProvider);
+                }
+                catch (Exception ex)
+                {
+                    NeonLogger.LogWarning("[Hermes] Media marker resolution failed for history: " + ex.Message);
+                }
+            }
         }
 
         private static int MessageOutputTokenCount(UsageStats usage, HermesStream stream, string text)
@@ -2857,7 +2921,10 @@ namespace NeonCompanion.Runtime.Chat
                 var message = messages[i];
                 if (message?.role == "assistant" && !string.IsNullOrWhiteSpace(message.content))
                 {
-                    OnAssistantResponse?.Invoke(message.content);
+                    // Media markers are attachments, not prose: TTS must not read a file path out.
+                    string spoken = ChatMediaPipeline.StripMediaMarkers(message.content);
+                    if (!string.IsNullOrWhiteSpace(spoken))
+                        OnAssistantResponse?.Invoke(spoken);
                     return;
                 }
             }

@@ -287,10 +287,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         public void OpenFilePicker()
         {
-            _ = AttachImageTokenAsync();
+            _ = AttachFileAsync();
         }
 
-        private async Task AttachImageTokenAsync()
+        private async Task AttachFileAsync()
         {
             try
             {
@@ -298,7 +298,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 if (app == null || _messageInput == null) return;
 
                 var filePicker = app.Services.GetRequired<IFilePickerService>();
-                string path = await filePicker.PickImagePathAsync();
+                // Offer everything the composer accepts (documents and archives too), not just
+                // images — the drop path already accepted them, so the picker was the odd one out.
+                string path = await filePicker.PickFileAsync(ResponsesAttachmentPayloadBuilder.PickerExtensionFilter);
                 if (string.IsNullOrEmpty(path)) return;
                 if (!ResponsesAttachmentPayloadBuilder.IsSupportedPath(path))
                 {
@@ -307,12 +309,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 }
 
                 string fileName = System.IO.Path.GetFileName(path);
+                string pickedExt = System.IO.Path.GetExtension(path)?.ToLowerInvariant() ?? string.Empty;
+                bool pickedImage = IsImageExtension(pickedExt);
                 _pendingComposerAttachments.Add(new ChatAttachment
                 {
-                    kind = "image",
+                    kind = pickedImage ? "image" : "file",
                     name = fileName,
                     path = path,
-                    mediaType = GuessImageMediaType(path)
+                    mediaType = pickedImage ? GuessImageMediaType(path) : GuessFileMediaType(path)
                 });
 
                 RenderComposerPreviews();
@@ -496,10 +500,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 int index = i; // capture for closure
                 var thumb = new VisualElement();
                 thumb.AddToClassList("composer__preview-thumb");
+                bool isFileAttachment = !(attachment.kind == "image" || IsImageFile(attachment.path));
+                if (isFileAttachment)
+                    thumb.AddToClassList("composer__preview-thumb--file");
 
                 if (!string.IsNullOrEmpty(attachment.path) && System.IO.File.Exists(attachment.path))
                 {
-                    if (attachment.kind == "image" || IsImageFile(attachment.path))
+                    if (!isFileAttachment)
                     {
                         var img = new Image();
                         img.AddToClassList("composer__preview-img");
@@ -515,9 +522,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     }
                     else
                     {
-                        var fileLabel = new Label(GetAttachmentDisplayName(attachment));
-                        fileLabel.AddToClassList("composer__preview-file");
-                        thumb.Add(fileLabel);
+                        thumb.Add(CreateFileChip(attachment));
                     }
                 }
 
@@ -699,7 +704,111 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         {
             if (attachment == null)
                 return string.Empty;
-            return !string.IsNullOrWhiteSpace(attachment.name) ? attachment.name : "image";
+            if (!string.IsNullOrWhiteSpace(attachment.name))
+                return attachment.name;
+            if (!string.IsNullOrWhiteSpace(attachment.path))
+            {
+                string fromPath = System.IO.Path.GetFileName(attachment.path);
+                if (!string.IsNullOrWhiteSpace(fromPath))
+                    return fromPath;
+            }
+            return "file";
+        }
+
+        // ===== File chip (messenger-style badge for non-image attachments) =====
+
+        /// <summary>
+        /// Icon + name (+ size) badge used for every non-image attachment, in the composer strip
+        /// and in sent/received bubbles alike. Clicking hands the cached local copy to the OS.
+        /// </summary>
+        internal static VisualElement CreateFileChip(ChatAttachment attachment)
+        {
+            var chip = new VisualElement();
+            chip.AddToClassList("file-chip");
+
+            var icon = new VisualElement();
+            icon.AddToClassList("icon");
+            icon.AddToClassList("icon--attach");
+            icon.AddToClassList("file-chip__icon");
+            chip.Add(icon);
+
+            var text = new VisualElement();
+            text.AddToClassList("file-chip__text");
+
+            var nameLabel = new Label(GetAttachmentDisplayName(attachment));
+            nameLabel.AddToClassList("file-chip__name");
+            text.Add(nameLabel);
+
+            string sizeText = FormatAttachmentSize(attachment);
+            if (!string.IsNullOrEmpty(sizeText))
+            {
+                var sizeLabel = new Label(sizeText);
+                sizeLabel.AddToClassList("file-chip__size");
+                text.Add(sizeLabel);
+            }
+
+            chip.Add(text);
+
+            string path = attachment != null ? attachment.path : null;
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+            {
+                chip.tooltip = LocalizationExtensions.Get("chat.attachment.open", "Показать файл");
+                chip.RegisterCallback<ClickEvent>(evt =>
+                {
+                    OpenAttachmentPath(path);
+                    evt.StopPropagation();
+                });
+            }
+
+            return chip;
+        }
+
+        /// <summary>Human-readable file size, or empty when the file is not on this disk.</summary>
+        internal static string FormatAttachmentSize(ChatAttachment attachment)
+        {
+            if (attachment == null || string.IsNullOrEmpty(attachment.path))
+                return string.Empty;
+
+            try
+            {
+                if (!System.IO.File.Exists(attachment.path))
+                    return string.Empty;
+
+                long bytes = new System.IO.FileInfo(attachment.path).Length;
+                if (bytes < 1024)
+                    return bytes + " B";
+                if (bytes < 1024 * 1024)
+                    return (bytes / 1024f).ToString("0.#") + " KB";
+                return (bytes / (1024f * 1024f)).ToString("0.#") + " MB";
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>Best-effort "open with the OS default app". Silently ignored where unsupported.</summary>
+        internal static void OpenAttachmentPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+                return;
+
+            try
+            {
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+                System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + path.Replace('/', '\\') + "\"");
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+                System.Diagnostics.Process.Start("open", "-R \"" + path + "\"");
+#elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
+                System.Diagnostics.Process.Start("xdg-open", "\"" + path + "\"");
+#else
+                Application.OpenURL("file://" + path);
+#endif
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("Could not open attachment '" + path + "': " + ex.Message);
+            }
         }
 
         // ===== Image loading and layout =====
@@ -753,6 +862,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             if (ext == ".txt") return "text/plain";
             if (ext == ".cs" || ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" || ext == ".cpp" || ext == ".h" || ext == ".csproj")
                 return "text/plain";
+            if (ext == ".zip") return "application/zip";
+            if (ext == ".tar") return "application/x-tar";
+            if (ext == ".gz" || ext == ".tgz") return "application/gzip";
+            if (ext == ".7z") return "application/x-7z-compressed";
+            if (ext == ".rar") return "application/vnd.rar";
+            if (ext == ".bz2") return "application/x-bzip2";
+            if (ext == ".xz") return "application/x-xz";
             return "application/octet-stream";
         }
 

@@ -140,7 +140,9 @@ namespace NeonCompanion.Runtime.Platform
                     ofn.nFilterIndex = 1;
                     ofn.lpstrFile    = buf;
                     ofn.nMaxFile     = bufLen;
-                    ofn.lpstrTitle   = isSave ? "Save Chat Export" : "Select Image";
+                    ofn.lpstrTitle   = isSave
+                        ? "Save Chat Export"
+                        : (IsImageOnlyFilter(extension) ? "Select Image" : "Select File");
                     ofn.lpstrDefExt  = ext;
                     ofn.Flags        = OFN_NOCHANGEDIR | OFN_EXPLORER | OFN_HIDEREADONLY
                         | (isSave
@@ -165,9 +167,19 @@ namespace NeonCompanion.Runtime.Platform
             }
         }
 
+        // The composer's attach filter starts with the image extensions but also carries documents
+        // and archives, so "contains png" alone would mislabel it as an image-only dialog.
+        private static bool IsImageOnlyFilter(string extension)
+        {
+            if (string.IsNullOrEmpty(extension))
+                return false;
+            return (extension.Contains("png") || extension.Contains("jpg")) &&
+                   !extension.Contains("pdf") && !extension.Contains("zip");
+        }
+
         private static string BuildOpenFilter(string extension)
         {
-            bool isImage = extension.Contains("png") || extension.Contains("jpg");
+            bool isImage = IsImageOnlyFilter(extension);
             string label = isImage ? "Images" : "Files";
             string parts = string.Join(";", Array.ConvertAll(
                 extension.Split(new char[]{','}, StringSplitOptions.RemoveEmptyEntries),

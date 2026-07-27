@@ -665,11 +665,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     }
                     else
                     {
-                        var attachmentLabel = new Label($"[file] {ChatAttachmentManager.GetAttachmentDisplayName(attachment)}");
-                        attachmentLabel.AddToClassList("transcript__body");
-                        attachmentLabel.style.fontSize = 11f;
-                        attachmentLabel.focusable = true;
-                        attachmentWrap.Add(attachmentLabel);
+                        // Non-image attachment (assistant MEDIA: marker or a file the user sent):
+                        // a messenger-style badge, never a raw "[file] <path>" line.
+                        var chip = ChatAttachmentManager.CreateFileChip(attachment);
+                        chip.focusable = true;
+                        attachmentWrap.Add(chip);
                     }
                 }
 

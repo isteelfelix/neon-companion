@@ -18,6 +18,16 @@ namespace NeonCompanion.Runtime.Api
     {
         internal const long MaxAttachmentBytes = 10 * 1024 * 1024;
 
+        /// <summary>
+        /// Comma-separated extension list for the OS file dialog. Must stay in sync with
+        /// <see cref="IsAttachableExtension"/>, otherwise the picker offers files the composer
+        /// then rejects.
+        /// </summary>
+        internal const string PickerExtensionFilter =
+            "png,jpg,jpeg,gif,webp,bmp," +
+            "pdf,txt,md,json,xml,csv,cs,py,js,ts,java,cpp,h,csproj," +
+            "zip,tar,gz,tgz,7z,rar,bz2,xz";
+
         internal static bool TryBuild(AiChatAttachment attachment, out ResponsesAttachmentPayload payload, out string error)
         {
             payload = null;
@@ -37,6 +47,14 @@ namespace NeonCompanion.Runtime.Api
             bool image = IsImageExtension(extension);
             if (!image && !IsFileExtension(extension))
             {
+                // Archives can be attached (Hermes stages them as plain files), but the Responses
+                // API only accepts documents as input_file — say so instead of sending bytes it
+                // will reject with an opaque 400.
+                if (IsArchiveExtension(extension))
+                {
+                    error = "Archives (" + extension + ") can only be attached on a Hermes backend: " + attachment.name;
+                    return false;
+                }
                 error = "Unsupported attachment type: " + extension;
                 return false;
             }
@@ -77,7 +95,7 @@ namespace NeonCompanion.Runtime.Api
             }
 
             string extension = Path.GetExtension(sourcePath).ToLowerInvariant();
-            if ((!IsImageExtension(extension) && !IsFileExtension(extension)) || new FileInfo(sourcePath).Length > MaxAttachmentBytes)
+            if (!IsAttachableExtension(extension) || new FileInfo(sourcePath).Length > MaxAttachmentBytes)
             {
                 error = "Attachment is unsupported or exceeds the 10 MB limit.";
                 return false;
@@ -105,7 +123,16 @@ namespace NeonCompanion.Runtime.Api
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 return false;
             string extension = Path.GetExtension(path).ToLowerInvariant();
-            return (IsImageExtension(extension) || IsFileExtension(extension)) && new FileInfo(path).Length <= MaxAttachmentBytes;
+            return IsAttachableExtension(extension) && new FileInfo(path).Length <= MaxAttachmentBytes;
+        }
+
+        /// <summary>
+        /// Everything the composer accepts. Wider than what the Responses API can encode: archives
+        /// ride the Hermes file-staging path, which takes opaque bytes.
+        /// </summary>
+        internal static bool IsAttachableExtension(string extension)
+        {
+            return IsImageExtension(extension) || IsFileExtension(extension) || IsArchiveExtension(extension);
         }
 
         private static string SafeFileName(string name, string path)
@@ -127,6 +154,14 @@ namespace NeonCompanion.Runtime.Api
                    extension == ".cs" || extension == ".py" || extension == ".js" ||
                    extension == ".ts" || extension == ".java" || extension == ".cpp" ||
                    extension == ".h" || extension == ".csproj";
+        }
+
+        /// <summary>Archives Desktop already accepts; staged as opaque files, never as documents.</summary>
+        private static bool IsArchiveExtension(string extension)
+        {
+            return extension == ".zip" || extension == ".tar" || extension == ".gz" ||
+                   extension == ".tgz" || extension == ".7z" || extension == ".rar" ||
+                   extension == ".bz2" || extension == ".xz";
         }
 
         private static string GuessImageMediaType(string extension, string supplied)

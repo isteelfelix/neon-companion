@@ -121,6 +121,16 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
+        /// Session cookie header for the remote gateway, or null in legacy token mode. Only for
+        /// direct gateway fetches that bypass <see cref="HermesRestClient"/> (media downloads);
+        /// everything else should go through the REST client, which applies this itself.
+        /// </summary>
+        public string RemoteAuthCookieHeader
+        {
+            get { return _remoteAuth != null ? _remoteAuth.CookieHeader : null; }
+        }
+
+        /// <summary>
         /// Stable reason key for the last remote-auth failure ("no_cookie" / "expired" /
         /// "invalid_credentials"), or null. The UI keys reauth messaging off this.
         /// </summary>
