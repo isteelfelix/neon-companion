@@ -75,6 +75,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             _tabBar.name = "terminal-tabs";
             _tabBar.style.flexDirection = FlexDirection.Row;
             _tabBar.style.flexShrink = 0;
+            _tabBar.style.height = 28;
 
             Button add = new Button(AddUserTab);
             add.text = "+";
@@ -145,7 +146,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 tab.Pane.AppendReadOnlyOutput(initialOutput);
 
             var button = new Button(() => SelectTab(tab));
-            button.text = readOnly ? "agent " + ShortId(processId) : "shell " + (_tabs.Count + 1);
+            button.style.flexShrink = 0;
+            button.style.height = 26;
+            button.text = readOnly
+                ? LocalizationExtensions.Get("terminal.agent", "agent") + " " + ShortId(processId)
+                : LocalizationExtensions.Get("terminal.shell", "shell") + " " + NextShellNumber();
             button.tooltip = readOnly
                 ? LocalizationExtensions.Get("terminal.agent_readonly", "Agent output (read-only)")
                 : LocalizationExtensions.Get("terminal.switch", "Switch terminal");
@@ -154,6 +159,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             var close = new Button();
             close.text = "×";
             close.tooltip = LocalizationExtensions.Get("terminal.close", "Close terminal");
+            close.style.width = 20;
+            close.style.height = 20;
             close.RegisterCallback<ClickEvent>(evt =>
             {
                 evt.StopPropagation();
@@ -165,6 +172,17 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             if (!readOnly || _activeTab == null)
                 SelectTab(tab);
             return tab;
+        }
+
+        private int NextShellNumber()
+        {
+            int count = 1;
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                if (!_tabs[i].ReadOnly)
+                    count++;
+            }
+            return count;
         }
 
         private static string ShortId(string value)
@@ -184,6 +202,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 bool active = _tabs[i] == tab;
                 _tabs[i].Host.style.display = active ? DisplayStyle.Flex : DisplayStyle.None;
                 _tabs[i].Button.EnableInClassList("terminal-tab--active", active);
+                _tabs[i].Button.style.backgroundColor = active
+                    ? new StyleColor(new Color(0.16f, 0.18f, 0.24f))
+                    : StyleKeyword.Null;
             }
             _activeTab = tab;
             tab.Pane.SetVisible(true);
@@ -341,11 +362,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                     _view.ShowMessage("[shell exited: " + _exitCode + "]");
             }
 
-            // UITK can move focus to a rebuilt chat TextField while streamed messages are
-            // re-rendered. Keep terminal ownership until the user actually points elsewhere.
+            // A streamed UI rebuild can leave UITK with no focused element. Restore the terminal
+            // only in that case; a real dialog/TextField focus must always win.
             if (_keepKeyboardFocus && _view != null && _view.panel != null
-                && _root != null && _root.resolvedStyle.display != DisplayStyle.None
-                && _view.panel.focusController.focusedElement != _view)
+                && IsDisplayed(_root)
+                && _view.panel.focusController.focusedElement == null)
                 _view.Focus();
         }
 
@@ -357,11 +378,23 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             _documentRoot = _view.panel.visualTree;
             if (_documentRoot != null)
                 _documentRoot.RegisterCallback<PointerDownEvent>(OnDocumentPointerDown, TrickleDown.TrickleDown);
-            if (_root != null && _root.resolvedStyle.display != DisplayStyle.None)
+            if (IsDisplayed(_root))
             {
                 _keepKeyboardFocus = true;
                 _view.Focus();
             }
+        }
+
+        private static bool IsDisplayed(VisualElement element)
+        {
+            VisualElement current = element;
+            while (current != null)
+            {
+                if (current.resolvedStyle.display == DisplayStyle.None)
+                    return false;
+                current = current.parent;
+            }
+            return element != null;
         }
 
         private void OnDocumentPointerDown(PointerDownEvent evt)
@@ -452,19 +485,19 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 case KeyCode.KeypadEnter:
                     return Bytes("\r");
                 case KeyCode.Backspace:
-                    return Bytes("\x7f");
+                    return alt ? Bytes("\x1b\x7f") : Bytes("\x7f");
                 case KeyCode.Tab:
                     return Bytes("\t");
                 case KeyCode.Escape:
                     return Bytes("\x1b");
                 case KeyCode.UpArrow:
-                    return CursorKey('A');
+                    return CursorKey('A', evt.shiftKey, alt, ctrl);
                 case KeyCode.DownArrow:
-                    return CursorKey('B');
+                    return CursorKey('B', evt.shiftKey, alt, ctrl);
                 case KeyCode.RightArrow:
-                    return CursorKey('C');
+                    return CursorKey('C', evt.shiftKey, alt, ctrl);
                 case KeyCode.LeftArrow:
-                    return CursorKey('D');
+                    return CursorKey('D', evt.shiftKey, alt, ctrl);
                 case KeyCode.Home:
                     return _emulator != null && _emulator.ApplicationCursorKeys ? Bytes("\x1bOH") : Bytes("\x1b[H");
                 case KeyCode.End:
@@ -527,6 +560,18 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             }
 
             char ch = evt.character;
+            if (ch == '\0' && alt)
+            {
+                if (evt.keyCode >= KeyCode.A && evt.keyCode <= KeyCode.Z)
+                {
+                    char letter = (char)('a' + (int)evt.keyCode - (int)KeyCode.A);
+                    ch = evt.shiftKey ? char.ToUpperInvariant(letter) : letter;
+                }
+                else if (evt.keyCode >= KeyCode.Alpha0 && evt.keyCode <= KeyCode.Alpha9)
+                {
+                    ch = (char)('0' + (int)evt.keyCode - (int)KeyCode.Alpha0);
+                }
+            }
             if (ch == '\0')
                 return null;
 
@@ -563,8 +608,12 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             return body;
         }
 
-        private byte[] CursorKey(char final)
+        private byte[] CursorKey(char final, bool shift, bool alt, bool ctrl)
         {
+            int modifier = 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0);
+            if (modifier > 1)
+                return Bytes("\x1b[1;" + modifier + final);
+
             bool app = _emulator != null && _emulator.ApplicationCursorKeys;
             return Bytes((app ? "\x1bO" : "\x1b[") + final);
         }
@@ -589,7 +638,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             if (visible && _view != null)
             {
                 _keepKeyboardFocus = true;
-                _view.schedule.Execute(() => { if (_view != null) _view.Focus(); }).ExecuteLater(50);
+                _view.schedule.Execute(() =>
+                {
+                    if (_view != null && IsDisplayed(_root))
+                        _view.Focus();
+                }).ExecuteLater(50);
             }
             else if (!visible)
                 _keepKeyboardFocus = false;
