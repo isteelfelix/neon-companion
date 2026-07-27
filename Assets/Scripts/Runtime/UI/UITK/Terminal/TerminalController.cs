@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Core;
+using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Terminal;
 using NeonCompanion.Runtime.Terminal.Emulator;
 using Newtonsoft.Json;
