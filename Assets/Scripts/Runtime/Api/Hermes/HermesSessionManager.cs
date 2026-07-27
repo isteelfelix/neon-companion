@@ -310,6 +310,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
     public class TerminalExecuteRequest
     {
         public string RequestId;
+        public string SessionId;
         public string Command;
         public int TimeoutMs;
         public bool Persistent;
@@ -1383,7 +1384,12 @@ namespace NeonCompanion.Runtime.Api.Hermes
         /// it is swallowed (once, loudly) instead of surfacing as a bridge error. Every other
         /// failure still propagates to the caller.
         /// </summary>
-        public async Task RespondToTerminal(string requestId, ProcessResult result, long? durationMs = null)
+        public async Task RespondToTerminal(
+            string requestId,
+            ProcessResult result,
+            long? durationMs = null,
+            string status = "completed",
+            string errorCode = null)
         {
             if (_terminalRespondUnsupported)
                 return;
@@ -1394,10 +1400,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 { "stdout", result.stdout ?? string.Empty },
                 { "stderr", result.stderr ?? string.Empty },
                 { "exit_code", result.exitCode },
-                { "timed_out", result.timedOut }
+                { "timed_out", result.timedOut },
+                { "status", status ?? "completed" }
             };
             if (durationMs.HasValue)
                 payload["duration_ms"] = durationMs.Value;
+            if (!string.IsNullOrEmpty(errorCode))
+                payload["error_code"] = errorCode;
 
             try
             {
@@ -2208,14 +2217,20 @@ namespace NeonCompanion.Runtime.Api.Hermes
             // Companion-only extension. Once the backend has rejected terminal.respond there is
             // nowhere to deliver the result, so don't run the command at all.
             if (_terminalRespondUnsupported) return;
-            if (!IsActiveEvent(evt)) return;
             if (evt.Payload == null) return;
+            // Client execution is more privileged than display-only stream routing. It requires
+            // an explicit session id and must never inherit the currently focused/pinned chat.
+            string sid = string.IsNullOrEmpty(evt.SessionId)
+                ? null
+                : DisplaySessionIdFor(evt.SessionId);
+            if (string.IsNullOrEmpty(sid)) return;
             var payload = evt.Payload.ToObject<TerminalExecutePayload>();
-            if (payload == null) return;
+            if (payload == null || string.IsNullOrEmpty(payload.request_id)) return;
             
             OnTerminalExecute?.Invoke(new TerminalExecuteRequest
             {
                 RequestId = payload.request_id,
+                SessionId = sid,
                 Command = payload.command ?? string.Empty,
                 TimeoutMs = payload.timeout_ms > 0 ? payload.timeout_ms : 30000,
                 Persistent = payload.persistent

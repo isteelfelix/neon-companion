@@ -2,8 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
-using System.Threading.Tasks;
-using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Localization;
 using NeonCompanion.Runtime.Terminal;
 using NeonCompanion.Runtime.Terminal.Emulator;
@@ -20,9 +18,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
     /// by a <see cref="TerminalScreenView"/>. PTY output arrives on a background thread, is
     /// queued, and is fed to the emulator on Unity's main thread in <see cref="Update"/>.
     ///
-    /// Note: <see cref="ExecuteRemoteCommand"/> (the Hermes <c>terminal.execute</c> bridge)
-    /// deliberately stays on the one-shot <see cref="ProcessExecutionService"/> — it needs a
-    /// structured stdout/stderr/exit-code result, not an interactive stream.
+    /// Remote agent execution belongs to ClientTerminalExecutionService. This controller owns
+    /// only the human-facing PTY workspace and read-only backend process views.
     /// </summary>
     public sealed class TerminalController : MonoBehaviour
     {
@@ -34,6 +31,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             public string ProcessId;
             public bool ReadOnly;
             public Button Button;
+            public Label Title;
             public VisualElement Host;
             public TerminalController Pane;
         }
@@ -52,11 +50,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         private bool _keepKeyboardFocus;
         private VisualElement _documentRoot;
 
-        private ProcessExecutionService _processService;
-        private PersistentShellService _persistentShell;
-        private bool _isExecuting;
         private bool _isWorkspace;
         private VisualElement _tabBar;
+        private VisualElement _tabList;
         private VisualElement _paneHost;
         private readonly List<TerminalTab> _tabs = new List<TerminalTab>();
         private TerminalTab _activeTab;
@@ -74,30 +70,31 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
 
             _tabBar = new VisualElement();
             _tabBar.name = "terminal-tabs";
-            _tabBar.style.flexDirection = FlexDirection.Row;
-            _tabBar.style.flexShrink = 0;
-            _tabBar.style.height = 28;
+            _tabBar.AddToClassList("terminal-tabs");
 
             Button add = new Button(AddUserTab);
             add.text = "+";
             add.tooltip = LocalizationExtensions.Get("terminal.new", "New terminal");
-            add.style.flexShrink = 0;
+            add.AddToClassList("terminal-tabs__add");
+            _tabList = new VisualElement();
+            _tabList.name = "terminal-tab-list";
+            _tabList.AddToClassList("terminal-tabs__list");
+            _tabBar.Add(_tabList);
             _tabBar.Add(add);
 
             _paneHost = new VisualElement();
             _paneHost.name = "terminal-panes";
-            _paneHost.style.flexGrow = 1;
-            _paneHost.style.flexDirection = FlexDirection.Column;
+            _paneHost.AddToClassList("terminal-panes");
 
             _root.Add(_tabBar);
             _root.Add(_paneHost);
             AddUserTab();
-            ResolveService();
         }
 
         private void InitializePane(VisualElement terminalRoot, bool startShell)
         {
             _root = terminalRoot;
+            _root.AddToClassList("terminal-pane");
 
             _emulator = new TerminalEmulator(80, 24);
             _emulator.Respond += OnEmulatorRespond;
@@ -119,7 +116,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 _view.HideMessage();
                 _dirty = true;
             }
-            ResolveService();
         }
 
         private void AddUserTab()
@@ -137,7 +133,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             tab.ProcessId = processId;
             tab.ReadOnly = readOnly;
             tab.Host = new VisualElement();
-            tab.Host.style.flexGrow = 1;
+            tab.Host.AddToClassList("terminal-pane-host");
             tab.Host.style.display = DisplayStyle.None;
             _paneHost.Add(tab.Host);
 
@@ -147,11 +143,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 tab.Pane.AppendReadOnlyOutput(initialOutput);
 
             var button = new Button(() => SelectTab(tab));
-            button.style.flexShrink = 0;
-            button.style.height = 26;
-            button.text = readOnly
+            button.AddToClassList("terminal-tab");
+            if (readOnly)
+                button.AddToClassList("terminal-tab--agent");
+
+            var title = new Label(readOnly
                 ? LocalizationExtensions.Get("terminal.agent", "agent") + " " + ShortId(processId)
-                : LocalizationExtensions.Get("terminal.shell", "shell") + " " + NextShellNumber();
+                : LocalizationExtensions.Get("terminal.shell", "shell") + " " + NextShellNumber());
+            title.AddToClassList("terminal-tab__label");
+            tab.Title = title;
             button.tooltip = readOnly
                 ? LocalizationExtensions.Get("terminal.agent_readonly", "Agent output (read-only)")
                 : LocalizationExtensions.Get("terminal.switch", "Switch terminal");
@@ -160,15 +160,15 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             var close = new Button();
             close.text = "×";
             close.tooltip = LocalizationExtensions.Get("terminal.close", "Close terminal");
-            close.style.width = 20;
-            close.style.height = 20;
+            close.AddToClassList("terminal-tab__close");
             close.RegisterCallback<ClickEvent>(evt =>
             {
                 evt.StopPropagation();
                 CloseTab(tab);
             });
+            button.Add(title);
             button.Add(close);
-            _tabBar.Insert(_tabBar.childCount - 1, button);
+            _tabList.Add(button);
             _tabs.Add(tab);
             if (!readOnly || _activeTab == null)
                 SelectTab(tab);
@@ -203,9 +203,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 bool active = _tabs[i] == tab;
                 _tabs[i].Host.style.display = active ? DisplayStyle.Flex : DisplayStyle.None;
                 _tabs[i].Button.EnableInClassList("terminal-tab--active", active);
-                _tabs[i].Button.style.backgroundColor = active
-                    ? new StyleColor(new Color(0.16f, 0.18f, 0.24f))
-                    : StyleKeyword.Null;
             }
             _activeTab = tab;
             tab.Pane.SetVisible(true);
@@ -746,88 +743,5 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             return sb.ToString(0, end);
         }
 
-        // ---- Remote one-shot execution (Hermes terminal.execute) ------------------
-
-        private void ResolveService()
-        {
-            if (_processService != null && _persistentShell != null)
-                return;
-
-            var bootstrap = FindAnyObjectByType<AppBootstrap>();
-            if (bootstrap == null || bootstrap.App == null || bootstrap.App.Services == null)
-                return;
-
-            try
-            {
-                if (_processService == null)
-                    _processService = bootstrap.App.Services.GetRequired<ProcessExecutionService>();
-            }
-            catch (Exception)
-            {
-                _processService = null;
-            }
-
-            try
-            {
-                if (_persistentShell == null)
-                    _persistentShell = bootstrap.App.Services.GetRequired<PersistentShellService>();
-            }
-            catch (Exception)
-            {
-                _persistentShell = null;
-            }
-        }
-
-        /// <summary>
-        /// Runs a command for the Hermes <c>terminal.execute</c> bridge. When
-        /// <paramref name="persistent"/> is true it goes to the long-lived agent shell
-        /// (state survives across commands); otherwise it's a clean one-shot.
-        /// </summary>
-        public async Task<ProcessResult> ExecuteRemoteCommand(string command, int timeoutMs = 30000, bool persistent = false)
-        {
-            ResolveService();
-
-            if (persistent)
-            {
-                if (_persistentShell == null)
-                {
-                    return new ProcessResult
-                    {
-                        exitCode = -1,
-                        stderr = "PersistentShellService not available"
-                    };
-                }
-                // The persistent shell serializes commands internally via its own gate.
-                return await _persistentShell.ExecuteAsync(command, timeoutMs);
-            }
-
-            if (_processService == null)
-            {
-                return new ProcessResult
-                {
-                    exitCode = -1,
-                    stderr = "ProcessExecutionService not available"
-                };
-            }
-
-            if (_isExecuting)
-            {
-                return new ProcessResult
-                {
-                    exitCode = -1,
-                    stderr = "Terminal is busy"
-                };
-            }
-
-            _isExecuting = true;
-            try
-            {
-                return await _processService.ExecuteAsync(command, timeoutMs);
-            }
-            finally
-            {
-                _isExecuting = false;
-            }
-        }
     }
 }

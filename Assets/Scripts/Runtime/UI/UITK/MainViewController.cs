@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
@@ -100,6 +101,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _rightPanelIsTerminal;
 
         private HermesSessionManager _terminalHermesManager;
+        private ClientTerminalExecutionService _clientTerminalService;
 
         private VisualElement _avatarCircle;
 
@@ -826,30 +828,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Create tab bar (small header with two buttons)
             _rightTabBar = new VisualElement();
             _rightTabBar.name = "right-panel-tabs";
-            _rightTabBar.style.flexDirection = FlexDirection.Row;
-            _rightTabBar.style.flexShrink = 0;
-            _rightTabBar.style.borderBottomWidth = 1;
-            _rightTabBar.style.borderBottomColor = new StyleColor(new Color(0.14f, 0.15f, 0.20f));
-            _rightTabBar.style.backgroundColor = new StyleColor(new Color(0.10f, 0.11f, 0.14f));
+            _rightTabBar.AddToClassList("right-panel-tabs");
 
             _avatarTabBtn = new Button();
             _avatarTabBtn.text = LocalizationExtensions.Get("tab.avatar", "Avatar");
-            _avatarTabBtn.style.flexGrow = 1;
-            _avatarTabBtn.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _avatarTabBtn.style.fontSize = 11;
-            _avatarTabBtn.style.paddingTop = 4;
-            _avatarTabBtn.style.paddingBottom = 4;
-            _avatarTabBtn.AddToClassList("btn");
-            _avatarTabBtn.AddToClassList("btn--ghost");
+            _avatarTabBtn.AddToClassList("right-panel-tab");
 
             _terminalTabBtn = new Button();
             _terminalTabBtn.text = LocalizationExtensions.Get("terminal.title", "Terminal");
-            _terminalTabBtn.style.flexGrow = 1;
-            _terminalTabBtn.style.fontSize = 11;
-            _terminalTabBtn.style.paddingTop = 4;
-            _terminalTabBtn.style.paddingBottom = 4;
-            _terminalTabBtn.AddToClassList("btn");
-            _terminalTabBtn.AddToClassList("btn--ghost");
+            _terminalTabBtn.AddToClassList("right-panel-tab");
 
             _rightTabBar.Add(_avatarTabBtn);
             _rightTabBar.Add(_terminalTabBtn);
@@ -860,8 +847,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Create/reparent avatar content host (move existing children except tab bar)
             _avatarContentHost = new VisualElement();
             _avatarContentHost.name = "avatar-content-host";
-            _avatarContentHost.style.flexGrow = 1;
-            _avatarContentHost.style.flexDirection = FlexDirection.Column;
+            _avatarContentHost.AddToClassList("right-panel-content");
 
             // Move current children (thinking + avatar hero) into the content host
             // Note: children[0] is now our tab bar, so start from 1
@@ -880,32 +866,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Create terminal host (hidden initially)
             _terminalHost = new VisualElement();
             _terminalHost.name = "terminal-host";
-            _terminalHost.style.flexGrow = 1;
-            _terminalHost.style.flexDirection = FlexDirection.Column;
+            _terminalHost.AddToClassList("terminal-host");
             _terminalHost.style.display = DisplayStyle.None;
             _avatarPanel.Add(_terminalHost);
-
-            // Load TerminalView UXML into host if possible (editor), else controller will build fallback
-#if UNITY_EDITOR
-            try
-            {
-                var uxml = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/UI/Terminal/TerminalView.uxml");
-                if (uxml != null)
-                {
-                    uxml.CloneTree(_terminalHost);
-
-                    // Also load USS for styles in editor play mode
-                    var uss = UnityEditor.AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/UI/Terminal/TerminalView.uss");
-                    if (uss != null && _root != null)
-                    {
-                        if (!_root.styleSheets.Contains(uss))
-                            _root.styleSheets.Add(uss);
-                    }
-                }
-            }
-            catch { }
-#endif
-            // If no UXML (player or missing), the TerminalController builds C# UI inside host
 
             // Tabs are registered in RegisterCallbacks() / UnregisterCallbacks()
 
@@ -945,27 +908,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ApplyRightTabVisuals()
         {
-            // Simple active styling via text + subtle bg (no z, full USS would enhance)
             if (_avatarTabBtn != null)
-            {
-                bool active = !_rightPanelIsTerminal;
-                _avatarTabBtn.style.backgroundColor = active
-                    ? new StyleColor(new Color(0.12f, 0.13f, 0.17f))
-                    : StyleKeyword.Null;
-                _avatarTabBtn.style.color = active
-                    ? new StyleColor(new Color(0.95f, 0.96f, 0.98f))
-                    : new StyleColor(new Color(0.6f, 0.64f, 0.7f));
-            }
+                _avatarTabBtn.EnableInClassList("right-panel-tab--active", !_rightPanelIsTerminal);
             if (_terminalTabBtn != null)
-            {
-                bool active = _rightPanelIsTerminal;
-                _terminalTabBtn.style.backgroundColor = active
-                    ? new StyleColor(new Color(0.12f, 0.13f, 0.17f))
-                    : StyleKeyword.Null;
-                _terminalTabBtn.style.color = active
-                    ? new StyleColor(new Color(0.95f, 0.96f, 0.98f))
-                    : new StyleColor(new Color(0.6f, 0.64f, 0.7f));
-            }
+                _terminalTabBtn.EnableInClassList("right-panel-tab--active", _rightPanelIsTerminal);
         }
 
         private void OnAvatarTabClicked()
@@ -1018,6 +964,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (selector == null || selector.SessionManager == null)
                 return;
 
+            bool managerChanged = _terminalHermesManager != null &&
+                _terminalHermesManager != selector.SessionManager;
             if (_terminalHermesManager != null)
             {
                 _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
@@ -1025,7 +973,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _terminalHermesManager.OnAgentTerminalOutput -= HandleAgentTerminalOutput;
                 _terminalHermesManager.OnAgentTerminalClose -= HandleAgentTerminalClose;
                 _terminalHermesManager.OnReviewSummary -= HandleReviewSummary;
+                _terminalHermesManager.OnStateChanged -= HandleTerminalTransportStateChanged;
             }
+            if (managerChanged && _clientTerminalService != null)
+                _clientTerminalService.ResetConnection();
 
             _terminalHermesManager = selector.SessionManager;
             _terminalHermesManager.OnTerminalExecute += HandleRemoteTerminalExecute;
@@ -1033,6 +984,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _terminalHermesManager.OnAgentTerminalOutput += HandleAgentTerminalOutput;
             _terminalHermesManager.OnAgentTerminalClose += HandleAgentTerminalClose;
             _terminalHermesManager.OnReviewSummary += HandleReviewSummary;
+            _terminalHermesManager.OnStateChanged += HandleTerminalTransportStateChanged;
+            ResolveClientTerminalService();
         }
 
         private void TeardownTerminalRemoteBridge()
@@ -1044,8 +997,38 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _terminalHermesManager.OnAgentTerminalOutput -= HandleAgentTerminalOutput;
                 _terminalHermesManager.OnAgentTerminalClose -= HandleAgentTerminalClose;
                 _terminalHermesManager.OnReviewSummary -= HandleReviewSummary;
+                _terminalHermesManager.OnStateChanged -= HandleTerminalTransportStateChanged;
                 _terminalHermesManager = null;
             }
+            if (_clientTerminalService != null)
+                _clientTerminalService.ResetConnection();
+        }
+
+        private void HandleTerminalTransportStateChanged(TransportState state)
+        {
+            if (state != TransportState.Connected && _clientTerminalService != null)
+                _clientTerminalService.ResetConnection();
+        }
+
+        private ClientTerminalExecutionService ResolveClientTerminalService()
+        {
+            if (_clientTerminalService != null)
+                return _clientTerminalService;
+
+            var bootstrap = FindAnyObjectByType<AppBootstrap>();
+            if (bootstrap == null || bootstrap.App == null || bootstrap.App.Services == null)
+                return null;
+
+            try
+            {
+                _clientTerminalService =
+                    bootstrap.App.Services.GetRequired<ClientTerminalExecutionService>();
+            }
+            catch (Exception)
+            {
+                _clientTerminalService = null;
+            }
+            return _clientTerminalService;
         }
 
         // Background self-improvement review saved to memory/skills (Desktop review.summary parity):
@@ -1092,16 +1075,81 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (request == null)
                 return;
 
-            if (_terminalController == null)
+            HermesSessionManager manager = _terminalHermesManager;
+            if (manager == null)
+                return;
+
+            ClientTerminalExecutionService service = ResolveClientTerminalService();
+            if (service == null)
             {
-                EnsureTerminalController();
+                await RespondToClientTerminal(
+                    manager,
+                    request,
+                    new Core.ProcessResult { exitCode = -1, stderr = "Client terminal service is unavailable." },
+                    0,
+                    "error",
+                    "service_unavailable");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(request.SessionId) ||
+                !string.Equals(request.SessionId, manager.ActiveSessionId, StringComparison.Ordinal))
+            {
+                await RespondToClientTerminal(
+                    manager,
+                    request,
+                    new Core.ProcessResult { exitCode = -1, stderr = "Client session is not active." },
+                    0,
+                    "denied",
+                    "inactive_session");
+                return;
+            }
+
+            if (!service.HasSessionGrant(request.SessionId))
+            {
+                string choice = await _chatController.RequestClientTerminalApprovalAsync(request);
+                if (string.Equals(choice, "session", StringComparison.OrdinalIgnoreCase))
+                {
+                    service.GrantSession(request.SessionId);
+                }
+                else if (!string.Equals(choice, "once", StringComparison.OrdinalIgnoreCase))
+                {
+                    await RespondToClientTerminal(
+                        manager,
+                        request,
+                        new Core.ProcessResult { exitCode = -1, stderr = "Local execution was denied by the user." },
+                        0,
+                        "denied",
+                        "user_denied");
+                    return;
+                }
+            }
+
+            // The user may switch chats or the socket may drop while the approval is visible.
+            // In either case the original authority is stale and the command must not run.
+            if (manager != _terminalHermesManager || !manager.IsConnected)
+                return;
+            if (!string.Equals(request.SessionId, manager.ActiveSessionId, StringComparison.Ordinal))
+            {
+                await RespondToClientTerminal(
+                    manager,
+                    request,
+                    new Core.ProcessResult { exitCode = -1, stderr = "Client session is no longer active." },
+                    0,
+                    "denied",
+                    "inactive_session");
+                return;
             }
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             Core.ProcessResult result;
             try
             {
-                result = await _terminalController.ExecuteRemoteCommand(request.Command, request.TimeoutMs, request.Persistent);
+                result = await service.ExecuteAsync(
+                    request.SessionId,
+                    request.Command,
+                    request.TimeoutMs,
+                    request.Persistent);
             }
             catch (Exception ex)
             {
@@ -1113,17 +1161,38 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             stopwatch.Stop();
 
-            var selector = Core.GlobalBackendSelector.Instance;
-            if (selector != null && selector.SessionManager != null)
+            await RespondToClientTerminal(
+                manager,
+                request,
+                result,
+                stopwatch.ElapsedMilliseconds,
+                result != null && result.timedOut ? "timed_out" : "completed",
+                result != null && result.timedOut ? "timeout" : null);
+        }
+
+        private static async Task RespondToClientTerminal(
+            HermesSessionManager manager,
+            TerminalExecuteRequest request,
+            Core.ProcessResult result,
+            long durationMs,
+            string status,
+            string errorCode)
+        {
+            if (manager == null || request == null)
+                return;
+
+            try
             {
-                try
-                {
-                    await selector.SessionManager.RespondToTerminal(request.RequestId, result, stopwatch.ElapsedMilliseconds);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning("[Terminal] Failed to respond to terminal RPC: " + ex.Message);
-                }
+                await manager.RespondToTerminal(
+                    request.RequestId,
+                    result ?? new Core.ProcessResult { exitCode = -1, stderr = "No execution result." },
+                    durationMs,
+                    status,
+                    errorCode);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[Terminal] Failed to respond to terminal RPC: " + ex.Message);
             }
         }
 

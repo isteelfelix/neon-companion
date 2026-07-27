@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -349,6 +350,48 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     NeonLogger.LogError("Error stopping on tool reject: " + ex);
                 }
             }
+        }
+
+        /// <summary>
+        /// Local trust prompt for a backend request to execute on the Companion host.
+        /// "session" is intentionally ephemeral and is enforced by ClientTerminalExecutionService;
+        /// the backend is only informed of the result and cannot grant itself local authority.
+        /// </summary>
+        internal async Task<string> RequestClientTerminalApprovalAsync(TerminalExecuteRequest request)
+        {
+            if (request == null || _currentApprovalPrompt != null)
+                return "deny";
+
+            var toolRequest = new ToolCallRequest
+            {
+                id = request.RequestId,
+                toolName = "client_terminal",
+                description = LocalizationExtensions.Get(
+                    "approval.client_terminal.description",
+                    "The agent wants to run this command on your device."),
+                parameters = new Dictionary<string, string>
+                {
+                    { LocalizationExtensions.Get("approval.command", "Command"), request.Command ?? string.Empty },
+                    {
+                        LocalizationExtensions.Get("approval.shell_mode", "Shell mode"),
+                        request.Persistent
+                            ? LocalizationExtensions.Get("approval.shell_mode.persistent", "Persistent for this chat")
+                            : LocalizationExtensions.Get("approval.shell_mode.oneshot", "One-shot")
+                    }
+                }
+            };
+
+            var approvalRequest = new ApprovalRequest
+            {
+                requestId = request.RequestId,
+                type = "client_terminal",
+                description = toolRequest.description,
+                choices = new string[] { "once", "session", "deny" },
+                allowPermanent = false
+            };
+
+            var decision = await RequestHermesApprovalAsync(toolRequest, approvalRequest);
+            return decision.choice ?? "deny";
         }
 
         internal void Subscribe()

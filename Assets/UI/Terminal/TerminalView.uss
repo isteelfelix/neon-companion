@@ -1,4 +1,189 @@
-/* Terminal panel styles — reuse tokens, no unsupported props (no gap/z-index/calc/pointer-events/box-shadow) */
+/* Terminal panel styles — runtime-loaded by ChatView.uxml. */
+
+.right-panel-tabs {
+    height: 44px;
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 5px;
+    background-color: var(--bg-1);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+}
+
+.right-panel-tab {
+    height: 32px;
+    flex-grow: 1;
+    flex-basis: 0;
+    padding: 0;
+    margin: 0 2px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: var(--r-md);
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-3);
+    font-size: 12px;
+    -unity-font-style: normal;
+    -unity-text-align: middle-center;
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.12s;
+}
+
+.right-panel-tab:hover {
+    background-color: var(--bg-3);
+    color: var(--text-1);
+}
+
+.right-panel-tab--active {
+    background-color: var(--bg-3);
+    border-color: var(--line-2);
+    color: var(--text-0);
+    -unity-font-style: bold;
+}
+
+.right-panel-content,
+.terminal-host {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.terminal-host {
+    background-color: var(--bg-1);
+}
+
+.terminal-tabs {
+    height: 40px;
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 5px 6px;
+    background-color: var(--bg-1);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+}
+
+.terminal-tabs__list {
+    flex-grow: 1;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+    overflow: hidden;
+}
+
+.terminal-tabs__add {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    margin-left: 4px;
+    padding: 0;
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: var(--r-sm);
+    background-color: var(--bg-2);
+    color: var(--text-2);
+    font-size: 16px;
+    -unity-font-style: normal;
+    -unity-text-align: middle-center;
+}
+
+.terminal-tabs__add:hover {
+    background-color: var(--bg-3);
+    border-color: var(--line-3);
+    color: var(--text-0);
+}
+
+.terminal-tab {
+    height: 28px;
+    min-width: 0;
+    max-width: 128px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 4px 0 8px;
+    margin-right: 4px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: var(--r-sm);
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-3);
+}
+
+.terminal-tab:hover {
+    background-color: var(--bg-2);
+    color: var(--text-1);
+}
+
+.terminal-tab--active {
+    background-color: var(--accent-soft);
+    border-color: var(--accent-glow);
+    color: var(--accent-text);
+}
+
+.terminal-tab--agent {
+    border-left-width: 2px;
+    border-left-color: var(--warn);
+}
+
+.terminal-tab__label {
+    flex-grow: 1;
+    min-width: 0;
+    font-size: 10px;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -unity-text-align: middle-left;
+}
+
+.terminal-tab__close {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-left: 3px;
+    padding: 0;
+    border-width: 0;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-3);
+    font-size: 13px;
+    -unity-font-style: normal;
+    -unity-text-align: middle-center;
+}
+
+.terminal-tab__close:hover {
+    background-color: rgba(226, 112, 71, 0.18);
+    color: var(--danger);
+}
+
+.terminal-panes,
+.terminal-pane-host,
+.terminal-pane,
+.terminal-screen {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.terminal-panes {
+    background-color: var(--bg-2);
+}
+
+.terminal-screen {
+    padding: 8px 6px;
+    background-color: var(--bg-2);
+}
+
+.terminal-screen__rows {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.terminal-screen__message {
+    color: var(--text-2);
+}
+
 .terminal-root {
     flex-grow: 1;
     flex-direction: column;

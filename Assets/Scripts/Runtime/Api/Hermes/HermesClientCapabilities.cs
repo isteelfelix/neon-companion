@@ -15,9 +15,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
     [Serializable]
     public class TerminalCapability
     {
-        public int version = 1;
+        public int version = 2;
         public bool streaming;
         public bool cancel;
+        public bool persistent;
+        public bool session_grants;
+        public int timeout_ms_max;
+        public int output_chars_max;
     }
 
     [Serializable]
@@ -130,9 +134,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 {
                     terminal = new TerminalCapability
                     {
-                        version = 1,
+                        version = 2,
                         streaming = false,
-                        cancel = false
+                        cancel = false,
+                        persistent = true,
+                        session_grants = true,
+                        timeout_ms_max = 600000,
+                        output_chars_max = 524288
                     },
                     file_transfer = new FileTransferCapability
                     {

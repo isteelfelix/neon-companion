@@ -218,6 +218,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void SetSessionSearchQuery(string value) { _searchController?.SetSessionSearchQuery(value); }
         public void ShowSystemMessage(string text) { _d.ShowSystemMessage?.Invoke(text); }
 
+        public async Task<string> RequestClientTerminalApprovalAsync(TerminalExecuteRequest request)
+        {
+            if (_approvalController == null)
+                return "deny";
+            return await _approvalController.RequestClientTerminalApprovalAsync(request);
+        }
+
         public void RegisterCallbacks()
         {
             ChatMessageListRenderer.RegisterClick(_d.SendButton, OnSendClicked);

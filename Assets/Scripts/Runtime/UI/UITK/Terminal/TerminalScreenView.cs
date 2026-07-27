@@ -53,18 +53,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         {
             _fontSize = fontSize > 0 ? fontSize : 12;
 
+            AddToClassList("terminal-screen");
             style.flexGrow = 1;
             style.overflow = Overflow.Hidden;
             style.backgroundColor = ToStyleColor(_palette.DefaultBackground);
-            style.paddingLeft = 4;
-            style.paddingTop = 2;
-            style.paddingRight = 4;
-            style.paddingBottom = 2;
 
             _rows = new VisualElement();
             _rows.name = "terminal-rows";
-            _rows.style.flexDirection = FlexDirection.Column;
-            _rows.style.flexGrow = 1;
+            _rows.AddToClassList("terminal-screen__rows");
             Add(_rows);
 
             _cursor = new VisualElement();
@@ -77,6 +73,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             _message = new Label();
             _message.name = "terminal-message";
             _message.AddToClassList("text-mono");
+            _message.AddToClassList("terminal-screen__message");
             _message.style.color = ToStyleColor(_palette.DefaultForeground);
             _message.style.fontSize = _fontSize;
             _message.style.whiteSpace = WhiteSpace.Normal;

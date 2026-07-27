@@ -3,6 +3,7 @@
     <ui:Style src="../Theme/Components.uss" />
     <ui:Style src="ChatView.uss" />
     <ui:Style src="../Main/MainView.Tints.uss" />
+    <ui:Style src="../Terminal/TerminalView.uss" />
 
     <ui:VisualElement name="chat-stage" class="stage">
 
