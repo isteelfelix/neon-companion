@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Terminal shell input now derives Ctrl control bytes from `keyCode` when Windows UITK omits `character`, preserves terminal focus during chat streaming until an intentional outside click, supports multiple independent local PTY tabs, and mirrors backend `agent.terminal.output` streams in read-only tabs.
+- Corrected the Hermes terminal contract documentation: the current upstream gateway does not expose the dormant Companion `client.register` / `terminal.execute` / `terminal.respond` extension.
+
 ### Added
 - **Composer completions (slash commands + `@` references)** — the chat composer now shows live suggestions from the Hermes gateway: a bare `/` lists the categorized `commands.catalog`, further typing queries `complete.slash` (arg-stage items respect `replace_from`), and an `@…` token queries `complete.path` for files/folders/git refs. Up/Down to move, Enter/Tab to accept, Esc to dismiss, click to pick. Responses that arrive after the draft, session, profile or connection changed are discarded, and a gateway without these methods simply shows nothing — completion never raises a chat error.
 - **Automatic Hermes browser OAuth session capture** — Gated-gateway Connect (password + Nous/OIDC) launches a dedicated Edge/Chrome profile on `{gateway}/login`, polls CDP `Network.getAllCookies` until `hermes_session_*` appear (Desktop `openOauthLoginWindow` parity), then mints ws-ticket and connects. No in-app credentials form and no cookie paste. Token mode remains under Advanced only.

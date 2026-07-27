@@ -994,6 +994,22 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Wire remote terminal execution bridge (for hermes terminal.execute) after controller ready
             SetupTerminalRemoteBridge();
+            ReplayAgentTerminalBacklogs();
+        }
+
+        private void ReplayAgentTerminalBacklogs()
+        {
+            if (_terminalController == null || _terminalHermesManager == null)
+                return;
+
+            string sessionId = _terminalHermesManager.ActiveSessionId;
+            var processIds = _terminalHermesManager.AgentTerminals.ProcessIds(sessionId);
+            for (int i = 0; i < processIds.Count; i++)
+            {
+                string processId = processIds[i];
+                string backlog = _terminalHermesManager.AgentTerminals.Read(sessionId, processId);
+                _terminalController.AppendAgentOutput(processId, string.Empty, backlog);
+            }
         }
 
         private void SetupTerminalRemoteBridge()
@@ -1006,12 +1022,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
                 _terminalHermesManager.OnTerminalReadRequest -= HandleRemoteTerminalRead;
+                _terminalHermesManager.OnAgentTerminalOutput -= HandleAgentTerminalOutput;
+                _terminalHermesManager.OnAgentTerminalClose -= HandleAgentTerminalClose;
                 _terminalHermesManager.OnReviewSummary -= HandleReviewSummary;
             }
 
             _terminalHermesManager = selector.SessionManager;
             _terminalHermesManager.OnTerminalExecute += HandleRemoteTerminalExecute;
             _terminalHermesManager.OnTerminalReadRequest += HandleRemoteTerminalRead;
+            _terminalHermesManager.OnAgentTerminalOutput += HandleAgentTerminalOutput;
+            _terminalHermesManager.OnAgentTerminalClose += HandleAgentTerminalClose;
             _terminalHermesManager.OnReviewSummary += HandleReviewSummary;
         }
 
@@ -1021,6 +1041,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _terminalHermesManager.OnTerminalExecute -= HandleRemoteTerminalExecute;
                 _terminalHermesManager.OnTerminalReadRequest -= HandleRemoteTerminalRead;
+                _terminalHermesManager.OnAgentTerminalOutput -= HandleAgentTerminalOutput;
+                _terminalHermesManager.OnAgentTerminalClose -= HandleAgentTerminalClose;
                 _terminalHermesManager.OnReviewSummary -= HandleReviewSummary;
                 _terminalHermesManager = null;
             }
@@ -1037,6 +1059,23 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_terminalHermesManager != null && sessionId != _terminalHermesManager.ActiveSessionId)
                 return;
             AddSystemMessage(text);
+        }
+
+        private void HandleAgentTerminalOutput(string sessionId, string processId, string chunk)
+        {
+            if (_terminalController == null)
+                return; // backlog is replayed when the user opens the terminal panel
+            if (_terminalHermesManager == null)
+                return;
+
+            string backlog = _terminalHermesManager.AgentTerminals.Read(sessionId, processId);
+            _terminalController.AppendAgentOutput(processId, chunk, backlog);
+        }
+
+        private void HandleAgentTerminalClose(string sessionId, string processId)
+        {
+            if (_terminalController != null)
+                _terminalController.CloseAgentOutput(processId);
         }
 
         private async void HandleRemoteTerminalExecute(TerminalExecuteRequest request)

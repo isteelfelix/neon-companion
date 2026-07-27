@@ -27,6 +27,16 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
     {
         private const int FontSize = 12;
 
+        private sealed class TerminalTab
+        {
+            public string Id;
+            public string ProcessId;
+            public bool ReadOnly;
+            public Button Button;
+            public VisualElement Host;
+            public TerminalController Pane;
+        }
+
         private VisualElement _root;
         private TerminalScreenView _view;
         private TerminalEmulator _emulator;
@@ -38,10 +48,17 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         private bool _exitReported;
         private bool _sessionStarted;
         private bool _dirty;
+        private bool _keepKeyboardFocus;
+        private VisualElement _documentRoot;
 
         private ProcessExecutionService _processService;
         private PersistentShellService _persistentShell;
         private bool _isExecuting;
+        private bool _isWorkspace;
+        private VisualElement _tabBar;
+        private VisualElement _paneHost;
+        private readonly List<TerminalTab> _tabs = new List<TerminalTab>();
+        private TerminalTab _activeTab;
 
         // ---- Lifecycle ------------------------------------------------------------
 
@@ -52,6 +69,33 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 return;
 
             _root.Clear();
+            _isWorkspace = true;
+
+            _tabBar = new VisualElement();
+            _tabBar.name = "terminal-tabs";
+            _tabBar.style.flexDirection = FlexDirection.Row;
+            _tabBar.style.flexShrink = 0;
+
+            Button add = new Button(AddUserTab);
+            add.text = "+";
+            add.tooltip = LocalizationExtensions.Get("terminal.new", "New terminal");
+            add.style.flexShrink = 0;
+            _tabBar.Add(add);
+
+            _paneHost = new VisualElement();
+            _paneHost.name = "terminal-panes";
+            _paneHost.style.flexGrow = 1;
+            _paneHost.style.flexDirection = FlexDirection.Column;
+
+            _root.Add(_tabBar);
+            _root.Add(_paneHost);
+            AddUserTab();
+            ResolveService();
+        }
+
+        private void InitializePane(VisualElement terminalRoot, bool startShell)
+        {
+            _root = terminalRoot;
 
             _emulator = new TerminalEmulator(80, 24);
             _emulator.Respond += OnEmulatorRespond;
@@ -65,13 +109,147 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             _root.Add(_view);
 
             _view.ShowMessage("Starting shell...");
-            _view.schedule.Execute(() => { if (_view != null) _view.Focus(); }).ExecuteLater(50);
+            _view.schedule.Execute(AttachFocusGuard).ExecuteLater(50);
 
+            _sessionStarted = !startShell;
+            if (!startShell)
+            {
+                _view.HideMessage();
+                _dirty = true;
+            }
             ResolveService();
+        }
+
+        private void AddUserTab()
+        {
+            AddTab(null, false, null);
+        }
+
+        private TerminalTab AddTab(string processId, bool readOnly, string initialOutput)
+        {
+            if (!_isWorkspace || _paneHost == null)
+                return null;
+
+            var tab = new TerminalTab();
+            tab.Id = Guid.NewGuid().ToString("N");
+            tab.ProcessId = processId;
+            tab.ReadOnly = readOnly;
+            tab.Host = new VisualElement();
+            tab.Host.style.flexGrow = 1;
+            tab.Host.style.display = DisplayStyle.None;
+            _paneHost.Add(tab.Host);
+
+            tab.Pane = gameObject.AddComponent<TerminalController>();
+            tab.Pane.InitializePane(tab.Host, !readOnly);
+            if (readOnly && !string.IsNullOrEmpty(initialOutput))
+                tab.Pane.AppendReadOnlyOutput(initialOutput);
+
+            var button = new Button(() => SelectTab(tab));
+            button.text = readOnly ? "agent " + ShortId(processId) : "shell " + (_tabs.Count + 1);
+            button.tooltip = readOnly
+                ? LocalizationExtensions.Get("terminal.agent_readonly", "Agent output (read-only)")
+                : LocalizationExtensions.Get("terminal.switch", "Switch terminal");
+            tab.Button = button;
+
+            var close = new Button();
+            close.text = "×";
+            close.tooltip = LocalizationExtensions.Get("terminal.close", "Close terminal");
+            close.RegisterCallback<ClickEvent>(evt =>
+            {
+                evt.StopPropagation();
+                CloseTab(tab);
+            });
+            button.Add(close);
+            _tabBar.Insert(_tabBar.childCount - 1, button);
+            _tabs.Add(tab);
+            if (!readOnly || _activeTab == null)
+                SelectTab(tab);
+            return tab;
+        }
+
+        private static string ShortId(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+            return value.Length <= 8 ? value : value.Substring(0, 8);
+        }
+
+        private void SelectTab(TerminalTab tab)
+        {
+            if (tab == null || !_tabs.Contains(tab))
+                return;
+
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                bool active = _tabs[i] == tab;
+                _tabs[i].Host.style.display = active ? DisplayStyle.Flex : DisplayStyle.None;
+                _tabs[i].Button.EnableInClassList("terminal-tab--active", active);
+            }
+            _activeTab = tab;
+            tab.Pane.SetVisible(true);
+        }
+
+        private void CloseTab(TerminalTab tab)
+        {
+            int index = _tabs.IndexOf(tab);
+            if (index < 0)
+                return;
+
+            _tabs.RemoveAt(index);
+            tab.Button.RemoveFromHierarchy();
+            tab.Host.RemoveFromHierarchy();
+            if (tab.Pane != null)
+                Destroy(tab.Pane);
+
+            if (_activeTab == tab)
+            {
+                _activeTab = null;
+                if (_tabs.Count > 0)
+                    SelectTab(_tabs[Math.Min(index, _tabs.Count - 1)]);
+            }
+        }
+
+        public void AppendAgentOutput(string processId, string chunk, string backlog)
+        {
+            if (!_isWorkspace || string.IsNullOrEmpty(processId))
+                return;
+
+            TerminalTab tab = null;
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                if (_tabs[i].ReadOnly && _tabs[i].ProcessId == processId)
+                {
+                    tab = _tabs[i];
+                    break;
+                }
+            }
+
+            if (tab == null)
+                tab = AddTab(processId, true, backlog);
+            else
+                tab.Pane.AppendReadOnlyOutput(chunk);
+        }
+
+        public void CloseAgentOutput(string processId)
+        {
+            for (int i = _tabs.Count - 1; i >= 0; i--)
+            {
+                if (_tabs[i].ReadOnly && _tabs[i].ProcessId == processId)
+                    CloseTab(_tabs[i]);
+            }
+        }
+
+        private void AppendReadOnlyOutput(string text)
+        {
+            if (_emulator == null || string.IsNullOrEmpty(text))
+                return;
+            _emulator.Feed(Encoding.UTF8.GetBytes(text));
+            _dirty = true;
         }
 
         private void OnPointerDown(PointerDownEvent evt)
         {
+            _keepKeyboardFocus = true;
             if (_view != null)
                 _view.Focus();
 
@@ -162,6 +340,34 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 if (_view != null)
                     _view.ShowMessage("[shell exited: " + _exitCode + "]");
             }
+
+            // UITK can move focus to a rebuilt chat TextField while streamed messages are
+            // re-rendered. Keep terminal ownership until the user actually points elsewhere.
+            if (_keepKeyboardFocus && _view != null && _view.panel != null
+                && _root != null && _root.resolvedStyle.display != DisplayStyle.None
+                && _view.panel.focusController.focusedElement != _view)
+                _view.Focus();
+        }
+
+        private void AttachFocusGuard()
+        {
+            if (_view == null || _view.panel == null)
+                return;
+
+            _documentRoot = _view.panel.visualTree;
+            if (_documentRoot != null)
+                _documentRoot.RegisterCallback<PointerDownEvent>(OnDocumentPointerDown, TrickleDown.TrickleDown);
+            if (_root != null && _root.resolvedStyle.display != DisplayStyle.None)
+            {
+                _keepKeyboardFocus = true;
+                _view.Focus();
+            }
+        }
+
+        private void OnDocumentPointerDown(PointerDownEvent evt)
+        {
+            VisualElement target = evt.target as VisualElement;
+            _keepKeyboardFocus = target != null && (target == _view || _view.Contains(target));
         }
 
         // ---- PTY callbacks (background thread) ------------------------------------
@@ -210,13 +416,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
             if (_session == null)
                 return;
 
+            _keepKeyboardFocus = true;
             // Paste shortcuts: Ctrl/Cmd+V and Shift+Insert.
             bool ctrlOrCmd = evt.ctrlKey || evt.commandKey;
             if ((ctrlOrCmd && evt.keyCode == KeyCode.V) ||
                 (evt.shiftKey && evt.keyCode == KeyCode.Insert))
             {
                 PasteFromClipboard();
-                evt.StopPropagation();
+                evt.StopImmediatePropagation();
                 return;
             }
 
@@ -229,7 +436,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                 _view.SetScrollOffset(0, _emulator);
 
             _session.Write(bytes);
-            evt.StopPropagation();
+            evt.StopImmediatePropagation();
         }
 
         // ---- Key encoding ---------------------------------------------------------
@@ -296,6 +503,29 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
                     return Bytes("\x1b[24~");
             }
 
+            if (ctrl)
+            {
+                // On Windows, UITK commonly reports Ctrl+letter with character == '\0'.
+                // keyCode remains reliable, so derive the control byte from it first.
+                if (evt.keyCode >= KeyCode.A && evt.keyCode <= KeyCode.Z)
+                {
+                    if (evt.keyCode == KeyCode.V)
+                        return null; // paste is handled by OnKeyDown
+                    return new byte[] { (byte)((int)evt.keyCode - (int)KeyCode.A + 1) };
+                }
+
+                switch (evt.keyCode)
+                {
+                    case KeyCode.Space: return new byte[] { 0 };
+                    case KeyCode.LeftBracket: return new byte[] { 0x1b };
+                    case KeyCode.Backslash: return new byte[] { 0x1c };
+                    case KeyCode.RightBracket: return new byte[] { 0x1d };
+                    case KeyCode.Caret: return new byte[] { 0x1e };
+                    case KeyCode.Underscore:
+                    case KeyCode.Minus: return new byte[] { 0x1f };
+                }
+            }
+
             char ch = evt.character;
             if (ch == '\0')
                 return null;
@@ -350,12 +580,36 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         {
             if (_root != null)
                 _root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_isWorkspace)
+            {
+                if (visible && _activeTab != null)
+                    _activeTab.Pane.SetVisible(true);
+                return;
+            }
             if (visible && _view != null)
+            {
+                _keepKeyboardFocus = true;
                 _view.schedule.Execute(() => { if (_view != null) _view.Focus(); }).ExecuteLater(50);
+            }
+            else if (!visible)
+                _keepKeyboardFocus = false;
         }
 
         private void OnDestroy()
         {
+            if (_isWorkspace)
+            {
+                for (int i = _tabs.Count - 1; i >= 0; i--)
+                {
+                    if (_tabs[i].Pane != null)
+                        Destroy(_tabs[i].Pane);
+                }
+                _tabs.Clear();
+                return;
+            }
+
+            if (_documentRoot != null)
+                _documentRoot.UnregisterCallback<PointerDownEvent>(OnDocumentPointerDown, TrickleDown.TrickleDown);
             if (_emulator != null)
                 _emulator.Respond -= OnEmulatorRespond;
 
@@ -380,6 +634,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Terminal
         /// </summary>
         public string ReadScreenJson(int start, int count)
         {
+            if (_isWorkspace)
+                return _activeTab != null ? _activeTab.Pane.ReadScreenJson(start, count) : null;
+
             if (_emulator == null || !_sessionStarted)
                 return null;
 
