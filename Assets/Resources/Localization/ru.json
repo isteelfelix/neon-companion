@@ -413,6 +413,8 @@
   "terminal.close": "Закрыть терминал",
   "terminal.switch": "Переключить терминал",
   "terminal.agent_readonly": "Вывод агента (только чтение)",
+  "terminal.agent": "агент",
+  "terminal.shell": "оболочка",
   "providers.field.base_url": "Базовый URL",
   "providers.profile.label": "Профиль",
   "providers.profile.loading": "Загрузка профилей…",

@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Terminal shell input now derives Ctrl control bytes from `keyCode` when Windows UITK omits `character`, preserves terminal focus during chat streaming until an intentional outside click, supports multiple independent local PTY tabs, and mirrors backend `agent.terminal.output` streams in read-only tabs.
+- Terminal shell input now derives Ctrl/Alt bytes from `keyCode` when Windows UITK omits `character`, emits xterm-compatible modifier sequences for arrow keys, preserves terminal focus during chat streaming until an intentional outside click, supports multiple independent local PTY tabs, and mirrors backend `agent.terminal.output` streams in read-only tabs.
 - Corrected the Hermes terminal contract documentation: the current upstream gateway does not expose the dormant Companion `client.register` / `terminal.execute` / `terminal.respond` extension.
 
 ### Added

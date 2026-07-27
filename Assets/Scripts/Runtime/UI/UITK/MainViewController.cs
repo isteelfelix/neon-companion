@@ -1063,13 +1063,22 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void HandleAgentTerminalOutput(string sessionId, string processId, string chunk)
         {
+            bool createdController = false;
             if (_terminalController == null)
-                return; // backlog is replayed when the user opens the terminal panel
+            {
+                EnsureTerminalController();
+                createdController = _terminalController != null;
+            }
+            if (_terminalController == null)
+                return;
             if (_terminalHermesManager == null)
                 return;
 
             string backlog = _terminalHermesManager.AgentTerminals.Read(sessionId, processId);
-            _terminalController.AppendAgentOutput(processId, chunk, backlog);
+            _terminalController.AppendAgentOutput(
+                processId,
+                createdController ? string.Empty : chunk,
+                backlog);
         }
 
         private void HandleAgentTerminalClose(string sessionId, string processId)

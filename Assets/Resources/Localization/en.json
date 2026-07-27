@@ -413,6 +413,8 @@
   "terminal.close": "Close terminal",
   "terminal.switch": "Switch terminal",
   "terminal.agent_readonly": "Agent output (read-only)",
+  "terminal.agent": "agent",
+  "terminal.shell": "shell",
   "providers.field.base_url": "Base URL",
   "providers.profile.label": "Profile",
   "providers.profile.loading": "Loading profiles…",
