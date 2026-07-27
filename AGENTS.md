@@ -6,7 +6,7 @@ Instructions for AI coding agents working on neon-companion.
 
 Unity 6 (6000.4+) desktop/mobile client for chatting with personal AI agents via OpenAI-compatible APIs. C# / UI Toolkit / JSON storage. The app version is set in the active Unity Build Profile's Player Settings (`bundleVersion`).
 
-**You cannot build or run this project on this server.** There is no Unity installation. Felix builds and tests locally. Your job is to write correct code and push — Felix confirms it works.
+**You cannot build or run this project on this server.** There is no Unity installation. Felix builds and tests locally. Your job is to write correct code and **commit on the runner branch only**. Do **not** `git push`, open PRs, or configure remotes/credentials — Neon merges and pushes after review. A missing GitHub auth in the runner is expected.
 
 ## C# Compatibility (Critical)
 
@@ -163,7 +163,7 @@ MonoImporter:
 - Use `switch` expressions or C# 10+ syntax anywhere
 - Assume API response formats — always check actual provider behavior (Hermes, OpenAI, Ollama differ)
 - Declare features "working" based on code inspection alone — only Felix's build+test confirms it
-- Push directly to `main` without committing clean, reviewed diffs
+- Push anywhere (origin/main, runner branch, forks) — Neon owns all remote git writes after review
 - Merge two unrelated feature changes in one commit
 
 ## Build
