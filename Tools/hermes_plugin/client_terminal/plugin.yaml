@@ -1,6 +1,0 @@
-name: client-terminal
-version: 1.0.0
-description: "Execute commands on the Companion device bound to the current Hermes session."
-kind: standalone
-provides_tools:
-  - client_terminal
