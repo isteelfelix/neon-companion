@@ -29,8 +29,6 @@ public class NeonFilePickerActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        // For images primarily, but allow all
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"image/*", "application/pdf", "text/*"});
 
         startActivityForResult(Intent.createChooser(intent, "Select file"), PICK_FILE_REQUEST);
     }

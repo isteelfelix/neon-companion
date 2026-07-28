@@ -17,11 +17,20 @@ namespace NeonCompanion.Runtime.Data.Repositories
         public List<AvatarProfile> GetAll()
         {
             var collection = _storage.Load<AvatarProfileCollection>(AppPaths.AvatarsFile);
-            return collection.items ?? new List<AvatarProfile>();
+            var items = collection.items ?? new List<AvatarProfile>();
+            for (int i = 0; i < items.Count; i++)
+                items[i]?.NormalizeContract();
+            return items;
         }
 
         public void SaveAll(List<AvatarProfile> avatars)
         {
+            if (avatars != null)
+            {
+                for (int i = 0; i < avatars.Count; i++)
+                    avatars[i]?.NormalizeContract();
+            }
+
             _storage.Save(AppPaths.AvatarsFile, new AvatarProfileCollection
             {
                 items = avatars ?? new List<AvatarProfile>()

@@ -1,0 +1,4 @@
+<linker>
+  <!-- Avatar3DLoader resolves glTFast through reflection for package-version tolerance. -->
+  <assembly fullname="glTFast" preserve="all" />
+</linker>

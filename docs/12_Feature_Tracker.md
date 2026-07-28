@@ -54,6 +54,7 @@
 | A-09 | Загрузка спрайтшитов — производительность | ✅ | M2 | Verified by Felix: ApplyAvatarViewMode() called at startup. Avatars in Resources as imported Unity sprites (.png). frameCount field in motion_pack avoids pixel reads (61c12e1) |
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Verified: avatar transitions idle→thinking→talking |
+| A-12 | Avatar backend import Phase A | ⏳ | M4 | Static 2D / sprite-sheet / generic GLB+glTF / catalog-only VRM; versioned persisted contract, safe local copies, limits, diagnostics and evidence-based capabilities implemented. Needs Felix Unity/Windows UI and persistence verification. |
 
 ## UI и UX
 | # | Фича | Статус | Спринт | Заметки |

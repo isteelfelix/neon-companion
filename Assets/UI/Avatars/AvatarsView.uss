@@ -63,6 +63,232 @@
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
+/* ---- Capability facts ---- */
+
+.capability-card {
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.capability-card__title {
+    color: var(--text-0);
+    font-size: 12px;
+    -unity-font-style: bold;
+    margin-bottom: 6px;
+}
+
+.capability-card__fact,
+.capability-card__evidence {
+    color: var(--text-2);
+    font-size: 11px;
+    margin-bottom: 4px;
+    white-space: normal;
+}
+
+.capability-card__evidence {
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.capability-card__diagnostic {
+    color: #e5a955;
+    font-size: 11px;
+    margin-top: 5px;
+    white-space: normal;
+}
+
+/* ---- Avatar import dialog ---- */
+
+.avatar-import-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-import-scrim {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: rgba(4, 5, 10, 0.82);
+}
+
+.avatar-import-dialog {
+    width: 720px;
+    max-width: 92%;
+    max-height: 92%;
+    background-color: var(--bg-1);
+    border-width: 1px;
+    border-color: var(--line-1);
+    border-radius: 16px;
+    padding: 18px;
+}
+
+.avatar-import-head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+}
+
+.avatar-import-title {
+    color: var(--text-0);
+    font-size: 18px;
+    -unity-font-style: bold;
+}
+
+.avatar-import-subtitle,
+.avatar-import-help {
+    color: var(--text-3);
+    font-size: 11px;
+    margin-top: 4px;
+    white-space: normal;
+}
+
+.avatar-import-close {
+    width: 30px;
+    height: 30px;
+    border-width: 0;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: 20px;
+}
+
+.avatar-import-types {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.avatar-import-type {
+    height: 32px;
+    margin-right: 8px;
+    margin-bottom: 6px;
+    padding: 0 13px;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 8px;
+    color: var(--text-2);
+}
+
+.avatar-import-type--active {
+    background-color: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+
+.avatar-import-source-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.avatar-import-source {
+    flex-grow: 1;
+    color: var(--text-2);
+    font-size: 11px;
+    background-color: var(--bg-2);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-right: 8px;
+    white-space: normal;
+}
+
+.avatar-import-preview-row {
+    flex-direction: row;
+    margin-top: 4px;
+    margin-bottom: 14px;
+}
+
+.avatar-import-preview-box {
+    width: 210px;
+    height: 210px;
+    flex-shrink: 0;
+    background-color: var(--bg-0);
+    border-width: 1px;
+    border-color: var(--line-2);
+    border-radius: 12px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-right: 12px;
+}
+
+.avatar-import-preview-image {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.avatar-import-preview-placeholder {
+    color: var(--text-3);
+    font-size: 12px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+    padding: 12px;
+}
+
+.avatar-import-capabilities {
+    flex-grow: 1;
+}
+
+.avatar-import-mapping {
+    margin-bottom: 12px;
+}
+
+.avatar-import-mapping-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.avatar-import-clip {
+    width: 48%;
+    margin-right: 2%;
+    margin-bottom: 6px;
+}
+
+.avatar-import-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.ff-phone .avatar-import-dialog {
+    width: 94%;
+    max-width: 94%;
+    max-height: 94%;
+}
+
+.ff-phone .avatar-import-preview-row {
+    flex-direction: column;
+}
+
+.ff-phone .avatar-import-preview-box {
+    width: 100%;
+    height: 180px;
+    margin-right: 0;
+    margin-bottom: 10px;
+}
+
+.ff-phone .avatar-import-clip {
+    width: 100%;
+    margin-right: 0;
+}
+
 /* ---- Animated tile badge ---- */
 
 .avtile__anim-badge {

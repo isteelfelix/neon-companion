@@ -111,3 +111,75 @@
 - Grid spritesheet с одинаковым размером кадров внутри файла
 - Порядок кадров: слева направо, сверху вниз
 - Автоматическое масштабирование и обрезка
+
+## User-owned avatar backends (Phase A)
+
+Экран аватаров сохраняет прежние built-in/static/sprite профили и добавляет
+явный импорт четырех backend-типов:
+
+- `static-2d` — PNG/JPG; после проверки и crop сохраняется локальная PNG-копия;
+- `sprite-sheet` — `motion_pack.json` v1 и перечисленные в нем локальные PNG;
+- `generic-3d` — существующий runtime GLB/glTF через glTFast;
+- `vrm` — отдельный тип контракта и каталог. Runtime-рендеринг, expressions,
+  анимация и lipsync VRM относятся к Phase B.
+
+Импорт сначала проверяет исходный файл и показывает capability card. Профиль и
+копия ассета создаются только после успешной проверки. Ошибка, отмена crop или
+ошибка сохранения не меняют активный аватар. Для VRM кнопка применения отключена:
+карточка прямо сообщает, что профиль пока catalog-only.
+
+### Persisted profile contract v1
+
+`AvatarProfile.contractVersion = 1` дополняет, но не удаляет legacy-поля
+`imagePath`, `modelPath`, `is3D`, `animationClips` и
+`motionPackManifestPath`. Репозиторий нормализует старые JSON-профили при чтении:
+тип выводится из существующих полей, а capability evidence помечается как legacy.
+Неизвестные будущие backend-типы и `contractVersion > 1` сохраняются в каталоге,
+но не подменяются другим runtime renderer: UI показывает явную диагностику и
+сохраняет текущий активный аватар.
+
+Новые поля:
+
+- `avatarType` — одна из строк выше;
+- `source` — `local-user-owned-copy`, исходное имя, расширение, размер и путь
+  относительно `Application.persistentDataPath`;
+- `capabilities` — только факты, полученные при декодировании/валидации:
+  `isVerified`, render/animation/lipsync, число клипов, узлов, renderers и
+  triangles, evidence code. Для legacy-профиля до повторного импорта UI
+  показывает неизвестные возможности, а не выдумывает подтверждение;
+- `stateClipMapping` — persisted mapping `idle`, `thinking`, `talking`,
+  `listening`, `smile`, `confused` для generic 3D;
+- `diagnostic` — стабильный код ограничения runtime (сейчас
+  `vrm_runtime_phase_b`).
+
+### Local storage and limits
+
+User-owned ассеты копируются вне packaged `Resources` в:
+
+```text
+Application.persistentDataPath/
+  Avatars/
+    custom_<guid>/
+      avatar.png | motion_pack.json | model.glb | model.gltf | model.vrm
+      <только явно перечисленные локальные sidecar-файлы>
+```
+
+Каждый импорт получает отдельный каталог, поэтому одинаковые исходные имена не
+перезаписывают существующие аватары. Абсолютные/remote URI, symlink-файлы и пути,
+выходящие из исходного каталога, отклоняются. При удалении нового профиля удаляется только его
+проверенный каталог под `Avatars/custom_<guid>`.
+
+Лимиты Phase A:
+
+- static image: 20 MB, максимум `8192 x 8192`;
+- sprite pack: до 24 клипов, 100 MB на bundle, 64 megapixels decoded суммарно,
+  каждый sheet до `8192 x 8192`, grid должен делить размеры без остатка;
+- GLB/glTF/VRM: 100 MB на локальный bundle;
+- generic 3D: минимум один renderer; максимум 512 scene nodes, 128 renderers,
+  500 000 triangles и 128 animation clips;
+- VRM catalog inspection: максимум 512 nodes и 128 meshes.
+
+Для `.gltf` копируются только локальные `buffers[].uri` и `images[].uri`.
+`com.unity.cloud.gltfast` зафиксирован как прямая runtime dependency, а не
+случайная транзитивная зависимость Unity AI package. `Avatar3D/link.xml`
+сохраняет reflection-loaded assembly в IL2CPP-сборках.

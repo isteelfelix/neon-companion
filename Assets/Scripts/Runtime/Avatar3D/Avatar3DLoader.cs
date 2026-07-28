@@ -11,13 +11,24 @@ namespace NeonCompanion.Runtime.Avatar3D
     {
         public bool Success;
         public string Error;
+        public string ErrorCode;
         public string SourcePath;
         public GameObject Instance;
+        public long FileSizeBytes;
+        public int SceneNodeCount;
+        public int RendererCount;
+        public long TriangleCount;
         public readonly List<string> AnimationNames = new List<string>();
     }
 
     public static class Avatar3DLoader
     {
+        public const long MaxModelFileBytes = 100L * 1024L * 1024L;
+        public const int MaxSceneNodes = 512;
+        public const int MaxRenderers = 128;
+        public const long MaxTriangles = 500000L;
+        public const int MaxAnimationClips = 128;
+
         private static readonly Dictionary<string, CachedModel> Cache = new Dictionary<string, CachedModel>(StringComparer.OrdinalIgnoreCase);
         private static readonly object CacheLock = new object();
 
@@ -30,20 +41,42 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             if (string.IsNullOrWhiteSpace(modelPath))
             {
+                result.ErrorCode = "empty_path";
                 result.Error = "Model path is empty.";
                 return result;
             }
 
-            string fullPath = Path.GetFullPath(modelPath);
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(modelPath);
+            }
+            catch (Exception ex)
+            {
+                result.ErrorCode = "invalid_path";
+                result.Error = "Model path is invalid: " + ex.Message;
+                return result;
+            }
+
             if (!File.Exists(fullPath))
             {
+                result.ErrorCode = "file_missing";
                 result.Error = $"Model file not found: {fullPath}";
+                return result;
+            }
+
+            result.FileSizeBytes = new FileInfo(fullPath).Length;
+            if (result.FileSizeBytes > MaxModelFileBytes)
+            {
+                result.ErrorCode = "file_too_large";
+                result.Error = "Model exceeds the 100 MB file limit.";
                 return result;
             }
 
             string ext = Path.GetExtension(fullPath).ToLowerInvariant();
             if (ext != ".glb" && ext != ".gltf")
             {
+                result.ErrorCode = "unsupported_format";
                 result.Error = $"Unsupported model format: {ext}. Expected .glb or .gltf";
                 return result;
             }
@@ -62,6 +95,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
                 result.Instance = cachedInstance;
                 result.AnimationNames.AddRange(cached.AnimationNames);
+                CollectSceneFacts(cachedInstance, result);
                 result.Success = true;
                 return result;
             }
@@ -71,6 +105,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 var importedRoot = await TryLoadWithGltfFastAsync(fullPath);
                 if (importedRoot == null)
                 {
+                    result.ErrorCode = "import_failed";
                     result.Error = "Unable to load model. glTFast package is not available or import failed.";
                     return result;
                 }
@@ -79,6 +114,28 @@ namespace NeonCompanion.Runtime.Avatar3D
                 importedRoot.SetActive(false);
 
                 var animationNames = CollectAnimationNames(importedRoot);
+                CollectSceneFacts(importedRoot, result);
+                if (result.RendererCount == 0)
+                {
+                    result.ErrorCode = "empty_scene";
+                    result.Error = "Model scene contains no renderers.";
+                    UnityEngine.Object.Destroy(importedRoot);
+                    return result;
+                }
+                if (result.SceneNodeCount > MaxSceneNodes ||
+                    result.RendererCount > MaxRenderers ||
+                    result.TriangleCount > MaxTriangles ||
+                    animationNames.Count > MaxAnimationClips)
+                {
+                    result.ErrorCode = "scene_limit_exceeded";
+                    result.Error = "Model scene exceeds limits (512 nodes, 128 renderers, 500,000 triangles, 128 animation clips). " +
+                        "Detected " + result.SceneNodeCount + " nodes, " + result.RendererCount +
+                        " renderers, " + result.TriangleCount + " triangles, " +
+                        animationNames.Count + " animation clips.";
+                    UnityEngine.Object.Destroy(importedRoot);
+                    return result;
+                }
+
                 var template = UnityEngine.Object.Instantiate(importedRoot);
                 template.name = importedRoot.name + "_Template";
                 template.SetActive(false);
@@ -101,6 +158,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
             catch (Exception ex)
             {
+                result.ErrorCode = "exception";
                 result.Error = ex.Message;
                 Debug.LogWarning($"[NeonCompanion] 3D avatar load failed: {ex}");
             }
@@ -134,7 +192,8 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return null;
             }
 
-            object instantiateResult = instantiateMethod.Invoke(importer, new object[] { root.transform });
+            object instantiateResult = instantiateMethod.Invoke(
+                importer, BuildInvocationArguments(instantiateMethod, root.transform));
             if (instantiateResult is bool ok && !ok)
             {
                 UnityEngine.Object.Destroy(root);
@@ -179,7 +238,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private static async Task<bool> InvokeLoadAsync(object importer, MethodInfo method, string fullPath)
         {
-            object returnValue = method.Invoke(importer, new object[] { fullPath });
+            object returnValue = method.Invoke(
+                importer, BuildInvocationArguments(method, fullPath));
             if (returnValue is Task<bool> taskBool)
                 return await taskBool;
 
@@ -193,6 +253,33 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return immediate;
 
             return false;
+        }
+
+        private static object[] BuildInvocationArguments(MethodInfo method, object firstArgument)
+        {
+            var parameters = method.GetParameters();
+            var arguments = new object[parameters.Length];
+            arguments[0] = firstArgument;
+            for (int i = 1; i < parameters.Length; i++)
+            {
+                Type parameterType = parameters[i].ParameterType;
+                object defaultValue = parameters[i].HasDefaultValue
+                    ? parameters[i].DefaultValue
+                    : null;
+                if (defaultValue != null &&
+                    defaultValue != DBNull.Value &&
+                    defaultValue != Missing.Value)
+                {
+                    arguments[i] = defaultValue;
+                }
+                else
+                {
+                    arguments[i] = parameterType.IsValueType
+                        ? Activator.CreateInstance(parameterType)
+                        : null;
+                }
+            }
+            return arguments;
         }
 
         private static List<string> CollectAnimationNames(GameObject root)
@@ -232,6 +319,47 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             return names;
+        }
+
+        private static void CollectSceneFacts(GameObject root, Avatar3DLoadResult result)
+        {
+            if (root == null || result == null)
+                return;
+
+            result.SceneNodeCount = root.GetComponentsInChildren<Transform>(true).Length;
+            result.RendererCount = root.GetComponentsInChildren<Renderer>(true).Length;
+
+            long triangles = 0;
+            var meshFilters = root.GetComponentsInChildren<MeshFilter>(true);
+            for (int i = 0; i < meshFilters.Length; i++)
+            {
+                var mesh = meshFilters[i] != null ? meshFilters[i].sharedMesh : null;
+                triangles += CountMeshTriangles(mesh);
+            }
+
+            var skinnedRenderers = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            for (int i = 0; i < skinnedRenderers.Length; i++)
+            {
+                var mesh = skinnedRenderers[i] != null ? skinnedRenderers[i].sharedMesh : null;
+                triangles += CountMeshTriangles(mesh);
+            }
+
+            result.TriangleCount = triangles;
+        }
+
+        private static long CountMeshTriangles(Mesh mesh)
+        {
+            if (mesh == null)
+                return 0;
+
+            long triangleCount = 0;
+            for (int i = 0; i < mesh.subMeshCount; i++)
+            {
+                if (mesh.GetTopology(i) == MeshTopology.Triangles)
+                    triangleCount += (long)mesh.GetIndexCount(i) / 3L;
+            }
+
+            return triangleCount;
         }
 
         private sealed class CachedModel

@@ -8,8 +8,8 @@
 
         <ui:VisualElement class="page__head">
             <ui:VisualElement class="page__head-copy">
-                <ui:Label text="Аватары" class="page__title" />
-                <ui:Label text="Визуальное представление агента. Можно выбрать готовый образ или загрузить свой PNG." class="page__subtitle" />
+                <ui:Label name="avatars-page-title" text="Аватары" class="page__title" />
+                <ui:Label name="avatars-page-subtitle" text="Выберите готовый образ или импортируйте локальный 2D, sprite-sheet, 3D или VRM-профиль." class="page__subtitle" />
             </ui:VisualElement>
             <ui:VisualElement class="page__actions">
                 <ui:Button name="avatar-open-folder-btn" text="Открыть папку" class="btn" />
@@ -132,7 +132,7 @@
                 <ui:VisualElement name="avtile-upload" class="avtile avtile--upload">
                     <ui:VisualElement class="avtile__upload">
                         <ui:VisualElement class="icon icon--upload" />
-                        <ui:Label text="перетащи PNG" />
+                        <ui:Label name="avatar-import-tile-label" text="Импортировать аватар" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -162,9 +162,9 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- 3D gallery (future) -->
+            <!-- Generic 3D and catalog-only VRM profiles are inserted here at runtime. -->
             <ui:VisualElement name="gallery-3d" class="gallery">
-                <ui:Label text="3D-аватары появятся в следующих обновлениях" class="gallery-empty-hint" />
+                <ui:Label name="avatar-gallery-3d-hint" text="Импортируйте GLB/glTF или добавьте VRM в локальный каталог." class="gallery-empty-hint" />
             </ui:VisualElement>
 
             </ui:ScrollView> <!-- end gallery-container -->
@@ -207,12 +207,80 @@
                         </ui:VisualElement>
                     </ui:Foldout>
 
+                    <ui:Foldout name="avatar-capabilities-foldout" text="Возможности" class="customize capability-card" value="true">
+                        <ui:Label name="avatar-capability-type" text="Тип: статичный 2D" class="capability-card__title" />
+                        <ui:Label name="avatar-capability-render" text="Отображение: доступно" class="capability-card__fact" />
+                        <ui:Label name="avatar-capability-animation" text="Анимация: недоступна" class="capability-card__fact" />
+                        <ui:Label name="avatar-capability-lipsync" text="Липсинк: недоступен" class="capability-card__fact" />
+                        <ui:Label name="avatar-capability-evidence" text="Проверка: встроенный профиль" class="capability-card__evidence" />
+                        <ui:Label name="avatar-capability-diagnostic" text="" class="capability-card__diagnostic" />
+                    </ui:Foldout>
+
                     <ui:VisualElement name="preview-actions-row" class="preview-actions">
                         <ui:Button name="preview-delete-avatar-btn" text="Удалить" class="btn btn--danger preview-actions__btn" />
                         <ui:Button name="preview-apply-btn" text="Применить" class="btn btn--primary preview-actions__btn is-last" />
                     </ui:VisualElement>
                 </ui:ScrollView>
             </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="avatar-import-overlay" class="avatar-import-overlay">
+            <ui:VisualElement class="avatar-import-scrim" />
+            <ui:ScrollView class="avatar-import-dialog" mode="Vertical">
+                <ui:VisualElement class="avatar-import-head">
+                    <ui:VisualElement>
+                        <ui:Label name="avatar-import-title" text="Импорт аватара" class="avatar-import-title" />
+                        <ui:Label name="avatar-import-subtitle" text="Выберите backend и проверьте возможности до сохранения." class="avatar-import-subtitle" />
+                    </ui:VisualElement>
+                    <ui:Button name="avatar-import-close-btn" text="×" class="avatar-import-close" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="avatar-import-types">
+                    <ui:Button name="avatar-import-static-btn" text="Статичный 2D" class="avatar-import-type avatar-import-type--active" />
+                    <ui:Button name="avatar-import-sprite-btn" text="Sprite-sheet" class="avatar-import-type" />
+                    <ui:Button name="avatar-import-3d-btn" text="Generic 3D" class="avatar-import-type" />
+                    <ui:Button name="avatar-import-vrm-btn" text="VRM" class="avatar-import-type" />
+                </ui:VisualElement>
+
+                <ui:Label name="avatar-import-type-help" text="PNG/JPG до 20 МБ и 8192 × 8192." class="avatar-import-help" />
+                <ui:VisualElement class="avatar-import-source-row">
+                    <ui:Label name="avatar-import-source" text="Файл не выбран" class="avatar-import-source" />
+                    <ui:Button name="avatar-import-choose-btn" text="Выбрать файл" class="btn" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="avatar-import-preview-row">
+                    <ui:VisualElement name="avatar-import-preview-box" class="avatar-import-preview-box">
+                        <ui:Image name="avatar-import-preview-image" class="avatar-import-preview-image" />
+                        <ui:Label name="avatar-import-preview-placeholder" text="Предпросмотр" class="avatar-import-preview-placeholder" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="avatar-import-capabilities capability-card">
+                        <ui:Label name="avatar-import-capability-title" text="Проверенные возможности" class="capability-card__title" />
+                        <ui:Label name="avatar-import-capability-render" text="Отображение: —" class="capability-card__fact" />
+                        <ui:Label name="avatar-import-capability-animation" text="Анимация: —" class="capability-card__fact" />
+                        <ui:Label name="avatar-import-capability-lipsync" text="Липсинк: —" class="capability-card__fact" />
+                        <ui:Label name="avatar-import-capability-scene" text="Сцена: —" class="capability-card__fact" />
+                        <ui:Label name="avatar-import-diagnostic" text="Выберите файл для проверки." class="capability-card__diagnostic" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="avatar-import-mapping" class="avatar-import-mapping">
+                    <ui:Label name="avatar-import-mapping-title" text="Сопоставление состояния и клипа" class="label" />
+                    <ui:Label name="avatar-import-mapping-help" text="Указывайте только имена клипов, найденные в файле." class="avatar-import-help" />
+                    <ui:VisualElement class="avatar-import-mapping-grid">
+                        <ui:TextField name="avatar-import-clip-idle" label="idle" class="avatar-import-clip" />
+                        <ui:TextField name="avatar-import-clip-thinking" label="thinking" class="avatar-import-clip" />
+                        <ui:TextField name="avatar-import-clip-talking" label="talking" class="avatar-import-clip" />
+                        <ui:TextField name="avatar-import-clip-listening" label="listening" class="avatar-import-clip" />
+                        <ui:TextField name="avatar-import-clip-smile" label="smile" class="avatar-import-clip" />
+                        <ui:TextField name="avatar-import-clip-confused" label="confused" class="avatar-import-clip" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="avatar-import-actions">
+                    <ui:Button name="avatar-import-cancel-btn" text="Отмена" class="btn" />
+                    <ui:Button name="avatar-import-save-btn" text="Сохранить в каталог" class="btn btn--primary is-last" />
+                </ui:VisualElement>
+            </ui:ScrollView>
         </ui:VisualElement>
 
     </ui:VisualElement>
