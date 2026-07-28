@@ -25,6 +25,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Action _refreshAvatarMotionState;
 
         private VisualElement _bubble;
+        // Outline beam of the bubble being streamed into; null once the stream ends.
+        private BubbleBeamElement _beam;
         private NeonCompanion.Runtime.UI.UITK.SelectableMarkdownElement _label;
         private VisualElement _typingDots;
         private readonly StringBuilder _textBuffer = new StringBuilder();
@@ -190,6 +192,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _statsLabel = _statsFooter != null ? _statsFooter.Q<Label>(className: "transcript__stats-label") : null;
                 if (_statsFooter != null)
                     _statsFooter.style.display = DisplayStyle.Flex;
+
+                _beam = bubble.Q<BubbleBeamElement>(className: "transcript__bubble-beam");
+                if (_beam != null)
+                    _beam.Play();
             }
             StartStatsUpdate();
             StartTypingAnimation();
@@ -306,6 +312,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         internal void SetFinalStats(int tokenCount, double elapsedSeconds)
         {
             _estimatedTokens = tokenCount;
+            if (_beam != null)
+            {
+                _beam.Stop();
+                _beam = null;
+            }
             if (_statsLabel != null)
             {
                 string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
@@ -322,6 +333,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 _typingDots.RemoveFromHierarchy();
                 _typingDots = null;
+            }
+            if (_beam != null)
+            {
+                _beam.Stop();
+                _beam = null;
             }
             _bubble = null;
             _label = null;

@@ -731,6 +731,13 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
             if (role == "assistant")
             {
+                // Outline beam: lit only while this message is streaming or being spoken. An
+                // absolute overlay, so it adds no layout; added before the action buttons so those
+                // still paint on top (USS has no z-index — child order is paint order).
+                var beam = new BubbleBeamElement();
+                beam.AddToClassList("transcript__bubble-beam");
+                bubble.Add(beam);
+
                 var statsFooter = new VisualElement();
                 statsFooter.AddToClassList("transcript__stats");
                 var statsLabel = new Label();
@@ -842,6 +849,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 });
                 track.RegisterCallback<PointerCaptureOutEvent>(_ => seekPointerId = -1);
 
+                // Assistant messages own an outline beam; a user voice message simply has none.
+                BubbleBeamElement voiceBeam =
+                    bubble.Q<BubbleBeamElement>(className: "transcript__bubble-beam");
+
                 bool voiceIdleRendered = false;
                 voiceBubble.schedule.Execute(() =>
                 {
@@ -864,10 +875,22 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         playBtn.tooltip = LocalizationExtensions.Get("voice.preview.play", "Play");
                         voiceBubble.EnableInClassList("voice-bubble--playing", false);
                         voiceBubble.EnableInClassList("voice-bubble--paused", false);
+                        if (voiceBeam != null)
+                            voiceBeam.Stop();
                         return;
                     }
 
                     voiceIdleRendered = false;
+
+                    // Same light as streaming, same fixed speed — it marks "this message is
+                    // active", so pausing playback puts it out.
+                    if (voiceBeam != null)
+                    {
+                        if (state.IsPlaying)
+                            voiceBeam.Play();
+                        else
+                            voiceBeam.Stop();
+                    }
                     float duration = state.IsCurrent && state.DurationSecs > 0f
                         ? state.DurationSecs
                         : capturedDuration;

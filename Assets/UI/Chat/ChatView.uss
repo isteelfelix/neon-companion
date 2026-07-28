@@ -356,7 +356,7 @@
     max-width: 90%;
     min-width: 0;
     background-color: var(--accent-soft);
-    border-color: rgba(124, 122, 237, 0.38);
+    border-color: var(--accent-glow);
 }
 
 .transcript__bubble--user.transcript__bubble--markdown {
@@ -400,12 +400,12 @@
 }
 
 .transcript__bubble-actions > Button {
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    min-height: 20px;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
     margin: 1px 0;
-    padding: 4px;
+    padding: 3px;
     font-size: 0;
     border-radius: 5px;
     background-color: rgba(0, 0, 0, 0.5);
@@ -483,6 +483,20 @@
 }
 
 /* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */
+
+/* ---- Outline beam (BubbleBeamElement, drawn with Painter2D) ----
+   Sits on the bubble's inner edge and lights up only while the message is
+   streaming or being spoken. `color` is the beam's own colour — read from
+   resolvedStyle in C#, so it follows the active theme's accent; the head is a
+   lightened version of it. Geometry and motion live in C#, USS only places it. */
+.transcript__bubble-beam {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    color: var(--accent);
+}
 
 /* Only rendered when the message actually carries token/time stats — an empty
    band reads worse than no band, so ChatMessageListRenderer hides it otherwise. */
@@ -603,8 +617,8 @@
 
 .mic-btn--audio-attached {
     opacity: 0.45;
-    background-color: rgba(124, 122, 237, 0.12);
-    border-color: rgba(124, 122, 237, 0.35);
+    background-color: var(--accent-soft);
+    border-color: var(--accent-glow);
     -unity-background-image-tint-color: var(--accent-text);
 }
 
@@ -1065,9 +1079,9 @@
 .thinking-bubble {
     margin: 6px 8px 0;
     padding: 5px 9px;
-    background-color: rgba(124, 122, 237, 0.10);
+    background-color: var(--accent-soft);
     border-width: 1px;
-    border-color: rgba(124, 122, 237, 0.35);
+    border-color: var(--accent-glow);
     border-radius: 12px;
     border-top-left-radius: 4px;
     flex-direction: column;
@@ -1077,7 +1091,7 @@
 }
 
 .thinking-bubble__text {
-    color: rgba(124, 122, 237, 0.85);
+    color: var(--accent);
     font-size: 11px;
     height: 15px;
     -unity-text-align: middle-left;
@@ -2231,10 +2245,10 @@
     height: 36px;
     padding-left: 8px;
     padding-right: 8px;
-    background-color: rgba(124, 122, 237, 0.10);
+    background-color: var(--accent-soft);
     border-radius: 10px;
     border-width: 1px;
-    border-color: rgba(124, 122, 237, 0.30);
+    border-color: var(--accent-glow);
     margin-bottom: 6px;
 }
 
@@ -2338,14 +2352,14 @@
     margin-top: 6px;
     padding: 6px;
     border-width: 1px;
-    border-color: rgba(124, 122, 237, 0.22);
+    border-color: var(--accent-glow);
     border-radius: 9px;
-    background-color: rgba(124, 122, 237, 0.07);
+    background-color: var(--accent-soft);
 }
 
 .voice-bubble--playing {
     border-color: var(--accent);
-    background-color: rgba(124, 122, 237, 0.12);
+    background-color: var(--accent-soft);
 }
 
 .voice-bubble__play {
