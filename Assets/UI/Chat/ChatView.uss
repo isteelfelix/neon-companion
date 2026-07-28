@@ -371,17 +371,15 @@
 
 /* ---- Bubble hover actions (copy/refresh/listen) ---- */
 
-/* Hover toolbar, parked in the bubble's bottom-left corner — the stats footer
-   is right-aligned, so that half of the footer band is free. Absolute, so it
-   costs no layout: the bubble keeps its content width and the row needs no
-   gutter (it used to sit outside the bubble at left:100%, which made every
-   assistant row reserve a permanent strip for a hover-only affordance).
-   Button height below is matched to the footer band so it sits inside it. */
+/* Hover toolbar, stacked just outside the bubble's right edge. It is absolutely
+   positioned, so it costs no layout — the bubble's max-width is what keeps the
+   column clear enough for it. */
 .transcript__bubble-actions {
     position: absolute;
-    left: 10px;
-    bottom: 3px;
-    flex-direction: row;
+    left: 100%;
+    top: 0;
+    flex-direction: column;
+    padding-left: 4px;
     flex-shrink: 0;
     opacity: 0;
     visibility: hidden;
@@ -402,12 +400,12 @@
 }
 
 .transcript__bubble-actions > Button {
-    width: 18px;
-    height: 18px;
-    min-width: 18px;
-    min-height: 18px;
-    margin: 0 2px 0 0;
-    padding: 3px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    margin: 1px 0;
+    padding: 4px;
     font-size: 0;
     border-radius: 5px;
     background-color: rgba(0, 0, 0, 0.5);
@@ -486,9 +484,9 @@
 
 /* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */
 
-/* position: relative anchors the centred ornament below. */
+/* Only rendered when the message actually carries token/time stats — an empty
+   band reads worse than no band, so ChatMessageListRenderer hides it otherwise. */
 .transcript__stats {
-    position: relative;
     flex-direction: row;
     justify-content: flex-end;
     align-items: center;
@@ -496,30 +494,6 @@
     padding-top: 3px;
     border-top-width: 1px;
     border-top-color: rgba(255, 255, 255, 0.06);
-}
-
-/* ---- Footer mercury (MercuryFooterElement, drawn with Painter2D) ----
-   The footer is always present because it hosts the hover action buttons, so on
-   a message without stats it would otherwise be an empty band. Three droplets
-   fill it: merged and still at rest, drifting apart while the answer streams,
-   snapping about while it is spoken.
-   `color` is what the element paints with — it reads resolvedStyle.color rather
-   than a custom property, so the droplets follow the accent through every theme
-   for free. Geometry and motion live in C#; USS only places and tints. */
-.transcript__stats-mercury {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    color: var(--accent);
-    opacity: 0.75;
-}
-
-/* Speaking reads in a different hue than working, without a second animation. */
-.transcript__stats-mercury--voice {
-    color: var(--accent-2);
-    opacity: 1;
 }
 
 .transcript__stats-label {
@@ -2136,8 +2110,6 @@
     min-width: 0;
 }
 
-/* The droplets stay on phone — they react to streaming and playback, not to
-   hover, so they carry the same meaning without a pointer. */
 
 /* Bubble actions (copy / regenerate / listen): on desktop they are a hover-only
    overlay in the bubble's corner. Touch has no hover, and a permanent overlay

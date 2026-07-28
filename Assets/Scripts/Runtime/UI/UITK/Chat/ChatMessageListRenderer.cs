@@ -733,17 +733,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 var statsFooter = new VisualElement();
                 statsFooter.AddToClassList("transcript__stats");
-
-                // The footer is always present now: it is what the hover action buttons sit in,
-                // and hiding it on stat-less messages (anything restored from history without a
-                // token count) made those buttons land on top of the last line of text instead.
-                // A bare empty band would read as a mistake, so it carries a centred ornament —
-                // a quiet accent thread that animates on hover. Purely USS transitions, no
-                // scheduler, so a long transcript pays nothing for it.
-                var mercury = new MercuryFooterElement();
-                mercury.AddToClassList("transcript__stats-mercury");
-                statsFooter.Add(mercury);
-
                 var statsLabel = new Label();
                 statsLabel.AddToClassList("transcript__stats-label");
                 statsFooter.Add(statsLabel);
@@ -762,6 +751,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     {
                         statsLabel.text = string.Format("{0:F1}s", t);
                     }
+                }
+                else
+                {
+                    statsFooter.style.display = DisplayStyle.None;
                 }
             }
 
@@ -849,11 +842,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 });
                 track.RegisterCallback<PointerCaptureOutEvent>(_ => seekPointerId = -1);
 
-                // Looked up once: the droplets live in this message's own footer, which was added
-                // above for assistant messages (a user voice message simply has none).
-                MercuryFooterElement footerMercury =
-                    bubble.Q<MercuryFooterElement>(className: "transcript__stats-mercury");
-
                 bool voiceIdleRendered = false;
                 voiceBubble.schedule.Execute(() =>
                 {
@@ -876,26 +864,10 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         playBtn.tooltip = LocalizationExtensions.Get("voice.preview.play", "Play");
                         voiceBubble.EnableInClassList("voice-bubble--playing", false);
                         voiceBubble.EnableInClassList("voice-bubble--paused", false);
-                        if (footerMercury != null)
-                        {
-                            footerMercury.Settle();
-                            footerMercury.RemoveFromClassList("transcript__stats-mercury--voice");
-                        }
                         return;
                     }
 
                     voiceIdleRendered = false;
-
-                    // Feed the footer droplets the loudness of the moment being played. The tick
-                    // here already runs for the progress bar, so the visualisation is free.
-                    if (footerMercury != null)
-                    {
-                        footerMercury.EnableInClassList("transcript__stats-mercury--voice", state.IsPlaying);
-                        if (state.IsPlaying)
-                            footerMercury.SetEnergy(state.Level);
-                        else
-                            footerMercury.Settle();
-                    }
                     float duration = state.IsCurrent && state.DurationSecs > 0f
                         ? state.DurationSecs
                         : capturedDuration;
