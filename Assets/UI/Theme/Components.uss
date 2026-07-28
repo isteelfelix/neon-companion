@@ -124,6 +124,8 @@
 .label {
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-left;
     -unity-font-style: normal;
     letter-spacing: 1px;
     color: var(--text-3);
@@ -154,11 +156,15 @@
 }
 .h2 {
     font-size: 14px;
+    height: 19px;
+    -unity-text-align: middle-left;
     color: var(--text-0);
     -unity-font-style: bold;
 }
 .h3 {
     font-size: 13px;
+    height: 17px;
+    -unity-text-align: middle-left;
     color: var(--text-0);
     -unity-font-style: bold;
 }

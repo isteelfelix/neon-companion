@@ -75,13 +75,15 @@
     border-right-width: 1px;
     border-right-color: var(--line-1);
     flex-direction: column;
-    padding: 6px 8px;
+    padding: 8px 8px 6px;
     overflow: hidden;
     min-height: 0;
 }
 
+/* min-height, never height: a Label's line box is taller than its font-size and
+   the rail clips overflow, so a fixed row height cut the top off the app name. */
 .rail__brand {
-    height: 28px;
+    min-height: 28px;
     flex-shrink: 0;
     flex-direction: row;
     align-items: center;
@@ -103,7 +105,9 @@
 
 .brand__name {
     color: var(--text-0);
-    font-size: 13px;
+    font-size: 14px;
+    height: 19px;
+    -unity-text-align: middle-left;
     -unity-font-style: bold;
     flex-grow: 1;
     min-width: 0;
@@ -172,6 +176,8 @@
 
 .nav__label {
     font-size: 12px;
+    height: 16px;
+    -unity-text-align: middle-left;
     color: var(--text-2);
     flex-grow: 1;
     overflow: hidden;
@@ -188,6 +194,8 @@
 .nav__count {
     color: var(--text-3);
     font-size: 10px;
+    height: 14px;
+    -unity-text-align: middle-right;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
@@ -223,6 +231,8 @@
 
 .rail__footer-provider {
     font-size: 11px;
+    height: 15px;
+    -unity-text-align: middle-left;
     color: var(--text-1);
     overflow: hidden;
     white-space: nowrap;
@@ -347,6 +357,8 @@
 
 .rail__footer-model {
     font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-left;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     overflow: hidden;
@@ -383,6 +395,8 @@
 
 .topbar__title {
     font-size: 13px;
+    height: 18px;
+    -unity-text-align: middle-left;
     -unity-font-style: bold;
     color: var(--text-0);
     flex-shrink: 1;
@@ -393,6 +407,8 @@
 
 .topbar__subtitle {
     font-size: 10px;
+    height: 14px;
+    -unity-text-align: middle-left;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     flex-shrink: 1;
@@ -485,6 +501,8 @@
 
 .page__title {
     font-size: 18px;
+    height: 24px;
+    -unity-text-align: middle-left;
     -unity-font-style: bold;
     color: var(--text-0);
     margin-bottom: 2px;
@@ -524,6 +542,8 @@
 .rail__sessions-label {
     flex-grow: 1;
     font-size: 9px;
+    height: 13px;
+    -unity-text-align: middle-left;
     color: var(--text-4);
     letter-spacing: 1px;
     -unity-font-style: bold;
@@ -613,7 +633,7 @@
     border-width: 1px;
     border-color: transparent;
     background-color: transparent;
-    padding: 5px 8px;
+    padding: 3px 8px;
     margin-bottom: 2px;
     min-width: 0;
     overflow: hidden;
@@ -622,7 +642,7 @@
 .history__row {
     flex-direction: row;
     align-items: center;
-    margin-bottom: 2px;
+    margin-bottom: 0;
     min-width: 0;
 }
 
@@ -638,6 +658,8 @@
 .history__title {
     color: var(--text-0);
     font-size: 12px;
+    height: 16px;
+    -unity-text-align: middle-left;
     -unity-font-style: bold;
     flex-grow: 1;
     min-width: 0;
@@ -662,7 +684,9 @@
 
 .history__meta {
     color: var(--text-3);
-    font-size: 11px;
+    font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-left;
 }
 
 /* Session delete button */
@@ -819,29 +843,32 @@
 
 /* Плитки сессий в рейле: одна строка-заголовок, плотный ритм (как в Claude Code). */
 .rail__sessions-list .history__item {
-    padding: 1px 6px;
+    padding: 2px 6px;
     margin-bottom: 0;
     border-radius: 5px;
 }
 
+/* Matches the delete button below, so revealing it on hover cannot shift the row. */
 .rail__sessions-list .history__row {
     margin-bottom: 0;
-    min-height: 18px;
+    min-height: 16px;
 }
 
 .rail__sessions-list .history__title {
     font-size: 11px;
+    height: 15px;
+    -unity-text-align: middle-left;
     -unity-font-style: normal;
     color: var(--text-2);
 }
 
 .rail__sessions-list .history__delete-btn {
-    width: 18px;
-    height: 18px;
-    min-width: 18px;
-    min-height: 18px;
-    font-size: 12px;
-    border-radius: 5px;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    font-size: 11px;
+    border-radius: 4px;
 }
 
 .rail__sessions-list .history__item:hover .history__title,

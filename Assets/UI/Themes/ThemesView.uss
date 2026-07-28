@@ -34,21 +34,23 @@
 .themes-card__head {
     flex-direction: row;
     align-items: center;
-    padding-bottom: 12px;
+    padding-bottom: 7px;
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
-    margin-bottom: 10px;
+    margin-bottom: 6px;
 }
 
 .themes-card__icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 10px;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
     -unity-background-image-tint-color: var(--accent);
 }
 
 .themes-card__title {
-    font-size: 14px;
+    font-size: 13px;
+    height: 18px;
+    -unity-text-align: middle-left;
     -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
     color: var(--text-0);
 }
@@ -62,34 +64,36 @@
 .themes-hero__copy {
     flex-grow: 1;
     flex-shrink: 1;
-    margin-right: 24px;
+    margin-right: 16px;
 }
 
 .themes-hero__title {
-    font-size: 22px;
+    font-size: 18px;
+    height: 24px;
+    -unity-text-align: middle-left;
     color: var(--text-0);
     -unity-font-style: bold;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .themes-hero__subtitle {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-3);
     white-space: normal;
     max-width: 520px;
 }
 
 .themes-preview {
-    min-width: 172px;
-    height: 148px;
+    min-width: 132px;
+    height: 108px;
     align-items: center;
     justify-content: center;
 }
 
 .themes-preview__halo {
     position: absolute;
-    width: 118px;
-    height: 118px;
+    width: 92px;
+    height: 92px;
     border-radius: 999px;
     background-color: var(--accent-soft);
     border-width: 1px;
@@ -97,8 +101,8 @@
 }
 
 .themes-preview__avatar {
-    width: 86px;
-    height: 86px;
+    width: 66px;
+    height: 66px;
     border-radius: 999px;
     align-items: center;
     justify-content: center;
@@ -112,7 +116,7 @@
 
 .themes-preview__letter {
     color: white;
-    font-size: 28px;
+    font-size: 22px;
     -unity-font-style: bold;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
 }
@@ -121,7 +125,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 0;
+    padding: 6px 0;
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
 }
@@ -135,18 +139,20 @@
     flex-grow: 1;
     flex-shrink: 1;
     flex-direction: column;
-    margin-right: 16px;
+    margin-right: 12px;
 }
 
 .themes-row__name {
-    font-size: 13px;
+    font-size: 12px;
+    height: 16px;
+    -unity-text-align: middle-left;
     color: var(--text-0);
     -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
-    margin-bottom: 3px;
+    margin-bottom: 1px;
 }
 
 .themes-row__sub {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-3);
     white-space: normal;
     max-width: 540px;
@@ -154,21 +160,21 @@
 
 .themes-toggle {
     margin: 0;
-    width: 42px;
-    min-width: 42px;
-    height: 22px;
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
     flex-shrink: 0;
-    border-radius: 11px;
+    border-radius: 10px;
     overflow: hidden;
 }
 
 .themes-toggle .unity-toggle__input,
 .themes-toggle .unity-base-field__input {
-    width: 42px;
-    min-width: 42px;
-    height: 22px;
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
     flex-shrink: 0;
-    border-radius: 11px;
+    border-radius: 10px;
     background-color: var(--bg-4);
     background-image: none;
     -unity-background-image-tint-color: rgba(0,0,0,0);
@@ -180,9 +186,9 @@
 }
 
 .themes-toggle .unity-toggle__checkmark {
-    width: 16px;
-    height: 16px;
-    margin: 3px;
+    width: 14px;
+    height: 14px;
+    margin: 2px;
     border-radius: 999px;
     background-color: var(--text-2);
     background-image: none;
@@ -198,7 +204,7 @@
 
 .themes-toggle:checked .unity-toggle__checkmark {
     background-color: rgb(255, 255, 255);
-    translate: 20px 0px;
+    translate: 16px 0px;
 }
 
 .themes-toggle .unity-toggle__text {
@@ -210,14 +216,14 @@
     background-color: var(--bg-2);
     border-width: 1px;
     border-color: var(--line-2);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 2px;
 }
 
 .seg__btn {
-    height: 28px;
-    padding: 0 12px;
-    border-radius: 8px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 6px;
     border-width: 0;
     background-color: rgba(0, 0, 0, 0);
     color: var(--text-2);

@@ -62,7 +62,21 @@
      card padding      12px 14px
      font sizes        micro 9-10 · small 11 · body 12 · title 13-14 · page 18
 
-   Anything larger than this is a deliberate exception (avatar hero, modals). */
+   Anything larger than this is a deliberate exception (avatar hero, modals).
+
+   IMPORTANT — why single-line labels carry an explicit `height`:
+   UITK has no line-height property, and a Label's intrinsic box is roughly
+   2x its font-size. That box, not the padding, is what sets a row's height,
+   so shrinking a container's padding alone does nothing. Worse, giving the
+   container a fixed `height` smaller than the label makes the glyphs spill
+   out and get cut by the nearest `overflow: hidden` ancestor.
+
+   The rule that works:
+     - single-line label  -> height: font-size + ~4px, plus
+                             -unity-text-align: middle-*  (glyphs overflow the
+                             smaller box harmlessly; only layout shrinks)
+     - wrapping text (white-space: normal) -> never set a height
+     - container holding text -> min-height, never height */
 
 /* ============== Accent palettes (U-13) ==============
    Default (indigo) is defined above. A theme class on #app-root

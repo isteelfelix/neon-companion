@@ -178,7 +178,7 @@
 }
 
 .history__item {
-    padding: 5px 8px;
+    padding: 3px 8px;
     border-radius: 6px;
     border-width: 1px;
     border-color: rgba(0, 0, 0, 0);
@@ -189,7 +189,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 2px;
+    margin-bottom: 0;
 }
 
 .history__item:hover {
@@ -203,6 +203,8 @@
 
 .history__title {
     font-size: 12px;
+    height: 16px;
+    -unity-text-align: middle-left;
     color: var(--text-1);
     flex-grow: 1;
     min-width: 0;
@@ -212,17 +214,19 @@
 }
 
 .history__provider {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--accent-2);
     background-color: var(--accent-soft);
-    border-radius: 6px;
-    padding: 2px 8px;
+    border-radius: 5px;
+    padding: 1px 6px;
     -unity-font-style: bold;
     flex-shrink: 0;
 }
 
 .history__meta {
     font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-left;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
@@ -430,6 +434,8 @@
     flex-grow: 1;
     color: var(--text-2);
     font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-left;
     letter-spacing: 1px;
     -unity-font-style: bold;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
@@ -438,6 +444,8 @@
 .transcript__time {
     color: var(--text-3);
     font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-right;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
@@ -1061,6 +1069,8 @@
 .thinking-bubble__text {
     color: rgba(124, 122, 237, 0.85);
     font-size: 11px;
+    height: 15px;
+    -unity-text-align: middle-left;
     -unity-font-style: italic;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     white-space: nowrap;
@@ -1113,6 +1123,8 @@
 
 .tool-entry__name {
     font-size: 11px;
+    height: 14px;
+    -unity-text-align: middle-left;
     -unity-font-style: bold;
     color: var(--text-1);
     margin-right: 8px;
@@ -1122,6 +1134,8 @@
 
 .tool-entry__label {
     font-size: 11px;
+    height: 14px;
+    -unity-text-align: middle-left;
     color: var(--text-2);
     flex-grow: 1;
     flex-shrink: 1;
@@ -1784,6 +1798,8 @@
 
 .file-chip__name {
     font-size: 11px;
+    height: 14px;
+    -unity-text-align: middle-left;
     color: var(--text-1);
     white-space: nowrap;
     overflow: hidden;
@@ -1792,14 +1808,18 @@
 
 .file-chip__size {
     font-size: 10px;
+    height: 12px;
+    -unity-text-align: middle-left;
     color: var(--text-2);
-    margin-top: 1px;
+    margin-top: 0;
 }
 
 /* Context window indicator */
+/* Height must stay >= the label's line box (~2x font-size) or the caption
+   spills out of the strip and reads as vertically off-centre. */
 .context-bar {
     position: relative;
-    height: 14px;
+    height: 18px;
     flex-shrink: 0;
     margin-top: 3px;
     overflow: hidden;
@@ -1819,8 +1839,8 @@
     position: absolute;
     left: 6px;
     top: 0;
-    height: 14px;
-    font-size: 9px;
+    height: 18px;
+    font-size: 10px;
     color: rgba(255, 255, 255, 0.7);
     -unity-text-align: middle-left;
 }

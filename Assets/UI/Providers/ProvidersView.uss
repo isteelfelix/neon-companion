@@ -60,10 +60,10 @@
 /* ============== Provider row ============== */
 
 .provider {
-    min-height: 48px;
+    min-height: 40px;
     flex-direction: row;
     align-items: center;
-    padding: 8px 12px;
+    padding: 6px 10px;
     background-color: var(--bg-1);
     border-width: 1px;
     border-color: var(--line-1);
@@ -109,7 +109,7 @@
 .provider__body {
     flex-grow: 1;
     flex-direction: column;
-    margin-left: 16px;
+    margin-left: 10px;
     min-width: 0;
 }
 
@@ -119,14 +119,18 @@
 }
 
 .provider__name {
-    font-size: 14px;
+    font-size: 13px;
+    height: 17px;
+    -unity-text-align: middle-left;
     color: var(--text-0);
     -unity-font-style: bold;
     margin-right: 8px;
 }
 
 .provider__url {
-    font-size: 11px;
+    font-size: 10px;
+    height: 14px;
+    -unity-text-align: middle-left;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     white-space: nowrap;
@@ -135,10 +139,12 @@
 }
 
 .provider__model {
-    font-size: 11px;
+    font-size: 10px;
+    height: 14px;
+    -unity-text-align: middle-left;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
-    margin-top: 2px;
+    margin-top: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -153,13 +159,17 @@
 
 .provider__meta-label {
     font-size: 9px;
+    height: 12px;
+    -unity-text-align: middle-right;
     color: var(--text-4);
     letter-spacing: 1px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
 .provider__meta-value {
-    font-size: 11px;
+    font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-right;
     color: var(--text-2);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
@@ -208,7 +218,7 @@
 .editor__header {
     flex-direction: row;
     align-items: center;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .editor__header-copy {
@@ -217,19 +227,25 @@
 
 .editor__title {
     font-size: 14px;
+    height: 19px;
+    -unity-text-align: middle-left;
     -unity-font-style: bold;
     color: var(--text-0);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .editor__sub {
     font-size: 12px;
+    height: 16px;
+    -unity-text-align: middle-left;
     color: var(--text-3);
 }
 
 .editor__status {
-    margin-top: 4px;
+    margin-top: 2px;
     font-size: 11px;
+    height: 15px;
+    -unity-text-align: middle-left;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
 }
 
@@ -247,12 +263,12 @@
 
 .field {
     flex-direction: column;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
 }
 
 .field__row {
     flex-direction: row;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
 }
 
 .field--half {
@@ -262,7 +278,7 @@
 }
 
 .slider-input {
-    height: 36px;
+    height: 28px;
 }
 
 /* ---- Slider numeric input (show-input-field) ---- */
@@ -310,15 +326,15 @@
 /* ---- Test row ---- */
 
 .testrow {
-    min-height: 42px;
+    min-height: 32px;
     flex-direction: row;
     align-items: flex-start;
-    padding: 10px 12px;
+    padding: 7px 10px;
     border-width: 1px;
     border-color: var(--line-2);
-    border-radius: 10px;
+    border-radius: 8px;
     background-color: var(--bg-2);
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .testrow--ok {
