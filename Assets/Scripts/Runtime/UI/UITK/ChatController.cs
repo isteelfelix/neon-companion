@@ -149,7 +149,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _messageQueue.Clear();
                     RenderQueueIndicator();
                 },
-                StartNewSessionAsync);
+                StartNewSessionAsync,
+                SubmitGatewayMessageAsync);
             _inputManager.OnSubmit += _ => OnSendClicked();
             _completionController = new ChatComposerCompletionController(
                 _d.MessageInput,
@@ -748,6 +749,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Task<bool> TryHandleCommandAsync(string message)
         {
             return _inputManager.TryHandleCommandAsync(message);
+        }
+
+        private async Task SubmitGatewayMessageAsync(string message)
+        {
+            if (_d.MessageInput == null || string.IsNullOrWhiteSpace(message))
+                return;
+
+            _d.MessageInput.value = message;
+            _inputManager.QueueComposerHeightUpdate();
+            await SendCurrentMessageAsync();
         }
 
         // Notification badge extracted to Chat/ChatNotificationManager.cs

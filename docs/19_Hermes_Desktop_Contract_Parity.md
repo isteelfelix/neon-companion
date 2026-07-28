@@ -87,7 +87,7 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | `session.activate` | YES | YES (`ActivateSession`) — rebinds a live session's event transport to the new socket after a reconnect; failure falls back to a full `session.resume` | P2 |
 | `prompt.submit` | YES (**`PROMPT_SUBMIT_REQUEST_TIMEOUT_MS` = 1 800 000**) | PARTIAL — sends it, but with the default 30 s timeout (§3) | **P0** |
 | `prompt.submit` (rewind) | `truncate_before_user_ordinal` param (`use-prompt-actions/rewind.ts`) | YES (`RewindAndSubmit`; drives regenerate and edit-and-regenerate, §11) | P2 |
-| `slash.exec` | YES | YES (inline string, `SwitchModelAsync`) | P1 |
+| `slash.exec` | YES | YES (`SwitchModelAsync` + composer catalog commands; output renders inline and send/prefill directives are followed) | P1 |
 | `image.attach` | YES (local mode, path-based) | YES (`AttachImagePath`) — compatibility fallback only, used when a gateway answers `image.attach_bytes` with `-32601` (§12) | P2 |
 | `image.attach_bytes` | YES | YES (`AttachImageBytes`, now with the `filename` extension hint) — the default path, since Companion rarely shares a filesystem with the gateway (§12) | P1 |
 | `image.detach` | YES (chip removal) | YES (`DetachImage`) — rollback for a send that never reached the agent; Companion stages at submit time, so there is no chip-removal case to detach from (§12) | P2 |
@@ -104,7 +104,8 @@ Desktop calls go through a `requestGateway(method, params, timeoutMs?)` wrapper 
 | `reload.env` / `reload.mcp` | YES | **NO** | P3 |
 | `process.list` / `process.kill` | YES | **NO** | P3 |
 | `llm.oneshot` | YES | **NO** | P3 |
-| `handoff.*`, `browser.manage`, `command.dispatch`, `preview.restart`, `pet.*` | YES | **NO** | P3 (Desktop-host-only) |
+| `command.dispatch` | YES | YES (fallback when composer `slash.exec` rejects; exec/plugin/alias/skill/send/prefill responses handled) | P1 |
+| `handoff.*`, `browser.manage`, `preview.restart`, `pet.*` | YES | **NO** | P3 (Desktop-host-only) |
 | `client.register` | (host has no remote register) | YES (`HermesClientBridge.RegisterClientAsync`) | P0 (companion remote-client) |
 | `client.pong` | — | YES | P1 |
 | `file.transfer.ack/complete/start/chunk/finish` | — | YES (companion extension) | P2 |
@@ -221,7 +222,7 @@ Matches the planned chain **gateway timeouts/events → session manager routing 
 - **No UI/UX port** of the Electron/React Desktop app (no screens, panes, composer, statusbar, themes).
 - **No Electron / local hermes bootstrap** — companion is a *remote* client; it does not spawn or manage a backend process.
 - **No avatar/skin, OpenAI-path, or voice** changes (`skin.changed`, `reaction`, `vibe`, audio REST are out of scope).
-- **No Desktop-host-only RPC** (`handoff.*`, `browser.manage`, `pet.*`, `process.*`, `preview.restart`, `command.dispatch`, `reload.*`, `llm.oneshot`).
+- **No Desktop-host-only RPC** (`handoff.*`, `browser.manage`, `pet.*`, `process.*`, `preview.restart`, `reload.*`, `llm.oneshot`).
 - **No multi-profile socket fan-out** unless companion needs concurrent cross-profile sessions (Desktop-host convenience).
 - **No settings control-plane REST** (config/env/skills/mcp/cron/messaging/ops) beyond what the agent turn requires.
 

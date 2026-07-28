@@ -1349,12 +1349,32 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 cmd += $" --provider {providerSlug}";
             cmd += " --session";
 
-            var result = await _gateway.Request<object>(
-                "slash.exec",
-                new { session_id = RuntimeSessionIdFor(sessionId), command = cmd }
-            );
+            JToken result = await ExecuteSlashCommandAsync(sessionId, cmd);
             OnRuntimeInfoChanged?.Invoke(sessionId);
             return result != null;
+        }
+
+        public Task<JToken> ExecuteSlashCommandAsync(string sessionId, string command)
+        {
+            return _gateway.Request<JToken>(
+                RpcMethods.SlashExec,
+                new
+                {
+                    session_id = RuntimeSessionIdFor(sessionId),
+                    command = (command ?? string.Empty).TrimStart('/')
+                });
+        }
+
+        public Task<JToken> DispatchCommandAsync(string sessionId, string name, string arg)
+        {
+            return _gateway.Request<JToken>(
+                RpcMethods.CommandDispatch,
+                new
+                {
+                    session_id = RuntimeSessionIdFor(sessionId),
+                    name = name,
+                    arg = arg ?? string.Empty
+                });
         }
 
         /// <summary>

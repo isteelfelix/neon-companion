@@ -116,6 +116,7 @@ WebSocket JSON-RPC 2.0 клиент.
 | `secret.respond` | Ответ на secret (текстовое значение) | `{request_id, value}` |
 | `sudo.respond` | Ответ на sudo (пароль) | `{request_id, password}` |
 | `slash.exec` | Выполнить slash-команду | `{session_id, command}` |
+| `command.dispatch` | Fallback для slash-команды, отклонённой `slash.exec` | `{session_id, name, arg}` |
 
 **События (server → client):**
 

@@ -104,7 +104,7 @@
 | U-44 | Drag-and-drop файлов в чат | ✅ | M2 | Verified by Felix: Windows standalone drag-and-drop works; dropped supported files become pending composer attachments/previews |
 | U-45 | Очередь сообщений | ✅ | M2 | Verified: queue visible when sending while response in progress |
 | U-46 | Кнопка стоп (отмена генерации) | ✅ | M2 | Работает |
-| U-47 | Система команд в чате | ✅ | M2 | Работает |
+| U-47 | Система команд в чате | ✅ | M2 | `/new`, `/clear`, `/help`, `/model`, `/system`, `/temp`, `/tokens` выполняются локально; остальные команды каталога Hermes идут через `slash.exec` с fallback на `command.dispatch`, inline-выводом и send/prefill directives |
 | U-48 | Agent Approval System (Part B) | ✅ | M2 | Verified by Felix: local OpenAI tool-call approval blocks before ToolExecutor; Hermes SSE approval/request/progress statuses surface in-chat approval prompt |
 | U-49 | Входящие вложения от AI | ✅ | M2 | Verified by Felix (июнь 2026) |
 | U-60 | Tools UI в бабле — расположение | ✅ | M2 | Fixed 9db20fa: replaced two-pass render (all text then all tools) with single-pass over segments — tool calls now appear inline in streaming order |

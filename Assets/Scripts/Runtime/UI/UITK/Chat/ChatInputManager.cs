@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Localization;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -25,6 +27,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private readonly Action<IReadOnlyList<ChatMessage>> _renderMessages;
         private readonly Action _clearMessageQueue;
         private readonly Func<Task<bool>> _startNewSessionAsync;
+        private readonly Func<string, Task> _submitGatewayMessageAsync;
 
         private TextElement _composerTextElement;
         private ScrollView _composerScroll;
@@ -51,7 +54,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Func<string, bool, Task> applyModelSelectionAsync,
             Action<IReadOnlyList<ChatMessage>> renderMessages,
             Action clearMessageQueue,
-            Func<Task<bool>> startNewSessionAsync)
+            Func<Task<bool>> startNewSessionAsync,
+            Func<string, Task> submitGatewayMessageAsync)
         {
             _messageInput = messageInput;
             _composer = composer;
@@ -63,6 +67,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _renderMessages = renderMessages;
             _clearMessageQueue = clearMessageQueue;
             _startNewSessionAsync = startNewSessionAsync;
+            _submitGatewayMessageAsync = submitGatewayMessageAsync;
         }
 
         public void SetVoiceRecording(bool value) { _isVoiceRecording = value; }
@@ -85,12 +90,14 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 return false;
 
             string command;
-            string args = null;
-            int spaceIdx = trimmed.IndexOf(' ');
-            if (spaceIdx > 0)
+            string args = string.Empty;
+            int separatorIndex = 1;
+            while (separatorIndex < trimmed.Length && !char.IsWhiteSpace(trimmed[separatorIndex]))
+                separatorIndex++;
+            if (separatorIndex < trimmed.Length)
             {
-                command = trimmed.Substring(0, spaceIdx).ToLowerInvariant();
-                args = trimmed.Substring(spaceIdx + 1).Trim();
+                command = trimmed.Substring(0, separatorIndex).ToLowerInvariant();
+                args = trimmed.Substring(separatorIndex).Trim();
             }
             else
             {
@@ -114,9 +121,167 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 case "/tokens":
                     return HandleTokensCommand(args);
                 default:
-                    _showSystemMessage?.Invoke($"Неизвестная команда: {command}. Введите /help для списка.");
-                    return true;
+                    return await HandleGatewayCommandAsync(trimmed, command.Substring(1), args);
             }
+        }
+
+        private async Task<bool> HandleGatewayCommandAsync(string commandText, string name, string args)
+        {
+            ChatService chat = _getChatServiceAsync != null ? await _getChatServiceAsync() : null;
+            HermesSessionManager manager = chat != null ? chat.ChatTransport as HermesSessionManager : null;
+            if (chat == null || !chat.IsHermesActive || manager == null)
+            {
+                ShowUnknownCommand(name);
+                return true;
+            }
+
+            string sessionId;
+            try
+            {
+                sessionId = await chat.EnsureForegroundSessionIdAsync();
+            }
+            catch (Exception ex)
+            {
+                ShowGatewayError(ex);
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(sessionId))
+            {
+                _showSystemMessage?.Invoke(LocalizationExtensions.Get(
+                    "chat.create.failed",
+                    "Could not create chat. Check the provider connection and try again."));
+                return true;
+            }
+
+            try
+            {
+                JToken result = await manager.ExecuteSlashCommandAsync(sessionId, commandText);
+                if (await HandleGatewayDispatchAsync(result, args))
+                    return true;
+
+                ShowGatewayOutput(name, result);
+                return true;
+            }
+            catch (Exception)
+            {
+                // Desktop falls back to command.dispatch when slash.exec rejects the command.
+            }
+
+            try
+            {
+                JToken result = await manager.DispatchCommandAsync(sessionId, name, args);
+                if (!await HandleGatewayDispatchAsync(result, args))
+                {
+                    _showSystemMessage?.Invoke(LocalizationExtensions.Get(
+                        "chat.command.invalid_response",
+                        "Gateway returned an invalid command response."));
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowGatewayError(ex);
+            }
+
+            return true;
+        }
+
+        private async Task<bool> HandleGatewayDispatchAsync(JToken result, string originalArgs)
+        {
+            if (result == null || result.Type != JTokenType.Object)
+                return false;
+
+            string type = ReadString(result["type"]);
+            switch (type)
+            {
+                case "exec":
+                case "plugin":
+                    ShowOutputOrFallback(ReadString(result["output"]));
+                    return true;
+                case "alias":
+                    string target = ReadString(result["target"]);
+                    if (string.IsNullOrWhiteSpace(target))
+                        return false;
+                    target = target.TrimStart('/');
+                    string aliasCommand = "/" + target;
+                    if (!string.IsNullOrWhiteSpace(originalArgs))
+                        aliasCommand += " " + originalArgs;
+                    return await TryHandleCommandAsync(aliasCommand);
+                case "send":
+                case "skill":
+                    string message = ReadString(result["message"]);
+                    string notice = ReadString(result["notice"]);
+                    if (!string.IsNullOrWhiteSpace(notice))
+                        _showSystemMessage?.Invoke(notice);
+                    if (string.IsNullOrWhiteSpace(message) || _submitGatewayMessageAsync == null)
+                        return false;
+                    await _submitGatewayMessageAsync(message);
+                    return true;
+                case "prefill":
+                    string prefill = ReadString(result["message"]);
+                    string prefillNotice = ReadString(result["notice"]);
+                    if (!string.IsNullOrWhiteSpace(prefillNotice))
+                        _showSystemMessage?.Invoke(prefillNotice);
+                    if (string.IsNullOrWhiteSpace(prefill) || _messageInput == null)
+                        return false;
+                    TextField input = _messageInput;
+                    input.schedule.Execute(() =>
+                    {
+                        if (input.panel == null)
+                            return;
+                        input.value = prefill;
+                        QueueComposerHeightUpdate();
+                    }).StartingIn(0);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private void ShowGatewayOutput(string name, JToken result)
+        {
+            bool hasObject = result != null && result.Type == JTokenType.Object;
+            string output = hasObject ? ReadString(result["output"]) : null;
+            string warning = hasObject ? ReadString(result["warning"]) : null;
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                output = LocalizationExtensions.GetFormat(
+                    "chat.command.no_output",
+                    "/{0}: no output",
+                    name);
+            }
+
+            _showSystemMessage?.Invoke(string.IsNullOrWhiteSpace(warning)
+                ? output
+                : warning + "\n" + output);
+        }
+
+        private void ShowOutputOrFallback(string output)
+        {
+            _showSystemMessage?.Invoke(string.IsNullOrWhiteSpace(output)
+                ? LocalizationExtensions.Get("chat.command.no_output_short", "(no output)")
+                : output);
+        }
+
+        private void ShowGatewayError(Exception ex)
+        {
+            _showSystemMessage?.Invoke(LocalizationExtensions.GetFormat(
+                "chat.command.gateway_error",
+                "Gateway command failed: {0}",
+                ex != null ? ex.Message : string.Empty));
+        }
+
+        private void ShowUnknownCommand(string name)
+        {
+            _showSystemMessage?.Invoke(LocalizationExtensions.GetFormat(
+                "chat.command.unknown",
+                "Unknown command: /{0}. Type /help for the list.",
+                name));
+        }
+
+        private static string ReadString(JToken token)
+        {
+            return token != null && token.Type == JTokenType.String ? token.Value<string>() : null;
         }
 
         private async Task<bool> HandleModelCommandAsync(string args)

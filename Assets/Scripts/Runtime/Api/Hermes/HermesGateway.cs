@@ -167,6 +167,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
         public const string SessionSteer = "session.steer";
         public const string PromptSubmit = "prompt.submit";
         public const string SlashExec = "slash.exec";
+        public const string CommandDispatch = "command.dispatch";
         public const string ModelOptions = "model.options";
         public const string ClarifyRespond = "clarify.respond";
         public const string ApprovalRespond = "approval.respond";
