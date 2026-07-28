@@ -626,12 +626,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                     SetProviderHeader(draft);
                 }
 
-                UpdateEditorStatus();
-
                 _cancelPending = false;
-                _editingProviderSource = draft;
-                _editingProvider = CloneProvider(draft);
-                ShowProviderEditPanel();
+                _editingProvider = null;
+                _editingProviderSource = null;
+                SetDisplay(_d.ProviderEditPanel, DisplayStyle.None);
                 await RefreshProvidersListAsync();
             }
             catch (Exception ex)
