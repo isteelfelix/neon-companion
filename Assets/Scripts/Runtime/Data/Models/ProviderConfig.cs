@@ -12,7 +12,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public string defaultModel;
         public float temperature = 0.7f;
         public int maxTokens = 512;
-        public int contextWindow = 0; // 0 = unknown/not set
+        public int contextWindow = 0; // 0 = Auto; positive value = manual context cap
         public bool isEnabled = true;
 
         /// <summary>

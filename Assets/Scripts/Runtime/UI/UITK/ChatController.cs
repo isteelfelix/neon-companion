@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Models;
@@ -105,6 +106,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _contextBarFill;
         private Label _contextBarLabel;
         private HermesSessionManager _contextSessionManager;
+        private CancellationTokenSource _contextWindowCts;
+        private string _contextWindowRequestKey;
 
         // Message list rendering (U-29) — delegated to ChatMessageListRenderer
         private ChatMessageListRenderer _messageListRenderer;
@@ -336,6 +339,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (backendSelector != null)
                 backendSelector.OnModeChanged -= OnBackendModeChanged;
             SubscribeToContextUpdates(null);
+            _contextWindowCts?.Cancel();
+            _contextWindowCts?.Dispose();
+            _contextWindowCts = null;
+            _contextWindowRequestKey = null;
 
             _editController?.UnregisterCallbacks();
 
@@ -1202,53 +1209,48 @@ namespace NeonCompanion.Runtime.UI.UITK
             var chat = _d.GetChatServiceAsync().Result;
             var provider = chat?.CurrentProvider;
 
-            // Prefer real context_length from gateway runtime info, then discovery API, then saved value, then heuristic guess.
+            bool isHermes = provider != null && ChatService.IsHermesProvider(provider);
+
+            // Hermes reports live usage. OpenAI-compatible providers use the resolved
+            // runtime/discovery/registry/manual context window from ModelDiscoveryService.
             int contextWindow = 0;
             bool exactContextWindow = false;
 
-            // 1. Gateway runtime info (most accurate — model's actual context window)
-            try
+            if (isHermes)
             {
-                var rt = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
-                if (rt != null && rt.context_max > 0)
+                try
                 {
-                    contextWindow = rt.context_max;
-                    exactContextWindow = true;
+                    var rt = GlobalBackendSelector.Instance?.SessionManager?.RuntimeInfo?.usage;
+                    if (rt != null && rt.context_max > 0)
+                    {
+                        contextWindow = rt.context_max;
+                        exactContextWindow = true;
+                    }
                 }
+                catch { /* non-critical */ }
             }
-            catch { /* non-critical */ }
 
-            if (provider != null)
+            if (provider != null && !isHermes)
             {
                 string modelId = chat.CurrentSessionModel ?? provider.defaultModel;
-                // 2. Discovery API (/v1/models)
-                if (contextWindow <= 0)
+                try
                 {
-                    try
+                    var app = _d.GetAppAsync().Result;
+                    ModelDiscoveryService discovery = null;
+                    if (app?.Services != null)
+                        app.Services.TryGet<ModelDiscoveryService>(out discovery);
+                    if (discovery != null && !string.IsNullOrWhiteSpace(modelId))
                     {
-                        var app = _d.GetAppAsync().Result;
-                        NeonCompanion.Runtime.Core.ModelDiscoveryService disc = null;
-                        if (app?.Services != null)
-                            app.Services.TryGet<NeonCompanion.Runtime.Core.ModelDiscoveryService>(out disc);
-                        if (disc != null && !string.IsNullOrEmpty(modelId))
-                        {
-                            contextWindow = disc.GetContextWindowForModel(provider, modelId);
-                            if (contextWindow > 0)
-                                exactContextWindow = true;
-                        }
-                    }
-                    catch { /* non-critical */ }
-                }
+                        ContextWindowResolution resolution =
+                            discovery.GetContextWindowResolution(provider, modelId);
+                        contextWindow = resolution.EffectiveContextWindow;
+                        exactContextWindow = contextWindow > 0;
 
-                // 3. Provider config
-                if (contextWindow <= 0 && provider.contextWindow > 0)
-                {
-                    contextWindow = provider.contextWindow;
-                    exactContextWindow = true;
+                        if (!discovery.HasResolvedContextWindow(provider, modelId))
+                            RequestContextWindowResolution(provider, modelId, discovery);
+                    }
                 }
-                // 4. Heuristic guess
-                if (contextWindow <= 0)
-                    contextWindow = ChatContextWindowEstimator.GuessContextWindow(provider, chat.CurrentSessionModel);
+                catch { /* non-critical */ }
             }
 
             if (contextWindow <= 0)
@@ -1293,6 +1295,56 @@ namespace NeonCompanion.Runtime.UI.UITK
             _contextBarLabel.text = LocalizationExtensions.Get(locKey, fallback)
                 .Replace("{0}", used.ToString("N0"))
                 .Replace("{1}", contextWindow.ToString("N0"));
+        }
+
+        private void RequestContextWindowResolution(
+            ProviderConfig provider,
+            string modelId,
+            ModelDiscoveryService discovery)
+        {
+            string requestKey = provider.backendType + "|" +
+                provider.baseUrl + "|" +
+                provider.apiKey + "|" +
+                modelId;
+            if (string.Equals(_contextWindowRequestKey, requestKey, StringComparison.Ordinal))
+                return;
+
+            _contextWindowCts?.Cancel();
+            _contextWindowCts?.Dispose();
+            _contextWindowCts = new CancellationTokenSource();
+            _contextWindowRequestKey = requestKey;
+            _ = ResolveContextWindowAndRefreshAsync(
+                provider,
+                modelId,
+                discovery,
+                requestKey,
+                _contextWindowCts.Token);
+        }
+
+        private async Task ResolveContextWindowAndRefreshAsync(
+            ProviderConfig provider,
+            string modelId,
+            ModelDiscoveryService discovery,
+            string requestKey,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await discovery.ResolveContextWindowAsync(provider, modelId, cancellationToken);
+                if (!cancellationToken.IsCancellationRequested &&
+                    string.Equals(_contextWindowRequestKey, requestKey, StringComparison.Ordinal))
+                {
+                    UpdateContextBar();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when the active provider or model changes.
+            }
+            catch
+            {
+                // Context discovery is best-effort and must not affect chat.
+            }
         }
 
         // ===== Message Rendering (delegated to ChatMessageListRenderer) =====

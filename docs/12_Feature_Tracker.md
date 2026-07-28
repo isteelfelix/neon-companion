@@ -93,7 +93,7 @@
 | U-33 | Пересылка выделенных в другой чат | ⏳ | M2 | UI-операция: пересланные сообщения отображаются в целевом чате, но агент их не видит — они не попадают в session history на gateway. Нужно при пересылке отправлять в backend сессии. |
 | U-34 | Выделение текста в сообщениях | ✅ | M2 | Verified by Felix: Label→TextField, I-beam cursor, long-press guard |
 | U-35 | Markdown разметка в сообщениях | ✅ | M2 | **Upgraded to SelectableMarkdownElement** — full native rendering engine: block model (paragraph/heading/quote/list/code/table/rule), inline tokenizer (bold/italic/strike/code/links), word-wrap, glyph-level selection, streaming block-level reconciliation. Syntax highlighting for 15+ languages. Diff-fenced code blocks with +/-/@@ coloring. Design tokens throughout. Previously: TextField-based with basic markdown parsing. |
-| U-36 | Индикатор контекстного окна | ✅ | M2 | Verified by Felix: real context_length from discovery API, fallback chain to heuristics |
+| U-36 | Индикатор контекстного окна | ✅ | M2 | Auto: LM Studio runtime → provider model metadata → OpenAI model catalog → Unknown; manual cap is validated against a known limit, heuristic model guesses removed |
 | U-37 | Экспорт чата | ✅ | M2 | Verified by Felix: save-file dialog via IFilePickerService + Windows SaveFileDialog + iOS fallback |
 | U-38 | Поиск по текущему чату | ✅ | M2 | Работает |
 | U-39 | Ветвление диалога | 📋 | M3 | |

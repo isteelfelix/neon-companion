@@ -38,6 +38,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             public TextField EditModel;
             public NeonDropdown EditModelPreset;
             public VisualElement EditModelCustomWrap;
+            public VisualElement EditContextField;
+            public Label EditContextLabel;
+            public TextField EditContextWindow;
+            public Label EditContextHint;
+            public Label EditMaxTokensLabel;
             public TextField EditMaxTokens;
             public Slider EditTemperature;
             // UI — global backend mode selector
@@ -112,6 +117,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private IReadOnlyList<string> _discoveredModels;
         private IVisualElementScheduledItem _autoDiscoverSchedule;
         private CancellationTokenSource _autoDiscoverCts;
+        private CancellationTokenSource _contextWindowCts;
+        private ContextWindowResolution _contextWindowResolution;
         private readonly Dictionary<string, string> _modelPresetByLabel = new Dictionary<string, string>();
 
         // Voice editor fields (queried lazily from ProviderEditPanel)
@@ -215,6 +222,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.EditApiKeyToggle.RegisterCallback<ClickEvent>(OnApiKeyToggleClicked);
             if (_d.EditModel != null)
                 _d.EditModel.RegisterCallback<ChangeEvent<string>>(OnManualModelChanged);
+            if (_d.EditContextWindow != null)
+                _d.EditContextWindow.RegisterCallback<ChangeEvent<string>>(OnContextWindowChanged);
 
             // Global backend mode selector
             if (_d.GlobalBackendMode != null)
@@ -249,6 +258,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.EditApiKeyToggle.UnregisterCallback<ClickEvent>(OnApiKeyToggleClicked);
             if (_d.EditModel != null)
                 _d.EditModel.UnregisterCallback<ChangeEvent<string>>(OnManualModelChanged);
+            if (_d.EditContextWindow != null)
+                _d.EditContextWindow.UnregisterCallback<ChangeEvent<string>>(OnContextWindowChanged);
+
+            _contextWindowCts?.Cancel();
+            _contextWindowCts?.Dispose();
+            _contextWindowCts = null;
 
             if (_d.GlobalBackendMode != null)
                 _d.GlobalBackendMode.UnregisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
@@ -528,15 +543,37 @@ namespace NeonCompanion.Runtime.UI.UITK
             SyncModelPresetUi(_editingProvider.defaultModel ?? string.Empty);
             if (_d.EditTemperature != null)
                 _d.EditTemperature.SetValueWithoutNotify(_editingProvider.temperature);
+            if (_d.EditContextLabel != null)
+                _d.EditContextLabel.text = LocalizationExtensions.Get(
+                    "providers.context.label",
+                    "Context window");
+            if (_d.EditMaxTokensLabel != null)
+                _d.EditMaxTokensLabel.text = LocalizationExtensions.Get(
+                    "providers.max_output_tokens.label",
+                    "Max response tokens");
+            if (_d.EditContextWindow != null)
+            {
+                _d.EditContextWindow.SetValueWithoutNotify(
+                    _editingProvider.contextWindow > 0
+                        ? _editingProvider.contextWindow.ToString()
+                        : string.Empty);
+            }
             if (_d.EditMaxTokens != null)
                 _d.EditMaxTokens.SetValueWithoutNotify(_editingProvider.maxTokens.ToString());
 
             bool isHermes = ChatService.IsHermesProvider(_editingProvider);
+            _contextWindowResolution = null;
 
             // Temperature / max tokens only apply to the OpenAI HTTP path. Hermes drives
             // generation server-side (session.create ignores them), so hide that row.
             var generationRow = _d.EditTemperature?.parent?.parent;
             SetDisplay(generationRow, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
+            SetDisplay(_d.EditContextField, isHermes ? DisplayStyle.None : DisplayStyle.Flex);
+            if (!isHermes)
+            {
+                UpdateContextWindowHint(null);
+                _ = RefreshContextWindowResolutionAsync();
+            }
 
             // Voice section: shown for OpenAI-compatible providers only.
             EnsureVoiceEditorFields();
@@ -577,6 +614,31 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var draft = BuildProviderDraftFromEditor();
                 if (draft == null)
                     return;
+
+                if (!ChatService.IsHermesProvider(draft))
+                {
+                    if (!TryReadManualContextWindow(out int manualContextWindow, out string contextError))
+                    {
+                        SetTestRow(false, contextError);
+                        return;
+                    }
+                    draft.contextWindow = manualContextWindow;
+
+                    ContextWindowResolution contextResolution =
+                        await ResolveContextWindowForDraftAsync(draft, CancellationToken.None);
+                    if (manualContextWindow > 0 &&
+                        contextResolution != null &&
+                        contextResolution.KnownLimit > 0 &&
+                        manualContextWindow > contextResolution.KnownLimit)
+                    {
+                        SetTestRow(false, LocalizationExtensions.Get(
+                            "providers.context.error.above_limit",
+                            "The manual context cannot exceed the known limit of {0}.")
+                            .Replace("{0}", FormatContextWindow(contextResolution.KnownLimit)));
+                        UpdateContextWindowHint(contextResolution);
+                        return;
+                    }
+                }
 
                 SyncGlobalBackendModeUi(ChatService.IsHermesProvider(draft)
                     ? BackendMode.Hermes
@@ -627,6 +689,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 _cancelPending = false;
+                _contextWindowCts?.Cancel();
                 _editingProvider = null;
                 _editingProviderSource = null;
                 SetDisplay(_d.ProviderEditPanel, DisplayStyle.None);
@@ -648,6 +711,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _cancelPending = false;
+            _contextWindowCts?.Cancel();
             _editingProvider = null;
             _editingProviderSource = null;
             SetDisplay(_d.ProviderEditPanel, DisplayStyle.None);
@@ -1676,12 +1740,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_d.EditModel != null)
                     _d.EditModel.SetValueWithoutNotify(_lastCustomModel ?? string.Empty);
                 _editModelUsesCustomMode = true;
+                ScheduleAutoDiscover();
                 return;
             }
 
             _editModelUsesCustomMode = false;
             if (_modelPresetByLabel.TryGetValue(selectedLabel, out string modelId) && _d.EditModel != null)
                 _d.EditModel.SetValueWithoutNotify(modelId ?? string.Empty);
+            ScheduleAutoDiscover();
         }
 
         private void OnManualModelChanged(ChangeEvent<string> evt)
@@ -1691,6 +1757,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (string.Equals(_d.EditModelPreset?.value, CustomModelPresetValue, StringComparison.Ordinal))
                 _lastCustomModel = evt?.newValue ?? string.Empty;
+            ScheduleAutoDiscover();
         }
 
         private void OnGlobalBackendModeChanged(ChangeEvent<string> evt)
@@ -1960,6 +2027,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_syncingModelPresetUi) return;
             _discoveredModels = null;
             SyncModelPresetUi(GetCurrentModelValue());
+            ScheduleAutoDiscover();
         }
 
         private void OnProviderEndpointChanged(ChangeEvent<string> _)
@@ -1968,7 +2036,16 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SyncModelPresetUi(GetCurrentModelValue());
+            ScheduleAutoDiscover();
+        }
 
+        private void OnContextWindowChanged(ChangeEvent<string> _)
+        {
+            UpdateContextWindowHint(_contextWindowResolution);
+        }
+
+        private void ScheduleAutoDiscover()
+        {
             _autoDiscoverSchedule?.Pause();
             _autoDiscoverSchedule = _d.ProviderEditPanel?.schedule.Execute(StartAutoDiscoverModels).StartingIn(800);
         }
@@ -1997,11 +2074,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var app = await _d.GetAppAsync();
                 if (app == null || ct.IsCancellationRequested) return;
 
+                await DiscoverModelsForDraftAsync(currentDraft, ct);
+                if (ct.IsCancellationRequested) return;
+
                 if (ChatService.IsHermesProvider(currentDraft))
-                {
-                    await DiscoverModelsForDraftAsync(currentDraft, ct);
                     return;
-                }
 
                 var result = await app.AiClient.TestConnectionAsync(currentDraft, ct);
                 if (ct.IsCancellationRequested) return;
@@ -2039,6 +2116,181 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SyncModelPresetFromDiscovery(models, GetCurrentModelValue());
                 SyncTopbarModelPicker(GetCurrentModelValue());
             }
+
+            await RefreshContextWindowResolutionAsync(draft, cancellationToken);
+        }
+
+        private async Task RefreshContextWindowResolutionAsync()
+        {
+            _contextWindowCts?.Cancel();
+            _contextWindowCts?.Dispose();
+            _contextWindowCts = new CancellationTokenSource();
+
+            ProviderConfig draft = BuildProviderDraftFromEditor();
+            if (draft == null)
+                return;
+
+            await RefreshContextWindowResolutionAsync(draft, _contextWindowCts.Token);
+        }
+
+        private async Task RefreshContextWindowResolutionAsync(
+            ProviderConfig draft,
+            CancellationToken cancellationToken)
+        {
+            if (draft == null || ChatService.IsHermesProvider(draft))
+                return;
+
+            ContextWindowResolution resolution =
+                await ResolveContextWindowForDraftAsync(draft, cancellationToken);
+            if (cancellationToken.IsCancellationRequested || _editingProvider == null)
+                return;
+
+            _contextWindowResolution = resolution;
+            UpdateContextWindowHint(resolution);
+        }
+
+        private async Task<ContextWindowResolution> ResolveContextWindowForDraftAsync(
+            ProviderConfig draft,
+            CancellationToken cancellationToken)
+        {
+            if (draft == null)
+                return null;
+
+            var app = await _d.GetAppAsync();
+            if (app == null || cancellationToken.IsCancellationRequested)
+                return null;
+
+            ModelDiscoveryService discovery = null;
+            app.Services.TryGet<ModelDiscoveryService>(out discovery);
+            if (discovery == null)
+                return null;
+
+            string modelId = draft.defaultModel;
+            if (string.IsNullOrWhiteSpace(modelId))
+                modelId = GetCurrentModelValue();
+
+            return await discovery.ResolveContextWindowAsync(
+                draft,
+                modelId,
+                cancellationToken);
+        }
+
+        private bool TryReadManualContextWindow(out int value, out string error)
+        {
+            value = 0;
+            error = null;
+
+            if (_d.EditContextWindow == null)
+                return true;
+
+            string raw = (_d.EditContextWindow.value ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(raw))
+                return true;
+
+            if (!int.TryParse(raw, out value) || value <= 0)
+            {
+                value = 0;
+                error = LocalizationExtensions.Get(
+                    "providers.context.error.positive",
+                    "Enter a positive context size or leave the field empty for Auto.");
+                return false;
+            }
+
+            return true;
+        }
+
+        private void UpdateContextWindowHint(ContextWindowResolution resolution)
+        {
+            if (_d.EditContextHint == null)
+                return;
+
+            _d.EditContextHint.EnableInClassList("provider-context-hint--error", false);
+
+            if (!TryReadManualContextWindow(out int manualLimit, out string error))
+            {
+                _d.EditContextHint.text = error;
+                _d.EditContextHint.EnableInClassList("provider-context-hint--error", true);
+                return;
+            }
+
+            int knownLimit = resolution != null ? resolution.KnownLimit : 0;
+            ContextWindowSource knownSource = resolution != null
+                ? resolution.KnownSource
+                : ContextWindowSource.Unknown;
+
+            if (manualLimit > 0)
+            {
+                if (knownLimit > 0 && manualLimit > knownLimit)
+                {
+                    _d.EditContextHint.text = LocalizationExtensions.Get(
+                        "providers.context.hint.above_limit",
+                        "Manual: {0} · known maximum: {1}")
+                        .Replace("{0}", FormatContextWindow(manualLimit))
+                        .Replace("{1}", FormatContextWindow(knownLimit));
+                    _d.EditContextHint.EnableInClassList("provider-context-hint--error", true);
+                    return;
+                }
+
+                if (knownLimit > 0)
+                {
+                    _d.EditContextHint.text = LocalizationExtensions.Get(
+                        "providers.context.hint.manual_known",
+                        "Manual: {0} · maximum: {1} ({2})")
+                        .Replace("{0}", FormatContextWindow(manualLimit))
+                        .Replace("{1}", FormatContextWindow(knownLimit))
+                        .Replace("{2}", GetContextSourceText(knownSource));
+                }
+                else
+                {
+                    _d.EditContextHint.text = LocalizationExtensions.Get(
+                        "providers.context.hint.manual_unknown",
+                        "Manual: {0} · provider limit is unknown")
+                        .Replace("{0}", FormatContextWindow(manualLimit));
+                }
+                return;
+            }
+
+            _d.EditContextHint.text = knownLimit > 0
+                ? LocalizationExtensions.Get(
+                    "providers.context.hint.auto_known",
+                    "Auto · {0} · {1}")
+                    .Replace("{0}", FormatContextWindow(knownLimit))
+                    .Replace("{1}", GetContextSourceText(knownSource))
+                : LocalizationExtensions.Get(
+                    "providers.context.hint.auto_unknown",
+                    "Auto · Unknown");
+        }
+
+        private static string GetContextSourceText(ContextWindowSource source)
+        {
+            switch (source)
+            {
+                case ContextWindowSource.Runtime:
+                    return LocalizationExtensions.Get(
+                        "providers.context.source.runtime",
+                        "LM Studio runtime");
+                case ContextWindowSource.Discovery:
+                    return LocalizationExtensions.Get(
+                        "providers.context.source.discovery",
+                        "provider API");
+                case ContextWindowSource.Registry:
+                    return LocalizationExtensions.Get(
+                        "providers.context.source.registry",
+                        "model catalog");
+                default:
+                    return LocalizationExtensions.Get(
+                        "providers.context.source.unknown",
+                        "unknown source");
+            }
+        }
+
+        private static string FormatContextWindow(int value)
+        {
+            if (value > 0 && value % 1024 == 0)
+                return (value / 1024).ToString("N0") + "K";
+            if (value >= 1000 && value % 1000 == 0)
+                return (value / 1000).ToString("N0") + "K";
+            return value.ToString("N0");
         }
 
         // ============================================================
@@ -2783,6 +3035,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 || !SameText(draft.defaultModel,  _editingProviderSource.defaultModel)
                 || Math.Abs(draft.temperature - _editingProviderSource.temperature) > 0.001f
                 || draft.maxTokens != _editingProviderSource.maxTokens
+                || draft.contextWindow != _editingProviderSource.contextWindow
                 || !SameText(draft.authMode,     _editingProviderSource.authMode)
                 || !SameText(draft.authProvider, _editingProviderSource.authProvider)
                 || !SameText(draft.authUsername, _editingProviderSource.authUsername);
@@ -2805,6 +3058,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_d.EditTemperature != null) draft.temperature  = _d.EditTemperature.value;
             if (_d.EditMaxTokens != null && int.TryParse(_d.EditMaxTokens.value, out int tokens))
                 draft.maxTokens = tokens;
+            if (_d.EditContextWindow != null)
+            {
+                string contextText = (_d.EditContextWindow.value ?? string.Empty).Trim();
+                if (string.IsNullOrEmpty(contextText))
+                    draft.contextWindow = 0;
+                else if (int.TryParse(contextText, out int contextWindow) && contextWindow > 0)
+                    draft.contextWindow = contextWindow;
+            }
 
             if (!ChatService.IsHermesProvider(draft))
             {

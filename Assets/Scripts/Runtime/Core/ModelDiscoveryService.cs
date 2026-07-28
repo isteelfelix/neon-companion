@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Data.Repositories;
 using NeonCompanion.Runtime.Api.Adapters;
+using Newtonsoft.Json.Linq;
+using UnityEngine.Networking;
 
 namespace NeonCompanion.Runtime.Core
 {
@@ -13,6 +17,8 @@ namespace NeonCompanion.Runtime.Core
         private readonly Dictionary<string, IReadOnlyList<string>> _cache = new Dictionary<string, IReadOnlyList<string>>();
         // Raw JSON from successful discovery — used for context window lookup (U-36)
         private readonly Dictionary<string, string> _jsonCache = new Dictionary<string, string>();
+        private readonly Dictionary<string, DetectedContextWindow> _contextCache =
+            new Dictionary<string, DetectedContextWindow>();
 
         public ModelDiscoveryService(IProviderConfigRepository repository)
         {
@@ -48,64 +54,83 @@ namespace NeonCompanion.Runtime.Core
             return null;
         }
 
-        /// <summary>
-        /// Returns the context window size for a specific model from cached discovery data.
-        /// Parses context_length / context_window fields from the raw API response.
-        /// Returns 0 if not available (caller should fall back to heuristics).
-        /// </summary>
-        public int GetContextWindowForModel(ProviderConfig provider, string modelId)
+        public bool HasResolvedContextWindow(ProviderConfig provider, string modelId)
         {
             if (provider == null || string.IsNullOrEmpty(modelId))
-                return 0;
+                return false;
 
-            var cacheKey = $"{provider.backendType}|{provider.baseUrl}|{provider.apiKey}";
-            if (!_jsonCache.TryGetValue(cacheKey, out string json) || string.IsNullOrEmpty(json))
-                return 0;
-
-            return ExtractContextWindowFromJson(json, modelId);
+            return _contextCache.ContainsKey(BuildContextCacheKey(provider, modelId));
         }
 
-        private static int ExtractContextWindowFromJson(string json, string modelId)
+        public ContextWindowResolution GetContextWindowResolution(ProviderConfig provider, string modelId)
         {
-            // Find the model ID occurrence in the JSON document.
-            string quotedId = "\"" + modelId + "\"";
-            int pos = json.IndexOf(quotedId, System.StringComparison.OrdinalIgnoreCase);
-            if (pos < 0)
-                return 0;
+            if (provider == null)
+                return BuildResolution(0, ContextWindowSource.Unknown, 0);
 
-            // Search a window around the model ID for context size fields.
-            int searchStart = System.Math.Max(0, pos - 200);
-            int searchEnd = System.Math.Min(json.Length, pos + quotedId.Length + 400);
-            string region = json.Substring(searchStart, searchEnd - searchStart);
+            DetectedContextWindow detected = null;
+            if (!string.IsNullOrWhiteSpace(modelId))
+                _contextCache.TryGetValue(BuildContextCacheKey(provider, modelId), out detected);
 
-            string[] fields = { "context_length", "context_window", "n_ctx", "max_context_length", "max_tokens" };
-            foreach (string field in fields)
+            if (detected == null)
             {
-                string key = "\"" + field + "\"";
-                int fieldIdx = region.IndexOf(key, System.StringComparison.OrdinalIgnoreCase);
-                if (fieldIdx < 0)
-                    continue;
-
-                int colonIdx = region.IndexOf(':', fieldIdx + key.Length);
-                if (colonIdx < 0)
-                    continue;
-
-                int valueIdx = colonIdx + 1;
-                while (valueIdx < region.Length && char.IsWhiteSpace(region[valueIdx]))
-                    valueIdx++;
-
-                if (valueIdx >= region.Length || !char.IsDigit(region[valueIdx]))
-                    continue;
-
-                int end = valueIdx;
-                while (end < region.Length && char.IsDigit(region[end]))
-                    end++;
-
-                if (int.TryParse(region.Substring(valueIdx, end - valueIdx), out int value) && value > 512)
-                    return value;
+                int registryLimit = KnownModelContextRegistry.GetContextWindow(provider.baseUrl, modelId);
+                detected = new DetectedContextWindow
+                {
+                    Limit = registryLimit,
+                    Source = registryLimit > 0 ? ContextWindowSource.Registry : ContextWindowSource.Unknown
+                };
             }
 
-            return 0;
+            return BuildResolution(detected.Limit, detected.Source, provider.contextWindow);
+        }
+
+        public async Task<ContextWindowResolution> ResolveContextWindowAsync(
+            ProviderConfig provider,
+            string modelId,
+            CancellationToken cancellationToken = default)
+        {
+            if (provider == null || string.IsNullOrWhiteSpace(modelId))
+                return BuildResolution(0, ContextWindowSource.Unknown, provider != null ? provider.contextWindow : 0);
+
+            string contextCacheKey = BuildContextCacheKey(provider, modelId);
+            DetectedContextWindow detected = null;
+
+            if (IsLocalEndpoint(provider.baseUrl))
+                detected = await TryResolveLmStudioContextAsync(provider, modelId, cancellationToken);
+
+            if (detected == null || detected.Limit <= 0)
+            {
+                await DiscoverModelsAsync(provider, cancellationToken);
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    string providerKey = BuildProviderCacheKey(provider);
+                    if (_jsonCache.TryGetValue(providerKey, out string json))
+                    {
+                        int discoveredLimit = ExtractContextWindowFromModelsJson(json, modelId);
+                        if (discoveredLimit > 0)
+                        {
+                            detected = new DetectedContextWindow
+                            {
+                                Limit = discoveredLimit,
+                                Source = ContextWindowSource.Discovery
+                            };
+                        }
+                    }
+                }
+            }
+
+            if (detected == null || detected.Limit <= 0)
+            {
+                int registryLimit = KnownModelContextRegistry.GetContextWindow(provider.baseUrl, modelId);
+                detected = new DetectedContextWindow
+                {
+                    Limit = registryLimit,
+                    Source = registryLimit > 0 ? ContextWindowSource.Registry : ContextWindowSource.Unknown
+                };
+            }
+
+            _contextCache[contextCacheKey] = detected;
+            return BuildResolution(detected.Limit, detected.Source, provider.contextWindow);
         }
 
         private sealed class FetchResult
@@ -149,6 +174,244 @@ namespace NeonCompanion.Runtime.Core
                 var parsed = adapter.ParseDiscoveryResponse(payload);
                 return new FetchResult { Models = parsed, Json = payload };
             }
+        }
+
+        private async Task<DetectedContextWindow> TryResolveLmStudioContextAsync(
+            ProviderConfig provider,
+            string modelId,
+            CancellationToken cancellationToken)
+        {
+            if (!Uri.TryCreate(provider.baseUrl, UriKind.Absolute, out Uri baseUri))
+                return null;
+
+            string endpoint = baseUri.GetLeftPart(UriPartial.Authority).TrimEnd('/') + "/api/v1/models";
+            string json = await TryFetchJsonAsync(endpoint, provider.apiKey, cancellationToken);
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            try
+            {
+                JObject root = JObject.Parse(json);
+                JArray models = root["models"] as JArray;
+                if (models == null)
+                    return null;
+
+                for (int i = 0; i < models.Count; i++)
+                {
+                    JObject model = models[i] as JObject;
+                    if (model == null)
+                        continue;
+
+                    JArray instances = model["loaded_instances"] as JArray;
+                    if (instances != null)
+                    {
+                        for (int j = 0; j < instances.Count; j++)
+                        {
+                            JObject instance = instances[j] as JObject;
+                            string instanceId = ReadString(instance != null ? instance["id"] : null);
+                            if (!string.Equals(instanceId, modelId, StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            int runtimeLimit = ReadPositiveInt(instance["config"]?["context_length"]);
+                            if (runtimeLimit > 0)
+                            {
+                                return new DetectedContextWindow
+                                {
+                                    Limit = runtimeLimit,
+                                    Source = ContextWindowSource.Runtime
+                                };
+                            }
+                        }
+                    }
+
+                    string modelKey = ReadString(model["key"]);
+                    if (!string.Equals(modelKey, modelId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (instances != null && instances.Count == 1)
+                    {
+                        int runtimeLimit = ReadPositiveInt(instances[0]?["config"]?["context_length"]);
+                        if (runtimeLimit > 0)
+                        {
+                            return new DetectedContextWindow
+                            {
+                                Limit = runtimeLimit,
+                                Source = ContextWindowSource.Runtime
+                            };
+                        }
+                    }
+
+                    int maximumLimit = ReadPositiveInt(model["max_context_length"]);
+                    if (maximumLimit > 0)
+                    {
+                        return new DetectedContextWindow
+                        {
+                            Limit = maximumLimit,
+                            Source = ContextWindowSource.Discovery
+                        };
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        private static int ExtractContextWindowFromModelsJson(string json, string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(modelId))
+                return 0;
+
+            try
+            {
+                JObject root = JObject.Parse(json);
+                JArray models = root["data"] as JArray;
+                if (models == null)
+                    return 0;
+
+                for (int i = 0; i < models.Count; i++)
+                {
+                    JObject model = models[i] as JObject;
+                    if (model == null ||
+                        !string.Equals(ReadString(model["id"]), modelId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    int value = ReadPositiveInt(model["metadata"]?["limits"]?["max_context_length"]);
+                    if (value <= 0) value = ReadPositiveInt(model["context_length"]);
+                    if (value <= 0) value = ReadPositiveInt(model["context_window"]);
+                    if (value <= 0) value = ReadPositiveInt(model["n_ctx"]);
+                    if (value <= 0) value = ReadPositiveInt(model["max_context_length"]);
+                    if (value <= 0) value = ReadPositiveInt(model["max_model_len"]);
+                    return value;
+                }
+            }
+            catch
+            {
+                return 0;
+            }
+
+            return 0;
+        }
+
+        private static ContextWindowResolution BuildResolution(
+            int knownLimit,
+            ContextWindowSource knownSource,
+            int manualLimit)
+        {
+            int normalizedKnown = knownLimit > 0 ? knownLimit : 0;
+            int normalizedManual = manualLimit > 0 ? manualLimit : 0;
+            int effective = normalizedKnown;
+            ContextWindowSource source = normalizedKnown > 0 ? knownSource : ContextWindowSource.Unknown;
+
+            if (normalizedManual > 0)
+            {
+                effective = normalizedKnown > 0
+                    ? Math.Min(normalizedManual, normalizedKnown)
+                    : normalizedManual;
+                source = ContextWindowSource.Manual;
+            }
+
+            return new ContextWindowResolution
+            {
+                EffectiveContextWindow = effective,
+                KnownLimit = normalizedKnown,
+                ManualLimit = normalizedManual,
+                Source = source,
+                KnownSource = normalizedKnown > 0 ? knownSource : ContextWindowSource.Unknown
+            };
+        }
+
+        private static int ReadPositiveInt(JToken token)
+        {
+            if (token == null)
+                return 0;
+
+            if (token.Type == JTokenType.Integer)
+            {
+                long value = token.Value<long>();
+                return value > 0 && value <= int.MaxValue ? (int)value : 0;
+            }
+
+            if (token.Type == JTokenType.String &&
+                int.TryParse(token.Value<string>(), out int parsed) &&
+                parsed > 0)
+            {
+                return parsed;
+            }
+
+            return 0;
+        }
+
+        private static string ReadString(JToken token)
+        {
+            return token != null && token.Type == JTokenType.String
+                ? token.Value<string>()
+                : null;
+        }
+
+        private async Task<string> TryFetchJsonAsync(
+            string endpoint,
+            string apiKey,
+            CancellationToken cancellationToken)
+        {
+            using (var webRequest = UnityWebRequest.Get(endpoint))
+            {
+                webRequest.timeout = 8;
+                if (!string.IsNullOrWhiteSpace(apiKey))
+                    webRequest.SetRequestHeader("Authorization", "Bearer " + apiKey);
+
+                var operation = webRequest.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        webRequest.Abort();
+                        return null;
+                    }
+
+                    await Task.Yield();
+                }
+
+                if (webRequest.result != UnityWebRequest.Result.Success)
+                    return null;
+
+                return webRequest.downloadHandler != null ? webRequest.downloadHandler.text : null;
+            }
+        }
+
+        private static bool IsLocalEndpoint(string baseUrl)
+        {
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri uri))
+                return false;
+
+            if (string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(uri.Host, "0.0.0.0", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return IPAddress.TryParse(uri.Host, out IPAddress address) && IPAddress.IsLoopback(address);
+        }
+
+        private static string BuildProviderCacheKey(ProviderConfig provider)
+        {
+            return $"{provider.backendType}|{provider.baseUrl}|{provider.apiKey}";
+        }
+
+        private static string BuildContextCacheKey(ProviderConfig provider, string modelId)
+        {
+            return BuildProviderCacheKey(provider) + "|" + (modelId ?? string.Empty).Trim();
+        }
+
+        private sealed class DetectedContextWindow
+        {
+            public int Limit;
+            public ContextWindowSource Source;
         }
     }
 }

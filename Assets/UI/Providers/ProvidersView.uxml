@@ -65,13 +65,18 @@
                     <ui:Label text="ID модели (вручную)" class="label" />
                     <ui:TextField name="edit-model" class="input input--mono" />
                 </ui:VisualElement>
+                <ui:VisualElement name="edit-context-field" class="field">
+                    <ui:Label name="edit-context-label" text="" class="label" />
+                    <ui:TextField name="edit-context-window" class="input input--mono" />
+                    <ui:Label name="edit-context-hint" text="" class="provider-context-hint" />
+                </ui:VisualElement>
                 <ui:VisualElement class="field__row">
                     <ui:VisualElement class="field field--half">
                         <ui:Label text="Температура" class="label" />
                         <ui:Slider name="edit-temperature" low-value="0" high-value="2" value="0.7" show-input-field="true" class="input slider-input" />
                     </ui:VisualElement>
                     <ui:VisualElement class="field field--half">
-                        <ui:Label text="Макс. токенов" class="label" />
+                        <ui:Label name="edit-maxtokens-label" text="" class="label" />
                         <ui:TextField name="edit-maxtokens" class="input input--mono" />
                     </ui:VisualElement>
                 </ui:VisualElement>

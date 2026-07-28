@@ -427,6 +427,17 @@
     white-space: normal;
 }
 
+.provider-context-hint {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 5px;
+    white-space: normal;
+}
+
+.provider-context-hint--error {
+    color: var(--danger);
+}
+
 /* ============================================================
    Узкое окно: компактнее паддинги и плотнее строки провайдеров.
    meta «Источник» прячем — освобождаем место под имя/URL/действия,
