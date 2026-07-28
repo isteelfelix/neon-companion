@@ -7,12 +7,12 @@
     flex-grow: 1;
     flex-direction: column;
     overflow: hidden;
-    padding: 28px 36px 0 36px;
+    padding: 16px 20px 0 20px;
 }
 
 .settings-scroll {
     flex-grow: 1;
-    padding-bottom: 36px;
+    padding-bottom: 20px;
 }
 
 /* ---- card ---- */
@@ -20,27 +20,27 @@
     background-color: var(--bg-1);
     border-width: 1px;
     border-color: var(--line-1);
-    border-radius: 14px;
-    padding: 16px 20px 8px 20px;
-    margin-bottom: 14px;
+    border-radius: 10px;
+    padding: 10px 14px 4px 14px;
+    margin-bottom: 10px;
 }
 
 .settings-card__head {
     flex-direction: row;
     align-items: center;
-    padding-bottom: 12px;
+    padding-bottom: 8px;
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 .settings-card__icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 10px;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
     -unity-background-image-tint-color: var(--accent);
 }
 .settings-card__title {
-    font-size: 14px;
+    font-size: 13px;
     -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
     color: var(--text-0);
 }
@@ -50,7 +50,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 0;
+    padding: 7px 0;
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
 }
@@ -58,16 +58,16 @@
     flex-grow: 1;
     flex-shrink: 1;
     flex-direction: column;
-    margin-right: 16px;
+    margin-right: 12px;
 }
 .settings-row__name {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-0);
     -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
     margin-bottom: 3px;
 }
 .settings-row__sub {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-3);
     white-space: normal;
 }
@@ -80,7 +80,7 @@
     color: var(--text-2);
 }
 .settings-row--compact {
-    padding: 6px 0;
+    padding: 4px 0;
 }
 .settings-row--danger .settings-row__name {
     color: var(--danger);

@@ -6,7 +6,7 @@
     flex-grow: 1;
     flex-direction: column;
     overflow: hidden;
-    padding: 28px 36px 0 36px;
+    padding: 16px 20px 0 20px;
 }
 
 .themes-scroll {
@@ -18,17 +18,17 @@
     background-color: var(--bg-1);
     border-width: 1px;
     border-color: var(--line-1);
-    border-radius: 14px;
-    padding: 18px 20px;
-    margin-bottom: 14px;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
 }
 
 .themes-card--hero {
-    padding: 22px;
+    padding: 14px;
 }
 
 .themes-card--notes {
-    padding-bottom: 20px;
+    padding-bottom: 14px;
 }
 
 .themes-card__head {
@@ -275,7 +275,7 @@
    не сжимались и не наезжали (сегмент «Круг/Квадрат/…», превью-кружок).
    ============================================================ */
 .app--compact .themes-page {
-    padding: 22px 20px 0 20px;
+    padding: 12px 14px 0 14px;
 }
 
 .app--compact .themes-hero {
@@ -285,7 +285,7 @@
 
 .app--compact .themes-hero__copy {
     margin-right: 0;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
 }
 
 .app--compact .themes-row {

@@ -1,28 +1,28 @@
 /* Terminal panel styles — runtime-loaded by ChatView.uxml. */
 
 .right-panel-tabs {
-    height: 44px;
+    height: 32px;
     flex-direction: row;
     align-items: center;
     flex-shrink: 0;
-    padding: 5px;
+    padding: 3px;
     background-color: var(--bg-1);
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
 }
 
 .right-panel-tab {
-    height: 32px;
+    height: 24px;
     flex-grow: 1;
     flex-basis: 0;
     padding: 0;
     margin: 0 2px;
     border-width: 1px;
     border-color: rgba(0, 0, 0, 0);
-    border-radius: var(--r-md);
+    border-radius: var(--r-sm);
     background-color: rgba(0, 0, 0, 0);
     color: var(--text-3);
-    font-size: 12px;
+    font-size: 11px;
     -unity-font-style: normal;
     -unity-text-align: middle-center;
     transition-property: background-color, border-color, color;
@@ -53,11 +53,11 @@
 }
 
 .terminal-tabs {
-    height: 40px;
+    height: 32px;
     flex-direction: row;
     align-items: center;
     flex-shrink: 0;
-    padding: 5px 6px;
+    padding: 3px 4px;
     background-color: var(--bg-1);
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
@@ -66,19 +66,19 @@
 .terminal-tabs__scroll {
     flex-grow: 1;
     min-width: 0;
-    height: 28px;
+    height: 24px;
     flex-shrink: 1;
 }
 
 .terminal-tabs__list {
-    height: 28px;
+    height: 24px;
     flex-direction: row;
     align-items: center;
 }
 
 .terminal-tabs__add {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     flex-shrink: 0;
     margin-left: 4px;
     padding: 0;
@@ -99,10 +99,10 @@
 }
 
 .terminal-tab {
-    width: 54px;
-    height: 28px;
-    min-width: 54px;
-    max-width: 54px;
+    width: 50px;
+    height: 24px;
+    min-width: 50px;
+    max-width: 50px;
     flex-grow: 0;
     flex-shrink: 0;
     flex-direction: row;
@@ -183,7 +183,7 @@
 }
 
 .terminal-screen {
-    padding: 8px 6px;
+    padding: 6px 6px;
     background-color: var(--bg-2);
 }
 
@@ -207,7 +207,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 10px;
+    padding: 5px 8px;
     flex-shrink: 0;
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);

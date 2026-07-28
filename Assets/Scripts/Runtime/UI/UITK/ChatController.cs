@@ -1669,17 +1669,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             picker.style.minWidth = 280f;
             picker.style.maxWidth = 360f;
             picker.style.maxHeight = 420f;
-            picker.style.paddingTop = 8f;
-            picker.style.paddingBottom = 8f;
-            picker.style.paddingLeft = 8f;
-            picker.style.paddingRight = 8f;
+            picker.style.paddingTop = 6f;
+            picker.style.paddingBottom = 6f;
+            picker.style.paddingLeft = 6f;
+            picker.style.paddingRight = 6f;
 
             var headerLabel = new Label(LocalizationExtensions.Get("chat.selection.pick_session", "Pick a chat to forward to"));
             headerLabel.AddToClassList("session-picker__header");
             headerLabel.style.color = new Color(0.604f, 0.635f, 0.702f, 1f); // --text-2
-            headerLabel.style.fontSize = 13f;
-            headerLabel.style.paddingLeft = 6f;
-            headerLabel.style.paddingBottom = 8f;
+            headerLabel.style.fontSize = 12f;
+            headerLabel.style.paddingLeft = 5f;
+            headerLabel.style.paddingBottom = 6f;
             picker.Add(headerLabel);
 
             var listScroll = new ScrollView();
@@ -1696,10 +1696,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 item.AddToClassList("session-picker__item");
                 item.style.flexDirection = FlexDirection.Row;
                 item.style.alignItems = Align.Center;
-                item.style.paddingTop = 8f;
-                item.style.paddingBottom = 8f;
-                item.style.paddingLeft = 10f;
-                item.style.paddingRight = 10f;
+                item.style.paddingTop = 5f;
+                item.style.paddingBottom = 5f;
+                item.style.paddingLeft = 8f;
+                item.style.paddingRight = 8f;
                 item.style.borderTopLeftRadius = 6f;
                 item.style.borderTopRightRadius = 6f;
                 item.style.borderBottomLeftRadius = 6f;
@@ -1710,7 +1710,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 titleLabel.AddToClassList("session-picker__title");
                 titleLabel.style.flexGrow = 1f;
                 titleLabel.style.color = new Color(0.847f, 0.863f, 0.902f, 1f); // --text-1
-                titleLabel.style.fontSize = 13f;
+                titleLabel.style.fontSize = 12f;
 
                 var timeLabel = new Label(FormatSessionTimestamp(s.updatedAtUnix));
                 timeLabel.AddToClassList("session-picker__time");

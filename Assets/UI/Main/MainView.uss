@@ -12,9 +12,10 @@
     -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Regular.ttf");
 }
 
+/* left must track .rail's width — the backdrop starts where the rail ends. */
 .app__atmo {
     position: absolute;
-    left: 232px;
+    left: 212px;
     top: 0;
     right: 0;
     bottom: 0;
@@ -68,41 +69,41 @@
 /* ============== Rail ============== */
 
 .rail {
-    width: 232px;
+    width: 212px;
     flex-shrink: 0;
     background-color: var(--bg-1);
     border-right-width: 1px;
     border-right-color: var(--line-1);
     flex-direction: column;
-    padding: 10px 12px;
+    padding: 6px 8px;
     overflow: hidden;
     min-height: 0;
 }
 
 .rail__brand {
-    height: 36px;
+    height: 28px;
     flex-shrink: 0;
     flex-direction: row;
     align-items: center;
-    padding: 0 10px 8px;
+    padding: 0 4px 6px;
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .brand__mark {
-    width: 26px;
-    height: 26px;
+    width: 20px;
+    height: 20px;
     flex-shrink: 0;
-    border-radius: 8px;
+    border-radius: 6px;
     background-image: url("project://database/Assets/UI/Branding/app-icon-1024.png");
     -unity-background-scale-mode: stretch-to-fill;
-    margin-right: 10px;
+    margin-right: 8px;
 }
 
 .brand__name {
     color: var(--text-0);
-    font-size: 15px;
+    font-size: 13px;
     -unity-font-style: bold;
     flex-grow: 1;
     min-width: 0;
@@ -116,17 +117,17 @@
     background-color: var(--bg-3);
     border-width: 1px;
     border-color: var(--line-1);
-    border-radius: 6px;
-    padding: 2px 6px;
-    font-size: 10px;
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 9px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     flex-shrink: 0;
 }
 
 .nav__group {
-    padding: 2px 10px 2px;
+    padding: 6px 6px 2px;
     color: var(--text-4);
-    font-size: 10px;
+    font-size: 9px;
     letter-spacing: 1px;
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     -unity-font-style: bold;
@@ -134,16 +135,21 @@
 }
 
 .nav__item {
-    height: 30px;
+    height: 26px;
     flex-shrink: 0;
     flex-direction: row;
     align-items: center;
-    padding: 6px 10px;
-    border-radius: 10px;
+    padding: 4px 6px;
+    border-radius: 6px;
     border-width: 1px;
     border-color: rgba(0, 0, 0, 0);
     color: var(--text-2);
-    margin-bottom: 2px;
+    /* Explicit on all four sides: Unity's default Button margin would otherwise
+       reintroduce the gap the 1px rhythm is meant to remove. */
+    margin-top: 0;
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 1px;
     background-color: rgba(0, 0, 0, 0);
     /* Button reset */
     -unity-font-style: normal;
@@ -159,9 +165,9 @@
 }
 
 .nav__icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 10px;
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
 }
 
 .nav__label {
@@ -192,21 +198,21 @@
 /* Height follows content: in Hermes mode the model line moves into the profile caption,
    and a fixed 38px would keep reserving room for a line that is no longer there. */
 .rail__footer {
-    min-height: 20px;
+    min-height: 18px;
     flex-shrink: 0;
     border-top-width: 1px;
     border-top-color: var(--line-1);
-    padding-top: 6px;
+    padding-top: 5px;
     flex-direction: row;
     align-items: center;
 }
 
 .dot--status {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 999px;
     background-color: var(--ok);
-    margin-right: 10px;
+    margin-right: 8px;
 }
 
 .rail__footer-text {
@@ -216,7 +222,7 @@
 }
 
 .rail__footer-provider {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-1);
     overflow: hidden;
     white-space: nowrap;
@@ -245,7 +251,7 @@
 }
 
 .rail__profile-strip {
-    height: 26px;
+    height: 22px;
     flex-shrink: 0;
 }
 
@@ -254,11 +260,11 @@
 }
 
 .rail__profile-chip {
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     /* Never squeeze: overflow is what the drag-scroll exists for. */
     flex-shrink: 0;
-    margin-right: 5px;
+    margin-right: 4px;
     border-radius: var(--r-md);
     /* Border width is constant so the active ring cannot shift the glyph. */
     border-width: 2px;
@@ -357,10 +363,10 @@
 }
 
 .topbar {
-    height: 56px;
+    height: 40px;
     flex-direction: row;
     align-items: center;
-    padding: 0 22px;
+    padding: 0 12px;
     border-bottom-width: 1px;
     border-bottom-color: var(--line-1);
     background-color: var(--bg-1);
@@ -376,7 +382,7 @@
 }
 
 .topbar__title {
-    font-size: 14px;
+    font-size: 13px;
     -unity-font-style: bold;
     color: var(--text-0);
     flex-shrink: 1;
@@ -386,7 +392,7 @@
 }
 
 .topbar__subtitle {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-3);
     -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Regular.ttf");
     flex-shrink: 1;
@@ -396,16 +402,16 @@
 }
 
 .topbar__model-picker {
-    margin-left: 12px;
-    max-width: 200px;
+    margin-left: 8px;
+    max-width: 180px;
 }
 
 .topbar__sep {
     width: 1px;
-    height: 18px;
+    height: 14px;
     background-color: var(--line-2);
-    margin-left: 12px;
-    margin-right: 12px;
+    margin-left: 8px;
+    margin-right: 8px;
 }
 
 .topbar__right {
@@ -415,16 +421,16 @@
 }
 
 .topbar__right > Button {
-    margin-left: 8px;
+    margin-left: 4px;
 }
 
 .iconbtn {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    min-height: 30px;
-    padding: 7px;
-    border-radius: 10px;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 6px;
+    border-radius: 7px;
     border-width: 1px;
     border-color: rgba(0, 0, 0, 0);
     background-color: rgba(0, 0, 0, 0);
@@ -466,10 +472,10 @@
 }
 
 .page__head {
-    min-height: 64px;
+    min-height: 34px;
     flex-direction: row;
     align-items: flex-end;
-    margin-bottom: 28px;
+    margin-bottom: 14px;
 }
 
 .page__head-copy {
@@ -478,14 +484,14 @@
 }
 
 .page__title {
-    font-size: 24px;
+    font-size: 18px;
     -unity-font-style: bold;
     color: var(--text-0);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .page__subtitle {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-3);
     white-space: normal;
 }
@@ -496,7 +502,7 @@
 }
 
 .page__actions > Button {
-    margin-left: 8px;
+    margin-left: 6px;
 }
 
 /* ---- Rail sessions ---- */
@@ -511,13 +517,13 @@
 .rail__sessions-head {
     flex-direction: row;
     align-items: center;
-    padding: 3px 10px 2px;
+    padding: 2px 4px 2px 6px;
     flex-shrink: 0;
 }
 
 .rail__sessions-label {
     flex-grow: 1;
-    font-size: 10px;
+    font-size: 9px;
     color: var(--text-4);
     letter-spacing: 1px;
     -unity-font-style: bold;
@@ -536,15 +542,15 @@
 .placeholder-page {
     align-items: flex-start;
     justify-content: flex-start;
-    padding: 28px 36px 36px;
+    padding: 16px 20px 20px;
 }
 
 /* ---- History panel ---- */
 
 .history-panel__state {
     color: var(--text-3);
-    font-size: 13px;
-    margin-bottom: 10px;
+    font-size: 12px;
+    margin-bottom: 8px;
 }
 
 .history-panel__state--error {
@@ -560,13 +566,13 @@
 .history__searchbar {
     flex-direction: row;
     align-items: center;
-    min-height: 34px;
+    min-height: 28px;
     border-width: 1px;
     border-color: var(--line-1);
     border-radius: var(--r-sm);
     background-color: var(--bg-1);
-    margin-bottom: 12px;
-    padding: 0 4px;
+    margin-bottom: 8px;
+    padding: 0 3px;
 }
 
 .history__searchbar-icon {
@@ -586,20 +592,20 @@
     border-width: 0;
     background-color: transparent;
     color: var(--text-1);
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .history__searchbar-clear {
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
 }
 
 .history__group {
     color: var(--text-4);
-    font-size: 10px;
+    font-size: 9px;
     letter-spacing: 0.8px;
     -unity-font-style: bold;
-    margin: 8px 8px 4px;
+    margin: 6px 6px 3px;
 }
 
 .history__item {
@@ -607,8 +613,8 @@
     border-width: 1px;
     border-color: transparent;
     background-color: transparent;
-    padding: 8px 10px;
-    margin-bottom: 4px;
+    padding: 5px 8px;
+    margin-bottom: 2px;
     min-width: 0;
     overflow: hidden;
 }
@@ -631,7 +637,7 @@
 
 .history__title {
     color: var(--text-0);
-    font-size: 13px;
+    font-size: 12px;
     -unity-font-style: bold;
     flex-grow: 1;
     min-width: 0;
@@ -643,9 +649,9 @@
 .history__provider {
     color: var(--accent-2);
     background-color: var(--accent-soft);
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 10px;
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 9px;
     -unity-font-style: bold;
     flex-shrink: 0;
     max-width: 48%;
@@ -656,17 +662,17 @@
 
 .history__meta {
     color: var(--text-3);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* Session delete button */
 .history__delete-btn {
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    min-height: 22px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
     padding: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     border-width: 1px;
     border-color: transparent;
     background-color: transparent;
@@ -718,23 +724,23 @@
     background-color: var(--bg-1);
     border-width: 1px;
     border-color: var(--line-2);
-    border-radius: 14px;
-    padding: 24px 28px;
-    min-width: 300px;
-    max-width: 380px;
+    border-radius: 10px;
+    padding: 16px 18px;
+    min-width: 260px;
+    max-width: 340px;
 }
 
 .quit-dialog__title {
-    font-size: 16px;
+    font-size: 14px;
     color: var(--text-0);
     -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-SemiBold.ttf");
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .quit-dialog__body {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-3);
-    margin-bottom: 22px;
+    margin-bottom: 14px;
     white-space: normal;
 }
 
@@ -769,17 +775,17 @@
 
 /* --- Compact (<1000px): declutter the topbar, free horizontal space --- */
 .app--compact .topbar {
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
 .app--compact .topbar__right > Button {
-    margin-left: 6px;
+    margin-left: 3px;
 }
 
 .app--compact .topbar__model-picker {
-    max-width: 150px;
-    margin-left: 8px;
+    max-width: 140px;
+    margin-left: 6px;
 }
 
 /* Ghost text buttons (Резюме / Export) drop out first — they overlap at
@@ -795,8 +801,8 @@
 }
 
 .app--narrow .topbar {
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
 }
 
 /* ============================================================
@@ -804,11 +810,11 @@
    ============================================================ */
 .rail__sessions-head .iconbtn,
 .history__searchbar-clear {
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    min-height: 22px;
-    padding: 5px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    padding: 4px;
 }
 
 /* Плитки сессий в рейле: одна строка-заголовок, плотный ритм (как в Claude Code). */
@@ -873,13 +879,22 @@
 .ff-phone .mobile-only  { display: flex; }
 .ff-phone .desktop-only { display: none; }
 
-/* ---- Touch targets (phone + tablet) ---- */
+/* ---- Touch targets (phone + tablet) ----
+   40px is the floor that still reads as tappable; the old 44px added a visible
+   band of dead space to every row on a phone-sized screen. Density elsewhere is
+   handled by padding, not by shrinking these below 40. */
 .ff-phone .iconbtn,
 .ff-phone .nav__item,
 .ff-phone .composer__send,
 .ff-tablet .iconbtn {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+/* Tablet keeps the desktop rail rows; only the icon buttons need the tap floor. */
+.ff-tablet .iconbtn {
+    min-width: 32px;
+    min-height: 32px;
 }
 
 /* ============================================================
@@ -905,10 +920,10 @@
     translate: 0 0;
 }
 
-/* Larger nav rows inside the drawer. */
+/* Larger nav rows inside the drawer — 40px is the tap floor, not a comfort margin. */
 .ff-phone .nav__item {
-    height: 46px;
-    padding: 8px 12px;
+    height: 40px;
+    padding: 6px 10px;
 }
 
 /* No drag-resize handles on phone (rail/avatar are overlays). */
@@ -933,8 +948,9 @@
 
 /* ---- Topbar density on phone ---- */
 .ff-phone .topbar {
-    padding-left: 12px;
-    padding-right: 12px;
+    height: 44px;
+    padding-left: 8px;
+    padding-right: 8px;
 }
 
 .ff-phone .topbar__subtitle,
@@ -972,23 +988,50 @@
 .ff-phone .page__head {
     flex-direction: column;
     align-items: stretch;
-    margin-bottom: 16px;
+    min-height: 0;
+    margin-bottom: 10px;
 }
 
 .ff-phone .page__actions {
     flex-wrap: wrap;
     justify-content: flex-start;
-    margin-top: 10px;
+    margin-top: 6px;
 }
 
 .ff-phone .page__actions > Button {
     margin-left: 0;
-    margin-right: 8px;
-    margin-bottom: 6px;
+    margin-right: 6px;
+    margin-bottom: 4px;
 }
 
 .ff-phone .page__title {
-    font-size: 20px;
+    font-size: 16px;
+}
+
+/* Page gutters: the desktop 16/20 inset costs ~10% of a phone's width for nothing.
+   Every page root is listed because each view owns its own padding declaration. */
+.ff-phone .placeholder-page,
+.ff-phone .providers-page,
+.ff-phone .avatars-page,
+.ff-phone .themes-page,
+.ff-phone .settings-page {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 10px;
+}
+
+.ff-phone .chat-main {
+    padding: 6px 8px 8px;
+}
+
+/* Keep the scrollbar-bleed trick in sync with the phone gutter above. */
+.ff-phone .transcript {
+    margin-right: -8px;
+    padding-right: 4px;
+}
+
+.ff-phone .transcript__row {
+    padding-right: 6px;
 }
 
 /* Dropdowns must never force horizontal overflow on a narrow screen. */
@@ -1006,9 +1049,9 @@
    Android / iOS — system inset breathing room (added to safe-area padding)
    ============================================================ */
 .platform-android .composer {
-    padding-bottom: 16px;
+    padding-bottom: 10px;
 }
 
 .platform-ios .composer {
-    padding-bottom: 22px;
+    padding-bottom: 14px;
 }

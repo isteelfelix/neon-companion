@@ -110,7 +110,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (evt.button != 0) return;
             _isRailResizing = true;
             _railResizeStartX = evt.position.x;
-            _railResizeStartWidth = _railElement?.resolvedStyle.width ?? 232f;
+            _railResizeStartWidth = _railElement?.resolvedStyle.width ?? 212f;
             _railResizeHandle.CapturePointer(evt.pointerId);
             _railResizeHandle?.AddToClassList("resize-handle--active");
             evt.StopPropagation();

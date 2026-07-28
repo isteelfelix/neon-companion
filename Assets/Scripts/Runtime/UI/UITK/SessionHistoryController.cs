@@ -836,25 +836,25 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Inline fallback styles (CSS may be template-scoped and unavailable here)
             item.style.flexDirection = FlexDirection.Row;
             item.style.alignItems = Align.Center;
-            item.style.paddingLeft = 12f;
-            item.style.paddingRight = 16f;
-            item.style.paddingTop = 6f;
-            item.style.paddingBottom = 6f;
+            item.style.paddingLeft = 9f;
+            item.style.paddingRight = 12f;
+            item.style.paddingTop = 4f;
+            item.style.paddingBottom = 4f;
             item.style.borderTopLeftRadius = 4f;
             item.style.borderTopRightRadius = 4f;
             item.style.borderBottomLeftRadius = 4f;
             item.style.borderBottomRightRadius = 4f;
-            item.style.minHeight = 28f;
+            item.style.minHeight = 24f;
 
             var iconLabel = new Label(icon);
             iconLabel.AddToClassList("message-context-menu__icon");
-            iconLabel.style.marginRight = 8f;
-            iconLabel.style.fontSize = 14f;
-            iconLabel.style.width = 18f;
+            iconLabel.style.marginRight = 6f;
+            iconLabel.style.fontSize = 13f;
+            iconLabel.style.width = 16f;
 
             var textLabel = new Label(labelText);
             textLabel.AddToClassList("message-context-menu__label");
-            textLabel.style.fontSize = 13f;
+            textLabel.style.fontSize = 12f;
             textLabel.style.color = new Color(0.847f, 0.863f, 0.902f, 1f); // --text-1
 
             item.Add(iconLabel);
