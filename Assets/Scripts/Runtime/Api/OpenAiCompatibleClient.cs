@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Api.Adapters;
 using NeonCompanion.Runtime.Api.Models;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -27,19 +28,28 @@ namespace NeonCompanion.Runtime.Api
                 throw new ArgumentNullException(nameof(request));
 
             string endpoint = BuildResponsesEndpoint(provider.baseUrl);
-            string payload = BuildResponsesPayloadJson(request, false);
-            using (UnityWebRequest webRequest = CreatePostRequest(endpoint, payload, provider.apiKey))
+            bool omitTemperature = RequiresTemperatureOmission(provider);
+            while (true)
             {
-                await SendAsync(webRequest, cancellationToken);
-                ThrowIfRequestFailed(webRequest, "API request failed");
+                string payload = BuildResponsesPayloadJson(request, false, omitTemperature);
+                using (UnityWebRequest webRequest = CreatePostRequest(endpoint, payload, provider.apiKey))
+                {
+                    await SendAsync(webRequest, cancellationToken);
+                    if (ShouldRetryWithoutTemperature(webRequest, omitTemperature))
+                    {
+                        omitTemperature = true;
+                        continue;
+                    }
+                    ThrowIfRequestFailed(webRequest, "API request failed");
 
-                AiChatResponse response = ParseResponsesResponse(webRequest.downloadHandler != null
-                    ? webRequest.downloadHandler.text
-                    : string.Empty);
-                EnsureCompletedResponse(response, "Response request failed");
-                if (string.IsNullOrWhiteSpace(response.model))
-                    response.model = request.model ?? string.Empty;
-                return response;
+                    AiChatResponse response = ParseResponsesResponse(webRequest.downloadHandler != null
+                        ? webRequest.downloadHandler.text
+                        : string.Empty);
+                    EnsureCompletedResponse(response, "Response request failed");
+                    if (string.IsNullOrWhiteSpace(response.model))
+                        response.model = request.model ?? string.Empty;
+                    return response;
+                }
             }
         }
 
@@ -55,31 +65,45 @@ namespace NeonCompanion.Runtime.Api
                 throw new ArgumentNullException(nameof(request));
 
             string endpoint = BuildResponsesEndpoint(provider.baseUrl);
-            string payload = BuildResponsesPayloadJson(request, true);
-
-            using (UnityWebRequest webRequest = CreatePostRequest(endpoint, payload, provider.apiKey))
+            bool omitTemperature = RequiresTemperatureOmission(provider);
+            while (true)
             {
-                UnityWebRequestAsyncOperation operation = webRequest.SendWebRequest();
-                int consumedLength = 0;
-                ResponsesSseParser parser = new ResponsesSseParser();
-                ResponsesStreamReducer reducer = new ResponsesStreamReducer(onToken);
-
-                while (!operation.isDone)
+                string payload = BuildResponsesPayloadJson(request, true, omitTemperature);
+                using (UnityWebRequest webRequest = CreatePostRequest(endpoint, payload, provider.apiKey))
                 {
+                    bool emittedAnyToken = false;
+                    ResponsesStreamReducer reducer = new ResponsesStreamReducer(token =>
+                    {
+                        emittedAnyToken = true;
+                        if (onToken != null)
+                            onToken(token);
+                    });
+                    UnityWebRequestAsyncOperation operation = webRequest.SendWebRequest();
+                    int consumedLength = 0;
+                    ResponsesSseParser parser = new ResponsesSseParser();
+
+                    while (!operation.isDone)
+                    {
+                        ThrowIfCancelled(webRequest, cancellationToken);
+                        string allText = webRequest.downloadHandler != null ? webRequest.downloadHandler.text : string.Empty;
+                        ConsumeNewStreamText(allText, ref consumedLength, parser, reducer, false);
+                        await Task.Yield();
+                    }
+
                     ThrowIfCancelled(webRequest, cancellationToken);
-                    string allText = webRequest.downloadHandler != null ? webRequest.downloadHandler.text : string.Empty;
-                    ConsumeNewStreamText(allText, ref consumedLength, parser, reducer, false);
-                    await Task.Yield();
+                    string finalText = webRequest.downloadHandler != null ? webRequest.downloadHandler.text : string.Empty;
+                    ConsumeNewStreamText(finalText, ref consumedLength, parser, reducer, true);
+                    if (!emittedAnyToken && ShouldRetryWithoutTemperature(webRequest, omitTemperature))
+                    {
+                        omitTemperature = true;
+                        continue;
+                    }
+                    ThrowIfRequestFailed(webRequest, "Streaming request failed");
+
+                    AiChatResponse response = reducer.BuildResponse(request.model);
+                    EnsureCompletedResponse(response, "Streaming response failed");
+                    return response;
                 }
-
-                ThrowIfCancelled(webRequest, cancellationToken);
-                string finalText = webRequest.downloadHandler != null ? webRequest.downloadHandler.text : string.Empty;
-                ConsumeNewStreamText(finalText, ref consumedLength, parser, reducer, true);
-                ThrowIfRequestFailed(webRequest, "Streaming request failed");
-
-                AiChatResponse response = reducer.BuildResponse(request.model);
-                EnsureCompletedResponse(response, "Streaming response failed");
-                return response;
             }
         }
 
@@ -186,6 +210,45 @@ namespace NeonCompanion.Runtime.Api
             throw new ResponsesApiException(prefix + ": " + ParseErrorMessage(webRequest));
         }
 
+        private static bool RequiresTemperatureOmission(ProviderConfig provider)
+        {
+            IProviderAdapter adapter = ProviderAdapterFactory.Create(provider != null ? provider.backendType : null);
+            ProviderCapabilities capabilities = adapter.GetCapabilities();
+            return capabilities != null && capabilities.RequiresTemperatureOmission;
+        }
+
+        private static bool ShouldRetryWithoutTemperature(UnityWebRequest webRequest, bool temperatureOmitted)
+        {
+            if (temperatureOmitted || webRequest == null || webRequest.responseCode != 400)
+                return false;
+
+            string body = webRequest.downloadHandler != null ? webRequest.downloadHandler.text : null;
+            if (string.IsNullOrWhiteSpace(body))
+                return false;
+
+            try
+            {
+                ResponsesApiResponse response = JsonUtility.FromJson<ResponsesApiResponse>(body);
+                ResponsesApiError error = response != null ? response.error : null;
+                if (error == null ||
+                    !string.Equals(error.param, "temperature", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                bool unsupportedCode =
+                    string.Equals(error.code, "unsupported_parameter", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(error.code, "unsupported_value", StringComparison.OrdinalIgnoreCase);
+                bool unsupportedMessage = !string.IsNullOrWhiteSpace(error.message) &&
+                    error.message.IndexOf("unsupported", StringComparison.OrdinalIgnoreCase) >= 0;
+                return unsupportedCode || unsupportedMessage;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static string BuildResponsesEndpoint(string baseUrl)
         {
             return BuildApiRoot(baseUrl) + "/responses";
@@ -209,7 +272,10 @@ namespace NeonCompanion.Runtime.Api
             return root;
         }
 
-        private static string BuildResponsesPayloadJson(AiChatRequest request, bool stream)
+        private static string BuildResponsesPayloadJson(
+            AiChatRequest request,
+            bool stream,
+            bool omitTemperature)
         {
             List<AiChatMessage> messages = request.messages ?? new List<AiChatMessage>();
             StringBuilder sb = new StringBuilder(1024);
@@ -232,7 +298,8 @@ namespace NeonCompanion.Runtime.Api
             AppendToolsJson(sb, request.tools);
 
             sb.Append(",\"max_output_tokens\":").Append(Math.Max(1, request.maxTokens));
-            sb.Append(",\"temperature\":").Append(request.temperature.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+            if (!omitTemperature)
+                sb.Append(",\"temperature\":").Append(request.temperature.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
             if (stream)
                 sb.Append(",\"stream\":true");
             sb.Append('}');
