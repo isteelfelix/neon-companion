@@ -582,6 +582,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                     ? BackendMode.Hermes
                     : BackendMode.OpenAI);
 
+                if (_editingProviderSource == null)
+                    draft.isEnabled = false;
+
                 await app.ProviderManager.SaveProviderAsync(draft);
 
                 bool endpointChanged = _editingProviderSource == null ||
