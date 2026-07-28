@@ -733,6 +733,33 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 var statsFooter = new VisualElement();
                 statsFooter.AddToClassList("transcript__stats");
+
+                // The footer is always present now: it is what the hover action buttons sit in,
+                // and hiding it on stat-less messages (anything restored from history without a
+                // token count) made those buttons land on top of the last line of text instead.
+                // A bare empty band would read as a mistake, so it carries a centred ornament —
+                // a quiet accent thread that animates on hover. Purely USS transitions, no
+                // scheduler, so a long transcript pays nothing for it.
+                var ornament = new VisualElement();
+                ornament.AddToClassList("transcript__stats-ornament");
+                ornament.pickingMode = PickingMode.Ignore;
+
+                var ornamentDotLeft = new VisualElement();
+                ornamentDotLeft.AddToClassList("transcript__stats-dot");
+                ornamentDotLeft.AddToClassList("transcript__stats-dot--l");
+
+                var ornamentThread = new VisualElement();
+                ornamentThread.AddToClassList("transcript__stats-thread");
+
+                var ornamentDotRight = new VisualElement();
+                ornamentDotRight.AddToClassList("transcript__stats-dot");
+                ornamentDotRight.AddToClassList("transcript__stats-dot--r");
+
+                ornament.Add(ornamentDotLeft);
+                ornament.Add(ornamentThread);
+                ornament.Add(ornamentDotRight);
+                statsFooter.Add(ornament);
+
                 var statsLabel = new Label();
                 statsLabel.AddToClassList("transcript__stats-label");
                 statsFooter.Add(statsLabel);
@@ -740,7 +767,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
                 if (message.tokenCount > 0 || message.responseTimeSeconds > 0)
                 {
-                    statsFooter.style.display = DisplayStyle.Flex;
                     double t = message.responseTimeSeconds > 0 ? message.responseTimeSeconds : 0.0;
                     string template = LocalizationExtensions.Get("chat.stats.footer", "~{0} tok · {1:F1}s");
                     if (message.tokenCount > 0)
@@ -752,10 +778,6 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     {
                         statsLabel.text = string.Format("{0:F1}s", t);
                     }
-                }
-                else
-                {
-                    statsFooter.style.display = DisplayStyle.None;
                 }
             }
 

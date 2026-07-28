@@ -486,7 +486,9 @@
 
 /* ---- Streaming stats footer (tokens + elapsed time, inside assistant bubble) ---- */
 
+/* position: relative anchors the centred ornament below. */
 .transcript__stats {
+    position: relative;
     flex-direction: row;
     justify-content: flex-end;
     align-items: center;
@@ -494,6 +496,66 @@
     padding-top: 3px;
     border-top-width: 1px;
     border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ---- Footer ornament ----
+   The footer is always present (it hosts the hover action buttons), so on a
+   message without stats it would otherwise be an empty band. This fills it: a
+   quiet accent thread with two satellites, centred by an overlay that spans the
+   whole footer so the mark stays centred whatever the stats text is doing.
+   Everything animates through USS transitions on the bubble's :hover — no
+   scheduler, so a thousand-message transcript costs nothing while idle. */
+.transcript__stats-ornament {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.transcript__stats-thread {
+    width: 26px;
+    height: 1px;
+    background-color: var(--accent);
+    opacity: 0.20;
+    transition-property: scale, opacity;
+    transition-duration: 0.45s;
+    transition-timing-function: ease-out;
+}
+
+.transcript__stats-dot {
+    width: 2px;
+    height: 2px;
+    border-radius: 999px;
+    background-color: var(--accent-2);
+    opacity: 0.18;
+    margin: 0 5px;
+    transition-property: translate, scale, opacity;
+    transition-duration: 0.45s;
+    transition-delay: 0.06s;
+    transition-timing-function: ease-out;
+}
+
+/* Hover: the thread stretches out of the centre, the satellites drift apart
+   slightly behind it (transition-delay above) and brighten. */
+.transcript__bubble--assistant:hover .transcript__stats-thread {
+    scale: 2.4 1;
+    opacity: 0.62;
+}
+
+.transcript__bubble--assistant:hover .transcript__stats-dot--l {
+    translate: -22px 0;
+    scale: 1.6 1.6;
+    opacity: 0.5;
+}
+
+.transcript__bubble--assistant:hover .transcript__stats-dot--r {
+    translate: 22px 0;
+    scale: 1.6 1.6;
+    opacity: 0.5;
 }
 
 .transcript__stats-label {
@@ -2108,6 +2170,13 @@
 /* A 300px floor overflows a small phone once the gutters are subtracted. */
 .ff-phone .transcript__bubble--markdown {
     min-width: 0;
+}
+
+/* Touch has no hover, so the ornament would just be a static smudge — and the
+   footer there is not load-bearing anyway, since the action buttons sit in the
+   flow under the bubble rather than on top of it. */
+.ff-phone .transcript__stats-ornament {
+    display: none;
 }
 
 /* Bubble actions (copy / regenerate / listen): on desktop they are a hover-only
