@@ -28,6 +28,8 @@ FILES=(
   "Assets/Scripts/Runtime/Data/Models/ProviderConfig.cs"
   "Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs"
   "Assets/Scripts/Runtime/Chat/ChatService.cs"
+  "Assets/Scripts/Runtime/Voice/HermesVoiceService.cs"
+  "Assets/Scripts/Runtime/Voice/VoiceServiceFactory.cs"
 )
 
 echo "== [1] Files exist =="
@@ -71,6 +73,23 @@ grep -q 'token=' Assets/Scripts/Runtime/Api/Hermes/HermesSessionManager.cs \
   && pass "?token= path kept" || fail "?token= path removed"
 grep -q 'Authorization", "Bearer ' Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.cs \
   && pass "Bearer token path kept" || fail "Bearer token path removed"
+
+echo "== [4a] Voice REST shares Hermes authentication =="
+VOICE="Assets/Scripts/Runtime/Voice/HermesVoiceService.cs"
+FACTORY="Assets/Scripts/Runtime/Voice/VoiceServiceFactory.cs"
+grep -q 'RemoteAuthProvider' "$FACTORY" \
+  && grep -q 'HermesRemoteAuth remoteAuth' "$VOICE" \
+  && pass "shared HermesRemoteAuth reaches voice service" || fail "voice service missing shared HermesRemoteAuth"
+grep -q 'SetRequestHeader("Cookie"' "$VOICE" \
+  && pass "voice OAuth requests set Cookie explicitly" || fail "voice OAuth Cookie header missing"
+grep -q 'AdoptRefreshedCookies' "$VOICE" \
+  && pass "voice adopts rotated Set-Cookie" || fail "voice cookie rotation missing"
+grep -q 'MarkReauthRequired' "$VOICE" \
+  && pass "voice 401/403 marks reauth required" || fail "voice reauth transition missing"
+grep -q 'HandleOAuthAuthFailure(request, "STT")' "$VOICE" \
+  && pass "STT auth failure exits before retry" || fail "STT auth failure still retries"
+grep -q 'Authorization", "Bearer ' "$VOICE" \
+  && pass "voice Bearer token path kept" || fail "voice Bearer token path removed"
 
 echo "== [4b] Desktop-style gateway UI (primary path = URL + Connect) =="
 # Positive: required wiring

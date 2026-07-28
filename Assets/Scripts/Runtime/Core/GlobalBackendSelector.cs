@@ -131,6 +131,17 @@ namespace NeonCompanion.Runtime.Core
         }
 
         /// <summary>
+        /// Shared live OAuth session for direct Hermes clients that cannot use
+        /// <see cref="HermesRestClient"/> (for example streaming audio upload/playback).
+        /// Consumers must apply <see cref="HermesRemoteAuth.CookieHeader"/> on every request,
+        /// adopt refreshed Set-Cookie headers, and mark rejected sessions for reauthentication.
+        /// </summary>
+        public HermesRemoteAuth RemoteAuthProvider
+        {
+            get { return _remoteAuth; }
+        }
+
+        /// <summary>
         /// Stable reason key for the last remote-auth failure ("no_cookie" / "expired" /
         /// "invalid_credentials"), or null. The UI keys reauth messaging off this.
         /// </summary>

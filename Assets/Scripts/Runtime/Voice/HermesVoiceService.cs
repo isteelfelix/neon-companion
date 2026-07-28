@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Core;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -11,6 +12,7 @@ namespace NeonCompanion.Runtime.Voice
     {
         private string _hermesRestUrl;
         private string _apiKey;
+        private HermesRemoteAuth _remoteAuth;
         private string _inputDeviceName;
 
         private AudioSource _audioSource;
@@ -53,8 +55,19 @@ namespace NeonCompanion.Runtime.Voice
 
         public void Initialize(string hermesRestUrl, string apiKey, string inputDeviceName, float outputVolume)
         {
+            Initialize(hermesRestUrl, apiKey, null, inputDeviceName, outputVolume);
+        }
+
+        public void Initialize(
+            string hermesRestUrl,
+            string apiKey,
+            HermesRemoteAuth remoteAuth,
+            string inputDeviceName,
+            float outputVolume)
+        {
             _hermesRestUrl   = hermesRestUrl != null ? hermesRestUrl.TrimEnd('/') : "";
             _apiKey          = apiKey ?? "";
+            _remoteAuth      = remoteAuth;
             _inputDeviceName = inputDeviceName;
 
             if (_audioSource == null)
@@ -380,18 +393,21 @@ namespace NeonCompanion.Runtime.Voice
                     request.downloadHandler           = new DownloadHandlerBuffer();
                     request.timeout                   = 30;
                     request.SetRequestHeader("Content-Type", "application/json");
-                    if (!string.IsNullOrEmpty(_apiKey))
-                        request.SetRequestHeader("Authorization", "Bearer " + _apiKey);
+                    ApplyAuthentication(request);
                     yield return request.SendWebRequest();
 
                     if (request.result == UnityWebRequest.Result.Success)
                     {
+                        AdoptRefreshedOAuthCookies(request);
                         HermesTranscribeResponse resp = JsonUtility.FromJson<HermesTranscribeResponse>(request.downloadHandler.text);
                         string text = (resp != null && resp.ok && resp.transcript != null) ? resp.transcript : "";
                         OnSpeechRecognized?.Invoke(text);
                         succeeded = true;
                         break;
                     }
+
+                    if (HandleOAuthAuthFailure(request, "STT"))
+                        break;
 
                     if (attempt == 0)
                     {
@@ -424,14 +440,18 @@ namespace NeonCompanion.Runtime.Voice
                 request.downloadHandler           = new DownloadHandlerBuffer();
                 request.timeout                   = 60;
                 request.SetRequestHeader("Content-Type", "application/json");
-                if (!string.IsNullOrEmpty(_apiKey))
-                    request.SetRequestHeader("Authorization", "Bearer " + _apiKey);
+                ApplyAuthentication(request);
                 yield return request.SendWebRequest();
 
                 if (request.result == UnityWebRequest.Result.Success)
+                {
+                    AdoptRefreshedOAuthCookies(request);
                     resp = JsonUtility.FromJson<HermesSpeakResponse>(request.downloadHandler.text);
-                else
+                }
+                else if (!HandleOAuthAuthFailure(request, "TTS"))
+                {
                     NeonLogger.LogWarning("HermesVoiceService TTS error: " + request.error);
+                }
             }
 
             if (resp != null && resp.ok && !string.IsNullOrEmpty(resp.data_url))
@@ -510,6 +530,48 @@ namespace NeonCompanion.Runtime.Voice
             _isSpeaking        = false;
             _playbackCoroutine = null;
             OnPlaybackComplete?.Invoke();
+        }
+
+        private void ApplyAuthentication(UnityWebRequest request)
+        {
+            if (request == null)
+                return;
+
+            // Match HermesRestClient exactly: OAuth mode uses the current shared session cookie
+            // and never falls through to a stale Bearer token.
+            if (_remoteAuth != null)
+            {
+                string cookie = _remoteAuth.CookieHeader;
+                if (!string.IsNullOrEmpty(cookie))
+                    request.SetRequestHeader("Cookie", cookie);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(_apiKey))
+                request.SetRequestHeader("Authorization", "Bearer " + _apiKey);
+        }
+
+        private void AdoptRefreshedOAuthCookies(UnityWebRequest request)
+        {
+            if (_remoteAuth == null || request == null)
+                return;
+
+            _remoteAuth.AdoptRefreshedCookies(request.GetResponseHeader("Set-Cookie"));
+        }
+
+        private bool HandleOAuthAuthFailure(UnityWebRequest request, string operation)
+        {
+            if (_remoteAuth == null || request == null ||
+                (request.responseCode != 401 && request.responseCode != 403))
+            {
+                return false;
+            }
+
+            _remoteAuth.MarkReauthRequired("expired");
+            NeonLogger.LogWarning(
+                "HermesVoiceService " + operation +
+                " authentication rejected; Hermes sign-in is required.");
+            return true;
         }
 
         // ============================================================

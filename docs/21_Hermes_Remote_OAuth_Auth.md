@@ -77,6 +77,7 @@ Selection is **automatic** from the probe. Stored as `ProviderConfig.authMode` (
 | Cookie session, password login, ws-ticket, probe | `Assets/Scripts/Runtime/Api/Hermes/HermesRemoteAuth.cs` |
 | **Automatic browser OAuth (CDP cookie capture + optional native handoff)** | `Assets/Scripts/Runtime/Api/Hermes/HermesBrowserOAuthLogin.cs` |
 | REST Cookie in OAuth mode; 401 → reauth | `Assets/Scripts/Runtime/Api/Hermes/HermesRestClient.cs` |
+| TTS/STT Cookie + rotation in OAuth mode; Bearer fallback in token mode | `Assets/Scripts/Runtime/Voice/HermesVoiceService.cs`, `VoiceServiceFactory.cs` |
 | WS `?ticket=` (token path unchanged) | `Assets/Scripts/Runtime/Api/Hermes/HermesSessionManager.cs` |
 | Connect, password login, **browser login**, clear session | `Assets/Scripts/Runtime/Core/GlobalBackendSelector.cs` |
 | Desktop-style UI: Gateway URL + Connect / status / Advanced | `Assets/Scripts/Runtime/UI/UITK/ProvidersController.cs` |

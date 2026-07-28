@@ -1,4 +1,6 @@
+using NeonCompanion.Runtime.Api.Hermes;
 using NeonCompanion.Runtime.Chat;
+using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
 
@@ -41,11 +43,20 @@ namespace NeonCompanion.Runtime.Voice
             string apiKey        = provider != null ? provider.apiKey ?? "" : "";
             string inputDevice   = settings != null ? settings.inputDeviceName : "";
             float outputVolume   = settings != null ? settings.outputVolume : 0.8f;
+            HermesRemoteAuth remoteAuth = null;
+
+            bool isOAuth = provider != null &&
+                string.Equals(provider.authMode, "oauth", System.StringComparison.OrdinalIgnoreCase);
+            GlobalBackendSelector selector = GlobalBackendSelector.Instance;
+            // Match GlobalBackendSelector.ConnectHermes: a restored live session outranks an
+            // authMode flag that may be absent in an older provider record.
+            if (selector != null && (isOAuth || selector.HasRemoteSession))
+                remoteAuth = selector.RemoteAuthProvider;
 
             GameObject go = new GameObject("HermesVoiceService");
             Object.DontDestroyOnLoad(go);
             HermesVoiceService service = go.AddComponent<HermesVoiceService>();
-            service.Initialize(hermesRestUrl, apiKey, inputDevice, outputVolume);
+            service.Initialize(hermesRestUrl, apiKey, remoteAuth, inputDevice, outputVolume);
             return service;
         }
 

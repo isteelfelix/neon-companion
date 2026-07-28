@@ -200,9 +200,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (provider == null || settings == null)
                 return "";
             return (provider.id ?? "") + "|" + (provider.baseUrl ?? "") + "|"
+                + (provider.apiKey ?? "").GetHashCode().ToString() + "|"
+                + (provider.authMode ?? "") + "|"
                 + (provider.ttsVoice ?? "") + "|" + (provider.ttsModel ?? "") + "|"
                 + provider.ttsSpeed.ToString() + "|" + (provider.sttLanguage ?? "") + "|"
-                + (settings.inputDeviceName ?? "") + "|" + settings.outputVolume.ToString();
+                + (settings.hermesRestUrl ?? "") + "|" + (settings.inputDeviceName ?? "") + "|"
+                + settings.outputVolume.ToString();
         }
 
         private void ReinitializeVoiceService(ProviderConfig provider, AppSettings settings, ChatService chat)
