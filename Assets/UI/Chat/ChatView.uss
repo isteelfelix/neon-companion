@@ -328,10 +328,13 @@
 .transcript__row--system    { justify-content: flex-start; }
 .transcript__row--assistant { align-items: flex-end; }
 
+/* Width follows the content: a short answer must not stretch into a full-width
+   band. max-width is the gutter against the opposite edge of the column — 90%
+   leaves the assistant bubble ~10% clear of the right side. */
 .transcript__bubble {
     position: relative;
-    width: 72%;
-    max-width: 86%;
+    width: auto;
+    max-width: 90%;
     min-width: 120px;
     flex-shrink: 0;
     padding: 6px 10px;
@@ -342,23 +345,23 @@
 }
 
 .transcript__bubble--markdown {
-    width: 86%;
-    max-width: 92%;
+    width: auto;
+    max-width: 90%;
     min-width: 300px;
     padding: 7px 10px 6px 10px;
 }
 
 .transcript__bubble--user {
     width: auto;
-    max-width: 78%;
+    max-width: 90%;
     min-width: 0;
     background-color: var(--accent-soft);
     border-color: rgba(124, 122, 237, 0.38);
 }
 
 .transcript__bubble--user.transcript__bubble--markdown {
-    width: 86%;
-    max-width: 92%;
+    width: auto;
+    max-width: 90%;
 }
 
 .transcript__bubble--system {
@@ -368,21 +371,25 @@
 
 /* ---- Bubble hover actions (copy/refresh/listen) ---- */
 
+/* Hover toolbar, parked in the bubble's bottom-left corner — the stats footer
+   is right-aligned, so that half of the footer band is free. Absolute, so it
+   costs no layout: the bubble keeps its content width and the row needs no
+   gutter (it used to sit outside the bubble at left:100%, which made every
+   assistant row reserve a permanent strip for a hover-only affordance).
+   Button height below is matched to the footer band so it sits inside it. */
 .transcript__bubble-actions {
     position: absolute;
-    left: 100%;
-    top: 0;
-    flex-direction: column;
-    padding-left: 4px;
+    left: 10px;
+    bottom: 3px;
+    flex-direction: row;
     flex-shrink: 0;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.15s ease;
 }
 
-/* Reveal only when hovering the bubble itself (or the buttons), not the empty
-   space beside the bubble. padding-left bridges the gap so moving onto the
-   buttons keeps them visible. */
+/* Reveal only when hovering the bubble itself (or the buttons). While hidden the
+   strip is visibility:hidden, so it never intercepts clicks on the text under it. */
 .transcript__bubble--assistant:hover > .transcript__bubble-actions,
 .transcript__bubble-actions:hover {
     opacity: 1;
@@ -395,12 +402,12 @@
 }
 
 .transcript__bubble-actions > Button {
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    min-height: 20px;
-    margin: 1px 0;
-    padding: 4px;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    margin: 0 2px 0 0;
+    padding: 3px;
     font-size: 0;
     border-radius: 5px;
     background-color: rgba(0, 0, 0, 0.5);
@@ -482,14 +489,17 @@
 .transcript__stats {
     flex-direction: row;
     justify-content: flex-end;
-    margin-top: 4px;
-    padding-top: 4px;
+    align-items: center;
+    margin-top: 3px;
+    padding-top: 3px;
     border-top-width: 1px;
     border-top-color: rgba(255, 255, 255, 0.06);
 }
 
 .transcript__stats-label {
     font-size: 10px;
+    height: 13px;
+    -unity-text-align: middle-right;
     color: var(--text-3);
     margin-right: 2px;
 }
@@ -2092,20 +2102,26 @@
 
 /* Bubbles use more of the narrow width. */
 .ff-phone .transcript__bubble {
-    max-width: 88%;
+    max-width: 100%;
 }
 
-/* Bubble actions (copy / regenerate / listen): on desktop they float at left:100%
-   and reveal on hover. Touch has no hover and that off-bubble strip is unreachable,
-   so on phone drop them into the flow under the bubble, always visible, big enough
-   to tap. */
+/* A 300px floor overflows a small phone once the gutters are subtracted. */
+.ff-phone .transcript__bubble--markdown {
+    min-width: 0;
+}
+
+/* Bubble actions (copy / regenerate / listen): on desktop they are a hover-only
+   overlay in the bubble's corner. Touch has no hover, and a permanent overlay
+   would sit on top of the text, so on phone they drop into the flow under the
+   bubble — always visible, big enough to tap. */
 .ff-phone .transcript__bubble-actions {
     position: relative;
     left: auto;
     top: auto;
+    right: auto;
+    bottom: auto;
     flex-direction: row;
-    padding-left: 0;
-    margin-top: 8px;
+    margin-top: 6px;
     opacity: 1;
     visibility: visible;
 }
