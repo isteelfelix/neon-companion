@@ -71,7 +71,7 @@ namespace NeonCompanion.Runtime.Avatar
                         await InspectGeneric3DAsync(result);
                         break;
                     case AvatarProfileTypes.Vrm:
-                        InspectVrm(result);
+                        await InspectVrmAsync(result);
                         break;
                     default:
                         Fail(result, "unsupported_type", "Unsupported avatar type.");
@@ -127,22 +127,28 @@ namespace NeonCompanion.Runtime.Avatar
                     id = profileId,
                     name = inspection.displayName,
                     isBuiltIn = false,
-                    is3D = inspection.avatarType == AvatarProfileTypes.Generic3D,
+                    is3D = inspection.avatarType == AvatarProfileTypes.Generic3D ||
+                           inspection.avatarType == AvatarProfileTypes.Vrm,
                     imagePath = inspection.avatarType == AvatarProfileTypes.Static2D ||
                                 inspection.avatarType == AvatarProfileTypes.SpriteSheet
                         ? previewPath
                         : string.Empty,
-                    modelPath = inspection.avatarType == AvatarProfileTypes.Generic3D ? primaryPath : string.Empty,
+                    modelPath = inspection.avatarType == AvatarProfileTypes.Generic3D ||
+                                inspection.avatarType == AvatarProfileTypes.Vrm
+                        ? primaryPath
+                        : string.Empty,
                     motionPackManifestPath = inspection.avatarType == AvatarProfileTypes.SpriteSheet
                         ? primaryPath
                         : string.Empty,
                     modelAnimationClips = new List<string>(inspection.animationClips),
-                    stateClipMapping = inspection.avatarType == AvatarProfileTypes.Generic3D
+                    stateClipMapping = inspection.avatarType == AvatarProfileTypes.Generic3D ||
+                                       inspection.avatarType == AvatarProfileTypes.Vrm
                         ? stateClipMapping
                         : null,
                     capabilities = inspection.capabilities,
-                    diagnostic = inspection.avatarType == AvatarProfileTypes.Vrm
-                        ? "vrm_runtime_phase_b"
+                    diagnostic = inspection.avatarType == AvatarProfileTypes.Vrm &&
+                                 inspection.capabilities.isRestricted
+                        ? "vrm_restricted_features"
                         : string.Empty,
                     source = new AvatarAssetSource
                     {
@@ -534,7 +540,7 @@ namespace NeonCompanion.Runtime.Avatar
             result.success = true;
         }
 
-        private static void InspectVrm(AvatarAssetInspection result)
+        private static async Task InspectVrmAsync(AvatarAssetInspection result)
         {
             if (!string.Equals(Path.GetExtension(result.sourcePath), ".vrm", StringComparison.OrdinalIgnoreCase))
             {
@@ -576,15 +582,17 @@ namespace NeonCompanion.Runtime.Avatar
                 sourcePath = result.sourcePath,
                 relativePath = Path.GetFileName(result.sourcePath)
             });
-            result.capabilities.canRender = false;
-            result.capabilities.isVerified = true;
-            result.capabilities.canAnimate = false;
-            result.capabilities.hasStateAnimations = false;
-            result.capabilities.hasLipsync = false;
-            result.capabilities.isRuntimeSupported = false;
-            result.capabilities.sceneNodeCount = nodeCount;
-            result.capabilities.rendererCount = rendererCount;
-            result.capabilities.evidence.Add("vrm_metadata");
+            Avatar3DLoadResult load = await Avatar3DLoader.LoadAsync(result.sourcePath);
+            if (!load.Success || load.Instance == null)
+            {
+                Fail(result, load.ErrorCode ?? "invalid_vrm",
+                    load.Error ?? "UniVRM could not import this VRM file.");
+                return;
+            }
+
+            result.previewInstance = load.Instance;
+            result.capabilities = load.Capabilities;
+            result.animationClips.AddRange(load.AnimationNames);
             result.success = true;
         }
 

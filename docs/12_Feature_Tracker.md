@@ -55,6 +55,7 @@
 | A-10 | Довести анимацию спрайтшитов до рабочего состояния | ✅ | M2 | Talking/listening/confused триггеры |
 | A-11 | Система триггерных анимаций | ✅ | M2 | Verified: avatar transitions idle→thinking→talking |
 | A-12 | Avatar backend import Phase A | ⏳ | M4 | Static 2D / sprite-sheet / generic GLB+glTF / catalog-only VRM; versioned persisted contract, safe local copies, limits, diagnostics and evidence-based capabilities implemented. Needs Felix Unity/Windows UI and persistence verification. |
+| A-13 | VRM runtime Phase B | ⏳ | M4 | UniVRM 0.131.2 import/render, actual humanoid/blink/gaze/expression/lipsync capability extraction, restricted fallback, VRMA states and immediate voice-stop clearing implemented. Felix fixture committed; needs Felix Unity/Windows gallery→preview and TTS/lipsync smoke verification. |
 
 ## UI и UX
 | # | Фича | Статус | Спринт | Заметки |

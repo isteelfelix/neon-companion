@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Data.Models;
+using UniVRM10;
 using UnityEngine;
 
 namespace NeonCompanion.Runtime.Avatar3D
@@ -14,6 +16,8 @@ namespace NeonCompanion.Runtime.Avatar3D
         public string ErrorCode;
         public string SourcePath;
         public GameObject Instance;
+        public Vrm10Instance VrmInstance;
+        public AvatarCapabilities Capabilities = new AvatarCapabilities();
         public long FileSizeBytes;
         public int SceneNodeCount;
         public int RendererCount;
@@ -74,12 +78,15 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             string ext = Path.GetExtension(fullPath).ToLowerInvariant();
-            if (ext != ".glb" && ext != ".gltf")
+            if (ext != ".glb" && ext != ".gltf" && ext != ".vrm")
             {
                 result.ErrorCode = "unsupported_format";
-                result.Error = $"Unsupported model format: {ext}. Expected .glb or .gltf";
+                result.Error = $"Unsupported model format: {ext}. Expected .glb, .gltf, or .vrm";
                 return result;
             }
+
+            if (ext == ".vrm")
+                return await LoadVrmAsync(fullPath, result);
 
             CachedModel cached;
             lock (CacheLock)
@@ -96,6 +103,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 result.Instance = cachedInstance;
                 result.AnimationNames.AddRange(cached.AnimationNames);
                 CollectSceneFacts(cachedInstance, result);
+                SetGenericCapabilities(result);
                 result.Success = true;
                 return result;
             }
@@ -154,6 +162,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
                 result.Instance = liveInstance;
                 result.AnimationNames.AddRange(animationNames);
+                SetGenericCapabilities(result);
                 result.Success = true;
             }
             catch (Exception ex)
@@ -164,6 +173,214 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             return result;
+        }
+
+        private static async Task<Avatar3DLoadResult> LoadVrmAsync(
+            string fullPath,
+            Avatar3DLoadResult result)
+        {
+            try
+            {
+                // UniVRM is deliberately called only for the .vrm extension. A GLB that happens
+                // to contain VRM metadata is not silently promoted to a VRM avatar.
+                Vrm10Instance vrm = await Vrm10.LoadPathAsync(fullPath, true);
+                if (vrm == null)
+                {
+                    result.ErrorCode = "invalid_vrm";
+                    result.Error = "UniVRM could not import this VRM file.";
+                    return result;
+                }
+
+                GameObject root = vrm.gameObject;
+                root.name = Path.GetFileNameWithoutExtension(fullPath);
+                CollectSceneFacts(root, result);
+                if (!ValidateSceneLimits(root, result, 0))
+                    return result;
+
+                result.Instance = root;
+                result.VrmInstance = vrm;
+                ExtractVrmCapabilities(vrm, result);
+                result.Success = true;
+            }
+            catch (Exception ex)
+            {
+                if (result.Instance != null)
+                {
+                    UnityEngine.Object.Destroy(result.Instance);
+                    result.Instance = null;
+                    result.VrmInstance = null;
+                }
+                result.ErrorCode = "invalid_vrm";
+                result.Error = ex.Message;
+                Debug.LogWarning($"[NeonCompanion] VRM avatar load failed: {ex}");
+            }
+
+            return result;
+        }
+
+        private static bool ValidateSceneLimits(
+            GameObject root,
+            Avatar3DLoadResult result,
+            int animationCount)
+        {
+            if (result.RendererCount == 0)
+            {
+                result.ErrorCode = "empty_scene";
+                result.Error = "Model scene contains no renderers.";
+                UnityEngine.Object.Destroy(root);
+                return false;
+            }
+
+            if (result.SceneNodeCount <= MaxSceneNodes &&
+                result.RendererCount <= MaxRenderers &&
+                result.TriangleCount <= MaxTriangles &&
+                animationCount <= MaxAnimationClips)
+                return true;
+
+            result.ErrorCode = "scene_limit_exceeded";
+            result.Error = "Model scene exceeds limits (512 nodes, 128 renderers, 500,000 triangles, 128 animation clips). " +
+                "Detected " + result.SceneNodeCount + " nodes, " + result.RendererCount +
+                " renderers, " + result.TriangleCount + " triangles, " +
+                animationCount + " animation clips.";
+            UnityEngine.Object.Destroy(root);
+            return false;
+        }
+
+        private static void SetGenericCapabilities(Avatar3DLoadResult result)
+        {
+            AvatarCapabilities capabilities = result.Capabilities;
+            capabilities.isVerified = true;
+            capabilities.canRender = true;
+            capabilities.canAnimate = result.AnimationNames.Count > 0;
+            capabilities.hasStateAnimations = capabilities.canAnimate;
+            capabilities.isRuntimeSupported = true;
+            capabilities.animationClipCount = result.AnimationNames.Count;
+            capabilities.sceneNodeCount = result.SceneNodeCount;
+            capabilities.rendererCount = result.RendererCount;
+            capabilities.triangleCount = result.TriangleCount;
+            capabilities.evidence.Add("gltfast_scene_import");
+        }
+
+        private static void ExtractVrmCapabilities(
+            Vrm10Instance vrm,
+            Avatar3DLoadResult result)
+        {
+            AvatarCapabilities capabilities = result.Capabilities;
+            capabilities.isVerified = true;
+            capabilities.canRender = true;
+            capabilities.isRuntimeSupported = true;
+            capabilities.sceneNodeCount = result.SceneNodeCount;
+            capabilities.rendererCount = result.RendererCount;
+            capabilities.triangleCount = result.TriangleCount;
+            capabilities.evidence.Add("univrm_0_131_2_runtime");
+
+            HumanBodyBones[] requiredBones =
+            {
+                HumanBodyBones.Hips,
+                HumanBodyBones.Spine,
+                HumanBodyBones.Head,
+                HumanBodyBones.LeftUpperArm,
+                HumanBodyBones.LeftLowerArm,
+                HumanBodyBones.LeftHand,
+                HumanBodyBones.RightUpperArm,
+                HumanBodyBones.RightLowerArm,
+                HumanBodyBones.RightHand,
+                HumanBodyBones.LeftUpperLeg,
+                HumanBodyBones.LeftLowerLeg,
+                HumanBodyBones.LeftFoot,
+                HumanBodyBones.RightUpperLeg,
+                HumanBodyBones.RightLowerLeg,
+                HumanBodyBones.RightFoot
+            };
+            capabilities.hasHumanoid = true;
+            for (int i = 0; i < requiredBones.Length; i++)
+            {
+                Transform bone;
+                if (!vrm.TryGetBoneTransform(requiredBones[i], out bone) || bone == null)
+                {
+                    capabilities.hasHumanoid = false;
+                    break;
+                }
+            }
+
+            VRM10ObjectExpression expressions = vrm.Vrm != null ? vrm.Vrm.Expression : null;
+            int customCount = expressions != null && expressions.CustomClips != null
+                ? expressions.CustomClips.Count
+                : 0;
+            int emotionalExpressionCount = expressions == null ? 0 :
+                CountPresent(
+                    expressions.Happy,
+                    expressions.Angry,
+                    expressions.Sad,
+                    expressions.Relaxed,
+                    expressions.Surprised) + customCount;
+            int mouthCount = expressions == null ? 0 :
+                CountPresent(
+                    expressions.Aa,
+                    expressions.Ih,
+                    expressions.Ou,
+                    expressions.Ee,
+                    expressions.Oh);
+            int gazeCount = expressions == null ? 0 :
+                CountPresent(
+                    expressions.LookUp,
+                    expressions.LookDown,
+                    expressions.LookLeft,
+                    expressions.LookRight);
+            int blinkCount = expressions == null ? 0 :
+                CountPresent(expressions.Blink, expressions.BlinkLeft, expressions.BlinkRight);
+
+            capabilities.expressionCount = emotionalExpressionCount + mouthCount +
+                gazeCount + blinkCount + (expressions != null && expressions.Neutral != null ? 1 : 0);
+            capabilities.hasExpressions = capabilities.hasHumanoid &&
+                emotionalExpressionCount > 0;
+            capabilities.hasBlink = capabilities.hasHumanoid &&
+                expressions != null &&
+                (expressions.Blink != null ||
+                 (expressions.BlinkLeft != null && expressions.BlinkRight != null));
+            capabilities.hasGaze = capabilities.hasHumanoid &&
+                vrm.Vrm != null && vrm.Vrm.LookAt != null &&
+                (gazeCount > 0 || HasEyeBones(vrm));
+            capabilities.hasLipsync = capabilities.hasHumanoid && mouthCount > 0;
+
+            string[] states = { "idle", "thinking", "talking", "listening", "smile", "confused" };
+            if (capabilities.hasHumanoid)
+            {
+                for (int i = 0; i < states.Length; i++)
+                {
+                    if (Resources.Load<GameObject>("Avatars/neon/Neon_" + states[i]) != null)
+                        result.AnimationNames.Add(states[i]);
+                }
+            }
+            capabilities.animationClipCount = result.AnimationNames.Count;
+            capabilities.hasStateAnimations = result.AnimationNames.Count > 0;
+            capabilities.canAnimate = capabilities.hasHumanoid && capabilities.hasStateAnimations;
+            capabilities.isRestricted = !capabilities.hasHumanoid ||
+                !capabilities.hasBlink ||
+                !capabilities.hasGaze ||
+                !capabilities.hasExpressions ||
+                !capabilities.hasLipsync;
+        }
+
+        private static int CountPresent(params UnityEngine.Object[] values)
+        {
+            int count = 0;
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (values[i] != null)
+                    count++;
+            }
+            return count;
+        }
+
+        private static bool HasEyeBones(Vrm10Instance vrm)
+        {
+            Transform leftEye;
+            Transform rightEye;
+            return vrm.TryGetBoneTransform(HumanBodyBones.LeftEye, out leftEye) &&
+                leftEye != null &&
+                vrm.TryGetBoneTransform(HumanBodyBones.RightEye, out rightEye) &&
+                rightEye != null;
         }
 
         private static async Task<GameObject> TryLoadWithGltfFastAsync(string fullPath)

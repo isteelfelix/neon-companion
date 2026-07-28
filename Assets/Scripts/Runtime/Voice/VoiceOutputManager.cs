@@ -15,6 +15,8 @@ namespace NeonCompanion.Runtime.Voice
         private Func<bool> _shouldAutoVoice;
         private bool _isConsuming;
         private string _activeResponse;
+        private int _playbackGeneration;
+        private bool _playbackAnnounced;
 
         public event Action<string> OnPlaybackStarted;
         public event Action OnPlaybackCompleted;
@@ -47,6 +49,7 @@ namespace NeonCompanion.Runtime.Voice
 
         private void HandlePlaybackStarted()
         {
+            _playbackAnnounced = true;
             OnPlaybackStarted?.Invoke(_activeResponse ?? string.Empty);
         }
 
@@ -99,8 +102,15 @@ namespace NeonCompanion.Runtime.Voice
 
         public void StopSpeakingAndClear()
         {
+            bool notifyStopped = _isConsuming || _playbackAnnounced ||
+                !string.IsNullOrEmpty(_activeResponse);
+            _playbackGeneration++;
             _queue.Clear();
+            _activeResponse = null;
+            _playbackAnnounced = false;
             _voiceService?.StopSpeaking();
+            if (notifyStopped)
+                OnPlaybackCompleted?.Invoke();
         }
 
         public void EnqueueResponse(string response)
@@ -135,6 +145,7 @@ namespace NeonCompanion.Runtime.Voice
 
                     var next = _queue.Dequeue();
                     _activeResponse = next;
+                    int generation = _playbackGeneration;
 
                     var tcs = new TaskCompletionSource<bool>();
 
@@ -148,6 +159,9 @@ namespace NeonCompanion.Runtime.Voice
                     var doneTask = await Task.WhenAny(tcs.Task, timeoutTask);
                     _voiceService.OnPlaybackComplete -= Complete;
 
+                    if (generation != _playbackGeneration)
+                        break;
+
                     // The service (and this manager) may have been destroyed while we awaited —
                     // e.g. the voice pipeline was reinitialized. Stop before touching dead objects;
                     // continuing would call Speak/StartCoroutine on an inactive GameObject.
@@ -158,13 +172,17 @@ namespace NeonCompanion.Runtime.Voice
                         _voiceService.StopSpeaking();
 
                     OnPlaybackCompleted?.Invoke();
+                    _playbackAnnounced = false;
                     _activeResponse = null;
                 }
             }
             finally
             {
                 _activeResponse = null;
+                _playbackAnnounced = false;
                 _isConsuming = false;
+                if (_queue.Count > 0 && ServiceUsable())
+                    _ = ConsumeQueueAsync();
             }
         }
 

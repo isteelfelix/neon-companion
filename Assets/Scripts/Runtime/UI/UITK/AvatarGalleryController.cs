@@ -149,6 +149,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _avatarCapabilityType;
         private Label _avatarCapabilityRender;
         private Label _avatarCapabilityAnimation;
+        private Label _avatarCapabilityHumanoid;
+        private Label _avatarCapabilityBlink;
+        private Label _avatarCapabilityGaze;
+        private Label _avatarCapabilityExpressions;
         private Label _avatarCapabilityLipsync;
         private Label _avatarCapabilityEvidence;
         private Label _avatarCapabilityDiagnostic;
@@ -169,6 +173,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _avatarImportPreviewPlaceholder;
         private Label _avatarImportCapabilityRender;
         private Label _avatarImportCapabilityAnimation;
+        private Label _avatarImportCapabilityHumanoid;
+        private Label _avatarImportCapabilityBlink;
+        private Label _avatarImportCapabilityGaze;
+        private Label _avatarImportCapabilityExpressions;
         private Label _avatarImportCapabilityLipsync;
         private Label _avatarImportCapabilityScene;
         private Label _avatarImportDiagnostic;
@@ -184,6 +192,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Texture2D _avatarImportPreviewTexture;
         private GameObject _avatarImportPreviewModel;
         private int _avatarImportRequestVersion;
+        private int _avatarSelectionRequestVersion;
 
         // ---- Public properties ----
 
@@ -194,6 +203,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         public SpriteSheetAnimator GetAvatarAnimatorInstance() { return _avatarAnimator; }
+        public IAvatar3DService GetAvatar3DServiceInstance() { return _avatar3DService; }
 
         public string AvatarViewModeSetting
         {
@@ -266,6 +276,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarCapabilityType = root.Q<Label>("avatar-capability-type");
             _avatarCapabilityRender = root.Q<Label>("avatar-capability-render");
             _avatarCapabilityAnimation = root.Q<Label>("avatar-capability-animation");
+            _avatarCapabilityHumanoid = root.Q<Label>("avatar-capability-humanoid");
+            _avatarCapabilityBlink = root.Q<Label>("avatar-capability-blink");
+            _avatarCapabilityGaze = root.Q<Label>("avatar-capability-gaze");
+            _avatarCapabilityExpressions = root.Q<Label>("avatar-capability-expressions");
             _avatarCapabilityLipsync = root.Q<Label>("avatar-capability-lipsync");
             _avatarCapabilityEvidence = root.Q<Label>("avatar-capability-evidence");
             _avatarCapabilityDiagnostic = root.Q<Label>("avatar-capability-diagnostic");
@@ -286,6 +300,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarImportPreviewPlaceholder = root.Q<Label>("avatar-import-preview-placeholder");
             _avatarImportCapabilityRender = root.Q<Label>("avatar-import-capability-render");
             _avatarImportCapabilityAnimation = root.Q<Label>("avatar-import-capability-animation");
+            _avatarImportCapabilityHumanoid = root.Q<Label>("avatar-import-capability-humanoid");
+            _avatarImportCapabilityBlink = root.Q<Label>("avatar-import-capability-blink");
+            _avatarImportCapabilityGaze = root.Q<Label>("avatar-import-capability-gaze");
+            _avatarImportCapabilityExpressions = root.Q<Label>("avatar-import-capability-expressions");
             _avatarImportCapabilityLipsync = root.Q<Label>("avatar-import-capability-lipsync");
             _avatarImportCapabilityScene = root.Q<Label>("avatar-import-capability-scene");
             _avatarImportDiagnostic = root.Q<Label>("avatar-import-diagnostic");
@@ -527,7 +545,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 (!AvatarProfile.IsKnownType(profile.avatarType) ||
                  profile.contractVersion > AvatarProfile.CurrentContractVersion);
             bool is3D = profile != null &&
-                (profile.is3D || profile.avatarType == AvatarProfileTypes.Generic3D) &&
+                (profile.is3D ||
+                 profile.avatarType == AvatarProfileTypes.Generic3D ||
+                 profile.avatarType == AvatarProfileTypes.Vrm) &&
                 !string.IsNullOrWhiteSpace(profile.modelPath);
             bool hasAnimation = !is3D && !hasUnsupportedType && ConfigureAvatarAnimation(profile);
             NeonLogger.Log("[AvatarArt] hasAnimation=" + hasAnimation + " is3D=" + is3D);
@@ -738,7 +758,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _previewApplyBtn.SetEnabled(profile == null || profile.isBuiltIn ||
                     (AvatarProfile.IsKnownType(profile.avatarType) &&
                      profile.contractVersion <= AvatarProfile.CurrentContractVersion &&
-                     profile.avatarType != AvatarProfileTypes.Vrm));
+                     profile.capabilities != null &&
+                     profile.capabilities.canRender &&
+                     profile.capabilities.isRuntimeSupported));
 
             AvatarCapabilities capabilities = profile != null ? profile.capabilities : null;
             string avatarType = profile != null ? profile.avatarType : AvatarProfileTypes.Static2D;
@@ -771,6 +793,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                     "Rendering: {0}", canRender);
                 SetCapabilityFact(_avatarCapabilityAnimation, "avatar.capability.animation",
                     "Animation: {0}", canAnimate);
+                SetCapabilityFact(_avatarCapabilityHumanoid, "avatar.capability.humanoid",
+                    "Humanoid: {0}", capabilities != null && capabilities.hasHumanoid);
+                SetCapabilityFact(_avatarCapabilityBlink, "avatar.capability.blink",
+                    "Blink: {0}", capabilities != null && capabilities.hasBlink);
+                SetCapabilityFact(_avatarCapabilityGaze, "avatar.capability.gaze",
+                    "Gaze: {0}", capabilities != null && capabilities.hasGaze);
+                SetCapabilityFact(_avatarCapabilityExpressions, "avatar.capability.expressions",
+                    "Expressions: {0}", capabilities != null && capabilities.hasExpressions);
                 SetCapabilityFact(_avatarCapabilityLipsync, "avatar.capability.lipsync",
                     "Lipsync: {0}", hasLipsync);
             }
@@ -778,6 +808,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 SetCapabilityUnknown(_avatarCapabilityRender, "avatar.capability.render", "Rendering: {0}");
                 SetCapabilityUnknown(_avatarCapabilityAnimation, "avatar.capability.animation", "Animation: {0}");
+                SetCapabilityUnknown(_avatarCapabilityHumanoid, "avatar.capability.humanoid", "Humanoid: {0}");
+                SetCapabilityUnknown(_avatarCapabilityBlink, "avatar.capability.blink", "Blink: {0}");
+                SetCapabilityUnknown(_avatarCapabilityGaze, "avatar.capability.gaze", "Gaze: {0}");
+                SetCapabilityUnknown(_avatarCapabilityExpressions, "avatar.capability.expressions", "Expressions: {0}");
                 SetCapabilityUnknown(_avatarCapabilityLipsync, "avatar.capability.lipsync", "Lipsync: {0}");
             }
             if (_avatarCapabilityEvidence != null)
@@ -787,9 +821,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     evidence += " · " + LocalizationExtensions.GetFormat(
                         "avatar.capability.scene.vrm.compact",
-                        "{0} nodes, {1} meshes; triangles not inspected",
+                        "{0} nodes, {1} renderers, {2} triangles",
                         capabilities.sceneNodeCount,
-                        capabilities.rendererCount);
+                        capabilities.rendererCount,
+                        capabilities.triangleCount);
                 }
                 else if (capabilities != null &&
                          avatarType == AvatarProfileTypes.Generic3D)
@@ -821,11 +856,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                     "avatar.type.unsupported",
                     "This avatar profile uses a newer unsupported backend. The active avatar was preserved.");
             }
-            else if (profile != null && profile.diagnostic == "vrm_runtime_phase_b")
+            else if (profile != null && profile.diagnostic == "vrm_restricted_features")
             {
                 diagnostic = LocalizationExtensions.Get(
-                    "avatar.vrm.phase_b.short",
-                    "VRM runtime support is Phase B. This profile is catalog-only.");
+                    "avatar.vrm.restricted",
+                    "This VRM can render, but only the verified features above are enabled.");
             }
             else if (profile != null && !isBuiltIn)
             {
@@ -1084,13 +1119,48 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             if (selectedProfile != null && selectedProfile.avatarType == AvatarProfileTypes.Vrm)
             {
-                ShowCatalogOnlyProfile(selectedProfile);
-                _d.AddSystemMessage?.Invoke(LocalizationExtensions.Get(
-                    "avatar.vrm.phase_b",
-                    "VRM was saved to the catalog. Runtime rendering, animation, and lipsync arrive in Phase B; the active avatar was preserved."));
+                int requestVersion = ++_avatarSelectionRequestVersion;
+                _ = SelectVrmAvatarAsync(avatarId, selectedProfile, requestVersion);
                 return;
             }
 
+            _avatarSelectionRequestVersion++;
+            CommitAvatarSelection(avatarId);
+        }
+
+        private async Task SelectVrmAvatarAsync(
+            string avatarId,
+            AvatarProfile profile,
+            int requestVersion)
+        {
+            Avatar3DLoadResult validation = await Avatar3DLoader.LoadAsync(profile.modelPath);
+            if (requestVersion != _avatarSelectionRequestVersion)
+            {
+                if (validation.Instance != null)
+                    UnityEngine.Object.Destroy(validation.Instance);
+                return;
+            }
+
+            if (!validation.Success || validation.Instance == null)
+            {
+                ShowCatalogOnlyProfile(profile);
+                _d.AddSystemMessage?.Invoke(LocalizationExtensions.Get(
+                    "avatar.vrm.invalid.preserved",
+                    "The VRM could not be loaded. The current avatar was preserved."));
+                return;
+            }
+
+            UnityEngine.Object.Destroy(validation.Instance);
+            profile.capabilities = validation.Capabilities;
+            profile.modelAnimationClips = new List<string>(validation.AnimationNames);
+            profile.diagnostic = validation.Capabilities.isRestricted
+                ? "vrm_restricted_features"
+                : string.Empty;
+            CommitAvatarSelection(avatarId);
+        }
+
+        private void CommitAvatarSelection(string avatarId)
+        {
             if (_activeAvatarId == avatarId) return;
             ClosePersonaEditor();
             CancelCustomizationEdits();
@@ -1675,7 +1745,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_avatar3DService != null && _avatar3DService.IsLoaded)
             {
-                NeonLogger.LogWarning("3D avatar reaction is not implemented for clip '" + reactionClipName + "'.");
+                if (!_avatar3DService.SetAnimation(reactionClipName))
+                    _avatar3DService.SetExpression(reactionClipName, 1f);
                 return;
             }
 
@@ -1965,7 +2036,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _avatarImportVrmBtn?.EnableInClassList(
                 "avatar-import-type--active", avatarType == AvatarProfileTypes.Vrm);
             SetDisplay(_avatarImportMapping,
-                avatarType == AvatarProfileTypes.Generic3D ? DisplayStyle.Flex : DisplayStyle.None);
+                avatarType == AvatarProfileTypes.Generic3D ||
+                avatarType == AvatarProfileTypes.Vrm
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None);
 
             if (_avatarImportTypeHelp != null)
             {
@@ -1980,7 +2054,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 else if (avatarType == AvatarProfileTypes.Vrm)
                     _avatarImportTypeHelp.text = LocalizationExtensions.Get(
                         "avatar.import.help.vrm",
-                        "VRM is catalog-only in Phase A; rendering, expressions, animation, and lipsync are Phase B.");
+                        "VRM is imported with UniVRM; only verified model features are enabled.");
                 else
                     _avatarImportTypeHelp.text = LocalizationExtensions.Get(
                         "avatar.import.help.static",
@@ -2064,6 +2138,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 "Rendering: {0}", capabilities.canRender);
             SetCapabilityFact(_avatarImportCapabilityAnimation, "avatar.capability.animation",
                 "Animation: {0}", capabilities.canAnimate);
+            SetCapabilityFact(_avatarImportCapabilityHumanoid, "avatar.capability.humanoid",
+                "Humanoid: {0}", capabilities.hasHumanoid);
+            SetCapabilityFact(_avatarImportCapabilityBlink, "avatar.capability.blink",
+                "Blink: {0}", capabilities.hasBlink);
+            SetCapabilityFact(_avatarImportCapabilityGaze, "avatar.capability.gaze",
+                "Gaze: {0}", capabilities.hasGaze);
+            SetCapabilityFact(_avatarImportCapabilityExpressions, "avatar.capability.expressions",
+                "Expressions: {0}", capabilities.hasExpressions);
             SetCapabilityFact(_avatarImportCapabilityLipsync, "avatar.capability.lipsync",
                 "Lipsync: {0}", capabilities.hasLipsync);
             if (_avatarImportCapabilityScene != null)
@@ -2072,9 +2154,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     _avatarImportCapabilityScene.text = LocalizationExtensions.GetFormat(
                         "avatar.capability.scene.vrm",
-                        "VRM catalog: {0} nodes, {1} meshes; triangles not inspected",
+                        "VRM scene: {0} nodes, {1} renderers, {2} triangles",
                         capabilities.sceneNodeCount,
-                        capabilities.rendererCount);
+                        capabilities.rendererCount,
+                        capabilities.triangleCount);
                 }
                 else if (inspection.avatarType == AvatarProfileTypes.Generic3D)
                 {
@@ -2097,10 +2180,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_avatarImportDiagnostic != null)
             {
-                _avatarImportDiagnostic.text = inspection.avatarType == AvatarProfileTypes.Vrm
+                _avatarImportDiagnostic.text = inspection.avatarType == AvatarProfileTypes.Vrm &&
+                                               capabilities.isRestricted
                     ? LocalizationExtensions.Get(
-                        "avatar.import.valid.vrm",
-                        "Valid VRM metadata. Catalog storage only; runtime support is Phase B.")
+                        "avatar.import.valid.vrm.restricted",
+                        "Valid VRM. Missing optional features stay disabled.")
                     : LocalizationExtensions.Get(
                         "avatar.import.valid",
                         "Validation passed. Saving creates a private local copy.");
@@ -2118,7 +2202,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             else
             {
-                if (inspection.avatarType == AvatarProfileTypes.Generic3D &&
+                if ((inspection.avatarType == AvatarProfileTypes.Generic3D ||
+                     inspection.avatarType == AvatarProfileTypes.Vrm) &&
                     inspection.previewInstance != null)
                 {
                     ShowImport3DPreview(inspection);
@@ -2130,11 +2215,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (_avatarImportPreviewPlaceholder != null)
                     {
                         _avatarImportPreviewPlaceholder.text =
-                            inspection.avatarType == AvatarProfileTypes.Vrm
-                            ? LocalizationExtensions.Get(
-                                "avatar.import.preview.vrm",
-                                "VRM catalog preview\nRuntime renderer: Phase B")
-                            : LocalizationExtensions.GetFormat(
+                            LocalizationExtensions.GetFormat(
                                 "avatar.import.preview.3d",
                                 "3D scene validated\n{0} nodes · {1} triangles",
                                 capabilities.sceneNodeCount,
@@ -2177,7 +2258,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             bool profilePersisted = false;
             try
             {
-                if (imported.profile.avatarType == AvatarProfileTypes.Generic3D)
+                if (imported.profile.avatarType == AvatarProfileTypes.Generic3D ||
+                    imported.profile.avatarType == AvatarProfileTypes.Vrm)
                 {
                     Avatar3DLoadResult copiedModel =
                         await Avatar3DLoader.LoadAsync(imported.profile.modelPath);
@@ -2212,16 +2294,11 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 string importedType = imported.profile.avatarType;
                 CloseAvatarImport();
-                if (importedType == AvatarProfileTypes.Vrm)
-                {
-                    SetAvatarViewMode(AvatarViewMode.Volume3D);
-                    ShowCatalogOnlyProfile(imported.profile);
-                }
-                else
                 {
                     if (importedType == AvatarProfileTypes.SpriteSheet)
                         SetAvatarViewMode(AvatarViewMode.Animated);
-                    else if (importedType == AvatarProfileTypes.Generic3D)
+                    else if (importedType == AvatarProfileTypes.Generic3D ||
+                             importedType == AvatarProfileTypes.Vrm)
                         SetAvatarViewMode(AvatarViewMode.Volume3D);
                     else
                         SetAvatarViewMode(AvatarViewMode.Static);
@@ -2262,7 +2339,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             mapping = null;
             error = null;
-            if (inspection.avatarType != AvatarProfileTypes.Generic3D)
+            if (inspection.avatarType != AvatarProfileTypes.Generic3D &&
+                inspection.avatarType != AvatarProfileTypes.Vrm)
                 return true;
 
             mapping = new Avatar3DStateClipMapping
@@ -2341,6 +2419,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                     "avatar.import.choose_prompt", "Choose a file to validate.");
             SetCapabilityUnknown(_avatarImportCapabilityRender, "avatar.capability.render", "Rendering: {0}");
             SetCapabilityUnknown(_avatarImportCapabilityAnimation, "avatar.capability.animation", "Animation: {0}");
+            SetCapabilityUnknown(_avatarImportCapabilityHumanoid, "avatar.capability.humanoid", "Humanoid: {0}");
+            SetCapabilityUnknown(_avatarImportCapabilityBlink, "avatar.capability.blink", "Blink: {0}");
+            SetCapabilityUnknown(_avatarImportCapabilityGaze, "avatar.capability.gaze", "Gaze: {0}");
+            SetCapabilityUnknown(_avatarImportCapabilityExpressions, "avatar.capability.expressions", "Expressions: {0}");
             SetCapabilityUnknown(_avatarImportCapabilityLipsync, "avatar.capability.lipsync", "Lipsync: {0}");
             if (_avatarImportCapabilityScene != null)
                 _avatarImportCapabilityScene.text = LocalizationExtensions.Get(

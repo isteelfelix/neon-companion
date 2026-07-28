@@ -584,6 +584,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 PlayNotificationSound = PlayNotificationBeep,
                 ToggleAudioFile = path => _voiceController.ToggleMessageAudio(path),
                 SeekAudioFile = (path, normalized) => _voiceController.SeekMessageAudio(path, normalized),
+                StopVoiceOutput = _voiceController.StopVoiceOutput,
                 GetAudioPlaybackState = path => _voiceController.GetMessageAudioState(path),
                 SetCurrentSession = (id, title) => { _currentSessionId = id; _currentSessionTitle = title; }
             };
@@ -739,6 +740,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 AttachAssistantAudio = AttachAssistantAudio,
                 OnVoicePlaybackCompleted = ClearTtsBusyState,
+                GetAvatarAnimator = _avatarGalleryController.GetAvatarAnimatorInstance,
+                GetAvatar3DService = _avatarGalleryController.GetAvatar3DServiceInstance,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetChatServiceSync = () => _chatService,
                 IsBound = () => _isBound,

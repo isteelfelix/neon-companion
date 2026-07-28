@@ -112,7 +112,7 @@
 - Порядок кадров: слева направо, сверху вниз
 - Автоматическое масштабирование и обрезка
 
-## User-owned avatar backends (Phase A)
+## User-owned avatar backends (Phase A + VRM Phase B)
 
 Экран аватаров сохраняет прежние built-in/static/sprite профили и добавляет
 явный импорт четырех backend-типов:
@@ -120,13 +120,28 @@
 - `static-2d` — PNG/JPG; после проверки и crop сохраняется локальная PNG-копия;
 - `sprite-sheet` — `motion_pack.json` v1 и перечисленные в нем локальные PNG;
 - `generic-3d` — существующий runtime GLB/glTF через glTFast;
-- `vrm` — отдельный тип контракта и каталог. Runtime-рендеринг, expressions,
-  анимация и lipsync VRM относятся к Phase B.
+- `vrm` — отдельный runtime backend через закреплённый UniVRM 0.131.2. Импортер
+  вызывается только для расширения `.vrm`; произвольный GLB не считается VRM.
 
 Импорт сначала проверяет исходный файл и показывает capability card. Профиль и
 копия ассета создаются только после успешной проверки. Ошибка, отмена crop или
-ошибка сохранения не меняют активный аватар. Для VRM кнопка применения отключена:
-карточка прямо сообщает, что профиль пока catalog-only.
+ошибка сохранения не меняют активный аватар. VRM до выбора повторно проверяется
+UniVRM, поэтому ошибочная модель не заменяет текущий preview.
+
+### VRM runtime (Phase B)
+
+После успешного импорта путь пользователя: Avatars → 3D → выбрать VRM-файл →
+проверить preview и capability card → Save → выбрать созданную gallery tile →
+увидеть модель в основном preview. Capability card показывает фактически найденные
+humanoid bones, blink, gaze, expressions, lipsync и упакованные VRMA state clips.
+Отсутствующие необязательные возможности дают `vrm_restricted_features`: модель
+остается доступной как restricted 3D, но отсутствующая функция не вызывается.
+
+Состояния `idle`, `thinking`, `talking`, `listening`, `smile`, `confused`
+ретаргетятся только для humanoid VRM и только когда соответствующий VRMA ресурс
+существует. Voice playback управляет только найденными mouth expressions.
+Recording, stop, cancel, interrupt и barge-in немедленно очищают speaking/mouth
+state. Маршруты Hermes и Generic OpenAI TTS/STT не изменены.
 
 ### Persisted profile contract v1
 
@@ -144,13 +159,14 @@
 - `source` — `local-user-owned-copy`, исходное имя, расширение, размер и путь
   относительно `Application.persistentDataPath`;
 - `capabilities` — только факты, полученные при декодировании/валидации:
-  `isVerified`, render/animation/lipsync, число клипов, узлов, renderers и
-  triangles, evidence code. Для legacy-профиля до повторного импорта UI
+  `isVerified`, render/animation/humanoid/blink/gaze/expressions/lipsync,
+  restricted status, число expressions, клипов, узлов, renderers и triangles,
+  evidence code. Для legacy-профиля до повторного импорта UI
   показывает неизвестные возможности, а не выдумывает подтверждение;
 - `stateClipMapping` — persisted mapping `idle`, `thinking`, `talking`,
-  `listening`, `smile`, `confused` для generic 3D;
-- `diagnostic` — стабильный код ограничения runtime (сейчас
-  `vrm_runtime_phase_b`).
+  `listening`, `smile`, `confused` для generic 3D и VRM;
+- `diagnostic` — стабильный код ограничения runtime
+  (`vrm_restricted_features`).
 
 ### Local storage and limits
 
@@ -177,9 +193,16 @@ Application.persistentDataPath/
 - GLB/glTF/VRM: 100 MB на локальный bundle;
 - generic 3D: минимум один renderer; максимум 512 scene nodes, 128 renderers,
   500 000 triangles и 128 animation clips;
-- VRM catalog inspection: максимум 512 nodes и 128 meshes.
+- VRM runtime inspection: минимум один renderer; максимум 512 scene nodes,
+  128 renderers и 500 000 triangles.
 
 Для `.gltf` копируются только локальные `buffers[].uri` и `images[].uri`.
 `com.unity.cloud.gltfast` зафиксирован как прямая runtime dependency, а не
 случайная транзитивная зависимость Unity AI package. `Avatar3D/link.xml`
 сохраняет reflection-loaded assembly в IL2CPP-сборках.
+UniVRM 0.131.2 хранится как embedded `com.vrmc.gltf` + `com.vrmc.vrm`;
+runtime asmdef ссылается на VRM10 напрямую, а linker сохраняет VRM10 для IL2CPP.
+
+Полная Windows-проверка требует Unity Editor, Windows TTS и лицензированный VRM.
+В репозитории есть предоставленный Felix fixture `Assets/Resources/Avatars/neon/Neon.vrm`
+и шесть VRMA состояний; сборка и smoke test выполняются Felix локально.

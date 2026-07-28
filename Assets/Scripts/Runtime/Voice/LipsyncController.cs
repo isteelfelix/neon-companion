@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Data.Models;
 using UnityEngine;
 
@@ -39,6 +41,11 @@ namespace NeonCompanion.Runtime.Voice
             ['ö'] = Viseme.O, ['ô'] = Viseme.O,
             ['u'] = Viseme.U, ['ù'] = Viseme.U, ['ú'] = Viseme.U,
             ['ü'] = Viseme.U,
+            ['а'] = Viseme.A, ['я'] = Viseme.A,
+            ['е'] = Viseme.E, ['э'] = Viseme.E,
+            ['и'] = Viseme.I, ['ы'] = Viseme.I,
+            ['о'] = Viseme.O, ['ё'] = Viseme.O,
+            ['у'] = Viseme.U, ['ю'] = Viseme.U,
         };
 
         private const float CharsPerSecond = 12f;
@@ -50,6 +57,8 @@ namespace NeonCompanion.Runtime.Voice
         private VoiceInputManager   _inputManager;
         private SpriteSheetAnimator _spriteAnimator;
         private SkinnedMeshRenderer _blendShapeTarget;
+        private Func<SpriteSheetAnimator> _getSpriteAnimator;
+        private Func<IAvatar3DService> _getAvatar3DService;
 
         // Cached blend-shape indices; -1 means not present on the mesh
         private readonly int[] _shapeIndices = new int[6]; // one slot per Viseme
@@ -65,10 +74,15 @@ namespace NeonCompanion.Runtime.Voice
 
         public void Initialize(
             VoiceOutputManager outputManager,
-            VoiceInputManager  inputManager)
+            VoiceInputManager inputManager,
+            Func<SpriteSheetAnimator> getSpriteAnimator,
+            Func<IAvatar3DService> getAvatar3DService)
         {
             _outputManager = outputManager;
             _inputManager  = inputManager;
+            _getSpriteAnimator = getSpriteAnimator;
+            _getAvatar3DService = getAvatar3DService;
+            RefreshTargets();
 
             if (_outputManager != null)
             {
@@ -96,6 +110,7 @@ namespace NeonCompanion.Runtime.Voice
                 _inputManager.OnRecordingStarted -= HandleRecordingStarted;
                 _inputManager.OnRecordingStopped -= HandleRecordingStopped;
             }
+            Apply3DViseme(Viseme.Silence);
         }
 
         // ── Per-frame update ────────────────────────────────────────────────────
@@ -106,7 +121,11 @@ namespace NeonCompanion.Runtime.Voice
                 return;
 
             // Skip update if neither path can consume the result
-            if (!_hasLipsyncClip && _blendShapeTarget == null)
+            IAvatar3DService avatar3D = _getAvatar3DService != null
+                ? _getAvatar3DService()
+                : null;
+            if (!_hasLipsyncClip && _blendShapeTarget == null &&
+                (avatar3D == null || !avatar3D.IsLoaded || !avatar3D.Capabilities.hasLipsync))
                 return;
 
             _charTimer += Time.unscaledDeltaTime;
@@ -128,6 +147,7 @@ namespace NeonCompanion.Runtime.Voice
 
         private void StartLipsync(string text)
         {
+            RefreshTargets();
             _activeText = text ?? string.Empty;
             _charTimer  = 0f;
             _charIndex  = 0;
@@ -163,6 +183,7 @@ namespace NeonCompanion.Runtime.Voice
 
         private void HandleRecordingStarted()
         {
+            RefreshTargets();
             if (_spriteAnimator == null)
                 return;
 
@@ -190,6 +211,17 @@ namespace NeonCompanion.Runtime.Voice
 
         private void Apply3DViseme(Viseme viseme)
         {
+            IAvatar3DService avatar3D = _getAvatar3DService != null
+                ? _getAvatar3DService()
+                : null;
+            if (avatar3D != null && avatar3D.IsLoaded)
+            {
+                if (viseme == Viseme.Silence)
+                    avatar3D.ClearMouth();
+                else
+                    avatar3D.SetMouthShape(viseme.ToString());
+            }
+
             if (_blendShapeTarget == null)
                 return;
 
@@ -211,6 +243,15 @@ namespace NeonCompanion.Runtime.Voice
 
             char c = char.ToLowerInvariant(text[charIndex]);
             return CharToViseme.TryGetValue(c, out var viseme) ? viseme : Viseme.Silence;
+        }
+
+        private void RefreshTargets()
+        {
+            _spriteAnimator = _getSpriteAnimator != null ? _getSpriteAnimator() : null;
+            _hasLipsyncClip = _spriteAnimator != null &&
+                _spriteAnimator.HasClip(LipsyncClipName);
+            _hasTalkingClip = _spriteAnimator != null &&
+                _spriteAnimator.HasClip(TalkingClipName);
         }
 
     }

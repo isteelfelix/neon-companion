@@ -34,7 +34,7 @@ for field in (
 
 assert repository.count("NormalizeContract()") >= 2
 assert 'public const string Vrm = "vrm"' in profile
-assert "vrm_runtime_phase_b" in importer
+assert "vrm_restricted_features" in importer
 assert "DeleteImportDirectory" in importer
 assert "TryBuildClipMapping" in controller
 

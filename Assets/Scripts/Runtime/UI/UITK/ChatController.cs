@@ -78,6 +78,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Voice bubble replay
             public Action<string> ToggleAudioFile;
             public Action<string, float> SeekAudioFile;
+            public Action StopVoiceOutput;
             public Func<string, VoicePlaybackState> GetAudioPlaybackState;
         }
 
@@ -410,6 +411,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnStopClicked()
         {
+            _d.StopVoiceOutput?.Invoke();
             _approvalController?.Dismiss();
             DismissSessionPicker();
             _editController?.Hide();
@@ -564,6 +566,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             }
 
+            // A new generation is an interruption boundary for any previous TTS.
+            _d.StopVoiceOutput?.Invoke();
             List<ChatAttachment> pendingAttachments = _attachmentManager.CloneCurrent();
             string message = ChatAttachmentManager.StripAttachmentTokens(composerText, pendingAttachments);
             _d.MessageInput.value = string.Empty;

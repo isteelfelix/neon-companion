@@ -26,6 +26,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Light _directionalLight;
         private Transform _cameraPivot;
         private Transform _target;
+        private Vector3 _targetCenter;
 
         private Image _targetImage;
         private bool _dragging;
@@ -54,6 +55,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         {
             _target = modelRoot;
             EnsureRenderScene();
+            FrameTarget();
             UpdateCameraTransform();
         }
 
@@ -167,7 +169,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_cameraPivot == null)
                 return;
 
-            Vector3 pivot = _target != null ? _target.position : Vector3.zero;
+            Vector3 pivot = _target != null ? _targetCenter : Vector3.zero;
             _cameraPivot.position = pivot;
             _cameraPivot.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
 
@@ -176,6 +178,31 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _camera.transform.localPosition = new Vector3(0f, 0f, -_orbitDistance);
                 _camera.transform.LookAt(pivot);
             }
+        }
+
+        private void FrameTarget()
+        {
+            if (_target == null)
+            {
+                _targetCenter = Vector3.zero;
+                return;
+            }
+
+            Renderer[] renderers = _target.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                _targetCenter = _target.position;
+                return;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+                bounds.Encapsulate(renderers[i].bounds);
+
+            _targetCenter = bounds.center;
+            float halfHeight = Mathf.Max(bounds.extents.y, 0.25f);
+            float framedDistance = halfHeight / Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            _orbitDistance = Mathf.Clamp(framedDistance * 1.15f, _minDistance, _maxDistance);
         }
 
         private void BindImageEvents()

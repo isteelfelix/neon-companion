@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using NeonCompanion.Runtime.Avatar;
+using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Chat;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
@@ -29,6 +31,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             /// <summary>(ttsAudioPath, durationSecs) — attach a synthesized clip to the latest assistant message.</summary>
             public Action<string, float> AttachAssistantAudio;
             public Action OnVoicePlaybackCompleted;
+            public Func<SpriteSheetAnimator> GetAvatarAnimator;
+            public Func<IAvatar3DService> GetAvatar3DService;
             public Func<Task<ChatService>> GetChatServiceAsync;
             public Func<ChatService> GetChatServiceSync;
             public Func<bool> IsBound;
@@ -83,6 +87,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         internal void OnDisable()
         {
+            StopVoiceOutput();
             UnbindVoiceAnimationEvents();
             UnbindProviderChangeEvents();
             ChatService chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
@@ -154,7 +159,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_lipsyncController == null)
             {
                 _lipsyncController = _d.gameObject.AddComponent<LipsyncController>();
-                _lipsyncController.Initialize(_voiceOutputManager, _voiceInputManager);
+                _lipsyncController.Initialize(
+                    _voiceOutputManager,
+                    _voiceInputManager,
+                    _d.GetAvatarAnimator,
+                    _d.GetAvatar3DService);
             }
 
             BindVoiceAnimationEvents();
@@ -215,6 +224,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_voiceOutputManager != null)
             {
+                _voiceOutputManager.StopSpeakingAndClear();
                 _voiceOutputManager.OnResponseAudioReady -= HandleResponseAudioReady;
                 if (_voiceBoundToChat && chat != null)
                     _voiceOutputManager.UnbindChat(chat);
@@ -260,7 +270,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         internal void OnVoiceRecordingStarted()
         {
+            StopVoiceOutput();
+        }
+
+        internal void StopVoiceOutput()
+        {
             _voiceOutputManager?.StopSpeakingAndClear();
+            _isVoicePlaying = false;
+            _d.RefreshAvatarMotionState?.Invoke();
         }
 
         internal bool EnqueueVoiceResponse(string text)

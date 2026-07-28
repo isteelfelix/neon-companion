@@ -29,8 +29,14 @@ namespace NeonCompanion.Runtime.Data.Models
         public bool canAnimate;
         public bool hasStateAnimations;
         public bool hasLipsync;
+        public bool hasHumanoid;
+        public bool hasBlink;
+        public bool hasGaze;
+        public bool hasExpressions;
+        public bool isRestricted;
         public bool isRuntimeSupported;
         public int animationClipCount;
+        public int expressionCount;
         public int sceneNodeCount;
         public int rendererCount;
         public long triangleCount;
@@ -121,7 +127,8 @@ namespace NeonCompanion.Runtime.Data.Models
                     avatarType = AvatarProfileTypes.Static2D;
             }
 
-            if (avatarType == AvatarProfileTypes.Generic3D &&
+            if ((avatarType == AvatarProfileTypes.Generic3D ||
+                 avatarType == AvatarProfileTypes.Vrm) &&
                 !string.IsNullOrWhiteSpace(modelPath))
                 is3D = true;
 

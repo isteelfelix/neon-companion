@@ -1,4 +1,6 @@
 <linker>
   <!-- Avatar3DLoader resolves glTFast through reflection for package-version tolerance. -->
   <assembly fullname="glTFast" preserve="all" />
+  <!-- Runtime VRM import is a direct UniVRM API call and must survive IL2CPP stripping. -->
+  <assembly fullname="VRM10" preserve="all" />
 </linker>
