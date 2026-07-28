@@ -14,6 +14,8 @@ namespace NeonCompanion.Runtime.Voice
         public bool IsLoading;
         public float PositionSecs;
         public float DurationSecs;
+        /// <summary>Loudness of the moment being played, 0..1. Drives the bubble footer droplets.</summary>
+        public float Level;
     }
 
     /// <summary>
@@ -28,6 +30,8 @@ namespace NeonCompanion.Runtime.Voice
         private string _activePath;
         private bool _paused;
         private float _pendingSeekNormalized = -1f;
+        // Reused so sampling the level never allocates; 128 samples is plenty for an envelope.
+        private readonly float[] _levelBuffer = new float[128];
 
         public event Action OnPlaybackComplete;
 
@@ -133,8 +137,28 @@ namespace NeonCompanion.Runtime.Voice
                 IsPaused = isCurrent && _paused,
                 IsLoading = isCurrent && _loadCoroutine != null && _clip == null,
                 PositionSecs = isCurrent && _src != null ? _src.time : 0f,
-                DurationSecs = isCurrent && _clip != null ? _clip.length : 0f
+                DurationSecs = isCurrent && _clip != null ? _clip.length : 0f,
+                Level = isCurrent ? SampleLevel() : 0f
             };
+        }
+
+        /// <summary>
+        /// RMS of the output buffer, boosted into a usable 0..1 range — speech sits far below full
+        /// scale, so raw RMS would barely move anything. Sampled on demand from GetState rather than
+        /// polled, so it costs nothing while no clip is playing.
+        /// </summary>
+        private float SampleLevel()
+        {
+            if (_src == null || !_src.isPlaying)
+                return 0f;
+
+            float sum = 0f;
+            _src.GetOutputData(_levelBuffer, 0);
+            for (int i = 0; i < _levelBuffer.Length; i++)
+                sum += _levelBuffer[i] * _levelBuffer[i];
+
+            float rms = Mathf.Sqrt(sum / _levelBuffer.Length);
+            return Mathf.Clamp01(rms * 4.5f);
         }
 
         public void Stop()

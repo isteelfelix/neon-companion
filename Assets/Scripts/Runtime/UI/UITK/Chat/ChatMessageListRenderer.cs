@@ -740,25 +740,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 // A bare empty band would read as a mistake, so it carries a centred ornament —
                 // a quiet accent thread that animates on hover. Purely USS transitions, no
                 // scheduler, so a long transcript pays nothing for it.
-                var ornament = new VisualElement();
-                ornament.AddToClassList("transcript__stats-ornament");
-                ornament.pickingMode = PickingMode.Ignore;
-
-                var ornamentDotLeft = new VisualElement();
-                ornamentDotLeft.AddToClassList("transcript__stats-dot");
-                ornamentDotLeft.AddToClassList("transcript__stats-dot--l");
-
-                var ornamentThread = new VisualElement();
-                ornamentThread.AddToClassList("transcript__stats-thread");
-
-                var ornamentDotRight = new VisualElement();
-                ornamentDotRight.AddToClassList("transcript__stats-dot");
-                ornamentDotRight.AddToClassList("transcript__stats-dot--r");
-
-                ornament.Add(ornamentDotLeft);
-                ornament.Add(ornamentThread);
-                ornament.Add(ornamentDotRight);
-                statsFooter.Add(ornament);
+                var mercury = new MercuryFooterElement();
+                mercury.AddToClassList("transcript__stats-mercury");
+                statsFooter.Add(mercury);
 
                 var statsLabel = new Label();
                 statsLabel.AddToClassList("transcript__stats-label");
@@ -865,6 +849,11 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 });
                 track.RegisterCallback<PointerCaptureOutEvent>(_ => seekPointerId = -1);
 
+                // Looked up once: the droplets live in this message's own footer, which was added
+                // above for assistant messages (a user voice message simply has none).
+                MercuryFooterElement footerMercury =
+                    bubble.Q<MercuryFooterElement>(className: "transcript__stats-mercury");
+
                 bool voiceIdleRendered = false;
                 voiceBubble.schedule.Execute(() =>
                 {
@@ -887,10 +876,26 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                         playBtn.tooltip = LocalizationExtensions.Get("voice.preview.play", "Play");
                         voiceBubble.EnableInClassList("voice-bubble--playing", false);
                         voiceBubble.EnableInClassList("voice-bubble--paused", false);
+                        if (footerMercury != null)
+                        {
+                            footerMercury.Settle();
+                            footerMercury.RemoveFromClassList("transcript__stats-mercury--voice");
+                        }
                         return;
                     }
 
                     voiceIdleRendered = false;
+
+                    // Feed the footer droplets the loudness of the moment being played. The tick
+                    // here already runs for the progress bar, so the visualisation is free.
+                    if (footerMercury != null)
+                    {
+                        footerMercury.EnableInClassList("transcript__stats-mercury--voice", state.IsPlaying);
+                        if (state.IsPlaying)
+                            footerMercury.SetEnergy(state.Level);
+                        else
+                            footerMercury.Settle();
+                    }
                     float duration = state.IsCurrent && state.DurationSecs > 0f
                         ? state.DurationSecs
                         : capturedDuration;

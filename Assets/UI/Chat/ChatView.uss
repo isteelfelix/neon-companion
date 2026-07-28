@@ -498,64 +498,28 @@
     border-top-color: rgba(255, 255, 255, 0.06);
 }
 
-/* ---- Footer ornament ----
-   The footer is always present (it hosts the hover action buttons), so on a
-   message without stats it would otherwise be an empty band. This fills it: a
-   quiet accent thread with two satellites, centred by an overlay that spans the
-   whole footer so the mark stays centred whatever the stats text is doing.
-   Everything animates through USS transitions on the bubble's :hover — no
-   scheduler, so a thousand-message transcript costs nothing while idle. */
-.transcript__stats-ornament {
+/* ---- Footer mercury (MercuryFooterElement, drawn with Painter2D) ----
+   The footer is always present because it hosts the hover action buttons, so on
+   a message without stats it would otherwise be an empty band. Three droplets
+   fill it: merged and still at rest, drifting apart while the answer streams,
+   snapping about while it is spoken.
+   `color` is what the element paints with — it reads resolvedStyle.color rather
+   than a custom property, so the droplets follow the accent through every theme
+   for free. Geometry and motion live in C#; USS only places and tints. */
+.transcript__stats-mercury {
     position: absolute;
     left: 0;
     right: 0;
     top: 0;
     bottom: 0;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
+    color: var(--accent);
+    opacity: 0.75;
 }
 
-.transcript__stats-thread {
-    width: 26px;
-    height: 1px;
-    background-color: var(--accent);
-    opacity: 0.20;
-    transition-property: scale, opacity;
-    transition-duration: 0.45s;
-    transition-timing-function: ease-out;
-}
-
-.transcript__stats-dot {
-    width: 2px;
-    height: 2px;
-    border-radius: 999px;
-    background-color: var(--accent-2);
-    opacity: 0.18;
-    margin: 0 5px;
-    transition-property: translate, scale, opacity;
-    transition-duration: 0.45s;
-    transition-delay: 0.06s;
-    transition-timing-function: ease-out;
-}
-
-/* Hover: the thread stretches out of the centre, the satellites drift apart
-   slightly behind it (transition-delay above) and brighten. */
-.transcript__bubble--assistant:hover .transcript__stats-thread {
-    scale: 2.4 1;
-    opacity: 0.62;
-}
-
-.transcript__bubble--assistant:hover .transcript__stats-dot--l {
-    translate: -22px 0;
-    scale: 1.6 1.6;
-    opacity: 0.5;
-}
-
-.transcript__bubble--assistant:hover .transcript__stats-dot--r {
-    translate: 22px 0;
-    scale: 1.6 1.6;
-    opacity: 0.5;
+/* Speaking reads in a different hue than working, without a second animation. */
+.transcript__stats-mercury--voice {
+    color: var(--accent-2);
+    opacity: 1;
 }
 
 .transcript__stats-label {
@@ -2172,12 +2136,8 @@
     min-width: 0;
 }
 
-/* Touch has no hover, so the ornament would just be a static smudge — and the
-   footer there is not load-bearing anyway, since the action buttons sit in the
-   flow under the bubble rather than on top of it. */
-.ff-phone .transcript__stats-ornament {
-    display: none;
-}
+/* The droplets stay on phone — they react to streaming and playback, not to
+   hover, so they carry the same meaning without a pointer. */
 
 /* Bubble actions (copy / regenerate / listen): on desktop they are a hover-only
    overlay in the bubble's corner. Touch has no hover, and a permanent overlay
