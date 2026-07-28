@@ -688,7 +688,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 // Refresh the send/stop button for whatever session is now in the foreground
                 // (it may differ from the one this send targeted).
-                _streamingCoordinator?.SetSending(IsForegroundGenerating());
+                bool foregroundGenerating = chat != null &&
+                    chat.IsHermesActive &&
+                    chat.IsSessionGenerating(chat.CurrentSessionId);
+                _streamingCoordinator?.SetSending(foregroundGenerating);
 
                 // Show notification badge if window not focused
                 if (!Application.isFocused)
@@ -698,7 +701,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
                 // Process queued messages only when the foreground is idle (the queue is the
                 // current session's backlog; don't drain it into a different session).
-                if (_messageQueue.Count > 0 && !IsForegroundGenerating())
+                if (_messageQueue.Count > 0 && !foregroundGenerating)
                 {
                     nextQueuedMessage = _messageQueue.Dequeue();
                     RenderQueueIndicator();
