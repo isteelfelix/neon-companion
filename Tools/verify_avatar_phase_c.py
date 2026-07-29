@@ -102,6 +102,11 @@ for field in (
     assert field in settings and field in controller, "missing persisted control: " + field
 
 for element in (
+    "companion-window-card",
+    "companion-configure-button",
+    "companion-settings-overlay",
+    "companion-settings-close-button",
+    "companion-avatar-settings-button",
     "companion-visible-toggle",
     "companion-pinned-toggle",
     "companion-click-through-toggle",
@@ -110,6 +115,27 @@ for element in (
     "companion-return-button",
 ):
     assert element in uxml and element in controller, "missing UI wiring: " + element
+
+card_body = uxml.split('name="companion-window-card"', 1)[1].split(
+    'name="companion-settings-overlay"', 1
+)[0]
+assert "companion-scale-slider" not in card_body
+assert "companion-pinned-toggle" not in card_body
+assert "companion-configure-button" in card_body
+for marker in (
+    "DrawHoverControls",
+    "DrawContextMenu",
+    "WindowsCompanionWindowNative.BeginDrag()",
+    '"open_avatar_settings"',
+    '"return_to_column"',
+    '"pinned"',
+    '"visible"',
+    '"scale"',
+):
+    assert marker in player, "missing Companion Pet interaction: " + marker
+assert "DrawControls" not in player, "legacy permanent Companion controls remain"
+assert "CompanionWindowEventKind.ScaleChanged" in parent
+assert "CompanionWindowEventKind.ScaleChanged" in controller
 
 chat_uxml = read("Assets/UI/Chat/ChatView.uxml")
 assert "avatar-detach-button" in chat_uxml and "avatar-detach-button" in controller

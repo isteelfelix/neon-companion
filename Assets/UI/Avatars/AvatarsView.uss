@@ -712,74 +712,98 @@
 }
 .companion-window-card {
     flex-direction: row;
-    flex-wrap: wrap;
     align-items: center;
-    padding: 12px;
+    align-self: flex-start;
+    max-width: 440px;
+    padding: 8px 10px;
     margin-bottom: 12px;
     border-width: 1px;
-    border-color: var(--border);
-    border-radius: 10px;
-    background-color: var(--surface);
+    border-color: var(--line-2);
+    border-radius: var(--r-lg);
+    background-color: var(--bg-1);
 }
 
 .companion-window-card__copy {
     flex-grow: 1;
-    min-width: 260px;
-    margin-right: 12px;
+    margin-right: 10px;
 }
 
 .companion-window-card__title {
-    color: var(--text-primary);
+    color: var(--text-0);
     font-size: 14px;
     -unity-font-style: bold;
 }
 
-.companion-window-card__subtitle,
-.companion-window-card__status,
-.companion-window-card__hint {
-    color: var(--text-muted);
+.companion-window-card__status {
+    color: var(--text-3);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.companion-settings-overlay {
+    position: absolute;
+}
+
+.companion-settings-scrim {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.companion-settings-modal {
+    width: 520px;
+    max-width: 94%;
+}
+
+.companion-settings-modal__head {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.companion-settings-modal__copy,
+.companion-settings-modal__scale,
+.companion-settings-modal__scale > Slider {
+    flex-grow: 1;
+}
+
+.companion-settings-modal__title {
+    color: var(--text-0);
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.companion-settings-modal__subtitle,
+.companion-settings-modal__hint {
+    color: var(--text-3);
     font-size: 11px;
     margin-top: 3px;
+    white-space: normal;
 }
 
-.companion-window-card__status {
-    color: var(--accent);
+.companion-settings-modal__close {
+    min-width: 32px;
+    margin-left: 10px;
 }
 
-.companion-window-card__toggle {
-    margin-left: 8px;
+.companion-settings-modal__options {
+    margin-bottom: 8px;
 }
 
-.companion-window-card__options {
-    width: 100%;
+.companion-settings-modal__options > * {
+    margin-bottom: 8px;
+}
+
+.companion-settings-modal__actions {
     flex-direction: row;
-    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     margin-top: 10px;
 }
 
-.companion-window-card__options > * {
-    margin-right: 12px;
-}
-
-.companion-window-card__scale {
-    flex-grow: 1;
-    min-width: 180px;
-}
-
-.companion-window-card__scale > Slider {
-    flex-grow: 1;
-}
-
-.companion-window-card__hint {
-    flex-grow: 1;
-    margin-top: 10px;
-}
-
-.companion-window-card__actions {
-    flex-direction: row;
-    margin-top: 10px;
-}
-
-.companion-window-card__actions > .btn {
+.companion-settings-modal__actions > .btn {
     margin-left: 6px;
+    margin-bottom: 6px;
 }

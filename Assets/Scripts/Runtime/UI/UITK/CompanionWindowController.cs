@@ -36,7 +36,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private int _monitorIndex;
 
         private VisualElement _card;
+        private VisualElement _settingsOverlay;
+        private VisualElement _settingsScrim;
         private Label _title;
+        private Label _settingsTitle;
         private Label _subtitle;
         private Label _status;
         private Label _emergencyHint;
@@ -50,6 +53,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _hideButton;
         private Button _returnButton;
         private Button _detachButton;
+        private Button _configureButton;
+        private Button _settingsCloseButton;
+        private Button _avatarSettingsButton;
 
         public bool IsAvailable => _service != null && _service.IsAvailable;
         public string DockState => _dockState.State;
@@ -66,7 +72,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             _card = root.Q<VisualElement>("companion-window-card");
+            _settingsOverlay = root.Q<VisualElement>("companion-settings-overlay");
+            _settingsScrim = root.Q<VisualElement>("companion-settings-scrim");
             _title = root.Q<Label>("companion-window-title");
+            _settingsTitle = root.Q<Label>("companion-settings-title");
             _subtitle = root.Q<Label>("companion-window-subtitle");
             _status = root.Q<Label>("companion-window-status");
             _emergencyHint = root.Q<Label>("companion-window-emergency");
@@ -80,9 +89,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             _hideButton = root.Q<Button>("companion-hide-button");
             _returnButton = root.Q<Button>("companion-return-button");
             _detachButton = root.Q<Button>("avatar-detach-button");
+            _configureButton = root.Q<Button>("companion-configure-button");
+            _settingsCloseButton = root.Q<Button>("companion-settings-close-button");
+            _avatarSettingsButton = root.Q<Button>("companion-avatar-settings-button");
 
             Localize();
             SetDisplay(_card, DisplayStyle.None);
+            SetDisplay(_settingsOverlay, DisplayStyle.None);
             SetDisplay(_detachButton, DisplayStyle.None);
             _ = LoadAsync();
         }
@@ -108,6 +121,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_hideButton, OnHideClicked);
             RegisterClick(_returnButton, OnReturnClicked);
             RegisterClick(_detachButton, OnDetachClicked);
+            RegisterClick(_configureButton, OnConfigureClicked);
+            RegisterClick(_settingsCloseButton, OnSettingsCloseClicked);
+            RegisterClick(_settingsScrim, OnSettingsCloseClicked);
+            RegisterClick(_avatarSettingsButton, OnAvatarSettingsClicked);
         }
 
         public void UnregisterCallbacks()
@@ -126,6 +143,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_hideButton, OnHideClicked);
             UnregisterClick(_returnButton, OnReturnClicked);
             UnregisterClick(_detachButton, OnDetachClicked);
+            UnregisterClick(_configureButton, OnConfigureClicked);
+            UnregisterClick(_settingsCloseButton, OnSettingsCloseClicked);
+            UnregisterClick(_settingsScrim, OnSettingsCloseClicked);
+            UnregisterClick(_avatarSettingsButton, OnAvatarSettingsClicked);
             if (_service != null)
                 _service.EventReceived -= OnServiceEvent;
         }
@@ -424,10 +445,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             Detach();
         }
 
+        private void OnConfigureClicked(ClickEvent evt)
+        {
+            SetDisplay(_settingsOverlay, DisplayStyle.Flex);
+            _settingsOverlay?.BringToFront();
+        }
+
+        private void OnSettingsCloseClicked(ClickEvent evt)
+        {
+            SetDisplay(_settingsOverlay, DisplayStyle.None);
+        }
+
+        private void OnAvatarSettingsClicked(ClickEvent evt)
+        {
+            SetDisplay(_settingsOverlay, DisplayStyle.None);
+            _d.OpenAvatarSettings?.Invoke();
+        }
+
         private void ReturnToColumn()
         {
             if (!IsAvailable)
                 return;
+            SetDisplay(_settingsOverlay, DisplayStyle.None);
             _service.ClearVoicePlayback();
             _service.SetState(CompanionDisplayStates.Stop);
             _service.Stop();
@@ -483,6 +522,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _pinnedToggle?.SetValueWithoutNotify(evt.BoolValue);
                     SaveSettings();
                     break;
+                case CompanionWindowEventKind.ScaleChanged:
+                    _preferences.scale = Mathf.Clamp(evt.FloatValue, 0.5f, 2f);
+                    _scaleSlider?.SetValueWithoutNotify(_preferences.scale);
+                    SaveSettings();
+                    break;
             }
         }
 
@@ -518,7 +562,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void Localize()
         {
             if (_title != null)
-                _title.text = LocalizationExtensions.Get("companion.window.title", "Companion window");
+                _title.text = LocalizationExtensions.Get("companion.window.short", "Companion");
+            if (_settingsTitle != null)
+                _settingsTitle.text = LocalizationExtensions.Get(
+                    "companion.window.settings",
+                    "Companion Pet");
             if (_subtitle != null)
                 _subtitle.text = LocalizationExtensions.Get(
                     "companion.window.subtitle",
@@ -545,6 +593,14 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _detachButton.text = LocalizationExtensions.Get(
                     "companion.window.detach",
                     "Detach");
+            if (_configureButton != null)
+                _configureButton.text = LocalizationExtensions.Get(
+                    "companion.window.configure",
+                    "Configure");
+            if (_avatarSettingsButton != null)
+                _avatarSettingsButton.text = LocalizationExtensions.Get(
+                    "companion.window.avatar_settings",
+                    "Avatar settings");
             if (_emergencyHint != null)
                 _emergencyHint.text = LocalizationExtensions.Get(
                     "companion.window.emergency",

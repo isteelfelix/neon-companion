@@ -359,6 +359,13 @@ namespace NeonCompanion.Runtime.Platform
                         BoolValue = message.boolValue
                     });
                     break;
+                case "scale":
+                    _events.Enqueue(new CompanionWindowEvent
+                    {
+                        Kind = CompanionWindowEventKind.ScaleChanged,
+                        FloatValue = message.floatValue
+                    });
+                    break;
                 case "diagnostic":
                     NeonLogger.Log("[CompanionWindow.Player] " + (message.text ?? string.Empty));
                     break;

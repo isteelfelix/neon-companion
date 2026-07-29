@@ -100,7 +100,9 @@
       "title": "Drag, Settings, Column, Show/Hide, Pin, click-through, and emergency release controls",
       "runnerStatus": "blocked_windows_manual_ui",
       "executableCoverage": [
-        "Tools/Test-CompanionWindowsAcceptance.ps1"
+        "Tools/Test-CompanionWindowsAcceptance.ps1",
+        "Tools/verify_avatar_phase_c.py",
+        "Assets/Tests/EditMode/AvatarPhaseDTests.cs::CompanionPetPreferencesPreserveVisiblePinAndScale"
       ],
       "felixEvidence": [
         "Record manual control smoke including drag and navigation buttons.",

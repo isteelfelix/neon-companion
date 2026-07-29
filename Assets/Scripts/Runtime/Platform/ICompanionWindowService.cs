@@ -185,7 +185,8 @@ namespace NeonCompanion.Runtime.Platform
         BoundsChanged,
         ClickThroughChanged,
         VisibilityChanged,
-        PinnedChanged
+        PinnedChanged,
+        ScaleChanged
     }
 
     public sealed class CompanionWindowEvent
@@ -195,6 +196,7 @@ namespace NeonCompanion.Runtime.Platform
         public int X;
         public int Y;
         public bool BoolValue;
+        public float FloatValue;
     }
 
     public interface ICompanionWindowService : IDisposable
@@ -222,6 +224,7 @@ namespace NeonCompanion.Runtime.Platform
         public string type;
         public string text;
         public bool boolValue;
+        public float floatValue;
         public int x;
         public int y;
         public CompanionDisplaySnapshot snapshot;

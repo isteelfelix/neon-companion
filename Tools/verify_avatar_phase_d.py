@@ -258,6 +258,7 @@ def verify_implementation_contracts():
         "GenericMappingAndFutureContractFallbackStayDeterministic",
         "CompanionDockStateMachineCoversDetachHideRecoveryAndReturn",
         "DockDetachDoesNotMutateProfileSessionOrVoiceRoute",
+        "CompanionPetPreferencesPreserveVisiblePinAndScale",
         "ChangedSourceIsRejectedBeforeCopy",
         "TemporaryPreviewObjectsUseEditModeSafeCleanup",
         "OversizedImageIsRejectedBeforeDecode",

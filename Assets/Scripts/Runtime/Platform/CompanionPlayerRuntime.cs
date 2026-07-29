@@ -84,7 +84,10 @@ namespace NeonCompanion.Runtime.Platform
         private string _voiceText;
         private float _voiceStartedAt;
         private int _voiceCharIndex = -1;
-        private Rect _controlRect = new Rect(8f, 8f, 404f, 94f);
+        private Rect _hoverControlsRect = new Rect(8f, 8f, 264f, 34f);
+        private Rect _contextMenuRect = new Rect(8f, 8f, 220f, 248f);
+        private bool _contextMenuOpen;
+        private bool _pointerInside;
 
         private void Awake()
         {
@@ -496,11 +499,36 @@ namespace NeonCompanion.Runtime.Platform
         private void OnGUI()
         {
             DrawAvatar();
-            if (!_preferences.clickThrough)
+            if (_preferences.clickThrough)
+                return;
+
+            Event current = Event.current;
+            if (current != null && current.type == EventType.MouseEnterWindow)
+                _pointerInside = true;
+            else if (current != null && current.type == EventType.MouseLeaveWindow)
             {
-                _controlRect.width = Mathf.Max(194f, Screen.width - 16f);
-                _controlRect = GUI.Window(7331, _controlRect, DrawControls, string.Empty);
+                _pointerInside = false;
+                _contextMenuOpen = false;
             }
+            if (current != null && current.type == EventType.MouseDown && current.button == 1)
+            {
+                _pointerInside = true;
+                _contextMenuRect.x = Mathf.Clamp(
+                    current.mousePosition.x,
+                    4f,
+                    Mathf.Max(4f, Screen.width - _contextMenuRect.width - 4f));
+                _contextMenuRect.y = Mathf.Clamp(
+                    current.mousePosition.y,
+                    4f,
+                    Mathf.Max(4f, Screen.height - _contextMenuRect.height - 4f));
+                _contextMenuOpen = true;
+                current.Use();
+            }
+
+            if (_pointerInside && !_contextMenuOpen)
+                DrawHoverControls();
+            if (_contextMenuOpen)
+                _contextMenuRect = GUI.Window(7332, _contextMenuRect, DrawContextMenu, string.Empty);
         }
 
         private void DrawAvatar()
@@ -541,50 +569,135 @@ namespace NeonCompanion.Runtime.Platform
                 GUI.DrawTexture(rect, _staticTexture, ScaleMode.ScaleToFit, true);
         }
 
-        private void DrawControls(int id)
+        private void DrawHoverControls()
         {
-            float buttonWidth = (_controlRect.width - 16f) / 3f;
-            if (GUI.Button(new Rect(4f, 6f, buttonWidth, 24f),
-                LocalizationExtensions.Get("companion.player.settings", "Settings")))
-                Send(new CompanionProcessMessage { type = "open_avatar_settings" });
-            if (GUI.Button(new Rect(8f + buttonWidth, 6f, buttonWidth, 24f),
+            _hoverControlsRect.x = Mathf.Max(8f, (Screen.width - _hoverControlsRect.width) * 0.5f);
+            GUI.Box(_hoverControlsRect, string.Empty);
+
+            Rect dragRect = new Rect(
+                _hoverControlsRect.x + 4f,
+                _hoverControlsRect.y + 4f,
+                132f,
+                26f);
+            GUI.Label(dragRect, "⋮⋮ " + LocalizationExtensions.Get(
+                "companion.window.short",
+                "Companion"));
+            Event current = Event.current;
+            if (current != null && current.type == EventType.MouseDown &&
+                current.button == 0 && dragRect.Contains(current.mousePosition))
+            {
+                WindowsCompanionWindowNative.BeginDrag();
+                current.Use();
+            }
+
+            if (GUI.Button(
+                new Rect(_hoverControlsRect.x + 140f, _hoverControlsRect.y + 4f, 86f, 26f),
                 LocalizationExtensions.Get("companion.player.column", "Column")))
                 Send(new CompanionProcessMessage { type = "return_to_column" });
-            if (GUI.Button(new Rect(12f + (buttonWidth * 2f), 6f, buttonWidth, 24f),
+            if (GUI.Button(
+                new Rect(_hoverControlsRect.x + 230f, _hoverControlsRect.y + 4f, 30f, 26f),
+                "×"))
+                Application.Quit();
+        }
+
+        private void DrawContextMenu(int id)
+        {
+            float width = _contextMenuRect.width - 8f;
+            float y = 4f;
+            if (ContextButton(
+                _preferences.visible
+                    ? LocalizationExtensions.Get("companion.player.hide", "Hide")
+                    : LocalizationExtensions.Get("companion.player.show", "Show"),
+                width,
+                ref y))
+            {
+                _preferences.visible = !_preferences.visible;
+                Send(new CompanionProcessMessage
+                {
+                    type = "visible",
+                    boolValue = _preferences.visible
+                });
+                WindowsCompanionWindowNative.SetVisible(_preferences.visible);
+                _contextMenuOpen = false;
+            }
+            if (ContextButton(
                 _preferences.pinned
                     ? LocalizationExtensions.Get("companion.player.unpin", "Unpin")
-                    : LocalizationExtensions.Get("companion.player.pin", "Pin")))
+                    : LocalizationExtensions.Get("companion.player.pin", "Pin"),
+                width,
+                ref y))
             {
                 _preferences.pinned = !_preferences.pinned;
                 WindowsCompanionWindowNative.SetTopmost(_preferences.pinned);
                 Send(new CompanionProcessMessage { type = "pinned", boolValue = _preferences.pinned });
+                _contextMenuOpen = false;
             }
-            if (GUI.Button(new Rect(4f, 34f, buttonWidth, 24f),
-                LocalizationExtensions.Get("companion.player.click_through", "Click-through")))
-            {
-                _preferences.clickThrough = true;
-                WindowsCompanionWindowNative.SetClickThrough(true);
-                Send(new CompanionProcessMessage { type = "click_through", boolValue = true });
-            }
-            if (GUI.Button(new Rect(8f + buttonWidth, 34f, buttonWidth, 24f),
-                LocalizationExtensions.Get("companion.player.hide", "Hide")))
-            {
-                _preferences.visible = false;
-                Send(new CompanionProcessMessage { type = "visible", boolValue = false });
-                WindowsCompanionWindowNative.SetVisible(false);
-            }
-            if (GUI.Button(new Rect(12f + (buttonWidth * 2f), 34f, buttonWidth, 24f), "×"))
-                Application.Quit();
 
             GUI.Label(
-                new Rect(6f, 64f, _controlRect.width - 12f, 22f),
-                (_snapshot != null
-                    ? _snapshot.displayName
-                    : LocalizationExtensions.Get("companion.window.short", "Companion")) +
-                " · " + DisplayStateLabel());
-            GUI.DragWindow(new Rect(0f, 60f, _controlRect.width, 34f));
-            if (Event.current.type == EventType.MouseDown && Event.current.mousePosition.y >= 60f)
-                WindowsCompanionWindowNative.BeginDrag();
+                new Rect(4f, y, width, 22f),
+                LocalizationExtensions.Get("companion.player.scale", "Scale"));
+            y += 22f;
+            float scaleButtonWidth = (width - 12f) / 4f;
+            float[] scales = { 0.75f, 1f, 1.25f, 1.5f };
+            for (int i = 0; i < scales.Length; i++)
+            {
+                float scale = scales[i];
+                if (GUI.Button(
+                    new Rect(4f + (scaleButtonWidth + 4f) * i, y, scaleButtonWidth, 24f),
+                    Mathf.RoundToInt(scale * 100f) + "%"))
+                {
+                    SetWindowScale(scale);
+                    _contextMenuOpen = false;
+                }
+            }
+            y += 28f;
+
+            if (ContextButton(
+                LocalizationExtensions.Get("companion.window.avatar_settings", "Avatar settings"),
+                width,
+                ref y))
+            {
+                Send(new CompanionProcessMessage { type = "open_avatar_settings" });
+                _contextMenuOpen = false;
+            }
+            if (ContextButton(
+                LocalizationExtensions.Get("companion.player.return", "Return to column"),
+                width,
+                ref y))
+            {
+                Send(new CompanionProcessMessage { type = "return_to_column" });
+                _contextMenuOpen = false;
+            }
+            if (ContextButton(
+                LocalizationExtensions.Get("companion.player.close", "Close"),
+                width,
+                ref y))
+                Application.Quit();
+
+            Event current = Event.current;
+            if (current != null && current.type == EventType.MouseDown &&
+                current.button == 0 &&
+                !new Rect(0f, 0f, _contextMenuRect.width, _contextMenuRect.height)
+                    .Contains(current.mousePosition))
+                _contextMenuOpen = false;
+        }
+
+        private static bool ContextButton(string text, float width, ref float y)
+        {
+            bool clicked = GUI.Button(new Rect(4f, y, width, 26f), text);
+            y += 30f;
+            return clicked;
+        }
+
+        private void SetWindowScale(float scale)
+        {
+            _preferences.scale = Mathf.Clamp(scale, 0.5f, 2f);
+            _nativeApplied = WindowsCompanionWindowNative.Apply(_preferences);
+            Send(new CompanionProcessMessage
+            {
+                type = "scale",
+                floatValue = _preferences.scale
+            });
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)

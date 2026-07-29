@@ -163,6 +163,24 @@ namespace NeonCompanion.Tests
             Assert.IsNotNull(voiceRoute);
         }
 
+        [Test]
+        public void CompanionPetPreferencesPreserveVisiblePinAndScale()
+        {
+            var preferences = new CompanionWindowPreferences
+            {
+                visible = false,
+                pinned = true,
+                scale = 1.25f
+            };
+
+            CompanionWindowPreferences restored =
+                JsonUtility.FromJson<CompanionWindowPreferences>(JsonUtility.ToJson(preferences));
+
+            Assert.IsFalse(restored.visible);
+            Assert.IsTrue(restored.pinned);
+            Assert.AreEqual(1.25f, restored.scale);
+        }
+
         [UnityTest]
         public IEnumerator ChangedSourceIsRejectedBeforeCopy()
         {
