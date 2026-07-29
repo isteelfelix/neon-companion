@@ -27,6 +27,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
     public static class Avatar3DLoader
     {
+        public const bool Generic3DEnabled = false;
         public const long MaxModelFileBytes = 100L * 1024L * 1024L;
         public const int MaxSceneNodes = 512;
         public const int MaxRenderers = 128;
@@ -79,6 +80,11 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             string ext = Path.GetExtension(fullPath).ToLowerInvariant();
+            if (!Generic3DEnabled && (ext == ".glb" || ext == ".gltf"))
+            {
+                result.Error = "Generic GLB/glTF runtime loading is not enabled in this release.";
+                return result;
+            }
             if (ext != ".glb" && ext != ".gltf" && ext != ".vrm")
             {
                 result.ErrorCode = "unsupported_format";

@@ -29,6 +29,10 @@ namespace NeonCompanion.Runtime.Platform
         private string _state = CompanionDisplayStates.Idle;
         private string _voiceText;
         private bool _stopping;
+        private bool _pipeConnected;
+        private bool _runtimeReady;
+        private DateTime _lastHeartbeatUtc;
+        private const int HandshakeTimeoutMilliseconds = 10000;
 
         public WindowsCompanionWindowService()
         {
@@ -43,6 +47,11 @@ namespace NeonCompanion.Runtime.Platform
         }
 
         public bool IsRunning
+        {
+            get { return HasLiveProcess && _runtimeReady; }
+        }
+
+        private bool HasLiveProcess
         {
             get { return _process != null && !_process.HasExited; }
         }
@@ -59,9 +68,10 @@ namespace NeonCompanion.Runtime.Platform
             _snapshot = snapshot;
             _preferences = preferences ?? new CompanionWindowPreferences();
 
-            if (IsRunning)
+            if (HasLiveProcess)
             {
-                SendProfileAndPreferences();
+                if (_runtimeReady)
+                    SendProfileAndPreferences();
                 return;
             }
 
@@ -77,7 +87,9 @@ namespace NeonCompanion.Runtime.Platform
                 PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous);
 
-            Task.Run(() => AcceptClient(pipeName, _cancellation.Token));
+            NamedPipeServerStream pipe = _pipe;
+            CancellationTokenSource cancellation = _cancellation;
+            Task.Run(() => AcceptClientAsync(pipeName, pipe, cancellation));
 
             try
             {
@@ -199,43 +211,84 @@ namespace NeonCompanion.Runtime.Platform
             Stop();
         }
 
-        private void AcceptClient(string pipeName, CancellationToken token)
+        private async Task AcceptClientAsync(
+            string pipeName,
+            NamedPipeServerStream pipe,
+            CancellationTokenSource cancellation)
         {
+            CancellationToken token = cancellation.Token;
             try
             {
-                _pipe.WaitForConnection();
+                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(token))
+                {
+                    timeout.CancelAfter(HandshakeTimeoutMilliseconds);
+                    await pipe.WaitForConnectionAsync(timeout.Token);
+                }
                 if (token.IsCancellationRequested)
                     return;
 
+                var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, true);
                 lock (_writeLock)
                 {
+                    if (!ReferenceEquals(_pipe, pipe))
+                        return;
                     _writer = new StreamWriter(_pipe, new UTF8Encoding(false), 1024, true);
                     _writer.AutoFlush = true;
                 }
 
-                SendProfileAndPreferences();
-                QueueEvent(CompanionWindowEventKind.Started, "Companion player connected.");
+                _pipeConnected = true;
                 NeonLogger.Log("[CompanionWindow] IPC connected: " + pipeName);
-
-                using (var reader = new StreamReader(_pipe, Encoding.UTF8, false, 1024, true))
-                {
-                    while (!token.IsCancellationRequested && _pipe.IsConnected)
-                    {
-                        string line = reader.ReadLine();
-                        if (line == null)
-                            break;
-                        Receive(line);
-                    }
-                }
+                Task readTask = ReadClientAsync(reader, pipe, token);
+                SendProfileAndPreferences();
+                Task timeoutTask = Task.Delay(HandshakeTimeoutMilliseconds, token);
+                Task completed = await Task.WhenAny(readTask, WaitForRuntimeReadyAsync(token), timeoutTask);
+                if (completed == timeoutTask && !_runtimeReady)
+                    throw new TimeoutException("IPC connected, but runtime-ready handshake timed out.");
+                await readTask;
+            }
+            catch (OperationCanceledException)
+            {
+                if (!token.IsCancellationRequested && !_stopping)
+                    FailIpc("Pipe connection timed out.");
             }
             catch (Exception ex)
             {
                 if (!token.IsCancellationRequested && !_stopping)
+                    FailIpc(ex.Message);
+            }
+            finally
+            {
+                ClosePipe(pipe, cancellation);
+            }
+        }
+
+        private async Task ReadClientAsync(
+            StreamReader reader,
+            NamedPipeServerStream pipe,
+            CancellationToken token)
+        {
+            using (reader)
+            {
+                while (!token.IsCancellationRequested && pipe.IsConnected)
                 {
-                    QueueEvent(CompanionWindowEventKind.Failed, "IPC failed: " + ex.Message);
-                    NeonLogger.LogError("[CompanionWindow] IPC failed: " + ex);
+                    string line = await reader.ReadLineAsync();
+                    if (line == null)
+                        break;
+                    Receive(line);
                 }
             }
+        }
+
+        private async Task WaitForRuntimeReadyAsync(CancellationToken token)
+        {
+            while (!_runtimeReady && !token.IsCancellationRequested)
+                await Task.Delay(25, token);
+        }
+
+        private void FailIpc(string reason)
+        {
+            QueueEvent(CompanionWindowEventKind.Failed, "IPC failed: " + reason);
+            NeonLogger.LogError("[CompanionWindow] IPC failed: " + reason);
         }
 
         private void Receive(string json)
@@ -256,6 +309,18 @@ namespace NeonCompanion.Runtime.Platform
 
             switch (message.type)
             {
+                case "runtime_ready":
+                    if (!_runtimeReady)
+                    {
+                        _runtimeReady = true;
+                        _lastHeartbeatUtc = DateTime.UtcNow;
+                        QueueEvent(CompanionWindowEventKind.Started, "Companion runtime ready.");
+                        NeonLogger.Log("[CompanionWindow] Runtime ready.");
+                    }
+                    break;
+                case "heartbeat":
+                    _lastHeartbeatUtc = DateTime.UtcNow;
+                    break;
                 case "open_avatar_settings":
                     QueueEvent(CompanionWindowEventKind.OpenAvatarSettings, null);
                     break;
@@ -329,6 +394,9 @@ namespace NeonCompanion.Runtime.Platform
 
         private void OnProcessExited(object sender, EventArgs args)
         {
+            if (!ReferenceEquals(sender, _process))
+                return;
+
             int exitCode = -1;
             try
             {
@@ -353,29 +421,59 @@ namespace NeonCompanion.Runtime.Platform
             _events.Enqueue(new CompanionWindowEvent { Kind = kind, Message = message });
         }
 
-        private void ClosePipe()
+        private void ClosePipe(
+            NamedPipeServerStream expectedPipe = null,
+            CancellationTokenSource expectedCancellation = null)
         {
+            if (expectedPipe != null && !ReferenceEquals(expectedPipe, _pipe))
+                return;
+            if (expectedCancellation != null &&
+                !ReferenceEquals(expectedCancellation, _cancellation))
+                return;
+
             CancellationTokenSource cancellation = _cancellation;
             _cancellation = null;
-            if (cancellation != null)
+            try
             {
-                cancellation.Cancel();
-                cancellation.Dispose();
+                if (cancellation != null)
+                    cancellation.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
             }
 
             lock (_writeLock)
             {
-                if (_writer != null)
+                StreamWriter writer = _writer;
+                NamedPipeServerStream pipe = _pipe;
+                _writer = null;
+                _pipe = null;
+                try
                 {
-                    _writer.Dispose();
-                    _writer = null;
+                    if (writer != null)
+                        writer.Dispose();
                 }
-                if (_pipe != null)
+                catch (Exception)
                 {
-                    _pipe.Dispose();
-                    _pipe = null;
+                }
+                finally
+                {
+                    try
+                    {
+                        if (pipe != null)
+                            pipe.Dispose();
+                    }
+                    catch (Exception)
+                    {
+                    }
                 }
             }
+
+            if (cancellation != null)
+                cancellation.Dispose();
+            _pipeConnected = false;
+            _runtimeReady = false;
+            _lastHeartbeatUtc = DateTime.MinValue;
         }
 
         private static string Quote(string value)

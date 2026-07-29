@@ -346,6 +346,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SetDisplay(_previewDeleteAvatarBtn, DisplayStyle.None);
             SetDisplay(_avatarImportOverlay, DisplayStyle.None);
             SetDisplay(_avatarImportMapping, DisplayStyle.None);
+            SetDisplay(_avatarImport3DBtn, DisplayStyle.None);
             if (_avatarImportPreviewImage != null)
                 _avatarImportPreviewImage.scaleMode = ScaleMode.ScaleToFit;
             LocalizeImportUi(root);
@@ -1837,7 +1838,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _cachedProfilesById[profile.id] = profile;
             }
 
-            _cachedCustomProfiles = profiles.Where(a => a != null && !a.isBuiltIn).ToList();
+            _cachedCustomProfiles = profiles.Where(a =>
+                a != null &&
+                !a.isBuiltIn &&
+                a.avatarType != AvatarProfileTypes.Generic3D).ToList();
         }
 
         private VisualElement CreateCustomAvatarTile(AvatarProfile profile)
@@ -2152,7 +2156,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     requestedType != _avatarImportType)
                 {
                     if (inspection.previewInstance != null)
-                        UnityEngine.Object.Destroy(inspection.previewInstance);
+                        AvatarAssetImporter.DestroyTemporaryObject(inspection.previewInstance);
                     return;
                 }
                 ReleaseImportPreviewModel();
@@ -2523,11 +2527,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_avatarImportInspection != null &&
                 _avatarImportInspection.previewInstance != null)
             {
-                UnityEngine.Object.Destroy(_avatarImportInspection.previewInstance);
+                AvatarAssetImporter.DestroyTemporaryObject(_avatarImportInspection.previewInstance);
                 _avatarImportInspection.previewInstance = null;
             }
             if (_avatarImportPreviewModel != null)
-                UnityEngine.Object.Destroy(_avatarImportPreviewModel);
+                AvatarAssetImporter.DestroyTemporaryObject(_avatarImportPreviewModel);
             _avatarImportPreviewModel = null;
 
             if (_avatar3DRenderer != null)

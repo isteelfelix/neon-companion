@@ -65,13 +65,13 @@ for name in (
     "avatar-import-overlay",
     "avatar-import-static-btn",
     "avatar-import-sprite-btn",
-    "avatar-import-3d-btn",
     "avatar-import-vrm-btn",
     "avatar-import-preview-image",
     "avatar-import-save-btn",
     "avatar-capabilities-foldout",
 ):
     assert name in names, "missing UI element: " + name
+assert "avatar-import-3d-btn" not in names, "generic GLB/glTF import UI must stay isolated"
 
 for unsupported in (
     "z-index:",

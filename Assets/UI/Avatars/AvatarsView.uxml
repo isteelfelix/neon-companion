@@ -187,9 +187,9 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- Generic 3D and runtime-validated VRM profiles are inserted here. -->
+            <!-- Runtime-validated VRM profiles are inserted here. -->
             <ui:VisualElement name="gallery-3d" class="gallery">
-                <ui:Label name="avatar-gallery-3d-hint" text="Импортируйте GLB/glTF или добавьте VRM в локальный каталог." class="gallery-empty-hint" />
+                <ui:Label name="avatar-gallery-3d-hint" text="Добавьте VRM в локальный каталог." class="gallery-empty-hint" />
             </ui:VisualElement>
 
             </ui:ScrollView> <!-- end gallery-container -->
@@ -267,7 +267,6 @@
                 <ui:VisualElement class="avatar-import-types">
                     <ui:Button name="avatar-import-static-btn" text="Статичный 2D" class="avatar-import-type avatar-import-type--active" />
                     <ui:Button name="avatar-import-sprite-btn" text="Sprite-sheet" class="avatar-import-type" />
-                    <ui:Button name="avatar-import-3d-btn" text="Generic 3D" class="avatar-import-type" />
                     <ui:Button name="avatar-import-vrm-btn" text="VRM" class="avatar-import-type" />
                 </ui:VisualElement>
 

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Avatar3D;
@@ -49,6 +50,8 @@ namespace NeonCompanion.Runtime.Platform
     {
         private readonly ConcurrentQueue<CompanionProcessMessage> _messages =
             new ConcurrentQueue<CompanionProcessMessage>();
+        private readonly ConcurrentQueue<CompanionProcessMessage> _outgoing =
+            new ConcurrentQueue<CompanionProcessMessage>();
         private readonly Dictionary<string, SpriteSheetAnimation> _clips =
             new Dictionary<string, SpriteSheetAnimation>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Sprite[]> _frames =
@@ -56,6 +59,7 @@ namespace NeonCompanion.Runtime.Platform
 
         private NamedPipeClientStream _pipe;
         private StreamWriter _writer;
+        private CancellationTokenSource _pipeCancellation;
         private Process _parent;
         private CompanionDisplaySnapshot _snapshot;
         private CompanionWindowPreferences _preferences = new CompanionWindowPreferences();
@@ -75,6 +79,7 @@ namespace NeonCompanion.Runtime.Platform
         private bool _f12WasDown;
         private float _nextParentCheck;
         private float _nextBoundsReport;
+        private float _nextHeartbeat;
         private int _loadVersion;
         private string _voiceText;
         private float _voiceStartedAt;
@@ -129,8 +134,13 @@ namespace NeonCompanion.Runtime.Platform
                 _writer = new StreamWriter(_pipe, new UTF8Encoding(false), 1024, true);
                 _writer.AutoFlush = true;
                 _connected = true;
-                Send("diagnostic", "Connected; display-only runtime active.");
-                await ReadLoopAsync();
+                _pipeCancellation = new CancellationTokenSource();
+                Task readTask = ReadLoopAsync(_pipeCancellation.Token);
+                Task writeTask = WriteLoopAsync(_pipeCancellation.Token);
+                Send("runtime_ready", "Display-only runtime active.");
+                await readTask;
+                _pipeCancellation.Cancel();
+                await writeTask;
             }
             catch (Exception ex)
             {
@@ -139,11 +149,11 @@ namespace NeonCompanion.Runtime.Platform
             }
         }
 
-        private async Task ReadLoopAsync()
+        private async Task ReadLoopAsync(CancellationToken token)
         {
             using (var reader = new StreamReader(_pipe, Encoding.UTF8, false, 1024, true))
             {
-                while (_pipe != null && _pipe.IsConnected)
+                while (!token.IsCancellationRequested && _pipe != null && _pipe.IsConnected)
                 {
                     string line = await reader.ReadLineAsync();
                     if (line == null)
@@ -166,11 +176,41 @@ namespace NeonCompanion.Runtime.Platform
                 Application.Quit();
         }
 
+        private async Task WriteLoopAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    CompanionProcessMessage message;
+                    if (!_outgoing.TryDequeue(out message))
+                    {
+                        await Task.Delay(25, token);
+                        continue;
+                    }
+                    await _writer.WriteLineAsync(JsonUtility.ToJson(message));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (IOException ex)
+            {
+                NeonLogger.LogWarning("[CompanionPlayer] IPC writer closed: " + ex.Message);
+            }
+        }
+
         private void Update()
         {
             CompanionProcessMessage message;
             while (_messages.TryDequeue(out message))
                 ApplyMessage(message);
+
+            if (_connected && Time.unscaledTime >= _nextHeartbeat)
+            {
+                _nextHeartbeat = Time.unscaledTime + 2f;
+                Send("heartbeat", null);
+            }
 
             if (!_nativeApplied)
                 _nativeApplied = WindowsCompanionWindowNative.Apply(_preferences);
@@ -681,16 +721,9 @@ namespace NeonCompanion.Runtime.Platform
 
         private void Send(CompanionProcessMessage message)
         {
-            if (!_connected || _writer == null)
+            if (!_connected || message == null)
                 return;
-            try
-            {
-                _writer.WriteLine(JsonUtility.ToJson(message));
-            }
-            catch (Exception ex)
-            {
-                NeonLogger.LogWarning("[CompanionPlayer] IPC send failed: " + ex.Message);
-            }
+            _outgoing.Enqueue(message);
         }
 
         private void OnApplicationQuit()
@@ -698,12 +731,41 @@ namespace NeonCompanion.Runtime.Platform
             SceneManager.sceneLoaded -= OnSceneLoaded;
             Send("diagnostic", "Display process shutting down.");
             ClearDisplayAssets();
-            if (_writer != null)
-                _writer.Dispose();
-            if (_pipe != null)
-                _pipe.Dispose();
-            if (_parent != null)
-                _parent.Dispose();
+            _connected = false;
+            CancellationTokenSource cancellation = _pipeCancellation;
+            _pipeCancellation = null;
+            StreamWriter writer = _writer;
+            _writer = null;
+            NamedPipeClientStream pipe = _pipe;
+            _pipe = null;
+            try
+            {
+                if (cancellation != null)
+                    cancellation.Cancel();
+                if (writer != null)
+                    writer.Dispose();
+            }
+            catch (Exception)
+            {
+            }
+            finally
+            {
+                try
+                {
+                    if (pipe != null)
+                        pipe.Dispose();
+                }
+                catch (Exception)
+                {
+                }
+                if (cancellation != null)
+                    cancellation.Dispose();
+                if (_parent != null)
+                {
+                    _parent.Dispose();
+                    _parent = null;
+                }
+            }
         }
     }
 

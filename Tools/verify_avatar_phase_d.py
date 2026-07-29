@@ -228,6 +228,13 @@ def verify_implementation_contracts():
     voice = read("Assets/Scripts/Runtime/Voice/VoiceOutputManager.cs")
     tests = read("Assets/Tests/EditMode/AvatarPhaseDTests.cs")
     powershell = read("Tools/Test-CompanionWindowsAcceptance.ps1")
+    parent_runtime = read(
+        "Assets/Scripts/Runtime/Platform/WindowsCompanionWindowService.cs"
+    )
+    child_runtime = read(
+        "Assets/Scripts/Runtime/Platform/CompanionPlayerRuntime.cs"
+    )
+    avatar_ui = read("Assets/UI/Avatars/AvatarsView.uxml")
 
     for marker in (
         "ValidateImportFiles(",
@@ -250,6 +257,7 @@ def verify_implementation_contracts():
         "LegacyStaticAndSpriteProfilesRemainReadable",
         "GenericMappingAndFutureContractFallbackStayDeterministic",
         "ChangedSourceIsRejectedBeforeCopy",
+        "TemporaryPreviewObjectsUseEditModeSafeCleanup",
         "OversizedImageIsRejectedBeforeDecode",
         "CatalogLimitsRejectWorkBeforeRuntimeInstantiation",
         "GenericGltfAndGlbMappingsLoadThroughRuntime",
@@ -263,6 +271,20 @@ def verify_implementation_contracts():
     assert "Get-CimInstance Win32_Process" in powershell
     assert "CloseMainWindow()" in powershell
     assert "protectedDataHashes" in powershell
+    for reason in ("PROCESS_SPAWN_TIMEOUT", "PIPE_CONNECTION", "RUNTIME_READY"):
+        assert reason in powershell, f"missing Windows timeout diagnostic: {reason}"
+    assert '"runtime_ready"' in parent_runtime and '"heartbeat"' in parent_runtime
+    assert "WaitForConnectionAsync" in parent_runtime
+    assert "ReadClientAsync(reader, pipe, token)" in parent_runtime
+    accept_client = parent_runtime[parent_runtime.index("private async Task AcceptClientAsync"):]
+    assert accept_client.index("ReadClientAsync(reader, pipe, token)") < accept_client.index(
+        "SendProfileAndPreferences();"
+    )
+    assert '"runtime_ready"' in child_runtime and '"heartbeat"' in child_runtime
+    assert "WriteLoopAsync" in child_runtime
+    assert "Generic3DEnabled = false" in loader
+    assert "avatar-import-3d-btn" not in avatar_ui
+    assert "DestroyTemporaryObject" in importer
 
     asmdef = json.loads(
         read("Assets/Tests/EditMode/NeonCompanion.EditModeTests.asmdef")

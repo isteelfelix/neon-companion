@@ -144,6 +144,14 @@ namespace NeonCompanion.Tests
             Assert.IsFalse(Directory.Exists(imported.assetDirectory));
         }
 
+        [Test]
+        public void TemporaryPreviewObjectsUseEditModeSafeCleanup()
+        {
+            var preview = new GameObject("TemporaryAvatarPreview");
+            AvatarAssetImporter.DestroyTemporaryObject(preview);
+            Assert.IsTrue(preview == null);
+        }
+
         [UnityTest]
         public IEnumerator OversizedImageIsRejectedBeforeDecode()
         {
@@ -235,11 +243,9 @@ namespace NeonCompanion.Tests
                     yield return null;
                 Assert.IsFalse(task.IsFaulted);
                 Avatar3DLoadResult result = task.Result;
-                Assert.IsTrue(result.Success, paths[i] + ": " + result.Error);
-                Assert.Greater(result.RendererCount, 0);
-                Assert.AreEqual(1L, result.TriangleCount);
-                Assert.IsTrue(result.Capabilities.isVerified);
-                UnityEngine.Object.DestroyImmediate(result.Instance);
+                Assert.IsFalse(result.Success);
+                Assert.IsNull(result.Instance);
+                StringAssert.Contains("not enabled", result.Error);
             }
         }
 

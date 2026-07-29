@@ -21,6 +21,18 @@ function Get-CompanionChildren {
     })
 }
 
+function Save-ProcessSnapshot {
+    param([string]$Name)
+
+    Get-CimInstance Win32_Process | Where-Object {
+        $_.ExecutablePath -eq $resolvedPlayer -or
+        $_.CommandLine -match "(^|\s)--companion-player(\s|$)"
+    } |
+        Select-Object ProcessId, ParentProcessId, Name, ExecutablePath, CommandLine |
+        ConvertTo-Json -Depth 4 |
+        Set-Content -Encoding UTF8 (Join-Path $EvidenceDirectory "$Name-processes.json")
+}
+
 function Wait-ForCompanionChild {
     param([int]$ParentProcessId)
 
@@ -36,13 +48,15 @@ function Wait-ForCompanionChild {
         Start-Sleep -Milliseconds 250
     } while ((Get-Date) -lt $deadline)
 
-    throw "Companion child did not start within $StartupTimeoutSeconds seconds."
+    Save-ProcessSnapshot -Name "timeout-process-spawn"
+    throw "PROCESS_SPAWN_TIMEOUT: Companion child did not start within $StartupTimeoutSeconds seconds."
 }
 
 function Wait-ForLogText {
     param(
         [string]$Path,
-        [string]$Pattern
+        [string]$Pattern,
+        [string]$Reason
     )
 
     $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
@@ -53,7 +67,8 @@ function Wait-ForLogText {
         Start-Sleep -Milliseconds 250
     } while ((Get-Date) -lt $deadline)
 
-    throw "Log pattern '$Pattern' was not observed in $Path."
+    Save-ProcessSnapshot -Name "timeout-$($Reason.ToLowerInvariant())"
+    throw "${Reason}_TIMEOUT: Log pattern '$Pattern' was not observed in $Path."
 }
 
 function Get-FileHashOrNull {
@@ -131,8 +146,13 @@ try {
     $firstLog = Join-Path $EvidenceDirectory "parent-first.log"
     $firstParent = Start-Process -FilePath $resolvedPlayer -ArgumentList @("-logFile", "`"$firstLog`"") -PassThru
     $firstChild = Wait-ForCompanionChild -ParentProcessId $firstParent.Id
-    Wait-ForLogText -Path $firstLog -Pattern "\[CompanionWindow\] IPC connected:"
-    Wait-ForLogText -Path $firstLog -Pattern "display-only runtime active"
+    Wait-ForLogText -Path $firstLog -Pattern "\[CompanionWindow\] IPC connected:" -Reason "PIPE_CONNECTION"
+    Wait-ForLogText -Path $firstLog -Pattern "\[CompanionWindow\] Runtime ready\." -Reason "RUNTIME_READY"
+    $firstChildren = Get-CompanionChildren -ParentProcessId $firstParent.Id
+    if ($firstChildren.Count -ne 1) {
+        Save-ProcessSnapshot -Name "exactly-one-child-failed"
+        throw "CHILD_COUNT_INVALID: Expected exactly one ready Companion child, found $($firstChildren.Count)."
+    }
 
     $childLogText = ""
     if (Test-Path $childLog) {
@@ -159,7 +179,13 @@ try {
     $secondLog = Join-Path $EvidenceDirectory "parent-second.log"
     $secondParent = Start-Process -FilePath $resolvedPlayer -ArgumentList @("-logFile", "`"$secondLog`"") -PassThru
     $secondChild = Wait-ForCompanionChild -ParentProcessId $secondParent.Id
-    Wait-ForLogText -Path $secondLog -Pattern "\[CompanionWindow\] IPC connected:"
+    Wait-ForLogText -Path $secondLog -Pattern "\[CompanionWindow\] IPC connected:" -Reason "PIPE_CONNECTION"
+    Wait-ForLogText -Path $secondLog -Pattern "\[CompanionWindow\] Runtime ready\." -Reason "RUNTIME_READY"
+    $secondChildren = Get-CompanionChildren -ParentProcessId $secondParent.Id
+    if ($secondChildren.Count -ne 1) {
+        Save-ProcessSnapshot -Name "exactly-one-child-restart-failed"
+        throw "CHILD_COUNT_INVALID: Expected exactly one ready Companion child after restart, found $($secondChildren.Count)."
+    }
 
     $preferencesAfter = Read-PreferenceSnapshot -Path $settingsPath
     if (($preferencesBefore | ConvertTo-Json -Compress) -ne

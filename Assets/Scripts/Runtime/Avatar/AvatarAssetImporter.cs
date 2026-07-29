@@ -54,6 +54,16 @@ namespace NeonCompanion.Runtime.Avatar
         public const long MaxSpritePixels = 64000000L;
         public const int MaxMotionClips = 24;
 
+        public static void DestroyTemporaryObject(UnityEngine.Object value)
+        {
+            if (value == null)
+                return;
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(value);
+            else
+                UnityEngine.Object.DestroyImmediate(value);
+        }
+
         public static async Task<AvatarAssetInspection> InspectAsync(string sourcePath, string avatarType)
         {
             var result = NewInspection(sourcePath, avatarType);
@@ -71,7 +81,8 @@ namespace NeonCompanion.Runtime.Avatar
                         InspectMotionPack(result);
                         break;
                     case AvatarProfileTypes.Generic3D:
-                        await InspectGeneric3DAsync(result);
+                        Fail(result, "unsupported_type",
+                            "Generic GLB/glTF import is not enabled in this release.");
                         break;
                     case AvatarProfileTypes.Vrm:
                         await InspectVrmAsync(result);
@@ -1146,7 +1157,7 @@ namespace NeonCompanion.Runtime.Avatar
             finally
             {
                 if (texture != null)
-                    UnityEngine.Object.Destroy(texture);
+                    DestroyTemporaryObject(texture);
             }
         }
 
