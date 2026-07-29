@@ -33,8 +33,9 @@ namespace NeonCompanion.Runtime.Avatar3D
         public const long MaxTriangles = 500000L;
         public const int MaxAnimationClips = 128;
 
-        private static readonly Dictionary<string, CachedModel> Cache = new Dictionary<string, CachedModel>(StringComparer.OrdinalIgnoreCase);
         private static readonly object CacheLock = new object();
+        private static string _cachedPath;
+        private static CachedModel _cachedModel;
 
         public static async Task<Avatar3DLoadResult> LoadAsync(string modelPath)
         {
@@ -91,7 +92,9 @@ namespace NeonCompanion.Runtime.Avatar3D
             CachedModel cached;
             lock (CacheLock)
             {
-                Cache.TryGetValue(fullPath, out cached);
+                cached = string.Equals(_cachedPath, fullPath, StringComparison.OrdinalIgnoreCase)
+                    ? _cachedModel
+                    : null;
             }
 
             if (cached != null && cached.Template != null)
@@ -149,10 +152,16 @@ namespace NeonCompanion.Runtime.Avatar3D
                 template.SetActive(false);
                 UnityEngine.Object.DontDestroyOnLoad(template);
 
+                CachedModel evicted;
                 lock (CacheLock)
                 {
-                    Cache[fullPath] = new CachedModel(template, animationNames);
+                    evicted = _cachedModel;
+                    _cachedPath = fullPath;
+                    _cachedModel = new CachedModel(template, animationNames);
                 }
+                if (evicted != null && evicted.Template != null &&
+                    evicted.Template != template)
+                    UnityEngine.Object.Destroy(evicted.Template);
 
                 var liveInstance = UnityEngine.Object.Instantiate(template);
                 liveInstance.name = importedRoot.name;

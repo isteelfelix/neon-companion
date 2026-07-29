@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "runner": {
+    "platform": "Linux without Unity",
+    "status": "environment_blocked",
+    "reason": "The runner cannot build or execute the Windows Unity Player, inspect Win32 window styles, invoke Windows TTS, or collect licensed external VRM smoke evidence."
+  },
+  "criteria": [
+    {
+      "id": "WIN-01",
+      "title": "Separate transparent Companion window",
+      "runnerStatus": "blocked_windows_unity",
+      "executableCoverage": [
+        "Tools/Test-CompanionWindowsAcceptance.ps1"
+      ],
+      "felixEvidence": [
+        "Screenshot main UI and separate transparent Companion window on the selected monitor and scale.",
+        "Attach parent-first.log and processes-first.json."
+      ]
+    },
+    {
+      "id": "WIN-02",
+      "title": "Exactly one isolated display child and connected IPC",
+      "runnerStatus": "blocked_windows_unity",
+      "executableCoverage": [
+        "Tools/Test-CompanionWindowsAcceptance.ps1"
+      ],
+      "felixEvidence": [
+        "result.json reports one child for each parent launch and both IPC connections.",
+        "Task Manager or Process Explorer screenshot shows the two Player processes."
+      ]
+    },
+    {
+      "id": "WIN-03",
+      "title": "Child initializes no provider, secret, session, chat, plugin, or voice services",
+      "runnerStatus": "blocked_windows_unity",
+      "executableCoverage": [
+        "Tools/Test-CompanionWindowsAcceptance.ps1",
+        "Tools/verify_avatar_phase_c.py",
+        "Assets/Tests/EditMode/AvatarPhaseDTests.cs::CompanionSnapshotExcludesPersonaAndTransportState"
+      ],
+      "felixEvidence": [
+        "Child log contains display-only startup and no parent bootstrap/provider/session initialization.",
+        "Protected provider/session/secret hashes in result.json are unchanged."
+      ]
+    },
+    {
+      "id": "WIN-04",
+      "title": "Static, sprite, generic GLB/glTF, VRM 0.x, and VRM 1.0 display compatibility",
+      "runnerStatus": "blocked_windows_unity_and_licensed_vrm0",
+      "executableCoverage": [
+        "Assets/Tests/EditMode/AvatarPhaseDTests.cs::GenericGltfAndGlbMappingsLoadThroughRuntime",
+        "Assets/Tests/EditMode/AvatarPhaseDTests.cs::VrmZeroAndOneFixturesLoadThroughUniVrm"
+      ],
+      "felixEvidence": [
+        "Run the explicit VRM test with NEON_PHASE_D_VRM0_FIXTURE set to a licensed VRM 0.x model.",
+        "Record gallery and Companion screenshots for legacy static/sprite, synthetic GLB/glTF, Neon VRM 1.0, and the external VRM 0.x fixture."
+      ]
+    },
+    {
+      "id": "WIN-05",
+      "title": "Idle, listening, thinking, speaking, reaction, and stop state parity",
+      "runnerStatus": "blocked_windows_unity",
+      "executableCoverage": [
+        "Tools/verify_avatar_phase_c.py"
+      ],
+      "felixEvidence": [
+        "Record a short screen capture showing state changes in the main preview and Companion window.",
+        "Confirm unavailable optional VRM features remain disabled without breaking idle rendering."
+      ]
+    },
+    {
+      "id": "WIN-06",
+      "title": "TTS lipsync and immediate stop, cancel, interrupt, and barge-in reset",
+      "runnerStatus": "blocked_windows_tts",
+      "executableCoverage": [
+        "Assets/Tests/EditMode/AvatarPhaseDTests.cs::StopCancelsBackendWaitAndAllowsImmediateReplay",
+        "Tools/verify_avatar_phase_b.py",
+        "Tools/verify_avatar_phase_c.py"
+      ],
+      "felixEvidence": [
+        "Record TTS mouth movement in both windows, then stop and begin recording mid-playback.",
+        "Confirm mouth, speaking state, busy indicator, and queued speech clear immediately and a later TTS can play."
+      ]
+    },
+    {
+      "id": "WIN-07",
+      "title": "Visible, pin, click-through, monitor, scale, and position persist across restart",
+      "runnerStatus": "blocked_windows_unity",
+      "executableCoverage": [
+        "Tools/Test-CompanionWindowsAcceptance.ps1"
+      ],
+      "felixEvidence": [
+        "Set non-default controls before the harness; attach appsettings-before.json, appsettings-after.json, and result.json.",
+        "Screenshot the restored window after the second launch."
+      ]
+    },
+    {
+      "id": "WIN-08",
+      "title": "Drag, Settings, Column, Show/Hide, Pin, click-through, and emergency release controls",
+      "runnerStatus": "blocked_windows_manual_ui",
+      "executableCoverage": [
+        "Tools/Test-CompanionWindowsAcceptance.ps1"
+      ],
+      "felixEvidence": [
+        "Record manual control smoke including drag and navigation buttons.",
+        "Enable click-through and prove Ctrl+Shift+F12 restores interaction."
+      ]
+    },
+    {
+      "id": "WIN-09",
+      "title": "Child close or crash does not terminate or corrupt the parent chat",
+      "runnerStatus": "blocked_windows_unity_and_live_chat",
+      "executableCoverage": [
+        "Tools/Test-CompanionWindowsAcceptance.ps1"
+      ],
+      "felixEvidence": [
+        "Harness force-closes the first child and proves the parent remains alive.",
+        "Manually send a message afterward and confirm the same session and history remain usable."
+      ]
+    },
+    {
+      "id": "WIN-10",
+      "title": "Parent shutdown removes the child; non-Windows builds never spawn it",
+      "runnerStatus": "blocked_windows_and_mobile_builds",
+      "executableCoverage": [
+        "Tools/Test-CompanionWindowsAcceptance.ps1",
+        "Tools/verify_avatar_phase_c.py"
+      ],
+      "felixEvidence": [
+        "result.json proves the second child exits after its parent closes.",
+        "Android and iOS smoke records no child process and no Windows-only Companion card."
+      ]
+    }
+  ]
+}

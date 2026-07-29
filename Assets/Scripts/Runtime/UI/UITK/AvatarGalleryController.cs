@@ -2297,8 +2297,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 if (_avatarImportDiagnostic != null)
                     _avatarImportDiagnostic.text = LocalizationExtensions.Get(
-                        "avatar.import.error.copy_failed",
-                        "The validated asset could not be copied to local storage.");
+                        "avatar.import.error." + (imported.errorCode ?? "copy_failed"),
+                        LocalizationExtensions.Get(
+                            "avatar.import.error.copy_failed",
+                            "The validated asset could not be copied to local storage."));
                 _avatarImportSaveBtn?.SetEnabled(true);
                 return;
             }

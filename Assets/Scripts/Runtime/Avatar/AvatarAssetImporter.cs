@@ -32,6 +32,7 @@ namespace NeonCompanion.Runtime.Avatar
     public sealed class AvatarAssetImportResult
     {
         public bool success;
+        public string errorCode;
         public string error;
         public AvatarProfile profile;
         public string assetDirectory;
@@ -41,6 +42,8 @@ namespace NeonCompanion.Runtime.Avatar
     {
         public string sourcePath;
         public string relativePath;
+        public long validatedLength;
+        public long validatedLastWriteUtcTicks;
     }
 
     public static class AvatarAssetImporter
@@ -93,6 +96,7 @@ namespace NeonCompanion.Runtime.Avatar
             var result = new AvatarAssetImportResult();
             if (inspection == null || !inspection.success)
             {
+                result.errorCode = "inspection_required";
                 result.error = inspection != null ? inspection.error : "Asset has not been validated.";
                 return result;
             }
@@ -100,6 +104,18 @@ namespace NeonCompanion.Runtime.Avatar
             string profileId = "custom_" + Guid.NewGuid().ToString("N");
             string assetDirectory = Path.Combine(AppPaths.AvatarAssetsDirectory, profileId);
             result.assetDirectory = assetDirectory;
+            string validationCode;
+            string validationError;
+            if (!ValidateImportFiles(
+                inspection,
+                assetDirectory,
+                out validationCode,
+                out validationError))
+            {
+                result.errorCode = validationCode;
+                result.error = validationError;
+                return result;
+            }
 
             try
             {
@@ -177,6 +193,7 @@ namespace NeonCompanion.Runtime.Avatar
             }
             catch (Exception ex)
             {
+                result.errorCode = "copy_failed";
                 result.error = ex.Message;
                 DeleteImportDirectory(assetDirectory);
             }
@@ -317,11 +334,7 @@ namespace NeonCompanion.Runtime.Avatar
             result.imageWidth = width;
             result.imageHeight = height;
             result.previewImagePath = result.sourcePath;
-            result.files.Add(new AvatarImportFile
-            {
-                sourcePath = result.sourcePath,
-                relativePath = "avatar.png"
-            });
+            AddImportFile(result, result.sourcePath, "avatar.png");
             result.capabilities.canRender = true;
             result.capabilities.isVerified = true;
             result.capabilities.isRuntimeSupported = true;
@@ -357,11 +370,7 @@ namespace NeonCompanion.Runtime.Avatar
             }
 
             string sourceRoot = Path.GetDirectoryName(result.sourcePath) ?? string.Empty;
-            result.files.Add(new AvatarImportFile
-            {
-                sourcePath = result.sourcePath,
-                relativePath = Path.GetFileName(result.sourcePath)
-            });
+            AddImportFile(result, result.sourcePath, Path.GetFileName(result.sourcePath));
 
             long totalBytes = new FileInfo(result.sourcePath).Length;
             long totalPixels = 0;
@@ -475,11 +484,10 @@ namespace NeonCompanion.Runtime.Avatar
                 }
                 totalBytes += new FileInfo(path).Length;
                 totalPixels += (long)width * height;
-                result.files.Add(new AvatarImportFile
-                {
-                    sourcePath = path,
-                    relativePath = MakeRelativeWithinRoot(sourceRoot, path)
-                });
+                AddImportFile(
+                    result,
+                    path,
+                    MakeRelativeWithinRoot(sourceRoot, path));
             }
 
             return true;
@@ -512,6 +520,9 @@ namespace NeonCompanion.Runtime.Avatar
                 Fail(result, "vrm_type_required", "This file contains VRM metadata. Choose the VRM avatar type.");
                 return;
             }
+
+            if (!ValidateGltfCatalog(result, document))
+                return;
 
             if (!CollectGltfFiles(result, document))
                 return;
@@ -568,20 +579,11 @@ namespace NeonCompanion.Runtime.Avatar
                 return;
             }
 
-            int nodeCount = CountArray(document, "nodes");
-            int rendererCount = CountArray(document, "meshes");
-            if (nodeCount > Avatar3DLoader.MaxSceneNodes || rendererCount > Avatar3DLoader.MaxRenderers)
-            {
-                Fail(result, "scene_limit_exceeded", "VRM exceeds the 512 node or 128 mesh catalog limit.");
+            if (!ValidateGltfCatalog(result, document))
                 return;
-            }
 
             result.totalFileSizeBytes = fileSize;
-            result.files.Add(new AvatarImportFile
-            {
-                sourcePath = result.sourcePath,
-                relativePath = Path.GetFileName(result.sourcePath)
-            });
+            AddImportFile(result, result.sourcePath, Path.GetFileName(result.sourcePath));
             Avatar3DLoadResult load = await Avatar3DLoader.LoadAsync(result.sourcePath);
             if (!load.Success || load.Instance == null)
             {
@@ -599,11 +601,7 @@ namespace NeonCompanion.Runtime.Avatar
         private static bool CollectGltfFiles(AvatarAssetInspection result, JObject document)
         {
             string sourceRoot = Path.GetDirectoryName(result.sourcePath) ?? string.Empty;
-            result.files.Add(new AvatarImportFile
-            {
-                sourcePath = result.sourcePath,
-                relativePath = Path.GetFileName(result.sourcePath)
-            });
+            AddImportFile(result, result.sourcePath, Path.GetFileName(result.sourcePath));
 
             long totalBytes = new FileInfo(result.sourcePath).Length;
             var uris = new List<string>();
@@ -667,14 +665,226 @@ namespace NeonCompanion.Runtime.Avatar
                     return false;
                 }
 
-                result.files.Add(new AvatarImportFile
-                {
-                    sourcePath = path,
-                    relativePath = MakeRelativeWithinRoot(sourceRoot, path)
-                });
+                AddImportFile(
+                    result,
+                    path,
+                    MakeRelativeWithinRoot(sourceRoot, path));
             }
 
             result.totalFileSizeBytes = totalBytes;
+            return true;
+        }
+
+        private static bool ValidateGltfCatalog(
+            AvatarAssetInspection result,
+            JObject document)
+        {
+            int nodeCount = CountArray(document, "nodes");
+            int animationCount = CountArray(document, "animations");
+            JArray meshes = document != null ? document["meshes"] as JArray : null;
+            int meshCount = meshes != null ? meshes.Count : 0;
+            var meshUseCount = new int[meshCount];
+            JArray nodes = document != null ? document["nodes"] as JArray : null;
+            if (nodes != null)
+            {
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    JObject node = nodes[i] as JObject;
+                    int meshIndex;
+                    if (node != null &&
+                        TryReadArrayIndex(node["mesh"], meshCount, out meshIndex))
+                        meshUseCount[meshIndex]++;
+                }
+            }
+
+            long rendererEstimate = 0;
+            long triangleEstimate = 0;
+            for (int i = 0; i < meshCount; i++)
+            {
+                int instances = Math.Max(1, meshUseCount[i]);
+                rendererEstimate += instances;
+                JObject mesh = meshes[i] as JObject;
+                JArray primitives = mesh != null ? mesh["primitives"] as JArray : null;
+                if (primitives == null)
+                    continue;
+
+                long meshTriangles = 0;
+                for (int j = 0; j < primitives.Count; j++)
+                {
+                    JObject primitive = primitives[j] as JObject;
+                    if (primitive == null)
+                        continue;
+                    meshTriangles += EstimatePrimitiveTriangles(document, primitive);
+                    if (meshTriangles > Avatar3DLoader.MaxTriangles)
+                        break;
+                }
+
+                if (meshTriangles > 0 &&
+                    instances > Avatar3DLoader.MaxTriangles / meshTriangles)
+                {
+                    triangleEstimate = Avatar3DLoader.MaxTriangles + 1;
+                }
+                else
+                {
+                    triangleEstimate += meshTriangles * instances;
+                }
+
+                if (rendererEstimate > Avatar3DLoader.MaxRenderers ||
+                    triangleEstimate > Avatar3DLoader.MaxTriangles)
+                    break;
+            }
+
+            if (nodeCount <= Avatar3DLoader.MaxSceneNodes &&
+                rendererEstimate <= Avatar3DLoader.MaxRenderers &&
+                triangleEstimate <= Avatar3DLoader.MaxTriangles &&
+                animationCount <= Avatar3DLoader.MaxAnimationClips)
+                return true;
+
+            Fail(
+                result,
+                "scene_limit_exceeded",
+                "Model catalog exceeds limits before runtime import (512 nodes, 128 renderers, " +
+                "500,000 triangles, 128 animation clips). Detected " + nodeCount + " nodes, " +
+                rendererEstimate + " renderer instances, at least " + triangleEstimate +
+                " triangles, " + animationCount + " animation clips.");
+            return false;
+        }
+
+        private static long EstimatePrimitiveTriangles(JObject document, JObject primitive)
+        {
+            int mode = 4;
+            JToken modeToken = primitive["mode"];
+            if (modeToken != null && modeToken.Type == JTokenType.Integer)
+                mode = modeToken.Value<int>();
+            if (mode != 4 && mode != 5 && mode != 6)
+                return 0;
+
+            JToken accessorToken = primitive["indices"];
+            if (accessorToken == null)
+            {
+                JObject attributes = primitive["attributes"] as JObject;
+                accessorToken = attributes != null ? attributes["POSITION"] : null;
+            }
+
+            JArray accessors = document != null ? document["accessors"] as JArray : null;
+            int accessorIndex;
+            if (accessors == null ||
+                !TryReadArrayIndex(accessorToken, accessors.Count, out accessorIndex))
+                return 0;
+
+            JObject accessor = accessors[accessorIndex] as JObject;
+            JToken countToken = accessor != null ? accessor["count"] : null;
+            if (countToken == null || countToken.Type != JTokenType.Integer)
+                return 0;
+            long elementCount = countToken.Value<long>();
+            if (elementCount <= 0)
+                return 0;
+            if (mode == 5 || mode == 6)
+                return Math.Max(0L, elementCount - 2L);
+            return elementCount / 3L;
+        }
+
+        private static bool TryReadArrayIndex(JToken token, int count, out int index)
+        {
+            index = -1;
+            if (token == null || token.Type != JTokenType.Integer)
+                return false;
+            long value = token.Value<long>();
+            if (value < 0 || value >= count)
+                return false;
+            index = (int)value;
+            return true;
+        }
+
+        private static void AddImportFile(
+            AvatarAssetInspection result,
+            string sourcePath,
+            string relativePath)
+        {
+            var info = new FileInfo(sourcePath);
+            result.files.Add(new AvatarImportFile
+            {
+                sourcePath = sourcePath,
+                relativePath = relativePath,
+                validatedLength = info.Length,
+                validatedLastWriteUtcTicks = info.LastWriteTimeUtc.Ticks
+            });
+        }
+
+        private static bool ValidateImportFiles(
+            AvatarAssetInspection inspection,
+            string destinationRoot,
+            out string errorCode,
+            out string error)
+        {
+            errorCode = null;
+            error = null;
+            if (inspection.files == null || inspection.files.Count == 0)
+            {
+                errorCode = "inspection_required";
+                error = "Validated import file list is empty.";
+                return false;
+            }
+
+            long limit = inspection.avatarType == AvatarProfileTypes.Static2D
+                ? MaxImageFileBytes
+                : MaxAssetBundleBytes;
+            long total = 0;
+            var destinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                for (int i = 0; i < inspection.files.Count; i++)
+                {
+                    AvatarImportFile file = inspection.files[i];
+                    if (file == null ||
+                        string.IsNullOrWhiteSpace(file.sourcePath) ||
+                        string.IsNullOrWhiteSpace(file.relativePath) ||
+                        !File.Exists(file.sourcePath) ||
+                        IsSymbolicLink(file.sourcePath))
+                    {
+                        errorCode = "source_changed";
+                        error = "A validated source file is missing or is no longer a regular file.";
+                        return false;
+                    }
+
+                    var info = new FileInfo(file.sourcePath);
+                    if (info.Length != file.validatedLength ||
+                        info.LastWriteTimeUtc.Ticks != file.validatedLastWriteUtcTicks)
+                    {
+                        errorCode = "source_changed";
+                        error = "A source file changed after validation. Validate it again before saving.";
+                        return false;
+                    }
+                    if (info.Length < 0 || total > limit - info.Length)
+                    {
+                        errorCode = "bundle_too_large";
+                        error = "Validated asset files exceed the import size limit.";
+                        return false;
+                    }
+                    total += info.Length;
+
+                    string destination = GetSafeDestination(destinationRoot, file.relativePath);
+                    if (!destinations.Add(destination))
+                    {
+                        errorCode = "duplicate_destination";
+                        error = "Two source files resolve to the same local destination.";
+                        return false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                errorCode = "source_changed";
+                error = ex.Message;
+                return false;
+            }
+
+            if (total != inspection.totalFileSizeBytes)
+            {
+                errorCode = "source_changed";
+                error = "The validated asset bundle changed before it could be saved.";
+                return false;
+            }
             return true;
         }
 
@@ -720,8 +930,9 @@ namespace NeonCompanion.Runtime.Avatar
                     uint declaredLength = reader.ReadUInt32();
                     uint jsonLength = reader.ReadUInt32();
                     uint jsonType = reader.ReadUInt32();
-                    if (version != 2 || declaredLength > stream.Length || jsonType != 0x4E4F534A ||
+                    if (version != 2 || declaredLength != stream.Length || jsonType != 0x4E4F534A ||
                         jsonLength == 0 || jsonLength > int.MaxValue ||
+                        (jsonLength & 3u) != 0 ||
                         jsonLength > stream.Length - stream.Position)
                     {
                         error = "GLB header or JSON chunk is invalid.";

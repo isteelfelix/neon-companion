@@ -1,0 +1,23 @@
+{
+  "name": "NeonCompanion.EditModeTests",
+  "rootNamespace": "NeonCompanion.Tests",
+  "references": [
+    "GUID:30d9501bacecd4e4485f7b01a8ff7b4b"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

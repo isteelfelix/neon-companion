@@ -209,6 +209,10 @@ Application.persistentDataPath/
 выходящие из исходного каталога, отклоняются. При удалении нового профиля удаляется только его
 проверенный каталог под `Avatars/custom_<guid>`.
 
+Перед копированием Phase D повторно сверяет размер и время изменения каждого
+проверенного файла и отклоняет collision путей назначения. Изменившийся после
+preview источник требует повторной проверки и не оставляет частичный каталог.
+
 Лимиты Phase A:
 
 - static image: 20 MB, максимум `8192 x 8192`;
@@ -226,7 +230,12 @@ Application.persistentDataPath/
 сохраняет reflection-loaded assembly в IL2CPP-сборках.
 UniVRM 0.131.2 хранится как embedded `com.vrmc.gltf` + `com.vrmc.vrm`;
 runtime asmdef ссылается на VRM10 напрямую, а linker сохраняет VRM10 для IL2CPP.
+Catalog limits проверяются до Unity runtime import; после декодирования проверяются
+повторно по фактической сцене. Generic loader хранит не более одного неактивного
+template в cache.
 
 Полная Windows-проверка требует Unity Editor, Windows TTS и лицензированный VRM.
 В репозитории есть предоставленный Felix fixture `Assets/Resources/Avatars/neon/Neon.vrm`
 и шесть VRMA состояний; сборка и smoke test выполняются Felix локально.
+Phase D evidence, performance observations и точные ограничения описаны в
+`docs/24_Avatar_Phase_D_Hardening.md`.

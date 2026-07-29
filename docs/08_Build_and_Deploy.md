@@ -13,26 +13,36 @@
 3. Выбрать целевую платформу
 4. Собрать
 
-### Windows Companion Phase C acceptance
+### Windows Companion Phase C/D acceptance
 
-Сервер без Unity не подтверждает Windows runtime. Для принятия Phase C Felix
-собирает профиль `Assets/Settings/Build Profiles/Windows.asset` и сохраняет:
+Сервер без Unity не подтверждает Windows runtime. Машиночитаемый source of truth —
+`Tools/companion_windows_acceptance.json`: ровно десять критериев, executable
+coverage, текущий environment blocker и требуемый артефакт Felix.
 
-1. screenshot основного UI с включённым Companion mode и отдельного прозрачного
-   окна на выбранном monitor/scale;
-2. Process Explorer/Task Manager proof двух процессов одного Player executable;
-3. `Player.log` и `Logs/companion-player.log` с разными PID и IPC connected, без
-   второго provider/session initialization в child log;
-4. restart proof сохранённых visible/pin/click-through/monitor/scale/position;
-5. child close и forced child crash proof: основной chat продолжает отправлять и
-   хранить ту же session/history;
-6. parent close proof: child PID завершается; зависший child также убирается после
-   shutdown grace period;
-7. click-through on/off и аварийный `Ctrl+Shift+F12`, drag, Settings, Column,
-   Show/Hide, Pin и Stop state.
+После Windows Development build Felix включает Companion mode, задаёт
+non-default monitor/scale/position/pin/click-through, закрывает Player и запускает:
 
-Android/iOS smoke должен подтвердить отсутствие второго процесса и скрытую
-Windows-only card. До этих артефактов tracker остаётся `⏳`.
+```powershell
+powershell -ExecutionPolicy Bypass -File Tools\Test-CompanionWindowsAcceptance.ps1 `
+  -PlayerPath C:\path\to\neon-companion.exe
+```
+
+Harness не меняет settings и сохраняет логи, PID/command line, JSON до/после,
+protected-data hashes и `result.json`. Оставшийся smoke checklist:
+
+1. отдельное прозрачное Companion окно на выбранных monitor/scale;
+2. ровно parent + один `--companion-player`, IPC connected;
+3. child log без provider/secret/session/chat/plugin/voice bootstrap;
+4. legacy static/sprite, generated GLB/glTF, committed VRM 1.0 и licensed VRM 0.x;
+5. idle/listening/thinking/speaking/reaction/stop parity в обоих preview;
+6. TTS lipsync и мгновенный mouth/busy/queue reset на stop/cancel/barge-in;
+7. visible/pin/click-through/monitor/scale/position после restart;
+8. drag, Settings, Column, Show/Hide, Pin, click-through и `Ctrl+Shift+F12`;
+9. child close/crash: parent отправляет сообщение в той же session/history;
+10. parent close удаляет child; Android/iOS не spawn и не показывают Windows card.
+
+До Unity EditMode, Windows/TTS, licensed VRM 0.x, profiler и этих десяти артефактов
+tracker остаётся `⏳`. Подробности: `docs/24_Avatar_Phase_D_Hardening.md`.
 
 ### Headless-сборка (Android)
 Безголовая сборка через `AndroidHeadlessBuild.cs`:

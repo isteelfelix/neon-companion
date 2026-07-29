@@ -17,6 +17,7 @@ namespace NeonCompanion.Runtime.Voice
         private string _activeResponse;
         private int _playbackGeneration;
         private bool _playbackAnnounced;
+        private TaskCompletionSource<bool> _activePlaybackCompletion;
 
         public event Action<string> OnPlaybackStarted;
         public event Action OnPlaybackCompleted;
@@ -40,6 +41,13 @@ namespace NeonCompanion.Runtime.Voice
 
         private void OnDestroy()
         {
+            _playbackGeneration++;
+            _queue.Clear();
+            if (_activePlaybackCompletion != null)
+            {
+                _activePlaybackCompletion.TrySetResult(true);
+                _activePlaybackCompletion = null;
+            }
             if (_voiceService != null)
             {
                 _voiceService.OnPlaybackStarted -= HandlePlaybackStarted;
@@ -108,6 +116,11 @@ namespace NeonCompanion.Runtime.Voice
             _queue.Clear();
             _activeResponse = null;
             _playbackAnnounced = false;
+            if (_activePlaybackCompletion != null)
+            {
+                _activePlaybackCompletion.TrySetResult(true);
+                _activePlaybackCompletion = null;
+            }
             _voiceService?.StopSpeaking();
             if (notifyStopped)
                 OnPlaybackCompleted?.Invoke();
@@ -148,16 +161,26 @@ namespace NeonCompanion.Runtime.Voice
                     int generation = _playbackGeneration;
 
                     var tcs = new TaskCompletionSource<bool>();
+                    _activePlaybackCompletion = tcs;
 
                     void Complete() => tcs.TrySetResult(true);
                     _voiceService.OnPlaybackComplete += Complete;
-                    _voiceService.Speak(next);
+                    Task timeoutTask = Task.Delay(30 * 60 * 1000);
+                    Task doneTask;
+                    try
+                    {
+                        _voiceService.Speak(next);
 
-                    // Covers synthesis plus full playback, including user pause. Backend HTTP
-                    // requests keep their own shorter timeout; this is only a final stuck guard.
-                    var timeoutTask = Task.Delay(30 * 60 * 1000);
-                    var doneTask = await Task.WhenAny(tcs.Task, timeoutTask);
-                    _voiceService.OnPlaybackComplete -= Complete;
+                        // Covers synthesis plus full playback, including user pause. Backend HTTP
+                        // requests keep their own shorter timeout; this is only a final stuck guard.
+                        doneTask = await Task.WhenAny(tcs.Task, timeoutTask);
+                    }
+                    finally
+                    {
+                        _voiceService.OnPlaybackComplete -= Complete;
+                        if (ReferenceEquals(_activePlaybackCompletion, tcs))
+                            _activePlaybackCompletion = null;
+                    }
 
                     if (generation != _playbackGeneration)
                         break;
