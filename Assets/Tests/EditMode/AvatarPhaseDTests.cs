@@ -409,11 +409,13 @@ namespace NeonCompanion.Tests
             public int SpeakCalls { get; private set; }
             public int StopCalls { get; private set; }
 
+#pragma warning disable CS0067
             public event Action<string> OnSpeechRecognized;
             public event Action OnPlaybackStarted;
             public event Action OnPlaybackComplete;
             public event Action<string, float> OnRecordingComplete;
             public event Action<string, float> OnSpeechAudioReady;
+#pragma warning restore CS0067
 
             public void StartRecording()
             {

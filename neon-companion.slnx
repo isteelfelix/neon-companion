@@ -20,4 +20,5 @@
   <Project Path="UniGLTF.UniUnlit.Editor.csproj" />
   <Project Path="NeonCompanion.Editor.csproj" />
   <Project Path="VrmLibTests.csproj" />
+  <Project Path="NeonCompanion.EditModeTests.csproj" />
 </Solution>
