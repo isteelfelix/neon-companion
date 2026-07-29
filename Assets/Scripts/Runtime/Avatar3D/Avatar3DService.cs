@@ -34,10 +34,15 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (loadResult.VrmInstance != null)
             {
                 _vrmDriver = _runtimeRoot.AddComponent<VrmAvatarDriver>();
-                _vrmDriver.Initialize(
+                bool driverReady = await _vrmDriver.InitializeAsync(
                     loadResult.VrmInstance,
                     _capabilities,
                     BuiltInAvatarProfiles.IsResourcePath(modelPath));
+                if (!driverReady)
+                {
+                    Unload();
+                    return false;
+                }
             }
 
             _availableAnimations.Clear();
@@ -120,6 +125,12 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
+        public void SetGazeNormalized(float horizontal, float vertical)
+        {
+            if (_vrmDriver != null)
+                _vrmDriver.SetGazeNormalized(horizontal, vertical);
+        }
+
         public Transform GetRuntimeTransform()
         {
             return _runtimeRoot != null ? _runtimeRoot.transform : null;
@@ -140,18 +151,41 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             if (_runtimeRoot != null)
             {
-                UnityEngine.Object.Destroy(_runtimeRoot);
+                DestroyOwnedObject(_runtimeRoot);
                 _runtimeRoot = null;
             }
+        }
+
+        private static void DestroyOwnedObject(UnityEngine.Object value)
+        {
+            if (value == null)
+                return;
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(value);
+            else
+                UnityEngine.Object.DestroyImmediate(value);
         }
     }
 
     [DefaultExecutionOrder(10000)]
     internal sealed class VrmAvatarDriver : MonoBehaviour
     {
+        private static readonly string[] BuiltInStates =
+        {
+            "idle",
+            "thinking",
+            "talking",
+            "listening",
+            "smile",
+            "confused"
+        };
+
         private Vrm10Instance _vrm;
+        private Vrm10Runtime _runtime;
         private AvatarCapabilities _capabilities;
-        private GameObject _animationRoot;
+        private readonly Dictionary<string, Vrm10AnimationInstance> _animations =
+            new Dictionary<string, Vrm10AnimationInstance>(
+                StringComparer.OrdinalIgnoreCase);
         private Animation _activeAnimation;
         private Vrm10AnimationInstance _activeVrmAnimation;
         private string _activeState;
@@ -164,13 +198,16 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Transform _head;
         private Transform _gazeTarget;
         private bool _useBuiltInMotionPack;
+        private float _gazeHorizontal;
+        private float _gazeVertical;
 
-        internal void Initialize(
+        internal async Task<bool> InitializeAsync(
             Vrm10Instance vrm,
             AvatarCapabilities capabilities,
             bool useBuiltInMotionPack)
         {
             _vrm = vrm;
+            _runtime = _vrm != null ? _vrm.Runtime : null;
             _capabilities = capabilities ?? new AvatarCapabilities();
             _useBuiltInMotionPack = useBuiltInMotionPack;
             _blinkTimer = 2.5f;
@@ -183,6 +220,42 @@ namespace NeonCompanion.Runtime.Avatar3D
                     VRM10ObjectLookAt.LookAtTargetTypes.SpecifiedTransform;
                 _vrm.LookAtTarget = _gazeTarget;
             }
+
+            if (!_useBuiltInMotionPack)
+                return true;
+            if (_runtime == null || _runtime.ControlRig == null)
+            {
+                Debug.LogWarning(
+                    "[NeonCompanion] Built-in VRM has no runtime control rig.");
+                return false;
+            }
+
+            for (int i = 0; i < BuiltInStates.Length; i++)
+            {
+                string state = BuiltInStates[i];
+                Vrm10AnimationInstance animation =
+                    await Avatar3DLoader.LoadBuiltInVrmAnimationAsync(state);
+                if (animation == null ||
+                    animation.ControlRig.Item1 == null ||
+                    animation.ControlRig.Item2 == null)
+                {
+                    if (animation != null)
+                        DestroyOwnedObject(animation.gameObject);
+                    Debug.LogWarning(
+                        "[NeonCompanion] Built-in VRM animation has no runtime control rig: " +
+                        state);
+                    ClearAnimationResources();
+                    return false;
+                }
+
+                animation.gameObject.name = "AvatarVRMA_" + state;
+                animation.transform.SetParent(transform.parent, false);
+                if (animation.BoxMan != null)
+                    animation.BoxMan.enabled = false;
+                animation.gameObject.SetActive(false);
+                _animations[state] = animation;
+            }
+            return true;
         }
 
         internal bool SetAnimation(string state)
@@ -200,34 +273,22 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _activeAnimation.isPlaying)
                 return true;
 
-            GameObject prefab = Resources.Load<GameObject>(
-                "Avatars/neon/Neon_" + normalizedState);
-            if (prefab == null)
+            Vrm10AnimationInstance animationInstance;
+            if (!_animations.TryGetValue(normalizedState, out animationInstance) ||
+                animationInstance == null)
                 return false;
 
-            ClearAnimation();
-            _animationRoot = Instantiate(prefab);
-            _animationRoot.name = "AvatarVRMA_" + state;
-            _animationRoot.transform.SetParent(transform.parent, false);
-
-            Vrm10AnimationInstance animationInstance =
-                _animationRoot.GetComponentInChildren<Vrm10AnimationInstance>(true);
-            if (animationInstance == null)
-            {
-                ClearAnimation();
-                return false;
-            }
-
-            if (animationInstance.BoxMan != null)
-                animationInstance.BoxMan.enabled = false;
+            StopActiveAnimation();
+            animationInstance.gameObject.SetActive(true);
             _activeVrmAnimation = animationInstance;
-            _vrm.Runtime.VrmAnimation = animationInstance;
+            _runtime.VrmAnimation = animationInstance;
             BindActiveMouthSetter();
 
-            Animation animation = _animationRoot.GetComponentInChildren<Animation>(true);
+            Animation animation =
+                animationInstance.GetComponentInChildren<Animation>(true);
             if (animation == null)
             {
-                ClearAnimation();
+                StopActiveAnimation();
                 return false;
             }
 
@@ -245,8 +306,14 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return true;
             }
 
-            ClearAnimation();
+            StopActiveAnimation();
             return false;
+        }
+
+        internal void SetGazeNormalized(float horizontal, float vertical)
+        {
+            _gazeHorizontal = Mathf.Clamp(horizontal, -0.5f, 0.5f);
+            _gazeVertical = Mathf.Clamp(vertical, -0.5f, 0.5f);
         }
 
         internal bool SetMouthShape(string shape)
@@ -403,16 +470,10 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             if (_gazeTarget != null && _head != null)
             {
-                float normalizedX = Screen.width > 0
-                    ? (Input.mousePosition.x / Screen.width) - 0.5f
-                    : 0f;
-                float normalizedY = Screen.height > 0
-                    ? (Input.mousePosition.y / Screen.height) - 0.5f
-                    : 0f;
                 _gazeTarget.position = _head.position +
                     transform.forward * 3f +
-                    transform.right * normalizedX * 1.2f +
-                    transform.up * normalizedY * 0.8f;
+                    transform.right * _gazeHorizontal * 1.2f +
+                    transform.up * _gazeVertical * 0.8f;
             }
 
             if (_vrm == null)
@@ -446,18 +507,33 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void ClearAnimation()
         {
+            StopActiveAnimation();
+            ClearAnimationResources();
+        }
+
+        private void StopActiveAnimation()
+        {
+            if (_runtime != null && _useBuiltInMotionPack)
+                _runtime.VrmAnimation = null;
+            if (_activeAnimation != null)
+                _activeAnimation.Stop();
+            if (_activeVrmAnimation != null)
+                _activeVrmAnimation.gameObject.SetActive(false);
             _activeAnimation = null;
             _activeVrmAnimation = null;
             _activeState = null;
             _activeMouthSetter = null;
             _reactionPlaying = false;
-            if (_vrm != null && _useBuiltInMotionPack)
-                _vrm.Runtime.VrmAnimation = null;
-            if (_animationRoot != null)
+        }
+
+        private void ClearAnimationResources()
+        {
+            foreach (KeyValuePair<string, Vrm10AnimationInstance> pair in _animations)
             {
-                Destroy(_animationRoot);
-                _animationRoot = null;
+                if (pair.Value != null)
+                    DestroyOwnedObject(pair.Value.gameObject);
             }
+            _animations.Clear();
         }
 
         private void BindActiveMouthSetter()
@@ -478,7 +554,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_activeMouthSetter != null)
                 _activeMouthSetter(weight);
             else
-                _vrm.Runtime.Expression.SetWeight(_activeMouthKey, weight);
+                _runtime.Expression.SetWeight(_activeMouthKey, weight);
         }
 
         private void ApplyExpressionWeight(ExpressionKey key, float weight)
@@ -490,7 +566,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 setter(weight);
                 return;
             }
-            _vrm.Runtime.Expression.SetWeight(key, weight);
+            _runtime.Expression.SetWeight(key, weight);
         }
 
         private void OnDestroy()
@@ -498,7 +574,17 @@ namespace NeonCompanion.Runtime.Avatar3D
             ClearMouth();
             ClearAnimation();
             if (_gazeTarget != null)
-                Destroy(_gazeTarget.gameObject);
+                DestroyOwnedObject(_gazeTarget.gameObject);
+        }
+
+        private static void DestroyOwnedObject(UnityEngine.Object value)
+        {
+            if (value == null)
+                return;
+            if (Application.isPlaying)
+                Destroy(value);
+            else
+                DestroyImmediate(value);
         }
     }
 }

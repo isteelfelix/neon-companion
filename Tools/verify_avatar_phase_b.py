@@ -4,6 +4,7 @@
 import json
 import pathlib
 import re
+import struct
 import xml.etree.ElementTree as ET
 
 
@@ -12,6 +13,21 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 def read(path):
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def parse_glb_json(path):
+    with path.open("rb") as stream:
+        header = stream.read(20)
+        assert len(header) == 20
+        magic, version, declared_length, json_length, json_type = struct.unpack(
+            "<IIIII", header
+        )
+        assert magic == 0x46546C67 and version == 2
+        assert declared_length == path.stat().st_size
+        assert json_type == 0x4E4F534A
+        return json.loads(
+            stream.read(json_length).decode("utf-8").rstrip("\0 \t\r\n")
+        )
 
 
 manifest = json.loads(read("Packages/manifest.json"))
@@ -28,17 +44,40 @@ asmdef = json.loads(read("Assets/Scripts/Runtime/NeonCompanion.Runtime.asmdef"))
 assert "GUID:e47c917724578cc43b5506c17a27e9a0" in asmdef["references"]
 linker = ET.parse(ROOT / "Assets/Scripts/Runtime/Avatar3D/link.xml").getroot()
 assert any(node.attrib.get("fullname") == "VRM10" for node in linker.findall("assembly"))
+graphics_settings = read("ProjectSettings/GraphicsSettings.asset")
+assert (
+    "{fileID: 46, guid: 0000000000000000f000000000000000, type: 0}"
+    in graphics_settings
+), "UniVRM animation debug material requires the built-in Standard shader"
+assert (
+    "933532a4fcc9baf4fa0491de14d08ed7" in graphics_settings
+), "UniVRM animation debug material requires the URP Lit shader"
+for shader_guid in (
+    "8c17b56f4bf084c47872edcb95237e4a",
+):
+    assert shader_guid in graphics_settings, "runtime avatar shader can be stripped"
 
 loader = read("Assets/Scripts/Runtime/Avatar3D/Avatar3DLoader.cs")
 service = read("Assets/Scripts/Runtime/Avatar3D/Avatar3DService.cs")
 importer = read("Assets/Scripts/Runtime/Avatar/AvatarAssetImporter.cs")
 gallery = read("Assets/Scripts/Runtime/UI/UITK/AvatarGalleryController.cs")
+runtime_ui_installer = read(
+    "Assets/Scripts/Runtime/UI/UITK/RuntimeUiInstaller.cs"
+)
+boot_scene_loader = read("Assets/Scripts/Runtime/Core/BootSceneLoader.cs")
 lipsync = read("Assets/Scripts/Runtime/Voice/LipsyncController.cs")
 voice_output = read("Assets/Scripts/Runtime/Voice/VoiceOutputManager.cs")
 chat = read("Assets/Scripts/Runtime/UI/UITK/ChatController.cs")
 
 assert 'if (ext == ".vrm")' in loader
-assert "Vrm10.LoadPathAsync(fullPath, true)" in loader
+assert "CompanionProcessMode.IsPlayerProcess" in runtime_ui_installer
+assert "CompanionProcessMode.IsPlayerProcess" in boot_scene_loader
+assert "Vrm10.LoadPathAsync(" in loader
+assert "Vrm10.LoadBytesAsync" in loader
+assert (
+    loader.count("GetValidGltfMaterialDescriptorGenerator") >= 2
+), "VRM runtime imports must use the active pipeline's visible glTF materials"
+assert "LoadBuiltInVrmAnimationAsync" in loader
 assert "UniVRM is deliberately called only for the .vrm extension" in loader
 for capability in (
     "hasHumanoid",
@@ -66,15 +105,19 @@ for character, viseme in {
 assert "_playbackGeneration++" in voice_output
 assert "_d.StopVoiceOutput?.Invoke();" in chat
 
-fixture = ROOT / "Assets/Resources/Avatars/neon/Neon.vrm"
-fixture_meta = ROOT / "Assets/Resources/Avatars/neon/Neon.vrm.meta"
+fixture = ROOT / "Assets/Resources/Avatars/neon/Neon.vrm.bytes"
+fixture_meta = ROOT / "Assets/Resources/Avatars/neon/Neon.vrm.bytes.meta"
 assert fixture.is_file() and fixture.stat().st_size > 0
-fixture_contract = read("Assets/Resources/Avatars/neon/Neon.vrm1.Assets/_vrm1_.asset")
-assert "Authors:\n    - Felix" in fixture_contract
-assert "Redistribution: 1" in fixture_contract
+fixture_contract = parse_glb_json(fixture)
+fixture_meta_contract = fixture_contract["extensions"]["VRMC_vrm"]["meta"]
+assert "Felix" in fixture_meta_contract["authors"]
+assert fixture_meta_contract["allowRedistribution"] is True
 assert fixture_meta.is_file()
+assert "TextScriptImporter:" in fixture_meta.read_text(encoding="utf-8")
 for state in ("idle", "thinking", "talking", "listening", "smile", "confused"):
-    asset = ROOT / ("Assets/Resources/Avatars/neon/Neon_" + state + ".vrma")
+    asset = ROOT / (
+        "Assets/Resources/Avatars/neon/Neon_" + state + ".vrma.bytes"
+    )
     assert asset.is_file() and asset.stat().st_size > 0, "missing VRMA: " + state
     assert pathlib.Path(str(asset) + ".meta").is_file(), "missing VRMA meta: " + state
 

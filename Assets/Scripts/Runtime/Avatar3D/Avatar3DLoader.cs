@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Data.Models;
+using UniGLTF;
 using UniVRM10;
 using UnityEngine;
 
@@ -33,6 +34,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         public const int MaxRenderers = 128;
         public const long MaxTriangles = 500000L;
         public const int MaxAnimationClips = 128;
+        private const string BuiltInVrmAnimationPrefix = "Avatars/neon/Neon_";
 
         private static readonly object CacheLock = new object();
         private static string _cachedPath;
@@ -201,7 +203,15 @@ namespace NeonCompanion.Runtime.Avatar3D
             {
                 // UniVRM is deliberately called only for the .vrm extension. A GLB that happens
                 // to contain VRM metadata is not silently promoted to a VRM avatar.
-                Vrm10Instance vrm = await Vrm10.LoadPathAsync(fullPath, true);
+                Vrm10Instance vrm = await Vrm10.LoadPathAsync(
+                    fullPath,
+                    true,
+                    ControlRigGenerationOption.Generate,
+                    true,
+                    null,
+                    null,
+                    MaterialDescriptorGeneratorUtility
+                        .GetValidGltfMaterialDescriptorGenerator());
                 if (vrm == null)
                 {
                     result.ErrorCode = "invalid_vrm";
@@ -241,10 +251,9 @@ namespace NeonCompanion.Runtime.Avatar3D
             string resourceUri,
             Avatar3DLoadResult result)
         {
-            await Task.Yield();
             string resourcePath = BuiltInAvatarProfiles.GetResourcePath(resourceUri);
-            GameObject template = Resources.Load<GameObject>(resourcePath);
-            if (template == null)
+            TextAsset source = Resources.Load<TextAsset>(resourcePath);
+            if (source == null)
             {
                 result.ErrorCode = "resource_missing";
                 result.Error = "Built-in VRM resource is missing: " + resourcePath;
@@ -254,18 +263,32 @@ namespace NeonCompanion.Runtime.Avatar3D
             GameObject instance = null;
             try
             {
-                instance = UnityEngine.Object.Instantiate(template);
-                instance.name = Path.GetFileName(resourcePath);
-                instance.SetActive(true);
-                Vrm10Instance vrm = instance.GetComponent<Vrm10Instance>();
-                if (vrm == null)
+                result.FileSizeBytes = source.bytes.LongLength;
+                if (result.FileSizeBytes > MaxModelFileBytes)
                 {
-                    result.ErrorCode = "invalid_vrm";
-                    result.Error = "Built-in VRM resource has no Vrm10Instance.";
-                    UnityEngine.Object.Destroy(instance);
+                    result.ErrorCode = "file_too_large";
+                    result.Error = "Built-in VRM exceeds the 100 MB file limit.";
                     return result;
                 }
 
+                Vrm10Instance vrm = await Vrm10.LoadBytesAsync(
+                    source.bytes,
+                    true,
+                    ControlRigGenerationOption.Generate,
+                    true,
+                    null,
+                    null,
+                    MaterialDescriptorGeneratorUtility
+                        .GetValidGltfMaterialDescriptorGenerator());
+                if (vrm == null)
+                {
+                    result.ErrorCode = "invalid_vrm";
+                    result.Error = "UniVRM could not import the built-in VRM resource.";
+                    return result;
+                }
+
+                instance = vrm.gameObject;
+                instance.name = Path.GetFileName(resourcePath);
                 CollectSceneFacts(instance, result);
                 result.AnimationNames.AddRange(CollectAnimationNames(instance));
                 if (!ValidateSceneLimits(instance, result, result.AnimationNames.Count))
@@ -280,7 +303,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             catch (Exception ex)
             {
                 if (instance != null)
-                    UnityEngine.Object.Destroy(instance);
+                    DestroyLoadedObject(instance);
                 result.Instance = null;
                 result.VrmInstance = null;
                 result.ErrorCode = "invalid_vrm";
@@ -288,6 +311,71 @@ namespace NeonCompanion.Runtime.Avatar3D
                 Debug.LogWarning("[NeonCompanion] Built-in VRM load failed: " + ex);
             }
             return result;
+        }
+
+        public static async Task<Vrm10AnimationInstance> LoadBuiltInVrmAnimationAsync(
+            string clipName)
+        {
+            if (string.IsNullOrWhiteSpace(clipName))
+                return null;
+
+            string resourcePath =
+                BuiltInVrmAnimationPrefix + clipName.Trim().ToLowerInvariant() + ".vrma";
+            TextAsset source = Resources.Load<TextAsset>(resourcePath);
+            if (source == null)
+            {
+                Debug.LogWarning(
+                    "[NeonCompanion] Built-in VRM animation is missing: " + resourcePath);
+                return null;
+            }
+
+            GltfData data = null;
+            RuntimeGltfInstance runtimeInstance = null;
+            try
+            {
+                data = new GlbLowLevelParser(resourcePath, source.bytes).Parse();
+                var animationData = new VrmAnimationData(data);
+                using (var loader = new VrmAnimationImporter(animationData))
+                {
+                    IAwaitCaller awaitCaller = Application.isPlaying
+                        ? (IAwaitCaller)new RuntimeOnlyAwaitCaller()
+                        : new ImmediateCaller();
+                    runtimeInstance = await loader.LoadAsync(awaitCaller);
+                    if (runtimeInstance == null)
+                        return null;
+                    Vrm10AnimationInstance animation =
+                        runtimeInstance.GetComponentInChildren<Vrm10AnimationInstance>(true);
+                    if (animation != null)
+                        return animation;
+                    DestroyLoadedObject(runtimeInstance.gameObject);
+                    runtimeInstance = null;
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (runtimeInstance != null)
+                    DestroyLoadedObject(runtimeInstance.gameObject);
+                Debug.LogWarning(
+                    "[NeonCompanion] Built-in VRM animation load failed for '" +
+                    clipName + "': " + ex);
+                return null;
+            }
+            finally
+            {
+                if (data != null)
+                    data.Dispose();
+            }
+        }
+
+        private static void DestroyLoadedObject(UnityEngine.Object value)
+        {
+            if (value == null)
+                return;
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(value);
+            else
+                UnityEngine.Object.DestroyImmediate(value);
         }
 
         private static bool ValidateSceneLimits(
@@ -418,7 +506,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             {
                 for (int i = 0; i < states.Length; i++)
                 {
-                    if (Resources.Load<GameObject>("Avatars/neon/Neon_" + states[i]) != null &&
+                    if (Resources.Load<TextAsset>(
+                            BuiltInVrmAnimationPrefix + states[i] + ".vrma") != null &&
                         !result.AnimationNames.Contains(states[i]))
                         result.AnimationNames.Add(states[i]);
                 }

@@ -1,4 +1,5 @@
 using System.Collections;
+using NeonCompanion.Runtime.Platform;
 using NeonCompanion.Runtime.UI.UITK;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -18,6 +19,12 @@ namespace NeonCompanion.Runtime.Core
 
         private IEnumerator Start()
         {
+            // The isolated display process renders its snapshot directly in the
+            // empty Boot scene. Loading the splash and main UI would cover the
+            // companion and destroy scene-owned avatar objects on transition.
+            if (CompanionProcessMode.IsPlayerProcess)
+                yield break;
+
             // Defer to SplashViewController if one exists in the scene.
             var splash = FindAnyObjectByType<SplashViewController>();
             if (splash != null)

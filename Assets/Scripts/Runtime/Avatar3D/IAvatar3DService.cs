@@ -16,6 +16,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         void ClearMouth();
         bool SetExpression(string expressionName, float weight);
         bool SetPose(string poseName);
+        void SetGazeNormalized(float horizontal, float vertical);
         Transform GetRuntimeTransform();
         GameObject GetRuntimeRoot();
         void Unload();

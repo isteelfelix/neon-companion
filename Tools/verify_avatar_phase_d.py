@@ -145,7 +145,7 @@ def verify_acceptance_matrix():
 
 
 def verify_assets_and_runtime():
-    vrm_path = ROOT / "Assets/Resources/Avatars/neon/Neon.vrm"
+    vrm_path = ROOT / "Assets/Resources/Avatars/neon/Neon.vrm.bytes"
     vrm, observation = parse_glb(vrm_path)
     assert vrm_path.stat().st_size <= MAX_MODEL_BYTES
     assert "VRMC_vrm" in vrm.get("extensions", {})
@@ -158,7 +158,9 @@ def verify_assets_and_runtime():
     states = ("idle", "thinking", "talking", "listening", "smile", "confused")
     vrma_observations = []
     for state in states:
-        path = ROOT / f"Assets/Resources/Avatars/neon/Neon_{state}.vrma"
+        path = ROOT / (
+            f"Assets/Resources/Avatars/neon/Neon_{state}.vrma.bytes"
+        )
         document, item = parse_glb(path)
         assert "VRMC_vrm_animation" in document.get("extensions", {})
         assert len(document.get("animations", [])) == 1

@@ -230,12 +230,20 @@ preview источник требует повторной проверки и �
 сохраняет reflection-loaded assembly в IL2CPP-сборках.
 UniVRM 0.131.2 хранится как embedded `com.vrmc.gltf` + `com.vrmc.vrm`;
 runtime asmdef ссылается на VRM10 напрямую, а linker сохраняет VRM10 для IL2CPP.
+Built-in Standard, URP Lit и UniUnlit shaders входят в
+`m_AlwaysIncludedShaders`, поскольку raw runtime import не оставляет
+сериализованной material-ссылки, которая автоматически защитила бы shaders
+от build stripping. Runtime import выбирает glTF material generator активного
+render pipeline: bundled UniVRM MToon в URP standalone создавал корректную
+геометрию и rig, но не записывал ни одного пикселя в RenderTexture.
 Catalog limits проверяются до Unity runtime import; после декодирования проверяются
 повторно по фактической сцене. Generic loader хранит не более одного неактивного
 template в cache.
 
 Полная Windows-проверка требует Unity Editor, Windows TTS и лицензированный VRM.
-В репозитории есть предоставленный Felix fixture `Assets/Resources/Avatars/neon/Neon.vrm`
-и шесть VRMA состояний; сборка и smoke test выполняются Felix локально.
+Встроенный Neon хранится как raw `TextAsset`
+`Assets/Resources/Avatars/neon/Neon.vrm.bytes`; шесть состояний аналогично
+хранятся как `.vrma.bytes`. В runtime они импортируются UniVRM из байтов,
+чтобы model и animation control rig не терялись при сериализации prefab.
 Phase D evidence, performance observations и точные ограничения описаны в
 `docs/24_Avatar_Phase_D_Hardening.md`.

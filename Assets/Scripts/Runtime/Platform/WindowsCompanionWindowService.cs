@@ -442,6 +442,16 @@ namespace NeonCompanion.Runtime.Platform
                 case "diagnostic":
                     NeonLogger.Log("[CompanionWindow.Player] " + (message.text ?? string.Empty));
                     break;
+                case "backend_ready":
+                    NeonLogger.Log(
+                        "[CompanionWindow] Backend ready: " +
+                        (message.text ?? string.Empty));
+                    break;
+                case "backend_failed":
+                    NeonLogger.LogError(
+                        "[CompanionWindow] Backend failed: " +
+                        (message.text ?? string.Empty));
+                    break;
             }
         }
 

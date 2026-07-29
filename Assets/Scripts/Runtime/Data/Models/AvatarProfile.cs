@@ -15,7 +15,7 @@ namespace NeonCompanion.Runtime.Data.Models
     {
         public const string NeonVrmId = "neon-vrm";
         public const string ResourceScheme = "resource://";
-        public const string NeonVrmResourcePath = "Avatars/neon/Neon";
+        public const string NeonVrmResourcePath = "Avatars/neon/Neon.vrm";
 
         public static AvatarProfile CreateNeonVrm()
         {

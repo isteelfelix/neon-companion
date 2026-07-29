@@ -203,7 +203,44 @@ namespace NeonCompanion.Tests
             Assert.Greater(result.TriangleCount, 0);
             Assert.LessOrEqual(result.SceneNodeCount, Avatar3DLoader.MaxSceneNodes);
             Assert.LessOrEqual(result.TriangleCount, Avatar3DLoader.MaxTriangles);
+            Assert.IsNotNull(result.VrmInstance);
+            Assert.IsNotNull(
+                result.VrmInstance.Runtime.ControlRig,
+                "Built-in VRM must be runtime-imported with a control rig.");
+            CollectionAssert.Contains(result.AnimationNames, "idle");
+
+            Task<UniVRM10.Vrm10AnimationInstance> animationTask =
+                Avatar3DLoader.LoadBuiltInVrmAnimationAsync("idle");
+            while (!animationTask.IsCompleted)
+                yield return null;
+
+            Assert.IsFalse(animationTask.IsFaulted);
+            UniVRM10.Vrm10AnimationInstance animation = animationTask.Result;
+            Assert.IsNotNull(animation);
+            Assert.IsNotNull(animation.ControlRig.Item1);
+            Assert.IsNotNull(animation.ControlRig.Item2);
+            UnityEngine.Object.DestroyImmediate(animation.gameObject);
             UnityEngine.Object.DestroyImmediate(result.Instance);
+        }
+
+        [UnityTest]
+        public IEnumerator BuiltInNeonVrmServicePlaysRuntimeAnimation()
+        {
+            var service = new Avatar3DService();
+            Task<bool> task = service.LoadAvatar(
+                BuiltInAvatarProfiles.ResourceScheme +
+                BuiltInAvatarProfiles.NeonVrmResourcePath);
+            while (!task.IsCompleted)
+                yield return null;
+
+            Assert.IsFalse(task.IsFaulted);
+            Assert.IsTrue(task.Result);
+            CollectionAssert.Contains(
+                new List<string>(service.AvailableAnimations),
+                "idle");
+            Assert.IsTrue(service.SetAnimation("idle"));
+            service.Unload();
+            yield return null;
         }
 
         [Test]
@@ -395,17 +432,26 @@ namespace NeonCompanion.Tests
                 "Resources",
                 "Avatars",
                 "neon",
-                "Neon.vrm");
-            string[] paths = { currentPath, legacyPath };
-            for (int i = 0; i < paths.Length; i++)
+                "Neon.vrm.bytes");
+            string[] sourcePaths =
             {
-                AssertVrmGeneration(paths[i], i == 0);
-                Task<Avatar3DLoadResult> task = Avatar3DLoader.LoadAsync(paths[i]);
+                BuiltInAvatarProfiles.ResourceScheme +
+                    BuiltInAvatarProfiles.NeonVrmResourcePath,
+                legacyPath
+            };
+            string[] fixturePaths = { currentPath, legacyPath };
+            for (int i = 0; i < sourcePaths.Length; i++)
+            {
+                AssertVrmGeneration(fixturePaths[i], i == 0);
+                Task<Avatar3DLoadResult> task =
+                    Avatar3DLoader.LoadAsync(sourcePaths[i]);
                 while (!task.IsCompleted)
                     yield return null;
                 Assert.IsFalse(task.IsFaulted);
                 Avatar3DLoadResult result = task.Result;
-                Assert.IsTrue(result.Success, paths[i] + ": " + result.Error);
+                Assert.IsTrue(
+                    result.Success,
+                    sourcePaths[i] + ": " + result.Error);
                 Assert.Greater(result.RendererCount, 0);
                 Assert.LessOrEqual(result.SceneNodeCount, Avatar3DLoader.MaxSceneNodes);
                 Assert.LessOrEqual(result.TriangleCount, Avatar3DLoader.MaxTriangles);

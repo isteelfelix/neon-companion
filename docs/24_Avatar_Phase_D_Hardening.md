@@ -63,11 +63,11 @@ committed because its license belongs to the fixture owner.
 
 ## Compatibility evidence and honest blockers
 
-The Linux runner parsed the committed `Neon.vrm` as VRM 1.0 and all six packaged
-VRMA files as `VRMC_vrm_animation`. Actual Unity rendering, Win32 transparency,
-Windows TTS, and a second licensed VRM model are environment-blocked here.
-Therefore VRM 0.x + 1.0 runtime compatibility remains an explicit Felix-side test,
-not a claimed pass.
+The committed `Neon.vrm.bytes` parses as VRM 1.0 and all six packaged
+`.vrma.bytes` files parse as `VRMC_vrm_animation`. Unity EditMode verifies that
+both the model and animation are runtime-imported with live control rigs.
+Unity PlayMode runs the idle VRMA for 30 frames with no unexpected log messages.
+A second licensed VRM 0.x model remains an explicit external-fixture test.
 
 Generic compatibility has two generated mappings (`.gltf` with embedded data URI
 and binary `.glb`) in the Unity EditMode test. Their glTFast execution is likewise
@@ -77,7 +77,7 @@ Unity-gated; the runner only verifies that the tests and valid containers exist.
 
 One Linux run on 2026-07-29 reported:
 
-- `Neon.vrm`: 16,587,980 bytes, 122,324-byte JSON catalog, 149 nodes,
+- `Neon.vrm.bytes`: 16,587,980 bytes, 122,324-byte JSON catalog, 149 nodes,
   3 renderer instances, estimated 48,557 triangles; Python catalog parse about
   17–33 ms across two runs with about 0.66 MiB traced peak. This is parser
   evidence, not Unity memory.

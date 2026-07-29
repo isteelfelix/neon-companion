@@ -1,3 +1,4 @@
+using NeonCompanion.Runtime.Platform;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -10,6 +11,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void Awake()
         {
+            if (CompanionProcessMode.IsPlayerProcess)
+            {
+                var playerDocument = GetComponent<UIDocument>();
+                if (playerDocument != null)
+                    playerDocument.enabled = false;
+                enabled = false;
+                return;
+            }
+
             if (panelSettings == null || visualTreeAsset == null)
             {
                 Debug.LogError("[NeonCompanion] UI installer is missing PanelSettings or VisualTreeAsset.");

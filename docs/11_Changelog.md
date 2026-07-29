@@ -23,6 +23,12 @@
 - **Desktop-parity attachment path** — non-image files now go out through `file.attach` (data-URL upload) with the returned `@file:` ref prefixed to the prompt, images through `image.attach_bytes` with the `filename` extension hint, with path-based `image.attach` as the fallback for older gateways. Attachments are staged against the session that actually runs the turn (re-staged after a stale-session resume) and taken back with `image.detach` when the send never reaches the agent, so a failed turn cannot resend them. The agent-initiated `file.transfer.*` protocol is unchanged.
 
 ### Fixed
+- Built-in Neon VRM and VRMA states now load from raw packaged bytes through the
+  UniVRM runtime importer. This preserves both control rigs, eliminates the
+  per-frame retarget null reference, removes legacy `UnityEngine.Input` polling,
+  preserves runtime-import shaders against build stripping, and makes the
+  Companion child report its actual ready backend instead of
+  allowing a sprite launch to masquerade as VRM acceptance.
 - Avatar import now rejects catalog complexity before runtime instantiation and revalidates source metadata before copy; generic 3D retains only one cached template instead of growing for every selected model.
 - TTS stop/cancel/barge-in now releases the active queue wait locally, so a backend that omits `OnPlaybackComplete` cannot block later speech until the safety timeout.
 - Hermes TTS/STT no longer bypass OAuth authentication and depend on Unity's incidental cookie jar: direct audio requests now apply the live `HermesRemoteAuth` cookie, persist rotated `Set-Cookie` values, and move rejected sessions to explicit reauthentication without retrying the same unauthenticated STT request. Legacy Bearer-token voice auth is unchanged.

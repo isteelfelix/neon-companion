@@ -261,6 +261,7 @@ namespace NeonCompanion.Runtime.Platform
             AdvanceAnimation();
             AdvanceVoicePlayback();
             AdvanceReaction();
+            UpdateVrmGaze();
             UpdateHitTestMask();
 
             if (Time.unscaledTime >= _nextBoundsReport)
@@ -360,6 +361,7 @@ namespace NeonCompanion.Runtime.Platform
             if (_clips.Count > 0)
             {
                 ApplyState(_state);
+                ReportBackendReady(snapshot);
                 return;
             }
 
@@ -367,6 +369,11 @@ namespace NeonCompanion.Runtime.Platform
                 _staticTexture = LoadTexture(snapshot.imagePath);
             else if (!string.IsNullOrWhiteSpace(snapshot.imagePngBase64))
                 _staticTexture = LoadTextureBase64(snapshot.imagePngBase64);
+
+            if (_staticTexture != null)
+                ReportBackendReady(snapshot);
+            else
+                ReportBackendFailure(snapshot, "No renderable 2D asset was resolved.");
         }
 
         private async Task Load3DAsync(string path, int version)
@@ -380,7 +387,7 @@ namespace NeonCompanion.Runtime.Platform
             }
             if (!loaded)
             {
-                Send("diagnostic", "Avatar model could not be loaded.");
+                ReportBackendFailure(_snapshot, "Avatar model could not be loaded.");
                 return;
             }
 
@@ -388,6 +395,43 @@ namespace NeonCompanion.Runtime.Platform
             _avatar3DRenderer = gameObject.AddComponent<Avatar3DRenderer>();
             _avatar3DRenderer.SetModelRoot(service.GetRuntimeTransform());
             ApplyState(_state);
+            ReportBackendReady(_snapshot);
+        }
+
+        private void UpdateVrmGaze()
+        {
+            if (_avatar3DService == null || !_avatar3DService.IsLoaded)
+                return;
+
+            float horizontal;
+            float vertical;
+            if (WindowsCompanionWindowNative.TryGetCursorNormalized(
+                out horizontal,
+                out vertical))
+                _avatar3DService.SetGazeNormalized(horizontal, vertical);
+        }
+
+        private void ReportBackendReady(CompanionDisplaySnapshot snapshot)
+        {
+            if (snapshot == null)
+                return;
+            string details = "avatarId=" + (snapshot.avatarId ?? string.Empty) +
+                ";type=" + (snapshot.avatarType ?? string.Empty);
+            NeonLogger.Log("[CompanionPlayer] Backend ready: " + details);
+            Send("backend_ready", details);
+        }
+
+        private void ReportBackendFailure(
+            CompanionDisplaySnapshot snapshot,
+            string reason)
+        {
+            string details = "avatarId=" +
+                (snapshot != null ? snapshot.avatarId ?? string.Empty : string.Empty) +
+                ";type=" +
+                (snapshot != null ? snapshot.avatarType ?? string.Empty : string.Empty) +
+                ";reason=" + (reason ?? string.Empty);
+            NeonLogger.LogError("[CompanionPlayer] Backend failed: " + details);
+            Send("backend_failed", details);
         }
 
         private void ApplyState(string state)
@@ -1190,6 +1234,13 @@ namespace NeonCompanion.Runtime.Platform
         }
 
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct Point32
+        {
+            public int X;
+            public int Y;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         private struct MonitorInfo
         {
             public int Size;
@@ -1217,6 +1268,9 @@ namespace NeonCompanion.Runtime.Platform
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out Rect32 rect);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out Point32 point);
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
@@ -1366,6 +1420,35 @@ namespace NeonCompanion.Runtime.Platform
                 return false;
             x = rect.Left;
             y = rect.Top;
+            return true;
+        }
+
+        public static bool TryGetCursorNormalized(
+            out float horizontal,
+            out float vertical)
+        {
+            horizontal = 0f;
+            vertical = 0f;
+            Rect32 rect;
+            Point32 point;
+            if (!Resolve() ||
+                !GetWindowRect(_window, out rect) ||
+                !GetCursorPos(out point))
+                return false;
+
+            int width = rect.Right - rect.Left;
+            int height = rect.Bottom - rect.Top;
+            if (width <= 0 || height <= 0)
+                return false;
+
+            horizontal = Mathf.Clamp(
+                ((point.X - rect.Left) / (float)width) - 0.5f,
+                -0.5f,
+                0.5f);
+            vertical = Mathf.Clamp(
+                0.5f - ((point.Y - rect.Top) / (float)height),
+                -0.5f,
+                0.5f);
             return true;
         }
 

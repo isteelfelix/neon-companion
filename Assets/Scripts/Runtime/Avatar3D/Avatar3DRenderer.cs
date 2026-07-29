@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -33,6 +34,8 @@ namespace NeonCompanion.Runtime.Avatar3D
         private int _activePointerId = -1;
         private Vector2 _lastPointer;
         private float _lastPinchDistance;
+        private readonly Dictionary<int, Vector2> _touchPointers =
+            new Dictionary<int, Vector2>();
 
         public Texture OutputTexture
         {
@@ -77,6 +80,8 @@ namespace NeonCompanion.Runtime.Avatar3D
         private void OnDisable()
         {
             UnbindImageEvents();
+            _touchPointers.Clear();
+            _lastPinchDistance = 0f;
         }
 
         private void OnDestroy()
@@ -91,6 +96,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return;
 
             UpdateCameraTransform();
+            _camera.Render();
         }
 
         private void EnsureRenderScene()
@@ -122,7 +128,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _camera.farClipPlane = 30f;
                 _camera.fieldOfView = 32f;
                 _camera.targetTexture = _renderTexture;
-                _camera.enabled = true;
+                _camera.enabled = false;
             }
 
             if (_directionalLight == null)
@@ -171,6 +177,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 Destroy(_renderTexture);
                 _renderTexture = null;
             }
+
         }
 
         private void UpdateCameraTransform()
@@ -187,6 +194,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _camera.transform.localPosition = new Vector3(0f, 0f, -_orbitDistance);
                 _camera.transform.LookAt(pivot);
             }
+
         }
 
         private void FrameTarget()
@@ -243,7 +251,10 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
             {
+                _touchPointers[evt.pointerId] =
+                    new Vector2(evt.position.x, evt.position.y);
                 _lastPinchDistance = GetCurrentPinchDistance();
+                _targetImage?.CapturePointer(evt.pointerId);
                 return;
             }
 
@@ -260,6 +271,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
             {
+                _touchPointers[evt.pointerId] =
+                    new Vector2(evt.position.x, evt.position.y);
                 float currentPinchDistance = GetCurrentPinchDistance();
                 if (_lastPinchDistance > 0f && currentPinchDistance > 0f)
                 {
@@ -286,7 +299,9 @@ namespace NeonCompanion.Runtime.Avatar3D
         {
             if (evt.pointerType == UnityEngine.UIElements.PointerType.touch)
             {
-                _lastPinchDistance = 0f;
+                _touchPointers.Remove(evt.pointerId);
+                _lastPinchDistance = GetCurrentPinchDistance();
+                _targetImage?.ReleasePointer(evt.pointerId);
                 return;
             }
 
@@ -300,19 +315,25 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void OnPointerCancel(PointerCancelEvent evt)
         {
+            _touchPointers.Remove(evt.pointerId);
             _dragging = false;
             _activePointerId = -1;
-            _lastPinchDistance = 0f;
+            _lastPinchDistance = GetCurrentPinchDistance();
         }
 
         private float GetCurrentPinchDistance()
         {
-            if (Input.touchCount < 2)
+            if (_touchPointers.Count < 2)
                 return 0f;
 
-            var t0 = Input.GetTouch(0);
-            var t1 = Input.GetTouch(1);
-            return Vector2.Distance(t0.position, t1.position);
+            Dictionary<int, Vector2>.ValueCollection.Enumerator enumerator =
+                _touchPointers.Values.GetEnumerator();
+            if (!enumerator.MoveNext())
+                return 0f;
+            Vector2 first = enumerator.Current;
+            if (!enumerator.MoveNext())
+                return 0f;
+            return Vector2.Distance(first, enumerator.Current);
         }
     }
 }

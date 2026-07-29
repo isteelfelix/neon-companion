@@ -1,13 +1,11 @@
 {
-  "name": "NeonCompanion.EditModeTests",
+  "name": "NeonCompanion.PlayModeTests",
   "rootNamespace": "NeonCompanion.Tests",
   "references": [
     "GUID:30d9501bacecd4e4485f7b01a8ff7b4b",
     "VRM10"
   ],
-  "includePlatforms": [
-    "Editor"
-  ],
+  "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,
