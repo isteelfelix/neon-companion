@@ -48,7 +48,7 @@ namespace NeonCompanion.Runtime.Voice
             ['у'] = Viseme.U, ['ю'] = Viseme.U,
         };
 
-        private const float CharsPerSecond = 12f;
+        public const float TextCharsPerSecond = 12f;
         private const string LipsyncClipName = "lipsync";
         private const string TalkingClipName = "talking";
         private const string IdleClipName    = "idle";
@@ -129,7 +129,7 @@ namespace NeonCompanion.Runtime.Voice
                 return;
 
             _charTimer += Time.unscaledDeltaTime;
-            int newIndex = Mathf.FloorToInt(_charTimer * CharsPerSecond);
+            int newIndex = Mathf.FloorToInt(_charTimer * TextCharsPerSecond);
 
             if (newIndex <= _charIndex)
                 return;

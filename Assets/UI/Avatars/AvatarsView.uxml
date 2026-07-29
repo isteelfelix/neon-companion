@@ -17,6 +17,31 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="companion-window-card" class="companion-window-card" style="display: none;">
+            <ui:VisualElement class="companion-window-card__copy">
+                <ui:Label name="companion-window-title" text="Companion window" class="companion-window-card__title" />
+                <ui:Label name="companion-window-subtitle" text="Render the selected avatar in an isolated Windows player." class="companion-window-card__subtitle" />
+                <ui:Label name="companion-window-status" text="Companion player is stopped." class="companion-window-card__status" />
+            </ui:VisualElement>
+            <ui:Toggle name="companion-mode-toggle" label="Use Companion mode" class="companion-window-card__toggle" />
+            <ui:VisualElement class="companion-window-card__options">
+                <ui:Toggle name="companion-visible-toggle" label="Visible" />
+                <ui:Toggle name="companion-pinned-toggle" label="Always on top" />
+                <ui:Toggle name="companion-click-through-toggle" label="Click-through" />
+                <ui:Button name="companion-monitor-button" text="Monitor" class="btn" />
+                <ui:VisualElement class="companion-window-card__scale">
+                    <ui:Label name="companion-scale-label" text="Scale" />
+                    <ui:Slider name="companion-scale-slider" low-value="0.5" high-value="2" value="1" show-input-field="true" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="companion-window-emergency" text="Emergency click-through release: Ctrl+Shift+F12" class="companion-window-card__hint" />
+            <ui:VisualElement class="companion-window-card__actions">
+                <ui:Button name="companion-show-button" text="Show" class="btn" />
+                <ui:Button name="companion-hide-button" text="Hide" class="btn" />
+                <ui:Button name="companion-return-button" text="Return to column" class="btn btn--primary" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <ui:VisualElement class="viewmode-row">
             <ui:Button name="viewmode-static-btn" class="viewmode-btn viewmode-btn--active">
                 <ui:Label text="Статика" />

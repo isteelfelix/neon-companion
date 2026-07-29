@@ -48,6 +48,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<SpriteSheetAnimator> GetAvatarAnimator;
             public Action<AvatarMotionState> SetAvatarMotionState;
             public Action RefreshAvatarMotionState;
+            public Action StopAvatarDisplay;
             public Action TriggerAvatarSmile;
             public Action TriggerAvatarConfused;
             public Func<AvatarAnimationController> GetAvatarAnimationController;
@@ -412,6 +413,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnStopClicked()
         {
             _d.StopVoiceOutput?.Invoke();
+            _d.StopAvatarDisplay?.Invoke();
             _approvalController?.Dismiss();
             DismissSessionPicker();
             _editController?.Hide();

@@ -195,7 +195,7 @@ namespace NeonCompanion.Runtime.Platform
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoBootstrap()
         {
-            if (Instance != null)
+            if (Instance != null || CompanionProcessMode.IsPlayerProcess)
                 return;
 
             var go = new GameObject("WindowChromeBridge");

@@ -34,6 +34,15 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Vector2 _lastPointer;
         private float _lastPinchDistance;
 
+        public Texture OutputTexture
+        {
+            get
+            {
+                EnsureRenderScene();
+                return _renderTexture;
+            }
+        }
+
         public void AttachTargetImage(Image image)
         {
             if (_targetImage == image)

@@ -90,12 +90,14 @@ namespace NeonCompanion.Runtime.UI.UITK
         private readonly AvatarGalleryController _avatarGalleryController = new AvatarGalleryController();
         private readonly VoiceController _voiceController = new VoiceController();
         private readonly LayoutController _layoutController = new LayoutController();
+        private readonly CompanionWindowController _companionWindowController = new CompanionWindowController();
 
         // ===== Terminal (right panel tab) =====
         private TerminalController _terminalController;
         private VisualElement _rightTabBar;
         private Button _avatarTabBtn;
         private Button _terminalTabBtn;
+        private Button _companionModeBtn;
         private VisualElement _avatarContentHost;
         private VisualElement _terminalHost;
         private bool _rightPanelIsTerminal;
@@ -275,6 +277,15 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnEnable()
         {
+            if (CompanionProcessMode.IsPlayerProcess)
+            {
+                var playerDocument = GetComponent<UIDocument>();
+                if (playerDocument != null)
+                    playerDocument.enabled = false;
+                enabled = false;
+                return;
+            }
+
             var document = GetComponent<UIDocument>();
             if (document == null || document.rootVisualElement == null)
                 return;
@@ -321,6 +332,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             TeardownTerminalRemoteBridge();
+        }
+
+        private void Update()
+        {
+            _companionWindowController.Tick();
         }
 
         private bool _sessionStatesSubscribed;
@@ -471,6 +487,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _layoutController.SetDeps(BuildLayoutControllerDeps());
             _layoutController.Init();
             _layoutController.RegisterCallbacks();
+            _companionWindowController.SetDeps(BuildCompanionWindowControllerDeps());
+            _companionWindowController.Init();
+            _companionWindowController.RegisterCallbacks();
 
             _chatController.InitState();
             _isBound = true;
@@ -565,6 +584,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 GetAvatarAnimator = _avatarGalleryController.GetAvatarAnimatorInstance,
                 SetAvatarMotionState = _avatarGalleryController.SetAvatarMotionState,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
+                StopAvatarDisplay = _companionWindowController.StopAvatarDisplay,
                 TriggerAvatarSmile = _avatarGalleryController.TriggerAvatarSmile,
                 TriggerAvatarConfused = _avatarGalleryController.TriggerAvatarConfused,
                 GetAvatarAnimationController = () => _avatarAnimationController,
@@ -698,6 +718,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 IsChatStreamingResponse = () => _chatController.IsStreamingResponse,
                 GetIsVoicePlaying = () => _voiceController.IsVoicePlaying,
                 GetIsVoiceRecording = () => _voiceController.IsVoiceRecording,
+                AvatarChanged = _companionWindowController.OnAvatarChanged,
+                AvatarMotionStateChanged = _companionWindowController.OnAvatarMotionStateChanged,
                 GetAppAsync = GetAppAsync,
                 GetAppSync = () => _app,
                 IsBound = () => _isBound,
@@ -725,6 +747,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             };
         }
 
+        private CompanionWindowController.Deps BuildCompanionWindowControllerDeps()
+        {
+            return new CompanionWindowController.Deps
+            {
+                Root = _root,
+                GetAppAsync = GetAppAsync,
+                GetActiveAvatarId = () => _avatarGalleryController.ActiveAvatarId,
+                GetAvatarDisplayName = _avatarGalleryController.AvatarDisplayName,
+                CaptureBuiltInPreview = _avatarGalleryController.CaptureBuiltInPreview,
+                SetColumnCompanionMode = _layoutController.SetCompanionMode,
+                OpenAvatarSettings = _navigationController.ShowAvatars
+            };
+        }
+
         private VoiceController.Deps BuildVoiceControllerDeps()
         {
             return new VoiceController.Deps
@@ -739,7 +775,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 OnVoicePlaybackStarted = OnTtsPlaybackStarted,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 AttachAssistantAudio = AttachAssistantAudio,
-                OnVoicePlaybackCompleted = ClearTtsBusyState,
+                OnVoicePlaybackCompleted = OnTtsPlaybackCompleted,
                 GetAvatarAnimator = _avatarGalleryController.GetAvatarAnimatorInstance,
                 GetAvatar3DService = _avatarGalleryController.GetAvatar3DServiceInstance,
                 GetChatServiceAsync = GetChatServiceAsync,
@@ -792,6 +828,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _settingsController.RegisterCallbacks();
+            RegisterClick(_companionModeBtn, OnCompanionModeClicked);
 
             // Terminal tabs (defensive re-register)
             RegisterClick(_avatarTabBtn, OnAvatarTabClicked);
@@ -802,6 +839,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _chatController.UnregisterCallbacks();
             _avatarGalleryController.UnregisterCallbacks();
+            _companionWindowController.UnregisterCallbacks();
 
             UnregisterClick(_moreButton, OnMoreClicked);
             UnregisterClick(_mobileMenuButton, OnMobileMenuClicked);
@@ -819,6 +857,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Terminal tabs
             UnregisterClick(_avatarTabBtn, OnAvatarTabClicked);
             UnregisterClick(_terminalTabBtn, OnTerminalTabClicked);
+            UnregisterClick(_companionModeBtn, OnCompanionModeClicked);
 
             _scrollBottomButtonSchedule?.Pause();
             _scrollBottomButtonSchedule = null;
@@ -848,6 +887,10 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _rightTabBar.Add(_avatarTabBtn);
             _rightTabBar.Add(_terminalTabBtn);
+            _companionModeBtn = new Button();
+            _companionModeBtn.text = LocalizationExtensions.Get("companion.window.short", "Companion");
+            _companionModeBtn.AddToClassList("right-panel-tab");
+            _rightTabBar.Add(_companionModeBtn);
 
             // Insert tab bar as first child
             _avatarPanel.Insert(0, _rightTabBar);
@@ -930,6 +973,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnTerminalTabClicked()
         {
             SwitchRightPanelTab(true);
+        }
+
+        private void OnCompanionModeClicked()
+        {
+            _companionWindowController.EnableCompanionMode();
         }
 
         private void EnsureTerminalController()
@@ -1438,13 +1486,20 @@ namespace NeonCompanion.Runtime.UI.UITK
             RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
         }
 
-        private void OnTtsPlaybackStarted()
+        private void OnTtsPlaybackStarted(string text)
         {
+            _companionWindowController.StartVoicePlayback(text);
             if (_ttsBusyMessage == null || !_ttsBusyMessage.voiceOutputBusy)
                 return;
 
             _ttsBusyMessage.voiceOutputBusy = false;
             RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
+        }
+
+        private void OnTtsPlaybackCompleted()
+        {
+            _companionWindowController.ClearVoicePlayback();
+            ClearTtsBusyState();
         }
 
         private async Task EnsureVoicePipelineAsync(ChatService chat) => await _voiceController.EnsureVoicePipelineAsync(chat);
@@ -1684,6 +1739,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navThemesLabel?.Localize("settings.themes");
             _navSettingsLabel?.Localize("tab.settings");
             _navCloseLabel?.Localize("nav.close");
+            if (_companionModeBtn != null)
+                _companionModeBtn.text = LocalizationExtensions.Get("companion.window.short", "Companion");
             UpdatePanelToggleTooltips();
             ApplyStaticTemplateLocalization();
         }
@@ -1708,6 +1765,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _avatarGalleryController.UpdateAvatarActionButtons(activeAvatarId);
                 _avatarGalleryController.RefreshBuiltInAvatarTileLabels();
                 _avatarGalleryController.UpdateAvatarFilterCounts();
+                _companionWindowController.RefreshLocalizedUi();
                 _settingsController.UpdateClearDataButtonState();
 
                 var app = await GetAppAsync();

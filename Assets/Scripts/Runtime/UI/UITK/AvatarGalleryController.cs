@@ -36,6 +36,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<bool> IsChatStreamingResponse;
             public Func<bool> GetIsVoicePlaying;
             public Func<bool> GetIsVoiceRecording;
+            public Action<string> AvatarChanged;
+            public Action<AvatarMotionState> AvatarMotionStateChanged;
             // Services
             public Func<Task<CompanionApp>> GetAppAsync;
             public Func<CompanionApp> GetAppSync;
@@ -199,7 +201,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         public string ActiveAvatarId
         {
             get { return _activeAvatarId; }
-            set { _activeAvatarId = value; }
+            set
+            {
+                _activeAvatarId = value;
+                _d.AvatarChanged?.Invoke(value);
+            }
         }
 
         public SpriteSheetAnimator GetAvatarAnimatorInstance() { return _avatarAnimator; }
@@ -642,6 +648,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public void SetAvatarMotionState(AvatarMotionState state)
         {
             _avatarMotionState = state;
+            _d.AvatarMotionStateChanged?.Invoke(state);
 
             if (_avatar3DService != null && _avatar3DService.IsLoaded)
             {
@@ -710,6 +717,46 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return LocalizationExtensions.Get(meta.DisplayNameKey, meta.DisplayNameFallback);
             var fallbackMeta = BuiltInAvatarMetaById["neon"];
             return LocalizationExtensions.Get(fallbackMeta.DisplayNameKey, fallbackMeta.DisplayNameFallback);
+        }
+
+        public string CaptureBuiltInPreview(string avatarId)
+        {
+            if (_d.Root == null || string.IsNullOrWhiteSpace(avatarId))
+                return null;
+
+            VisualElement tile = _d.Root.Q<VisualElement>("avtile-" + avatarId);
+            Texture2D source = tile != null ? tile.resolvedStyle.backgroundImage.texture : null;
+            if (source == null)
+                return null;
+
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture temporary = RenderTexture.GetTemporary(
+                source.width,
+                source.height,
+                0,
+                RenderTextureFormat.ARGB32);
+            Texture2D readable = null;
+            try
+            {
+                Graphics.Blit(source, temporary);
+                RenderTexture.active = temporary;
+                readable = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
+                readable.ReadPixels(new Rect(0f, 0f, source.width, source.height), 0, 0);
+                readable.Apply();
+                return Convert.ToBase64String(readable.EncodeToPNG());
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning("[CompanionWindow] Preview snapshot failed: " + ex.Message);
+                return null;
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(temporary);
+                if (readable != null)
+                    UnityEngine.Object.Destroy(readable);
+            }
         }
 
         public void UpdatePersonaStateUi(string avatarId)
@@ -1175,6 +1222,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _d.SetChatSubtitle?.Invoke(updatedSub);
             _d.SetTopbarSubtitle?.Invoke(updatedSub);
             _d.SaveSettings?.Invoke();
+            _d.AvatarChanged?.Invoke(avatarId);
         }
 
         private void OnPreviewApplyClicked() { _ = ApplyAvatarToSessionAsync(); }

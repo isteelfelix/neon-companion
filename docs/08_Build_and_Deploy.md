@@ -13,6 +13,27 @@
 3. Выбрать целевую платформу
 4. Собрать
 
+### Windows Companion Phase C acceptance
+
+Сервер без Unity не подтверждает Windows runtime. Для принятия Phase C Felix
+собирает профиль `Assets/Settings/Build Profiles/Windows.asset` и сохраняет:
+
+1. screenshot основного UI с включённым Companion mode и отдельного прозрачного
+   окна на выбранном monitor/scale;
+2. Process Explorer/Task Manager proof двух процессов одного Player executable;
+3. `Player.log` и `Logs/companion-player.log` с разными PID и IPC connected, без
+   второго provider/session initialization в child log;
+4. restart proof сохранённых visible/pin/click-through/monitor/scale/position;
+5. child close и forced child crash proof: основной chat продолжает отправлять и
+   хранить ту же session/history;
+6. parent close proof: child PID завершается; зависший child также убирается после
+   shutdown grace period;
+7. click-through on/off и аварийный `Ctrl+Shift+F12`, drag, Settings, Column,
+   Show/Hide, Pin и Stop state.
+
+Android/iOS smoke должен подтвердить отсутствие второго процесса и скрытую
+Windows-only card. До этих артефактов tracker остаётся `⏳`.
+
 ### Headless-сборка (Android)
 Безголовая сборка через `AndroidHeadlessBuild.cs`:
 ```bash

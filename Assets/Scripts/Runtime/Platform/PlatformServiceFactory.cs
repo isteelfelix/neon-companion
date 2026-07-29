@@ -75,6 +75,15 @@ namespace NeonCompanion.Runtime.Platform
 #endif
         }
 
+        public static ICompanionWindowService CreateCompanionWindowService()
+        {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            return new WindowsCompanionWindowService();
+#else
+            return new StubCompanionWindowService();
+#endif
+        }
+
         public static IVoiceService CreateVoiceService(GameObject host = null)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -152,6 +161,28 @@ namespace NeonCompanion.Runtime.Platform
         public void BeginDrag() { }
         public void ToggleMaximize() { }
         public void Minimize() { }
+    }
+
+    public sealed class StubCompanionWindowService : ICompanionWindowService
+    {
+        private static readonly System.Collections.Generic.List<string> NoMonitors =
+            new System.Collections.Generic.List<string>();
+
+        public bool IsAvailable => false;
+        public bool IsRunning => false;
+        public System.Collections.Generic.IReadOnlyList<string> MonitorNames => NoMonitors;
+        public event System.Action<CompanionWindowEvent> EventReceived { add { } remove { } }
+        public void Launch(CompanionDisplaySnapshot snapshot, CompanionWindowPreferences preferences) { }
+        public void SetProfile(CompanionDisplaySnapshot snapshot) { }
+        public void SetState(string state) { }
+        public void StartVoicePlayback(string text) { }
+        public void ClearVoicePlayback() { }
+        public void UpdatePreferences(CompanionWindowPreferences preferences) { }
+        public void Show() { }
+        public void Hide() { }
+        public void Stop() { }
+        public void Tick() { }
+        public void Dispose() { }
     }
 
     /// <summary>

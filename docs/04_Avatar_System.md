@@ -143,6 +143,30 @@ humanoid bones, blink, gaze, expressions, lipsync и упакованные VRMA
 Recording, stop, cancel, interrupt и barge-in немедленно очищают speaking/mouth
 state. Маршруты Hermes и Generic OpenAI TTS/STT не изменены.
 
+### Windows Companion window (Phase C)
+
+На Windows Player пользователь может выбрать `Companion` в правой колонке или
+включить режим на странице Avatars. Основное окно скрывает avatar column, а тот же
+executable запускается вторым процессом с `--companion-player`. Дочерний процесс
+получает по случайно названному локальному named pipe только display snapshot:
+идентификатор/имя/тип профиля, локальные display asset paths или встроенный preview,
+state clip mapping и display transform. Provider config, API key, system prompt,
+chat/session/history и transport в snapshot отсутствуют.
+
+`AppBootstrap` распознаёт display-процесс до создания storage, secret store,
+provider/session repositories, `ChatService`, plugins и voice. Поэтому Companion
+Player не создаёт второй AI-сеанс и не конкурирует за JSON истории. Parent
+передаёт состояния `idle`, `listening`, `thinking`, `speaking`, `stop`; Phase-B
+motion-pack/3D state mapping используется непосредственно display runtime.
+
+Окно интерактивно по умолчанию: его можно перетаскивать, показать/скрыть,
+закрепить поверх окон, выбрать монитор и масштаб, открыть настройки аватара,
+вернуться к колонке или закрыть отдельно. Click-through — только пользовательский
+toggle; `Ctrl+Shift+F12` аварийно возвращает интерактивность. Позиция и controls
+сохраняются в `AppSettings`. Закрытие/crash player не завершает chat parent, а
+закрытие parent сначала посылает `stop`/shutdown и затем принудительно убирает
+зависший дочерний процесс. Android/iOS и Editor получают stub и никогда не spawn.
+
 ### Persisted profile contract v1
 
 `AvatarProfile.contractVersion = 1` дополняет, но не удаляет legacy-поля

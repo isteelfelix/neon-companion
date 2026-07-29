@@ -26,7 +26,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             /// <summary>(transcribedText, wavFilePath) — sends the voice message to the chat. Returns true if accepted.</summary>
             public Func<string, string, Task<bool>> SendVoiceMessageAsync;
             public Action OnVoiceRecordingStarted;
-            public Action OnVoicePlaybackStarted;
+            public Action<string> OnVoicePlaybackStarted;
             public Action RefreshAvatarMotionState;
             /// <summary>(ttsAudioPath, durationSecs) — attach a synthesized clip to the latest assistant message.</summary>
             public Action<string, float> AttachAssistantAudio;
@@ -219,18 +219,22 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ReinitializeVoiceService(ProviderConfig provider, AppSettings settings, ChatService chat)
         {
-            UnbindVoiceAnimationEvents();
             HideVoicePreview();
 
             if (_voiceOutputManager != null)
             {
                 _voiceOutputManager.StopSpeakingAndClear();
+                UnbindVoiceAnimationEvents();
                 _voiceOutputManager.OnResponseAudioReady -= HandleResponseAudioReady;
                 if (_voiceBoundToChat && chat != null)
                     _voiceOutputManager.UnbindChat(chat);
                 UnityEngine.Object.Destroy(_voiceOutputManager);
                 _voiceOutputManager = null;
                 _voiceBoundToChat = false;
+            }
+            else
+            {
+                UnbindVoiceAnimationEvents();
             }
 
             if (_voiceInputManager != null)
@@ -725,10 +729,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             _isVoiceRecording = false;
         }
 
-        private void HandleVoicePlaybackStarted(string _)
+        private void HandleVoicePlaybackStarted(string text)
         {
             _isVoicePlaying = true;
-            _d.OnVoicePlaybackStarted?.Invoke();
+            _d.OnVoicePlaybackStarted?.Invoke(text);
             _d.RefreshAvatarMotionState?.Invoke();
         }
 

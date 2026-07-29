@@ -23,6 +23,7 @@ namespace NeonCompanion.Runtime.Core
 
         private PersistentShellService _persistentShell;
         private ClientTerminalExecutionService _clientTerminal;
+        private ICompanionWindowService _companionWindow;
 
         public CompanionApp App { get; private set; }
         public Task InitializationTask { get; private set; } = Task.CompletedTask;
@@ -35,6 +36,12 @@ namespace NeonCompanion.Runtime.Core
 
         private void OnApplicationQuit()
         {
+            if (_companionWindow != null)
+            {
+                _companionWindow.Dispose();
+                _companionWindow = null;
+            }
+
             // Kill the long-lived agent shell so we don't leak a powershell/bash process.
             if (_persistentShell != null)
             {
@@ -51,6 +58,14 @@ namespace NeonCompanion.Runtime.Core
         private void Awake()
         {
             Application.runInBackground = true;
+
+            // The isolated Companion player receives a display-only snapshot. It must
+            // never initialize repositories, secrets, providers, sessions, or chat.
+            if (CompanionProcessMode.IsPlayerProcess)
+            {
+                enabled = false;
+                return;
+            }
 
             if (_instance != null && _instance != this)
             {
@@ -73,7 +88,9 @@ namespace NeonCompanion.Runtime.Core
             var platformInfo = PlatformServiceFactory.CreatePlatformInfoService();
             var fileDrop = PlatformServiceFactory.CreateFileDropService(gameObject);
             var windowChrome = PlatformServiceFactory.CreateWindowChromeService(gameObject);
+            var companionWindow = PlatformServiceFactory.CreateCompanionWindowService();
             var voiceService = PlatformServiceFactory.CreateVoiceService(gameObject);
+            _companionWindow = companionWindow;
 #if UNITY_ANDROID && !UNITY_EDITOR
             AndroidPermissionHelper.RequestPermission(AndroidPermissionHelper.READ_EXTERNAL_STORAGE);
 #endif
@@ -170,6 +187,7 @@ namespace NeonCompanion.Runtime.Core
             services.Register<IPlatformInfoService>(platformInfo);
             services.Register<IFileDropService>(fileDrop);
             services.Register<IWindowChromeService>(windowChrome);
+            services.Register<ICompanionWindowService>(companionWindow);
             services.Register<IVoiceService>(voiceService);
             services.Register<IProviderConfigRepository>(providers);
             services.Register<IChatSessionRepository>(sessions);

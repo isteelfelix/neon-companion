@@ -86,6 +86,21 @@ Platform/
 
 **Localization:** JSON-файлы лежат в `Assets/Resources/Localization/` (en.json, ru.json). Загружаются через `Resources.Load<TextAsset>()` — работает на всех платформах, включая Android APK (где StreamingAssets недоступны через `File.*`). Fallback: если ключ не найден в текущем языке, берётся `en`.
 
+### 2.5 Windows-isolated Companion display
+
+`ICompanionWindowService` создаётся только фабрикой. Реальная
+`WindowsCompanionWindowService` компилируется для
+`UNITY_STANDALONE_WIN && !UNITY_EDITOR`; все остальные платформы получают stub.
+Сервис запускает текущий Windows Player как отдельный display-only процесс и
+контролирует его через local named pipe. Контроллеры не используют Win32 напрямую.
+
+Win32 transparency, topmost, click-through, monitor placement и system drag живут
+в дочернем `CompanionPlayerRuntime`. Main process отвечает за supervision,
+persisted controls и display snapshot. Child-mode guard в `AppBootstrap` должен
+оставаться до любого чтения repository/secret/session state. Это security boundary:
+в протокол нельзя добавлять `ProviderConfig`, API keys, system prompt, chat history
+или session identity. Mobile builds никогда не запускают display process.
+
 Пример (целевая форма):
 
 ```csharp

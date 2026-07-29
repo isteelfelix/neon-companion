@@ -28,6 +28,16 @@ namespace NeonCompanion.Runtime.Data.Models
         public string toolPermissionMode = "manual";
         public List<string> alwaysApprovedTools = new List<string>();
 
+        // Windows Companion display process (display-only; no provider/session data).
+        public bool companionModeEnabled = false;
+        public bool companionWindowVisible = true;
+        public bool companionWindowPinned = true;
+        public bool companionWindowClickThrough = false;
+        public int companionWindowMonitor = 0;
+        public float companionWindowScale = 1f;
+        public int companionWindowPositionX = int.MinValue;
+        public int companionWindowPositionY = int.MinValue;
+
         // Hermes backend
         public string backendMode = "openai"; // "openai" | "hermes"
         public string hermesWsUrl = "";
