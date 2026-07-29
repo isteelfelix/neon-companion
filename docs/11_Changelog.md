@@ -4,10 +4,6 @@
 
 ### Changed
 
-- Replaced the wide Avatars-page Companion block with a compact status card and token-based settings modal; the Pet window now exposes hover drag/return/close controls and a right-click menu for visibility, pinning, scale, avatar settings, return, and close.
-
-### Changed
-
 - OpenAI-compatible provider context now defaults to **Auto**: Neon prefers the loaded LM Studio runtime value, then model metadata from the provider API, then the built-in OpenAI model catalog. A manual value acts as a cap and cannot exceed a known model limit; when no source knows the limit, the UI explicitly shows **Unknown** and accepts any positive manual value. The former “Max tokens” label is now “Max response tokens” to distinguish the output budget from the context window.
 - Client-host terminal execution now uses a dedicated session-scoped executor instead of `TerminalController`: the first command offers run-once/session/deny, a session grant avoids repetitive prompts, grants reset on disconnect, and persistent shells cannot leak state between chats. Terminal tabs now use runtime-loaded USS classes and fit the existing right-panel design instead of inline unstyled buttons.
 - Terminal shell input now derives Ctrl/Alt bytes from `keyCode` when Windows UITK omits `character`, emits xterm-compatible modifier sequences for arrow keys, preserves terminal focus during chat streaming until an intentional outside click, supports multiple independent local PTY tabs, and mirrors backend `agent.terminal.output` streams in read-only tabs.
