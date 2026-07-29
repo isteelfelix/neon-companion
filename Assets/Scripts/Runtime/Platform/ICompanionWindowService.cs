@@ -210,7 +210,9 @@ namespace NeonCompanion.Runtime.Platform
         void SetProfile(CompanionDisplaySnapshot snapshot);
         void SetState(string state);
         void StartVoicePlayback(string text);
+        void UpdateVoicePlayback(float positionSecs, float durationSecs, bool isPlaying);
         void ClearVoicePlayback();
+        void TriggerReaction(string reaction);
         void UpdatePreferences(CompanionWindowPreferences preferences);
         void Show();
         void Hide();
@@ -225,6 +227,7 @@ namespace NeonCompanion.Runtime.Platform
         public string text;
         public bool boolValue;
         public float floatValue;
+        public float floatValue2;
         public int x;
         public int y;
         public CompanionDisplaySnapshot snapshot;

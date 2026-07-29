@@ -29,6 +29,7 @@ namespace NeonCompanion.Runtime.Platform
         private bool _enabled;
 
         public bool IsAvailable => true;
+        internal static WindowsFileDropService Instance { get; private set; }
 
         [System.Runtime.InteropServices.DllImport("shell32.dll")]
         private static extern void DragAcceptFiles(IntPtr hWnd, bool fAccept);
@@ -50,6 +51,12 @@ namespace NeonCompanion.Runtime.Platform
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern IntPtr GetActiveWindow();
+
+        private void Awake()
+        {
+            if (Instance == null)
+                Instance = this;
+        }
 
         public void Start()
         {
@@ -121,10 +128,14 @@ namespace NeonCompanion.Runtime.Platform
         private void OnDestroy()
         {
             Stop();
+            if (ReferenceEquals(Instance, this))
+                Instance = null;
         }
 
         private void OnApplicationQuit()
         {
+            // This service is the top link in the WndProc chain. It must be removed
+            // before WindowsWindowChromeService restores Unity's original WndProc.
             Stop();
         }
 

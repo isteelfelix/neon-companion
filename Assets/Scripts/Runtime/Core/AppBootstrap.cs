@@ -166,6 +166,7 @@ namespace NeonCompanion.Runtime.Core
                 string activeAvatarId = settingsData.activeAvatarId;
                 bool knownAvatar = !string.IsNullOrWhiteSpace(activeAvatarId) &&
                                    (System.Array.IndexOf(new[] { "neon", "yorha-2b", "aurora", "ember", "glass", "flora", "mono", "cobalt", "rose" }, activeAvatarId) >= 0 ||
+                                    BuiltInAvatarProfiles.TryCreate(activeAvatarId) != null ||
                                     avatarProfiles.Exists(a => a != null && a.id == activeAvatarId));
 
                 if (!knownAvatar)

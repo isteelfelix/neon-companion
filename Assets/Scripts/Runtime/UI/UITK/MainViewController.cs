@@ -336,6 +336,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void Update()
         {
             _companionWindowController.Tick();
+            _voiceController.Tick();
         }
 
         private bool _sessionStatesSubscribed;
@@ -584,8 +585,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetAvatarMotionState = _avatarGalleryController.SetAvatarMotionState,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 StopAvatarDisplay = _companionWindowController.StopAvatarDisplay,
-                TriggerAvatarSmile = _avatarGalleryController.TriggerAvatarSmile,
-                TriggerAvatarConfused = _avatarGalleryController.TriggerAvatarConfused,
+                TriggerAvatarSmile = TriggerAvatarSmile,
+                TriggerAvatarConfused = TriggerAvatarConfused,
                 GetAvatarAnimationController = () => _avatarAnimationController,
                 GetChatServiceAsync = GetChatServiceAsync,
                 GetAppAsync = GetAppAsync,
@@ -694,7 +695,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 LoadSessionsAsync    = () => LoadSessionsAsync(_chatService),
                 RenderMessages       = () => RenderMessages(_chatService?.CurrentChatViewModel?.Messages),
                 AddSystemMessage     = AddSystemMessage,
-                TriggerAvatarConfused = _avatarGalleryController.TriggerAvatarConfused,
+                TriggerAvatarConfused = TriggerAvatarConfused,
                 ShowChat             = _navigationController.ShowChat,
                 SetCurrentSessionId  = id => _currentSessionId = id,
                 SetCurrentSessionTitle = title => _currentSessionTitle = title
@@ -774,6 +775,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SendVoiceMessageAsync = SendVoiceMessageAsync,
                 OnVoiceRecordingStarted = OnVoiceRecordingStarted,
                 OnVoicePlaybackStarted = OnTtsPlaybackStarted,
+                OnVoicePlaybackProgress = _companionWindowController.UpdateVoicePlayback,
                 RefreshAvatarMotionState = _avatarGalleryController.RefreshAvatarMotionState,
                 AttachAssistantAudio = AttachAssistantAudio,
                 OnVoicePlaybackCompleted = OnTtsPlaybackCompleted,
@@ -1485,6 +1487,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _ttsBusyMessage.voiceOutputBusy = false;
             RenderMessages(_chatService?.CurrentChatViewModel?.Messages);
+        }
+
+        private void TriggerAvatarSmile()
+        {
+            _avatarGalleryController.TriggerAvatarSmile();
+            _companionWindowController.TriggerReaction("smile");
+        }
+
+        private void TriggerAvatarConfused()
+        {
+            _avatarGalleryController.TriggerAvatarConfused();
+            _companionWindowController.TriggerReaction("confused");
         }
 
         private void OnTtsPlaybackCompleted()

@@ -219,10 +219,25 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _service.StartVoicePlayback(text);
         }
 
+        public void UpdateVoicePlayback(
+            float positionSecs,
+            float durationSecs,
+            bool isPlaying)
+        {
+            if (IsAvailable && _dockState.IsDetached)
+                _service.UpdateVoicePlayback(positionSecs, durationSecs, isPlaying);
+        }
+
         public void ClearVoicePlayback()
         {
             if (IsAvailable && _dockState.IsDetached)
                 _service.ClearVoicePlayback();
+        }
+
+        public void TriggerReaction(string reaction)
+        {
+            if (IsAvailable && _dockState.IsDetached)
+                _service.TriggerReaction(reaction);
         }
 
         private async Task LoadAsync()
@@ -343,6 +358,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             List<AvatarProfile> profiles = app.Avatars.GetAll();
             AvatarProfile profile = profiles.FirstOrDefault(item =>
                 item != null && string.Equals(item.id, avatarId, StringComparison.Ordinal));
+            if (profile == null)
+                profile = BuiltInAvatarProfiles.TryCreate(avatarId);
             string name = _d.GetAvatarDisplayName != null
                 ? _d.GetAvatarDisplayName(avatarId)
                 : avatarId;
@@ -578,7 +595,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_clickThroughToggle != null)
                 _clickThroughToggle.label = LocalizationExtensions.Get(
                     "companion.window.click_through",
-                    "Click-through");
+                    "Click-through transparent background");
+            if (_monitorButton != null)
+                _monitorButton.text = LocalizationExtensions.Get(
+                    "companion.window.monitor",
+                    "Monitor");
             if (_showButton != null)
                 _showButton.text = LocalizationExtensions.Get("companion.window.show", "Show");
             if (_scaleLabel != null)

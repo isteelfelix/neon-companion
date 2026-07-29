@@ -38,7 +38,14 @@ namespace NeonCompanion.Runtime.Avatar
                 return profile.systemPrompt;
 
             // Fall back to built-in persona
-            if (!string.IsNullOrWhiteSpace(avatarId) && BuiltInSystemPrompts.TryGetValue(avatarId, out var prompt))
+            string builtInPromptId = string.Equals(
+                avatarId,
+                BuiltInAvatarProfiles.NeonVrmId,
+                System.StringComparison.Ordinal)
+                ? "neon"
+                : avatarId;
+            if (!string.IsNullOrWhiteSpace(builtInPromptId) &&
+                BuiltInSystemPrompts.TryGetValue(builtInPromptId, out var prompt))
                 return prompt;
 
             return string.Empty;

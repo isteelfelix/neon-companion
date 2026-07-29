@@ -223,7 +223,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             ApplyAvatarViewMode();
         }
 
-        public int GetAvatarTotalCount() { return BuiltInAvatarIds.Length + (_cachedCustomProfiles != null ? _cachedCustomProfiles.Count : 0); }
+        public int GetAvatarTotalCount()
+        {
+            return BuiltInAvatarIds.Length + 1 +
+                (_cachedCustomProfiles != null ? _cachedCustomProfiles.Count : 0);
+        }
 
         // ---- Lifecycle ----
 
@@ -478,7 +482,15 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _customAvatarTiles[profile.id] = tile;
             }
 
-            int total = BuiltInAvatarIds.Length + _cachedCustomProfiles.Count;
+            AvatarProfile builtInVrm = GetStoredProfile(BuiltInAvatarProfiles.NeonVrmId);
+            if (builtInVrm != null)
+            {
+                VisualElement tile = CreateCustomAvatarTile(builtInVrm);
+                _gallery3D?.Add(tile);
+                _customAvatarTiles[builtInVrm.id] = tile;
+            }
+
+            int total = BuiltInAvatarIds.Length + 1 + _cachedCustomProfiles.Count;
             if (_navAvatarsCount != null)
                 _navAvatarsCount.text = total.ToString();
 
@@ -540,7 +552,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _catalogOnlyPreviewId = null;
             _avatarPersonaFoldout?.SetEnabled(true);
             _avatarCustomizationFoldout?.SetEnabled(true);
-            bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, avatarId) >= 0;
+            bool isBuiltIn = IsBuiltInAvatarId(avatarId);
             var profile = GetStoredProfile(avatarId);
             NeonLogger.Log("[AvatarArt] ApplyAvatarArt id='" + avatarId +
                 "' isBuiltIn=" + isBuiltIn +
@@ -710,9 +722,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public string AvatarDisplayName(string avatarId)
         {
-            var custom = GetCustomProfile(avatarId);
-            if (custom != null && !string.IsNullOrWhiteSpace(custom.name))
-                return custom.name;
+            AvatarProfile stored = GetStoredProfile(avatarId);
+            if (stored != null && !string.IsNullOrWhiteSpace(stored.name))
+                return stored.name;
 
             if (BuiltInAvatarMetaById.TryGetValue(avatarId, out var meta))
                 return LocalizationExtensions.Get(meta.DisplayNameKey, meta.DisplayNameFallback);
@@ -1060,7 +1072,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void OnViewModeStaticClicked()   { SetAvatarViewMode(AvatarViewMode.Static); }
         private void OnViewModeAnimatedClicked() { SetAvatarViewMode(AvatarViewMode.Animated); }
-        private void OnViewMode3DClicked()        { SetAvatarViewMode(AvatarViewMode.Volume3D); }
+        private void OnViewMode3DClicked()        { SetAvatarViewMode(AvatarViewMode.Vrm); }
 
         private void OnNeonAnimatedTileClicked(ClickEvent _)
         {
@@ -1111,16 +1123,16 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             bool isStatic   = _avatarViewMode == AvatarViewMode.Static;
             bool isAnimated = _avatarViewMode == AvatarViewMode.Animated;
-            bool is3D       = _avatarViewMode == AvatarViewMode.Volume3D;
+            bool isVrm      = _avatarViewMode == AvatarViewMode.Vrm;
 
             _viewModeStaticBtn?.EnableInClassList("viewmode-btn--active", isStatic);
             _viewModeAnimatedBtn?.EnableInClassList("viewmode-btn--active", isAnimated);
-            _viewMode3DBtn?.EnableInClassList("viewmode-btn--active", is3D);
+            _viewMode3DBtn?.EnableInClassList("viewmode-btn--active", isVrm);
 
             SetDisplay(_avatarFilterRow, isStatic ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_galleryStatic,   isStatic ? DisplayStyle.Flex : DisplayStyle.None);
             SetDisplay(_galleryAnimated, isAnimated ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_gallery3D,       is3D ? DisplayStyle.Flex : DisplayStyle.None);
+            SetDisplay(_gallery3D,       isVrm ? DisplayStyle.Flex : DisplayStyle.None);
 
             _avtileNeonAnimated?.EnableInClassList("avtile--selected", isAnimated && _activeAvatarId == "neon");
             _avtileYorha2bAnimated?.EnableInClassList("avtile--selected", isAnimated && _activeAvatarId == "yorha-2b");
@@ -1130,9 +1142,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (string.Equals(value, "animated", StringComparison.OrdinalIgnoreCase))
                 return AvatarViewMode.Animated;
-            if (string.Equals(value, "3d", StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(value, "vrm", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "3d", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(value, "volume3d", StringComparison.OrdinalIgnoreCase))
-                return AvatarViewMode.Volume3D;
+                return AvatarViewMode.Vrm;
             return AvatarViewMode.Static;
         }
 
@@ -1140,8 +1153,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (mode == AvatarViewMode.Animated)
                 return "animated";
-            if (mode == AvatarViewMode.Volume3D)
-                return "3d";
+            if (mode == AvatarViewMode.Vrm)
+                return "vrm";
             return "static";
         }
 
@@ -1286,7 +1299,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
                 if (profile == null)
                 {
-                    bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                    bool isBuiltIn = IsBuiltInAvatarId(_activeAvatarId);
                     if (!isBuiltIn) return;
 
                     profile = new AvatarProfile
@@ -1329,7 +1342,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string deleteId = !string.IsNullOrWhiteSpace(_catalogOnlyPreviewId)
                     ? _catalogOnlyPreviewId
                     : _activeAvatarId;
-                if (Array.IndexOf(BuiltInAvatarIds, deleteId) >= 0)
+                if (IsBuiltInAvatarId(deleteId))
                     return;
 
                 var app = await _d.GetAppAsync();
@@ -1385,7 +1398,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     return;
                 }
 
-                bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                bool isBuiltIn = IsBuiltInAvatarId(_activeAvatarId);
                 if (isBuiltIn)
                 {
                     profiles.RemoveAll(a => a.id == _activeAvatarId && a.isBuiltIn);
@@ -1512,7 +1525,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var profiles = app.Avatars.GetAll();
                 var profile = profiles.FirstOrDefault(a => a.id == _activeAvatarId);
                 var data = CloneCustomization(GetPanelCustomizationData());
-                bool isBuiltIn = Array.IndexOf(BuiltInAvatarIds, _activeAvatarId) >= 0;
+                bool isBuiltIn = IsBuiltInAvatarId(_activeAvatarId);
                 bool shouldStore = !IsCustomizationEffectivelyDefault(data);
 
                 if (profile == null && !isBuiltIn)
@@ -1824,6 +1837,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void UpdateAvatarProfileCaches(List<AvatarProfile> profiles)
         {
             _cachedProfilesById.Clear();
+            AvatarProfile builtInVrm = BuiltInAvatarProfiles.CreateNeonVrm();
+            _cachedProfilesById[builtInVrm.id] = builtInVrm;
             if (profiles == null)
             {
                 _cachedCustomProfiles = new List<AvatarProfile>();
@@ -1849,6 +1864,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             var tile = new VisualElement();
             tile.name = $"avtile-{profile.id}";
             tile.AddToClassList("avtile");
+            if (profile.id == BuiltInAvatarProfiles.NeonVrmId)
+                tile.AddToClassList("avtile--neon");
 
             var texture = GetOrLoadTexture(profile.imagePath);
             if (texture != null)
@@ -1856,7 +1873,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 tile.style.backgroundImage = new StyleBackground(texture);
                 ApplyCustomAvatarTransform(tile, profile);
             }
-            else
+            else if (profile.id != BuiltInAvatarProfiles.NeonVrmId)
             {
                 tile.style.backgroundColor = new StyleColor(new Color(0.25f, 0.25f, 0.30f));
             }
@@ -1887,10 +1904,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (profile != null && profile.avatarType == AvatarProfileTypes.SpriteSheet)
                 return _galleryAnimated ?? _galleryStatic;
-            if (profile != null &&
-                (profile.avatarType == AvatarProfileTypes.Generic3D ||
-                 profile.avatarType == AvatarProfileTypes.Vrm))
+            if (profile != null && profile.avatarType == AvatarProfileTypes.Vrm)
                 return _gallery3D ?? _galleryStatic;
+            if (profile != null && profile.avatarType == AvatarProfileTypes.Generic3D)
+                return null;
             return _galleryStatic;
         }
 
@@ -2353,7 +2370,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                         SetAvatarViewMode(AvatarViewMode.Animated);
                     else if (importedType == AvatarProfileTypes.Generic3D ||
                              importedType == AvatarProfileTypes.Vrm)
-                        SetAvatarViewMode(AvatarViewMode.Volume3D);
+                        SetAvatarViewMode(AvatarViewMode.Vrm);
                     else
                         SetAvatarViewMode(AvatarViewMode.Static);
                     SelectAvatar(imported.profile.id);
@@ -2767,7 +2784,16 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ---- Nested types ----
 
-        private enum AvatarViewMode { Static, Animated, Volume3D }
+        private static bool IsBuiltInAvatarId(string avatarId)
+        {
+            return Array.IndexOf(BuiltInAvatarIds, avatarId) >= 0 ||
+                string.Equals(
+                    avatarId,
+                    BuiltInAvatarProfiles.NeonVrmId,
+                    StringComparison.Ordinal);
+        }
+
+        private enum AvatarViewMode { Static, Animated, Vrm }
 
         private readonly struct BuiltInAvatarMeta
         {

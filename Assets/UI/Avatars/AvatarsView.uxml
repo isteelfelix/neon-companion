@@ -9,7 +9,7 @@
         <ui:VisualElement class="page__head">
             <ui:VisualElement class="page__head-copy">
                 <ui:Label name="avatars-page-title" text="Аватары" class="page__title" />
-                <ui:Label name="avatars-page-subtitle" text="Выберите готовый образ или импортируйте локальный 2D, sprite-sheet, 3D или VRM-профиль." class="page__subtitle" />
+                <ui:Label name="avatars-page-subtitle" text="Выберите готовый образ или импортируйте локальное изображение, sprite-sheet или VRM." class="page__subtitle" />
             </ui:VisualElement>
             <ui:VisualElement class="page__actions">
                 <ui:Button name="avatar-open-folder-btn" text="Открыть папку" class="btn" />
@@ -36,13 +36,13 @@
                     <ui:Button name="companion-settings-close-button" text="×" class="btn btn--ghost companion-settings-modal__close" />
                 </ui:VisualElement>
                 <ui:VisualElement class="companion-settings-modal__options">
-                    <ui:Toggle name="companion-visible-toggle" label="Visible" />
-                    <ui:Toggle name="companion-pinned-toggle" label="Always on top" />
-                    <ui:Toggle name="companion-click-through-toggle" label="Click-through" />
-                    <ui:Button name="companion-monitor-button" text="Monitor" class="btn" />
+                    <ui:Toggle name="companion-visible-toggle" label="Visible" class="companion-setting-toggle" />
+                    <ui:Toggle name="companion-pinned-toggle" label="Always on top" class="companion-setting-toggle" />
+                    <ui:Toggle name="companion-click-through-toggle" label="Click-through transparent background" class="companion-setting-toggle" />
+                    <ui:Button name="companion-monitor-button" text="Monitor" class="btn companion-monitor-button" />
                     <ui:VisualElement class="companion-settings-modal__scale">
-                        <ui:Label name="companion-scale-label" text="Scale" />
-                        <ui:Slider name="companion-scale-slider" low-value="0.5" high-value="2" value="1" show-input-field="true" />
+                        <ui:Label name="companion-scale-label" text="Scale" class="companion-settings-modal__scale-label" />
+                        <ui:Slider name="companion-scale-slider" low-value="0.5" high-value="2" value="1" show-input-field="false" class="companion-scale-slider" />
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:Label name="companion-window-emergency" text="Emergency click-through release: Ctrl+Shift+F12" class="companion-settings-modal__hint" />
@@ -63,7 +63,7 @@
                 <ui:Label text="Анимация" />
             </ui:Button>
             <ui:Button name="viewmode-3d-btn" class="viewmode-btn">
-                <ui:Label text="3D" />
+                <ui:Label text="VRM" />
             </ui:Button>
         </ui:VisualElement>
 

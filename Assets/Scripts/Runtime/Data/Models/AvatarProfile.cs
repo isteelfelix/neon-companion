@@ -11,6 +11,70 @@ namespace NeonCompanion.Runtime.Data.Models
         public const string Vrm = "vrm";
     }
 
+    public static class BuiltInAvatarProfiles
+    {
+        public const string NeonVrmId = "neon-vrm";
+        public const string ResourceScheme = "resource://";
+        public const string NeonVrmResourcePath = "Avatars/neon/Neon";
+
+        public static AvatarProfile CreateNeonVrm()
+        {
+            var capabilities = new AvatarCapabilities
+            {
+                isRuntimeSupported = true
+            };
+            capabilities.evidence.Add("built_in_resource");
+
+            return new AvatarProfile
+            {
+                contractVersion = AvatarProfile.CurrentContractVersion,
+                id = NeonVrmId,
+                name = "Neon VRM",
+                avatarType = AvatarProfileTypes.Vrm,
+                modelPath = ResourceScheme + NeonVrmResourcePath,
+                isBuiltIn = true,
+                is3D = true,
+                capabilities = capabilities,
+                modelAnimationClips = new List<string>
+                {
+                    "idle",
+                    "thinking",
+                    "talking",
+                    "listening",
+                    "smile",
+                    "confused"
+                },
+                stateClipMapping = new Avatar3DStateClipMapping
+                {
+                    idle = "idle",
+                    thinking = "thinking",
+                    talking = "talking",
+                    listening = "listening",
+                    smile = "smile",
+                    confused = "confused"
+                }
+            };
+        }
+
+        public static AvatarProfile TryCreate(string avatarId)
+        {
+            if (string.Equals(avatarId, NeonVrmId, StringComparison.Ordinal))
+                return CreateNeonVrm();
+            return null;
+        }
+
+        public static bool IsResourcePath(string path)
+        {
+            return !string.IsNullOrWhiteSpace(path) &&
+                path.StartsWith(ResourceScheme, StringComparison.Ordinal);
+        }
+
+        public static string GetResourcePath(string path)
+        {
+            return IsResourcePath(path) ? path.Substring(ResourceScheme.Length) : null;
+        }
+    }
+
     [Serializable]
     public class AvatarAssetSource
     {

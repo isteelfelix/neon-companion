@@ -52,6 +52,9 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return result;
             }
 
+            if (BuiltInAvatarProfiles.IsResourcePath(modelPath))
+                return await LoadResourceVrmAsync(modelPath, result);
+
             string fullPath;
             try
             {
@@ -209,12 +212,13 @@ namespace NeonCompanion.Runtime.Avatar3D
                 GameObject root = vrm.gameObject;
                 root.name = Path.GetFileNameWithoutExtension(fullPath);
                 CollectSceneFacts(root, result);
-                if (!ValidateSceneLimits(root, result, 0))
+                result.AnimationNames.AddRange(CollectAnimationNames(root));
+                if (!ValidateSceneLimits(root, result, result.AnimationNames.Count))
                     return result;
 
                 result.Instance = root;
                 result.VrmInstance = vrm;
-                ExtractVrmCapabilities(vrm, result);
+                ExtractVrmCapabilities(vrm, result, false);
                 result.Success = true;
             }
             catch (Exception ex)
@@ -230,6 +234,59 @@ namespace NeonCompanion.Runtime.Avatar3D
                 Debug.LogWarning($"[NeonCompanion] VRM avatar load failed: {ex}");
             }
 
+            return result;
+        }
+
+        private static async Task<Avatar3DLoadResult> LoadResourceVrmAsync(
+            string resourceUri,
+            Avatar3DLoadResult result)
+        {
+            await Task.Yield();
+            string resourcePath = BuiltInAvatarProfiles.GetResourcePath(resourceUri);
+            GameObject template = Resources.Load<GameObject>(resourcePath);
+            if (template == null)
+            {
+                result.ErrorCode = "resource_missing";
+                result.Error = "Built-in VRM resource is missing: " + resourcePath;
+                return result;
+            }
+
+            GameObject instance = null;
+            try
+            {
+                instance = UnityEngine.Object.Instantiate(template);
+                instance.name = Path.GetFileName(resourcePath);
+                instance.SetActive(true);
+                Vrm10Instance vrm = instance.GetComponent<Vrm10Instance>();
+                if (vrm == null)
+                {
+                    result.ErrorCode = "invalid_vrm";
+                    result.Error = "Built-in VRM resource has no Vrm10Instance.";
+                    UnityEngine.Object.Destroy(instance);
+                    return result;
+                }
+
+                CollectSceneFacts(instance, result);
+                result.AnimationNames.AddRange(CollectAnimationNames(instance));
+                if (!ValidateSceneLimits(instance, result, result.AnimationNames.Count))
+                    return result;
+
+                result.Instance = instance;
+                result.VrmInstance = vrm;
+                ExtractVrmCapabilities(vrm, result, true);
+                result.Capabilities.evidence.Add("built_in_resource");
+                result.Success = true;
+            }
+            catch (Exception ex)
+            {
+                if (instance != null)
+                    UnityEngine.Object.Destroy(instance);
+                result.Instance = null;
+                result.VrmInstance = null;
+                result.ErrorCode = "invalid_vrm";
+                result.Error = ex.Message;
+                Debug.LogWarning("[NeonCompanion] Built-in VRM load failed: " + ex);
+            }
             return result;
         }
 
@@ -278,7 +335,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private static void ExtractVrmCapabilities(
             Vrm10Instance vrm,
-            Avatar3DLoadResult result)
+            Avatar3DLoadResult result,
+            bool includeBuiltInMotionPack)
         {
             AvatarCapabilities capabilities = result.Capabilities;
             capabilities.isVerified = true;
@@ -347,31 +405,28 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             capabilities.expressionCount = emotionalExpressionCount + mouthCount +
                 gazeCount + blinkCount + (expressions != null && expressions.Neutral != null ? 1 : 0);
-            capabilities.hasExpressions = capabilities.hasHumanoid &&
-                emotionalExpressionCount > 0;
-            capabilities.hasBlink = capabilities.hasHumanoid &&
-                expressions != null &&
+            capabilities.hasExpressions = emotionalExpressionCount > 0;
+            capabilities.hasBlink = expressions != null &&
                 (expressions.Blink != null ||
                  (expressions.BlinkLeft != null && expressions.BlinkRight != null));
-            capabilities.hasGaze = capabilities.hasHumanoid &&
-                vrm.Vrm != null && vrm.Vrm.LookAt != null &&
+            capabilities.hasGaze = vrm.Vrm != null && vrm.Vrm.LookAt != null &&
                 (gazeCount > 0 || HasEyeBones(vrm));
-            capabilities.hasLipsync = capabilities.hasHumanoid && mouthCount > 0;
+            capabilities.hasLipsync = mouthCount > 0;
 
             string[] states = { "idle", "thinking", "talking", "listening", "smile", "confused" };
-            if (capabilities.hasHumanoid)
+            if (includeBuiltInMotionPack && capabilities.hasHumanoid)
             {
                 for (int i = 0; i < states.Length; i++)
                 {
-                    if (Resources.Load<GameObject>("Avatars/neon/Neon_" + states[i]) != null)
+                    if (Resources.Load<GameObject>("Avatars/neon/Neon_" + states[i]) != null &&
+                        !result.AnimationNames.Contains(states[i]))
                         result.AnimationNames.Add(states[i]);
                 }
             }
             capabilities.animationClipCount = result.AnimationNames.Count;
             capabilities.hasStateAnimations = result.AnimationNames.Count > 0;
-            capabilities.canAnimate = capabilities.hasHumanoid && capabilities.hasStateAnimations;
-            capabilities.isRestricted = !capabilities.hasHumanoid ||
-                !capabilities.hasBlink ||
+            capabilities.canAnimate = capabilities.hasStateAnimations;
+            capabilities.isRestricted = !capabilities.hasBlink ||
                 !capabilities.hasGaze ||
                 !capabilities.hasExpressions ||
                 !capabilities.hasLipsync;

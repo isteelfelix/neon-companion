@@ -8,7 +8,8 @@ using UnityEngine.Networking;
 
 namespace NeonCompanion.Runtime.Voice
 {
-    public sealed class HermesVoiceService : MonoBehaviour, IVoiceService, ISeekableVoicePlayback
+    public sealed class HermesVoiceService : MonoBehaviour, IVoiceService,
+        ISeekableVoicePlayback, IVoicePlaybackClock
     {
         private string _hermesRestUrl;
         private string _apiKey;
@@ -285,6 +286,21 @@ namespace NeonCompanion.Runtime.Voice
                 IsLoading = false,
                 PositionSecs = isCurrent && _audioSource != null ? _audioSource.time : 0f,
                 DurationSecs = isCurrent && _playbackClip != null ? _playbackClip.length : 0f
+            };
+        }
+
+        public VoicePlaybackState GetCurrentPlaybackState()
+        {
+            return new VoicePlaybackState
+            {
+                IsCurrent = _playbackClip != null,
+                IsPlaying = _audioSource != null && _audioSource.isPlaying,
+                IsPaused = _playbackPaused,
+                IsLoading = _playbackCoroutine != null && _playbackClip == null,
+                PositionSecs = _audioSource != null && _playbackClip != null
+                    ? _audioSource.time
+                    : 0f,
+                DurationSecs = _playbackClip != null ? _playbackClip.length : 0f
             };
         }
 

@@ -44,4 +44,9 @@ namespace NeonCompanion.Runtime.Voice
         bool TogglePlayback(string audioPath);
         bool SeekPlayback(string audioPath, float normalized);
     }
+
+    public interface IVoicePlaybackClock
+    {
+        VoicePlaybackState GetCurrentPlaybackState();
+    }
 }

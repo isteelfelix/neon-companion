@@ -472,6 +472,11 @@ namespace NeonCompanion.Runtime.Platform
 
         private void OnApplicationQuit()
         {
+            // Restore the two managed links in strict LIFO order while the HWND and
+            // both delegates are still alive. Unity does not guarantee callback
+            // order between these components during shutdown.
+            if (WindowsFileDropService.Instance != null)
+                WindowsFileDropService.Instance.Stop();
             RestoreDefault();
         }
 

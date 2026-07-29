@@ -30,6 +30,7 @@ namespace NeonCompanion.Runtime.Avatar
 
         public void Configure(IReadOnlyList<SpriteSheetAnimation> clips, Image targetImage)
         {
+            ReleaseAllLoadedFrames();
             _clips.Clear();
             _targetImage = targetImage;
             _activeClip = null;
@@ -48,18 +49,7 @@ namespace NeonCompanion.Runtime.Avatar
                 if (clip == null || string.IsNullOrWhiteSpace(clip.clipName))
                     continue;
 
-                var frames = SpriteSheetAnimationLoader.LoadFrames(
-                    clip.spriteSheetPath,
-                    clip.columns,
-                    clip.rows,
-                    clip.frameCount);
-                NeonLogger.Log("[SpriteSheetAnimator] clip='" + clip.clipName +
-                    "' path='" + clip.spriteSheetPath +
-                    "' frames=" + (frames?.Length.ToString() ?? "null"));
-                if (frames == null || frames.Length == 0)
-                    continue;
-
-                _clips[clip.clipName] = new ClipRuntime(clip, frames);
+                _clips[clip.clipName] = new ClipRuntime(clip);
             }
 
             if (_clips.Count == 0)
@@ -77,7 +67,10 @@ namespace NeonCompanion.Runtime.Avatar
 
             if (!_clips.TryGetValue(clipName, out var clip))
                 return;
+            if (!EnsureFrames(clip))
+                return;
 
+            ClipRuntime previousClip = _activeClip;
             _onClipCompleted = null;
             _isPlayingOneShot = false;
             ClearDeferredPlaybackState();
@@ -86,6 +79,8 @@ namespace NeonCompanion.Runtime.Avatar
             _frameIndex = 0;
             _pingPongForward = true;
             ApplyFrame();
+            if (previousClip != null && previousClip != _activeClip)
+                ReleaseFrames(previousClip);
         }
 
         public void Play(string clipName)
@@ -146,7 +141,10 @@ namespace NeonCompanion.Runtime.Avatar
         {
             if (string.IsNullOrWhiteSpace(clipName) || !_clips.TryGetValue(clipName, out var clip))
                 return;
+            if (!EnsureFrames(clip))
+                return;
 
+            ClipRuntime previousClip = _activeClip;
             _activeClip = clip;
             _isPlaying = false;
             _isPlayingOneShot = false;
@@ -156,6 +154,8 @@ namespace NeonCompanion.Runtime.Avatar
             _frameTimer = 0f;
             _frameIndex = Mathf.Clamp(frameIndex, 0, clip.Frames.Length - 1);
             ApplyFrame();
+            if (previousClip != null && previousClip != _activeClip)
+                ReleaseFrames(previousClip);
             if (callback != null)
                 callback();
         }
@@ -169,15 +169,11 @@ namespace NeonCompanion.Runtime.Avatar
             if (clip == null || string.IsNullOrWhiteSpace(clip.clipName) || _targetImage == null)
                 return;
 
-            var frames = SpriteSheetAnimationLoader.LoadFrames(
-                clip.spriteSheetPath,
-                clip.columns,
-                clip.rows,
-                clip.frameCount);
-            if (frames == null || frames.Length == 0)
-                return;
-
-            _clips[clip.clipName] = new ClipRuntime(clip, frames);
+            ClipRuntime previous;
+            if (_clips.TryGetValue(clip.clipName, out previous) &&
+                previous != _activeClip)
+                ReleaseFrames(previous);
+            _clips[clip.clipName] = new ClipRuntime(clip);
         }
 
         public bool PlayOneShot(string clipName, Action onComplete, bool pingPongToStart = false)
@@ -396,6 +392,9 @@ namespace NeonCompanion.Runtime.Avatar
         private bool StartOneShotPlayback(string clipName, ClipRuntime clip, Action onComplete, bool pingPongToStart)
         {
             SetClip(clipName);
+            if (_activeClip != clip || clip == null ||
+                clip.Frames == null || clip.Frames.Length == 0)
+                return false;
             _onClipCompleted = onComplete;
             _isPlayingOneShot = true;
             _isPlaying = true;
@@ -436,16 +435,63 @@ namespace NeonCompanion.Runtime.Avatar
             _targetImage.sprite = _activeClip.Frames[_frameIndex];
         }
 
+        private bool EnsureFrames(ClipRuntime clip)
+        {
+            if (clip == null)
+                return false;
+            if (clip.Frames != null && clip.Frames.Length > 0 &&
+                clip.Frames[0] != null)
+                return true;
+
+            clip.Frames = SpriteSheetAnimationLoader.LoadFrames(
+                clip.Config.spriteSheetPath,
+                clip.Config.columns,
+                clip.Config.rows,
+                clip.Config.frameCount);
+            NeonLogger.Log("[SpriteSheetAnimator] clip='" + clip.Config.clipName +
+                "' path='" + clip.Config.spriteSheetPath +
+                "' frames=" + (clip.Frames != null
+                    ? clip.Frames.Length.ToString()
+                    : "null"));
+            return clip.Frames != null && clip.Frames.Length > 0;
+        }
+
+        private void ReleaseFrames(ClipRuntime clip)
+        {
+            if (clip == null || clip.Frames == null)
+                return;
+            SpriteSheetAnimationLoader.ReleaseFrames(
+                clip.Config.spriteSheetPath,
+                clip.Config.columns,
+                clip.Config.rows,
+                clip.Config.frameCount,
+                clip.Frames);
+            clip.Frames = null;
+        }
+
+        private void ReleaseAllLoadedFrames()
+        {
+            if (_targetImage != null)
+                _targetImage.sprite = null;
+            foreach (ClipRuntime clip in _clips.Values)
+                ReleaseFrames(clip);
+            _activeClip = null;
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseAllLoadedFrames();
+        }
+
         private sealed class ClipRuntime
         {
-            public ClipRuntime(SpriteSheetAnimation config, Sprite[] frames)
+            public ClipRuntime(SpriteSheetAnimation config)
             {
                 Config = config;
-                Frames = frames;
             }
 
             public SpriteSheetAnimation Config { get; }
-            public Sprite[] Frames { get; }
+            public Sprite[] Frames { get; set; }
         }
     }
 }

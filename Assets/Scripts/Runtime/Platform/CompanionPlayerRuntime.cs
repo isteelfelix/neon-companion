@@ -84,10 +84,20 @@ namespace NeonCompanion.Runtime.Platform
         private string _voiceText;
         private float _voiceStartedAt;
         private int _voiceCharIndex = -1;
+        private float _voicePositionSecs;
+        private float _voiceDurationSecs;
+        private bool _voiceHasPlaybackClock;
         private Rect _hoverControlsRect = new Rect(8f, 8f, 264f, 34f);
         private Rect _contextMenuRect = new Rect(8f, 8f, 220f, 248f);
         private bool _contextMenuOpen;
         private bool _pointerInside;
+        private string _activeReaction;
+        private float _reactionReturnAt;
+        private Texture2D _hitTestReadback;
+        private byte[] _hitTestAlpha;
+        private float _nextHitTestCaptureAt;
+        private const int HitTestMaskSize = 192;
+        private const float HitTestCaptureInterval = 0.1f;
 
         private void Awake()
         {
@@ -250,6 +260,8 @@ namespace NeonCompanion.Runtime.Platform
 
             AdvanceAnimation();
             AdvanceVoicePlayback();
+            AdvanceReaction();
+            UpdateHitTestMask();
 
             if (Time.unscaledTime >= _nextBoundsReport)
             {
@@ -282,6 +294,15 @@ namespace NeonCompanion.Runtime.Platform
                 case "voice_clear":
                     ClearVoicePlayback();
                     break;
+                case "voice_progress":
+                    ApplyVoiceProgress(
+                        message.floatValue,
+                        message.floatValue2,
+                        message.boolValue);
+                    break;
+                case "reaction":
+                    TriggerReaction(message.text);
+                    break;
                 case "preferences":
                     ApplyPreferences(message.preferences);
                     break;
@@ -311,7 +332,8 @@ namespace NeonCompanion.Runtime.Platform
             if (snapshot.avatarType == AvatarProfileTypes.Generic3D ||
                 snapshot.avatarType == AvatarProfileTypes.Vrm)
             {
-                if (IsAllowedLocalAsset(snapshot.modelPath))
+                if (BuiltInAvatarProfiles.IsResourcePath(snapshot.modelPath) ||
+                    IsAllowedLocalAsset(snapshot.modelPath))
                     _ = Load3DAsync(snapshot.modelPath, _loadVersion);
                 return;
             }
@@ -405,6 +427,7 @@ namespace NeonCompanion.Runtime.Platform
                 _frames[clip.clipName] = frames;
             }
 
+            ReleaseInactiveSpriteFrames(clip.clipName);
             _activeFrames = frames ?? Array.Empty<Sprite>();
             _frameRate = clip.frameRate > 0f ? clip.frameRate : 8f;
             _pingPong = clip.pingPong;
@@ -418,7 +441,26 @@ namespace NeonCompanion.Runtime.Platform
             _voiceText = text ?? string.Empty;
             _voiceStartedAt = Time.unscaledTime;
             _voiceCharIndex = -1;
+            _voicePositionSecs = 0f;
+            _voiceDurationSecs = 0f;
+            _voiceHasPlaybackClock = false;
             ApplyVoiceViseme(0);
+        }
+
+        private void ApplyVoiceProgress(
+            float positionSecs,
+            float durationSecs,
+            bool isPlaying)
+        {
+            if (string.IsNullOrEmpty(_voiceText) || durationSecs <= 0f)
+                return;
+            _voicePositionSecs = Mathf.Clamp(positionSecs, 0f, durationSecs);
+            _voiceDurationSecs = durationSecs;
+            _voiceHasPlaybackClock = true;
+            if (isPlaying)
+                ApplyVoiceViseme(Mathf.FloorToInt(
+                    Mathf.Clamp01(_voicePositionSecs / _voiceDurationSecs) *
+                    _voiceText.Length));
         }
 
         private void AdvanceVoicePlayback()
@@ -426,8 +468,13 @@ namespace NeonCompanion.Runtime.Platform
             if (string.IsNullOrEmpty(_voiceText))
                 return;
 
-            int charIndex = Mathf.FloorToInt(
-                (Time.unscaledTime - _voiceStartedAt) * LipsyncController.TextCharsPerSecond);
+            int charIndex = _voiceHasPlaybackClock && _voiceDurationSecs > 0f
+                ? Mathf.FloorToInt(
+                    Mathf.Clamp01(_voicePositionSecs / _voiceDurationSecs) *
+                    _voiceText.Length)
+                : Mathf.FloorToInt(
+                    (Time.unscaledTime - _voiceStartedAt) *
+                    LipsyncController.TextCharsPerSecond);
             if (charIndex == _voiceCharIndex)
                 return;
             ApplyVoiceViseme(charIndex);
@@ -451,8 +498,42 @@ namespace NeonCompanion.Runtime.Platform
         {
             _voiceText = null;
             _voiceCharIndex = -1;
+            _voicePositionSecs = 0f;
+            _voiceDurationSecs = 0f;
+            _voiceHasPlaybackClock = false;
             if (_avatar3DService != null && _avatar3DService.IsLoaded)
                 _avatar3DService.ClearMouth();
+        }
+
+        private void TriggerReaction(string reaction)
+        {
+            if (string.IsNullOrWhiteSpace(reaction))
+                return;
+
+            _activeReaction = reaction.Trim().ToLowerInvariant();
+            _reactionReturnAt = Time.unscaledTime + 1.2f;
+            if (_avatar3DService != null && _avatar3DService.IsLoaded)
+            {
+                if (!_avatar3DService.SetAnimation(_activeReaction))
+                    _avatar3DService.SetExpression(_activeReaction, 1f);
+                return;
+            }
+
+            string currentState = _state;
+            ApplyState(_activeReaction);
+            _state = currentState;
+        }
+
+        private void AdvanceReaction()
+        {
+            if (string.IsNullOrEmpty(_activeReaction) ||
+                Time.unscaledTime < _reactionReturnAt)
+                return;
+
+            if (_avatar3DService != null && _avatar3DService.IsLoaded)
+                _avatar3DService.SetExpression(_activeReaction, 0f);
+            _activeReaction = null;
+            ApplyState(_state);
         }
 
         private void ApplyPreferences(CompanionWindowPreferences preferences)
@@ -499,8 +580,6 @@ namespace NeonCompanion.Runtime.Platform
         private void OnGUI()
         {
             DrawAvatar();
-            if (_preferences.clickThrough)
-                return;
 
             Event current = Event.current;
             if (current != null && current.type == EventType.MouseEnterWindow)
@@ -529,18 +608,17 @@ namespace NeonCompanion.Runtime.Platform
                 DrawHoverControls();
             if (_contextMenuOpen)
                 _contextMenuRect = GUI.Window(7332, _contextMenuRect, DrawContextMenu, string.Empty);
+
+            WindowsCompanionWindowNative.SetControlRects(
+                _hoverControlsRect,
+                _pointerInside && !_contextMenuOpen,
+                _contextMenuOpen,
+                _contextMenuRect);
         }
 
         private void DrawAvatar()
         {
-            float scale = _snapshot != null ? Mathf.Clamp(_snapshot.avatarScale, 0.25f, 3f) : 1f;
-            float width = Screen.width * scale;
-            float height = Screen.height * scale;
-            float x = (Screen.width - width) * 0.5f +
-                (_snapshot != null ? _snapshot.avatarOffsetX * Screen.width : 0f);
-            float y = (Screen.height - height) * 0.5f -
-                (_snapshot != null ? _snapshot.avatarOffsetY * Screen.height : 0f);
-            var rect = new Rect(x, y, width, height);
+            Rect rect = GetAvatarRect();
 
             if (_avatar3DRenderer != null && _avatar3DRenderer.OutputTexture != null)
             {
@@ -567,6 +645,156 @@ namespace NeonCompanion.Runtime.Platform
 
             if (_staticTexture != null)
                 GUI.DrawTexture(rect, _staticTexture, ScaleMode.ScaleToFit, true);
+        }
+
+        private Rect GetAvatarRect()
+        {
+            float scale = _snapshot != null
+                ? Mathf.Clamp(_snapshot.avatarScale, 0.25f, 3f)
+                : 1f;
+            float width = Screen.width * scale;
+            float height = Screen.height * scale;
+            float x = (Screen.width - width) * 0.5f +
+                (_snapshot != null ? _snapshot.avatarOffsetX * Screen.width : 0f);
+            float y = (Screen.height - height) * 0.5f -
+                (_snapshot != null ? _snapshot.avatarOffsetY * Screen.height : 0f);
+            return new Rect(x, y, width, height);
+        }
+
+        private void UpdateHitTestMask()
+        {
+            WindowsCompanionWindowNative.SetControlRects(
+                _hoverControlsRect,
+                _pointerInside && !_contextMenuOpen,
+                _contextMenuOpen,
+                _contextMenuRect);
+
+            if (Time.unscaledTime < _nextHitTestCaptureAt)
+                return;
+            _nextHitTestCaptureAt = Time.unscaledTime + HitTestCaptureInterval;
+
+            Texture source;
+            Rect uv;
+            Rect contentRect;
+            if (!TryGetHitTestSource(out source, out uv, out contentRect))
+            {
+                WindowsCompanionWindowNative.SetHitTestMask(
+                    null,
+                    0,
+                    0,
+                    new Rect());
+                return;
+            }
+
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture temporary = RenderTexture.GetTemporary(
+                HitTestMaskSize,
+                HitTestMaskSize,
+                0,
+                RenderTextureFormat.ARGB32);
+            try
+            {
+                Graphics.Blit(
+                    source,
+                    temporary,
+                    new Vector2(uv.width, uv.height),
+                    new Vector2(uv.x, uv.y));
+                if (_hitTestReadback == null)
+                {
+                    _hitTestReadback = new Texture2D(
+                        HitTestMaskSize,
+                        HitTestMaskSize,
+                        TextureFormat.RGBA32,
+                        false);
+                }
+
+                RenderTexture.active = temporary;
+                _hitTestReadback.ReadPixels(
+                    new Rect(0f, 0f, HitTestMaskSize, HitTestMaskSize),
+                    0,
+                    0,
+                    false);
+                Unity.Collections.NativeArray<Color32> pixels =
+                    _hitTestReadback.GetRawTextureData<Color32>();
+                if (_hitTestAlpha == null || _hitTestAlpha.Length != pixels.Length)
+                    _hitTestAlpha = new byte[pixels.Length];
+                for (int i = 0; i < pixels.Length; i++)
+                    _hitTestAlpha[i] = pixels[i].a;
+                WindowsCompanionWindowNative.SetHitTestMask(
+                    _hitTestAlpha,
+                    HitTestMaskSize,
+                    HitTestMaskSize,
+                    contentRect);
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(temporary);
+            }
+        }
+
+        private bool TryGetHitTestSource(out Texture source, out Rect uv, out Rect contentRect)
+        {
+            source = null;
+            uv = new Rect(0f, 0f, 1f, 1f);
+            contentRect = GetAvatarRect();
+
+            if (_avatar3DRenderer != null && _avatar3DRenderer.OutputTexture != null)
+            {
+                source = _avatar3DRenderer.OutputTexture;
+                contentRect = AspectFit(contentRect, source.width, source.height);
+                return true;
+            }
+
+            if (_activeFrames != null && _activeFrames.Length > 0)
+            {
+                int index = Mathf.Clamp(_frameIndex, 0, _activeFrames.Length - 1);
+                Sprite sprite = _activeFrames[index];
+                if (sprite != null && sprite.texture != null)
+                {
+                    Rect sourceRect = sprite.textureRect;
+                    source = sprite.texture;
+                    uv = new Rect(
+                        sourceRect.x / sprite.texture.width,
+                        sourceRect.y / sprite.texture.height,
+                        sourceRect.width / sprite.texture.width,
+                        sourceRect.height / sprite.texture.height);
+                    return true;
+                }
+            }
+
+            if (_staticTexture == null)
+                return false;
+
+            source = _staticTexture;
+            contentRect = AspectFit(contentRect, source.width, source.height);
+            return true;
+        }
+
+        private static Rect AspectFit(Rect outer, int textureWidth, int textureHeight)
+        {
+            if (outer.width <= 0f || outer.height <= 0f ||
+                textureWidth <= 0 || textureHeight <= 0)
+                return outer;
+
+            float sourceAspect = textureWidth / (float)textureHeight;
+            float outerAspect = outer.width / outer.height;
+            if (sourceAspect > outerAspect)
+            {
+                float height = outer.width / sourceAspect;
+                return new Rect(
+                    outer.x,
+                    outer.y + (outer.height - height) * 0.5f,
+                    outer.width,
+                    height);
+            }
+
+            float width = outer.height * sourceAspect;
+            return new Rect(
+                outer.x + (outer.width - width) * 0.5f,
+                outer.y,
+                width,
+                outer.height);
         }
 
         private void DrawHoverControls()
@@ -731,7 +959,10 @@ namespace NeonCompanion.Runtime.Platform
                 camera = cameraObject.AddComponent<Camera>();
             }
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+            // Must match WindowsCompanionWindowNative.TransparencyColorKey.
+            // Keep the key near black so antialiased sprite edges stay neutral,
+            // but do not remove genuine black pixels from the avatar.
+            camera.backgroundColor = new Color32(1, 0, 1, 255);
             camera.cullingMask = 0;
         }
 
@@ -746,6 +977,7 @@ namespace NeonCompanion.Runtime.Platform
 
         private void ClearDisplayAssets()
         {
+            ReleaseInactiveSpriteFrames(null);
             _clips.Clear();
             _frames.Clear();
             _activeFrames = Array.Empty<Sprite>();
@@ -763,6 +995,44 @@ namespace NeonCompanion.Runtime.Platform
             {
                 Destroy(_avatar3DRenderer);
                 _avatar3DRenderer = null;
+            }
+            if (_hitTestReadback != null)
+            {
+                Destroy(_hitTestReadback);
+                _hitTestReadback = null;
+            }
+            _hitTestAlpha = null;
+            WindowsCompanionWindowNative.SetHitTestMask(null, 0, 0, new Rect());
+        }
+
+        private void ReleaseInactiveSpriteFrames(string keepClipName)
+        {
+            var releaseNames = new List<string>();
+            foreach (KeyValuePair<string, Sprite[]> pair in _frames)
+            {
+                if (!string.Equals(
+                    pair.Key,
+                    keepClipName,
+                    StringComparison.OrdinalIgnoreCase))
+                    releaseNames.Add(pair.Key);
+            }
+
+            for (int i = 0; i < releaseNames.Count; i++)
+            {
+                string clipName = releaseNames[i];
+                SpriteSheetAnimation clip;
+                Sprite[] frames;
+                if (_clips.TryGetValue(clipName, out clip) &&
+                    _frames.TryGetValue(clipName, out frames))
+                {
+                    SpriteSheetAnimationLoader.ReleaseFrames(
+                        clip.spriteSheetPath,
+                        clip.columns,
+                        clip.rows,
+                        clip.frameCount,
+                        frames);
+                }
+                _frames.Remove(clipName);
             }
         }
 
@@ -885,10 +1155,14 @@ namespace NeonCompanion.Runtime.Platform
     internal static class WindowsCompanionWindowNative
     {
         private const int GwlExStyle = -20;
+        private const int GwlWndProc = -4;
         private const long WsExLayered = 0x00080000L;
         private const long WsExToolWindow = 0x00000080L;
-        private const long WsExTransparent = 0x00000020L;
         private const long WsExNoActivate = 0x08000000L;
+        private const uint LwaColorKey = 0x00000001;
+        private const uint TransparencyColorKey = 0x00010001;
+        private const uint WmNcHitTest = 0x0084;
+        private const int HtTransparent = -1;
         private const uint SwpNoActivate = 0x0010;
         private const uint SwpShowWindow = 0x0040;
         private const uint SwpFrameChanged = 0x0020;
@@ -897,6 +1171,14 @@ namespace NeonCompanion.Runtime.Platform
         private static readonly IntPtr HwndTopmost = new IntPtr(-1);
         private static readonly IntPtr HwndNotTopmost = new IntPtr(-2);
         private static IntPtr _window;
+        private static IntPtr _oldWndProc;
+        private static WndProcDelegate _wndProcDelegate;
+        private static bool _clickThrough;
+        private static HitTestSnapshot _hitTestSnapshot = new HitTestSnapshot();
+        private static Rect _hoverControlsRect;
+        private static bool _hoverControlsVisible;
+        private static Rect _contextMenuRect;
+        private static bool _contextMenuOpen;
 
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         private struct Rect32
@@ -916,16 +1198,12 @@ namespace NeonCompanion.Runtime.Platform
             public uint Flags;
         }
 
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-        private struct Margins
-        {
-            public int Left;
-            public int Right;
-            public int Top;
-            public int Bottom;
-        }
-
         private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref Rect32 rect, IntPtr data);
+        private delegate IntPtr WndProcDelegate(
+            IntPtr hWnd,
+            uint message,
+            IntPtr wParam,
+            IntPtr lParam);
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern IntPtr GetActiveWindow();
@@ -956,6 +1234,14 @@ namespace NeonCompanion.Runtime.Platform
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr CallWindowProc(
+            IntPtr previous,
+            IntPtr hWnd,
+            uint message,
+            IntPtr wParam,
+            IntPtr lParam);
+
         [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
         private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int index);
 
@@ -968,8 +1254,12 @@ namespace NeonCompanion.Runtime.Platform
         [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
         private static extern int SetWindowLong32(IntPtr hWnd, int index, int value);
 
-        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
-        private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref Margins margins);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetLayeredWindowAttributes(
+            IntPtr hWnd,
+            uint colorKey,
+            byte alpha,
+            uint flags);
 
         public static bool Apply(CompanionWindowPreferences preferences)
         {
@@ -978,16 +1268,14 @@ namespace NeonCompanion.Runtime.Platform
 
             long style = GetWindowLongPtr(_window, GwlExStyle).ToInt64();
             style |= WsExLayered | WsExToolWindow;
+            style &= ~WsExNoActivate;
             SetWindowLongPtr(_window, GwlExStyle, new IntPtr(style));
-
-            try
-            {
-                var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-                DwmExtendFrameIntoClientArea(_window, ref margins);
-            }
-            catch
-            {
-            }
+            SetLayeredWindowAttributes(
+                _window,
+                TransparencyColorKey,
+                byte.MaxValue,
+                LwaColorKey);
+            EnsureHitTestSubclass();
 
             MoveToMonitor(preferences);
             SetTopmost(preferences.pinned);
@@ -1011,17 +1299,48 @@ namespace NeonCompanion.Runtime.Platform
         {
             if (!Resolve())
                 return;
+            _clickThrough = enabled;
             long style = GetWindowLongPtr(_window, GwlExStyle).ToInt64();
-            if (enabled)
-                style |= WsExTransparent | WsExNoActivate;
-            else
-                style &= ~(WsExTransparent | WsExNoActivate);
+            // Whole-window WS_EX_TRANSPARENT makes the visible avatar and its
+            // controls unclickable. WM_NCHITTEST below passes through only pixels
+            // whose rendered alpha is effectively zero.
+            style &= ~WsExNoActivate;
             SetWindowLongPtr(_window, GwlExStyle, new IntPtr(style));
             SetWindowPos(
                 _window,
                 IntPtr.Zero,
                 0, 0, 0, 0,
                 0x0001 | 0x0002 | 0x0004 | SwpNoActivate | SwpFrameChanged);
+        }
+
+        public static void SetHitTestMask(
+            byte[] alpha,
+            int width,
+            int height,
+            Rect contentRect)
+        {
+            _hitTestSnapshot = new HitTestSnapshot
+            {
+                Alpha = alpha,
+                Width = width,
+                Height = height,
+                X = contentRect.x,
+                Y = contentRect.y,
+                RectWidth = contentRect.width,
+                RectHeight = contentRect.height
+            };
+        }
+
+        public static void SetControlRects(
+            Rect hoverControlsRect,
+            bool hoverControlsVisible,
+            bool contextMenuOpen,
+            Rect contextMenuRect)
+        {
+            _hoverControlsRect = hoverControlsRect;
+            _hoverControlsVisible = hoverControlsVisible;
+            _contextMenuOpen = contextMenuOpen;
+            _contextMenuRect = contextMenuRect;
         }
 
         public static void SetVisible(bool visible)
@@ -1096,6 +1415,76 @@ namespace NeonCompanion.Runtime.Platform
             return _window != IntPtr.Zero;
         }
 
+        private static void EnsureHitTestSubclass()
+        {
+            if (_window == IntPtr.Zero || _wndProcDelegate != null)
+                return;
+
+            _wndProcDelegate = WindowProc;
+            IntPtr pointer =
+                System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
+            _oldWndProc = SetWindowLongPtrWithResult(_window, GwlWndProc, pointer);
+            if (_oldWndProc == IntPtr.Zero)
+                _wndProcDelegate = null;
+        }
+
+        private static IntPtr WindowProc(
+            IntPtr hWnd,
+            uint message,
+            IntPtr wParam,
+            IntPtr lParam)
+        {
+            if (message == WmNcHitTest && _clickThrough)
+            {
+                long packed = lParam.ToInt64();
+                int screenX = unchecked((short)(packed & 0xFFFF));
+                int screenY = unchecked((short)((packed >> 16) & 0xFFFF));
+                Rect32 windowRect;
+                if (GetWindowRect(hWnd, out windowRect))
+                {
+                    float clientX = screenX - windowRect.Left;
+                    float clientY = screenY - windowRect.Top;
+                    if (!IsInteractive(clientX, clientY))
+                        return new IntPtr(HtTransparent);
+                }
+            }
+
+            return CallWindowProc(_oldWndProc, hWnd, message, wParam, lParam);
+        }
+
+        private static bool IsInteractive(float x, float y)
+        {
+            if (_hoverControlsVisible &&
+                _hoverControlsRect.Contains(new Vector2(x, y)))
+                return true;
+            if (_contextMenuOpen && _contextMenuRect.Contains(new Vector2(x, y)))
+                return true;
+
+            HitTestSnapshot snapshot = _hitTestSnapshot;
+            if (snapshot == null || snapshot.Alpha == null ||
+                snapshot.Width <= 0 || snapshot.Height <= 0 ||
+                snapshot.RectWidth <= 0f || snapshot.RectHeight <= 0f)
+                return false;
+            if (x < snapshot.X || y < snapshot.Y ||
+                x >= snapshot.X + snapshot.RectWidth ||
+                y >= snapshot.Y + snapshot.RectHeight)
+                return false;
+
+            float normalizedX = (x - snapshot.X) / snapshot.RectWidth;
+            float normalizedY = 1f - ((y - snapshot.Y) / snapshot.RectHeight);
+            int pixelX = Mathf.Clamp(
+                Mathf.FloorToInt(normalizedX * snapshot.Width),
+                0,
+                snapshot.Width - 1);
+            int pixelY = Mathf.Clamp(
+                Mathf.FloorToInt(normalizedY * snapshot.Height),
+                0,
+                snapshot.Height - 1);
+            int index = pixelY * snapshot.Width + pixelX;
+            return index >= 0 && index < snapshot.Alpha.Length &&
+                snapshot.Alpha[index] >= 16;
+        }
+
         private static IntPtr GetWindowLongPtr(IntPtr window, int index)
         {
             return IntPtr.Size == 8
@@ -1109,6 +1498,27 @@ namespace NeonCompanion.Runtime.Platform
                 SetWindowLongPtr64(window, index, value);
             else
                 SetWindowLong32(window, index, value.ToInt32());
+        }
+
+        private static IntPtr SetWindowLongPtrWithResult(
+            IntPtr window,
+            int index,
+            IntPtr value)
+        {
+            if (IntPtr.Size == 8)
+                return SetWindowLongPtr64(window, index, value);
+            return new IntPtr(SetWindowLong32(window, index, value.ToInt32()));
+        }
+
+        private sealed class HitTestSnapshot
+        {
+            public byte[] Alpha;
+            public int Width;
+            public int Height;
+            public float X;
+            public float Y;
+            public float RectWidth;
+            public float RectHeight;
         }
     }
 #endif

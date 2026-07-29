@@ -187,6 +187,7 @@ $preferencesBefore = Read-PreferenceSnapshot -Path $settingsPath
 if (-not $preferencesBefore.companionModeEnabled) {
     throw "Companion mode is disabled. Enable it in the Windows Player, set the requested controls, close, then rerun."
 }
+$settingsBeforeJson = Get-Content -Raw -Path $settingsPath
 
 New-Item -ItemType Directory -Force -Path $EvidenceDirectory | Out-Null
 Copy-Item $settingsPath (Join-Path $EvidenceDirectory "appsettings-before.json") -Force
@@ -234,6 +235,11 @@ try {
         throw "Parent exited when the Companion child was force-closed."
     }
     Close-OwnedParent -Process $firstParent
+
+    # An independent child exit is intentionally persisted as hidden. Restore the
+    # exact pre-test settings so the second launch validates restart/cleanup without
+    # turning this destructive fault-injection into a user preference change.
+    Set-Content -Path $settingsPath -Value $settingsBeforeJson -Encoding UTF8
 
     $secondLog = Join-Path $EvidenceDirectory "parent-second.log"
     $secondParent = Start-Process -FilePath $resolvedPlayer -ArgumentList @("-logFile", "`"$secondLog`"") -PassThru
@@ -315,5 +321,8 @@ finally {
         if ($null -ne $child) {
             Stop-Process -Id $child.ProcessId -Force -ErrorAction SilentlyContinue
         }
+    }
+    if (-not [string]::IsNullOrEmpty($settingsBeforeJson)) {
+        Set-Content -Path $settingsPath -Value $settingsBeforeJson -Encoding UTF8
     }
 }

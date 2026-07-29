@@ -159,6 +159,64 @@ namespace NeonCompanion.Runtime.Avatar
             return result;
         }
 
+        public static void ReleaseFrames(
+            string path,
+            int columns,
+            int rows,
+            int frameCount,
+            Sprite[] expectedFrames)
+        {
+            if (string.IsNullOrWhiteSpace(path) || columns <= 0 || rows <= 0)
+                return;
+
+            bool isResources = path.StartsWith(ResourcesScheme, StringComparison.Ordinal);
+            string resolvedPath = isResources ? path : ResolvePath(path);
+            if (string.IsNullOrWhiteSpace(resolvedPath))
+                return;
+
+            string cacheKey = BuildSpriteCacheKey(
+                resolvedPath,
+                columns,
+                rows,
+                frameCount);
+            Sprite[] cached;
+            if (!SpriteCache.TryGetValue(cacheKey, out cached) ||
+                (expectedFrames != null && !ReferenceEquals(cached, expectedFrames)))
+                return;
+
+            SpriteCache.Remove(cacheKey);
+            for (int i = 0; i < cached.Length; i++)
+                DestroyRuntimeObject(cached[i]);
+
+            string prefix = resolvedPath + "|";
+            foreach (string key in SpriteCache.Keys)
+            {
+                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            Texture2D texture;
+            if (!TextureCache.TryGetValue(resolvedPath, out texture))
+                return;
+            TextureCache.Remove(resolvedPath);
+            if (texture == null)
+                return;
+            if (isResources)
+                Resources.UnloadAsset(texture);
+            else
+                DestroyRuntimeObject(texture);
+        }
+
+        private static void DestroyRuntimeObject(UnityEngine.Object value)
+        {
+            if (value == null)
+                return;
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(value);
+            else
+                UnityEngine.Object.DestroyImmediate(value);
+        }
+
         /// <summary>
         /// Coroutine-friendly preloader. Yields after each clip so the caller
         /// can interleave boot-log UI updates. Populates TextureCache and SpriteCache.

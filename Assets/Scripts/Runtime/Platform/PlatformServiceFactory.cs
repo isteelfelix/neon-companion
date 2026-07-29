@@ -176,7 +176,9 @@ namespace NeonCompanion.Runtime.Platform
         public void SetProfile(CompanionDisplaySnapshot snapshot) { }
         public void SetState(string state) { }
         public void StartVoicePlayback(string text) { }
+        public void UpdateVoicePlayback(float positionSecs, float durationSecs, bool isPlaying) { }
         public void ClearVoicePlayback() { }
+        public void TriggerReaction(string reaction) { }
         public void UpdatePreferences(CompanionWindowPreferences preferences) { }
         public void Show() { }
         public void Hide() { }

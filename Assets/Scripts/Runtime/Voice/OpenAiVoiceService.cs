@@ -6,7 +6,7 @@ using UnityEngine.Networking;
 
 namespace NeonCompanion.Runtime.Voice
 {
-    public sealed class OpenAiVoiceService : MonoBehaviour, IVoiceService
+    public sealed class OpenAiVoiceService : MonoBehaviour, IVoiceService, IVoicePlaybackClock
     {
         private string _baseUrl;
         private string _apiKey;
@@ -18,6 +18,7 @@ namespace NeonCompanion.Runtime.Voice
 
         private AudioSource _audioSource;
         private AudioClip _recordingClip;
+        private AudioClip _playbackClip;
         private string _activeDevice;
         private bool _isRecording;
         private bool _isSpeaking;
@@ -99,8 +100,7 @@ namespace NeonCompanion.Runtime.Voice
                 StopCoroutine(_playbackCoroutine);
                 _playbackCoroutine = null;
             }
-            if (_audioSource != null)
-                _audioSource.Stop();
+            ClearPlaybackClip();
             if (_recordingClip != null)
             {
                 Destroy(_recordingClip);
@@ -229,13 +229,27 @@ namespace NeonCompanion.Runtime.Voice
                 StopCoroutine(_playbackCoroutine);
                 _playbackCoroutine = null;
             }
-            if (_audioSource != null)
-                _audioSource.Stop();
+            ClearPlaybackClip();
             if (hadPlayback)
             {
                 _isSpeaking = false;
                 OnPlaybackComplete?.Invoke();
             }
+        }
+
+        public VoicePlaybackState GetCurrentPlaybackState()
+        {
+            return new VoicePlaybackState
+            {
+                IsCurrent = _playbackClip != null,
+                IsPlaying = _audioSource != null && _audioSource.isPlaying,
+                IsPaused = false,
+                IsLoading = _playbackCoroutine != null && _playbackClip == null,
+                PositionSecs = _audioSource != null && _playbackClip != null
+                    ? _audioSource.time
+                    : 0f,
+                DurationSecs = _playbackClip != null ? _playbackClip.length : 0f
+            };
         }
 
         // ============================================================
@@ -366,12 +380,18 @@ namespace NeonCompanion.Runtime.Voice
                     AudioClip clip = DownloadHandlerAudioClip.GetContent(request);
                     if (clip != null)
                     {
+                        _playbackClip = clip;
                         _isSpeaking = true;
-                        _audioSource.PlayOneShot(clip);
+                        _audioSource.clip = clip;
+                        _audioSource.Play();
                         OnPlaybackStarted?.Invoke();
                         yield return null;
                         while (_audioSource != null && _audioSource.isPlaying)
                             yield return null;
+                        if (_audioSource != null)
+                            _audioSource.clip = null;
+                        if (_playbackClip == clip)
+                            _playbackClip = null;
                         Destroy(clip);
                     }
                 }
@@ -384,6 +404,20 @@ namespace NeonCompanion.Runtime.Voice
             _isSpeaking        = false;
             _playbackCoroutine = null;
             OnPlaybackComplete?.Invoke();
+        }
+
+        private void ClearPlaybackClip()
+        {
+            if (_audioSource != null)
+            {
+                _audioSource.Stop();
+                _audioSource.clip = null;
+            }
+            if (_playbackClip != null)
+            {
+                Destroy(_playbackClip);
+                _playbackClip = null;
+            }
         }
 
         // ============================================================

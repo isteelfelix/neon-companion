@@ -555,6 +555,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 var availableAvatars = app.Avatars.GetAll();
                 string resolvedAvatarId = string.IsNullOrEmpty(s.activeAvatarId) ? "neon" : s.activeAvatarId;
                 bool knownAvatar = System.Array.IndexOf(BuiltInAvatarIds, resolvedAvatarId) >= 0 ||
+                                   BuiltInAvatarProfiles.TryCreate(resolvedAvatarId) != null ||
                                    System.Linq.Enumerable.Any(availableAvatars, a => a != null && a.id == resolvedAvatarId);
                 if (!knownAvatar) resolvedAvatarId = "neon";
 

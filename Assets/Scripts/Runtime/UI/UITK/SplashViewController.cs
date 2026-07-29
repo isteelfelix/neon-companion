@@ -232,7 +232,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 yield return new WaitForSeconds(delay);
             }
 
-            // Phase 2: preload avatar spritesheets before the main UI scene opens.
+            // Phase 2: validate motion-pack manifests. Individual sheets are loaded
+            // lazily by SpriteSheetAnimator so startup does not decode every state.
             yield return PreloadAvatarSpriteSheets(65f, 82f);
 
             // Phase 3: Final entry
@@ -266,19 +267,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string avatarId = GetAvatarIdFromManifestPath(manifestPath);
                 AddLogRow("..", "Loading avatar sprites: " + avatarId, false);
 
-                int manifestIndex = i;
-                yield return SpriteSheetAnimationLoader.PreloadManifestCoroutine(
-                    manifestPath,
-                    (action, clipIndex, clipCount) =>
-                    {
-                        int safeClipCount = Mathf.Max(1, clipCount);
-                        float clipProgress = Mathf.Clamp01((float)clipIndex / safeClipCount);
-                        float totalProgress = (manifestIndex + clipProgress) / manifests.Count;
-                        SetProgress(startProgress + range * totalProgress);
-                    });
-
                 SetProgress(startProgress + range * ((float)(i + 1) / manifests.Count));
-                AddLogRow("OK", "Avatar sprites loaded: " + avatarId, true);
+                AddLogRow("OK", "Avatar motion pack ready: " + avatarId, true);
                 yield return null;
             }
         }

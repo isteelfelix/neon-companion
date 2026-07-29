@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,15 +16,42 @@ namespace NeonCompanion.Runtime.Platform
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
     public sealed class WindowsCompanionWindowService : ICompanionWindowService
     {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Rect32
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        private delegate bool MonitorEnumProc(
+            IntPtr monitor,
+            IntPtr dc,
+            ref Rect32 rect,
+            IntPtr data);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumDisplayMonitors(
+            IntPtr dc,
+            IntPtr clip,
+            MonitorEnumProc callback,
+            IntPtr data);
+
         private readonly object _writeLock = new object();
         private readonly ConcurrentQueue<CompanionWindowEvent> _events =
             new ConcurrentQueue<CompanionWindowEvent>();
+        private readonly ConcurrentQueue<ProcessExitNotice> _processExitNotices =
+            new ConcurrentQueue<ProcessExitNotice>();
         private readonly List<string> _monitorNames = new List<string>();
 
         private NamedPipeServerStream _pipe;
         private StreamWriter _writer;
         private CancellationTokenSource _cancellation;
         private Process _process;
+        private EventHandler _processExitHandler;
+        private int _launchGeneration;
         private CompanionDisplaySnapshot _snapshot;
         private CompanionWindowPreferences _preferences;
         private string _state = CompanionDisplayStates.Idle;
@@ -36,7 +64,18 @@ namespace NeonCompanion.Runtime.Platform
 
         public WindowsCompanionWindowService()
         {
-            int count = Mathf.Max(1, Display.displays != null ? Display.displays.Length : 1);
+            int count = 0;
+            MonitorEnumProc callback = delegate(
+                IntPtr monitor,
+                IntPtr dc,
+                ref Rect32 rect,
+                IntPtr data)
+            {
+                count++;
+                return true;
+            };
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, callback, IntPtr.Zero);
+            count = Mathf.Max(1, count);
             for (int i = 0; i < count; i++)
                 _monitorNames.Add((i + 1).ToString());
         }
@@ -106,12 +145,19 @@ namespace NeonCompanion.Runtime.Platform
                 start.Arguments =
                     "--companion-player --companion-pipe " + Quote(pipeName) +
                     " --companion-parent-pid " + Process.GetCurrentProcess().Id +
-                    " -popupwindow -screen-width 420 -screen-height 560 -logFile " + Quote(logPath);
+                    " -popupwindow -force-d3d11 -force-d3d11-bitblt-model" +
+                    " -screen-width 420 -screen-height 560 -logFile " +
+                    Quote(logPath);
 
                 _process = new Process();
                 _process.StartInfo = start;
                 _process.EnableRaisingEvents = true;
-                _process.Exited += OnProcessExited;
+                int generation = ++_launchGeneration;
+                _processExitHandler = delegate(object sender, EventArgs args)
+                {
+                    OnProcessExited(sender, generation);
+                };
+                _process.Exited += _processExitHandler;
                 if (!_process.Start())
                     throw new InvalidOperationException("Windows did not start the Companion player process.");
 
@@ -143,10 +189,30 @@ namespace NeonCompanion.Runtime.Platform
             Send(new CompanionProcessMessage { type = "voice_start", text = _voiceText });
         }
 
+        public void UpdateVoicePlayback(
+            float positionSecs,
+            float durationSecs,
+            bool isPlaying)
+        {
+            Send(new CompanionProcessMessage
+            {
+                type = "voice_progress",
+                floatValue = positionSecs,
+                floatValue2 = durationSecs,
+                boolValue = isPlaying
+            });
+        }
+
         public void ClearVoicePlayback()
         {
             _voiceText = null;
             Send(new CompanionProcessMessage { type = "voice_clear" });
+        }
+
+        public void TriggerReaction(string reaction)
+        {
+            if (!string.IsNullOrWhiteSpace(reaction))
+                Send(new CompanionProcessMessage { type = "reaction", text = reaction });
         }
 
         public void UpdatePreferences(CompanionWindowPreferences preferences)
@@ -178,9 +244,12 @@ namespace NeonCompanion.Runtime.Platform
 
             Process process = _process;
             _process = null;
+            EventHandler exitHandler = _processExitHandler;
+            _processExitHandler = null;
             if (process != null)
             {
-                process.Exited -= OnProcessExited;
+                if (exitHandler != null)
+                    process.Exited -= exitHandler;
                 try
                 {
                     if (!process.HasExited && !process.WaitForExit(1200))
@@ -201,6 +270,10 @@ namespace NeonCompanion.Runtime.Platform
 
         public void Tick()
         {
+            ProcessExitNotice notice;
+            while (_processExitNotices.TryDequeue(out notice))
+                HandleProcessExit(notice);
+
             CompanionWindowEvent item;
             while (_events.TryDequeue(out item))
                 EventReceived?.Invoke(item);
@@ -402,7 +475,7 @@ namespace NeonCompanion.Runtime.Platform
             }
         }
 
-        private void OnProcessExited(object sender, EventArgs args)
+        private void OnProcessExited(object sender, int generation)
         {
             if (!ReferenceEquals(sender, _process))
                 return;
@@ -418,10 +491,44 @@ namespace NeonCompanion.Runtime.Platform
             {
             }
 
+            // Process.Exited is raised on a ThreadPool thread. Unity logging, pipe
+            // disposal and controller events must stay on the Unity main thread.
+            _processExitNotices.Enqueue(new ProcessExitNotice
+            {
+                Generation = generation,
+                ExitCode = exitCode
+            });
+        }
+
+        private void HandleProcessExit(ProcessExitNotice notice)
+        {
+            if (notice == null || notice.Generation != _launchGeneration)
+                return;
+
+            Process process = _process;
+            _process = null;
+            EventHandler exitHandler = _processExitHandler;
+            _processExitHandler = null;
+            if (process != null)
+            {
+                try
+                {
+                    if (exitHandler != null)
+                        process.Exited -= exitHandler;
+                    process.Dispose();
+                }
+                catch (Exception)
+                {
+                }
+            }
+
             if (!_stopping)
             {
-                QueueEvent(CompanionWindowEventKind.Closed, "Player exited with code " + exitCode + ".");
-                NeonLogger.LogWarning("[CompanionWindow] Player exited independently. code=" + exitCode);
+                QueueEvent(
+                    CompanionWindowEventKind.Closed,
+                    "Player exited with code " + notice.ExitCode + ".");
+                NeonLogger.LogWarning(
+                    "[CompanionWindow] Player exited independently. code=" + notice.ExitCode);
             }
             ClosePipe();
         }
@@ -489,6 +596,12 @@ namespace NeonCompanion.Runtime.Platform
         private static string Quote(string value)
         {
             return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
+        }
+
+        private sealed class ProcessExitNotice
+        {
+            public int Generation;
+            public int ExitCode;
         }
     }
 #endif

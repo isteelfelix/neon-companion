@@ -170,6 +170,7 @@ def verify_assets_and_runtime():
     )
     assert len(sheet_paths) >= 6
     decoded_pixels = 0
+    max_active_sheet_pixels = 0
     compressed_bytes = 0
     lfs_pointers = []
     for path in sheet_paths:
@@ -182,9 +183,13 @@ def verify_assets_and_runtime():
         width, height = png_size(path)
         assert 0 < width <= 8192 and 0 < height <= 8192
         decoded_pixels += width * height
+        max_active_sheet_pixels = max(max_active_sheet_pixels, width * height)
         compressed_bytes += path.stat().st_size
     if not lfs_pointers:
-        assert decoded_pixels <= 64_000_000
+        # Runtime loads one motion state at a time and releases the previous sheet.
+        # Guard the actual peak decoded texture, not the sum of dormant build assets.
+        assert max_active_sheet_pixels <= 24_000_000
+        assert compressed_bytes <= 100 * 1024 * 1024
 
     too_many_nodes = {"nodes": [{} for _ in range(MAX_NODES + 1)]}
     assert not within_catalog_limits(catalog_facts(too_many_nodes))
@@ -216,6 +221,7 @@ def verify_assets_and_runtime():
             "count": len(sheet_paths),
             "compressedBytes": compressed_bytes,
             "decodedPixelsAvailableOnRunner": decoded_pixels,
+            "maxActiveSheetPixels": max_active_sheet_pixels,
             "rgbaObservedBytesAvailableOnRunner": decoded_pixels * 4,
             "gitLfsPointers": lfs_pointers,
         },
@@ -262,7 +268,7 @@ def verify_implementation_contracts():
         "ChangedSourceIsRejectedBeforeCopy",
         "TemporaryPreviewObjectsUseEditModeSafeCleanup",
         "OversizedImageIsRejectedBeforeDecode",
-        "CatalogLimitsRejectWorkBeforeRuntimeInstantiation",
+        "GenericCatalogWorkIsRejectedWhileBackendHidden",
         "GenericGltfAndGlbMappingsLoadThroughRuntime",
         "StopCancelsBackendWaitAndAllowsImmediateReplay",
         "VrmZeroAndOneFixturesLoadThroughUniVrm",

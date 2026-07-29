@@ -34,7 +34,10 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (loadResult.VrmInstance != null)
             {
                 _vrmDriver = _runtimeRoot.AddComponent<VrmAvatarDriver>();
-                _vrmDriver.Initialize(loadResult.VrmInstance, _capabilities);
+                _vrmDriver.Initialize(
+                    loadResult.VrmInstance,
+                    _capabilities,
+                    BuiltInAvatarProfiles.IsResourcePath(modelPath));
             }
 
             _availableAnimations.Clear();
@@ -50,8 +53,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (!IsLoaded || string.IsNullOrWhiteSpace(clipName))
                 return false;
 
-            if (_vrmDriver != null)
-                return _vrmDriver.SetAnimation(clipName);
+            if (_vrmDriver != null && _vrmDriver.SetAnimation(clipName))
+                return true;
 
             bool played = false;
 
@@ -160,13 +163,18 @@ namespace NeonCompanion.Runtime.Avatar3D
         private float _blinkWeight;
         private Transform _head;
         private Transform _gazeTarget;
+        private bool _useBuiltInMotionPack;
 
-        internal void Initialize(Vrm10Instance vrm, AvatarCapabilities capabilities)
+        internal void Initialize(
+            Vrm10Instance vrm,
+            AvatarCapabilities capabilities,
+            bool useBuiltInMotionPack)
         {
             _vrm = vrm;
             _capabilities = capabilities ?? new AvatarCapabilities();
+            _useBuiltInMotionPack = useBuiltInMotionPack;
             _blinkTimer = 2.5f;
-            if (_capabilities.hasGaze && _capabilities.hasHumanoid &&
+            if (_capabilities.hasGaze &&
                 _vrm.TryGetBoneTransform(HumanBodyBones.Head, out _head))
             {
                 GameObject gazeObject = new GameObject("AvatarVRM_GazeTarget");
@@ -180,7 +188,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         internal bool SetAnimation(string state)
         {
             if (_vrm == null || !_capabilities.canAnimate ||
-                string.IsNullOrWhiteSpace(state))
+                !_useBuiltInMotionPack || string.IsNullOrWhiteSpace(state))
                 return false;
 
             string normalizedState = state.Trim().ToLowerInvariant();
@@ -266,7 +274,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         internal void ClearMouth()
         {
-            if (_vrm != null && _hasActiveMouth && _capabilities.hasHumanoid)
+            if (_vrm != null && _hasActiveMouth)
                 ApplyActiveMouth(0f);
             _hasActiveMouth = false;
             _activeMouthSetter = null;
@@ -395,13 +403,19 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             if (_gazeTarget != null && _head != null)
             {
-                float sway = Mathf.Sin(Time.unscaledTime * 0.35f) * 0.12f;
+                float normalizedX = Screen.width > 0
+                    ? (Input.mousePosition.x / Screen.width) - 0.5f
+                    : 0f;
+                float normalizedY = Screen.height > 0
+                    ? (Input.mousePosition.y / Screen.height) - 0.5f
+                    : 0f;
                 _gazeTarget.position = _head.position +
                     transform.forward * 3f +
-                    transform.right * sway;
+                    transform.right * normalizedX * 1.2f +
+                    transform.up * normalizedY * 0.8f;
             }
 
-            if (_vrm == null || !_capabilities.hasHumanoid)
+            if (_vrm == null)
                 return;
 
             if (_hasActiveMouth)
@@ -437,7 +451,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             _activeState = null;
             _activeMouthSetter = null;
             _reactionPlaying = false;
-            if (_vrm != null && _capabilities.hasHumanoid)
+            if (_vrm != null && _useBuiltInMotionPack)
                 _vrm.Runtime.VrmAnimation = null;
             if (_animationRoot != null)
             {

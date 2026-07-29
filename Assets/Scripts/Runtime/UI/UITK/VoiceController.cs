@@ -27,6 +27,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<string, string, Task<bool>> SendVoiceMessageAsync;
             public Action OnVoiceRecordingStarted;
             public Action<string> OnVoicePlaybackStarted;
+            public Action<float, float, bool> OnVoicePlaybackProgress;
             public Action RefreshAvatarMotionState;
             /// <summary>(ttsAudioPath, durationSecs) — attach a synthesized clip to the latest assistant message.</summary>
             public Action<string, float> AttachAssistantAudio;
@@ -51,6 +52,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _isVoicePlaying;
         private bool _isVoiceRecording;
         private string _lastConfigHash;
+        private string _activeVoiceText;
+        private float _nextPlaybackProgressAt;
 
         // Composer preview state
         private VisualElement _previewBar;
@@ -281,7 +284,25 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             _voiceOutputManager?.StopSpeakingAndClear();
             _isVoicePlaying = false;
+            _activeVoiceText = null;
             _d.RefreshAvatarMotionState?.Invoke();
+        }
+
+        internal void Tick()
+        {
+            if (!_isVoicePlaying || string.IsNullOrEmpty(_activeVoiceText) ||
+                _voiceOutputManager == null ||
+                Time.unscaledTime < _nextPlaybackProgressAt)
+                return;
+
+            _nextPlaybackProgressAt = Time.unscaledTime + 0.05f;
+            VoicePlaybackState state = _voiceOutputManager.GetCurrentPlaybackState();
+            if (!state.IsCurrent || state.DurationSecs <= 0f)
+                return;
+            _d.OnVoicePlaybackProgress?.Invoke(
+                state.PositionSecs,
+                state.DurationSecs,
+                state.IsPlaying);
         }
 
         internal bool EnqueueVoiceResponse(string text)
@@ -732,6 +753,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void HandleVoicePlaybackStarted(string text)
         {
             _isVoicePlaying = true;
+            _activeVoiceText = text ?? string.Empty;
+            _nextPlaybackProgressAt = 0f;
             _d.OnVoicePlaybackStarted?.Invoke(text);
             _d.RefreshAvatarMotionState?.Invoke();
         }
@@ -739,6 +762,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void HandleVoicePlaybackCompleted()
         {
             _isVoicePlaying = false;
+            _activeVoiceText = null;
             _d.RefreshAvatarMotionState?.Invoke();
             _d.OnVoicePlaybackCompleted?.Invoke();
         }
