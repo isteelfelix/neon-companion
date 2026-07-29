@@ -382,7 +382,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SaveSettings();
         }
 
-        private void OnMonitorClicked()
+        private void OnMonitorClicked(ClickEvent evt)
         {
             if (!IsAvailable || _service.MonitorNames.Count == 0)
                 return;
@@ -395,7 +395,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SaveSettings();
         }
 
-        private void OnShowClicked()
+        private void OnShowClicked(ClickEvent evt)
         {
             if (!IsAvailable)
                 return;
@@ -407,7 +407,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SaveSettings();
         }
 
-        private void OnHideClicked()
+        private void OnHideClicked(ClickEvent evt)
         {
             if (!IsAvailable)
                 return;
@@ -417,7 +417,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             SaveSettings();
         }
 
-        private void OnReturnClicked()
+        private void OnReturnClicked(ClickEvent evt)
         {
             SetMode(false, true);
         }
