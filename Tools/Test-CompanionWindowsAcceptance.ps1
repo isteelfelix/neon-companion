@@ -12,6 +12,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class CompanionWindowProbe
+{
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(
+        IntPtr window,
+        uint message,
+        IntPtr wParam,
+        IntPtr lParam,
+        uint flags,
+        uint timeoutMilliseconds,
+        out IntPtr result);
+}
+"@
+
 function Get-CompanionChildren {
     param([int]$ParentProcessId)
 
@@ -69,6 +87,46 @@ function Wait-ForLogText {
 
     Save-ProcessSnapshot -Name "timeout-$($Reason.ToLowerInvariant())"
     throw "${Reason}_TIMEOUT: Log pattern '$Pattern' was not observed in $Path."
+}
+
+function Wait-ForResponsiveChild {
+    param([int]$ProcessId)
+
+    $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
+    do {
+        $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        if ($null -eq $process) {
+            Save-ProcessSnapshot -Name "timeout-window-responsiveness"
+            throw "WINDOW_RESPONSIVENESS_TIMEOUT: Companion child exited before its window became responsive."
+        }
+
+        $process.Refresh()
+        if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
+            try {
+                $inputIdle = $process.WaitForInputIdle(1000)
+            }
+            catch {
+                $inputIdle = $false
+            }
+
+            $result = [IntPtr]::Zero
+            $responded = [CompanionWindowProbe]::SendMessageTimeout(
+                $process.MainWindowHandle,
+                0,
+                [IntPtr]::Zero,
+                [IntPtr]::Zero,
+                2,
+                1000,
+                [ref]$result)
+            if ($inputIdle -and $responded -ne [IntPtr]::Zero) {
+                return
+            }
+        }
+        Start-Sleep -Milliseconds 250
+    } while ((Get-Date) -lt $deadline)
+
+    Save-ProcessSnapshot -Name "timeout-window-responsiveness"
+    throw "WINDOW_RESPONSIVENESS_TIMEOUT: Companion child exists but its main window did not reach input-idle and answer the bounded native probe."
 }
 
 function Get-FileHashOrNull {
@@ -148,6 +206,7 @@ try {
     $firstChild = Wait-ForCompanionChild -ParentProcessId $firstParent.Id
     Wait-ForLogText -Path $firstLog -Pattern "\[CompanionWindow\] IPC connected:" -Reason "PIPE_CONNECTION"
     Wait-ForLogText -Path $firstLog -Pattern "\[CompanionWindow\] Runtime ready\." -Reason "RUNTIME_READY"
+    Wait-ForResponsiveChild -ProcessId $firstChild.ProcessId
     $firstChildren = Get-CompanionChildren -ParentProcessId $firstParent.Id
     if ($firstChildren.Count -ne 1) {
         Save-ProcessSnapshot -Name "exactly-one-child-failed"
@@ -181,6 +240,7 @@ try {
     $secondChild = Wait-ForCompanionChild -ParentProcessId $secondParent.Id
     Wait-ForLogText -Path $secondLog -Pattern "\[CompanionWindow\] IPC connected:" -Reason "PIPE_CONNECTION"
     Wait-ForLogText -Path $secondLog -Pattern "\[CompanionWindow\] Runtime ready\." -Reason "RUNTIME_READY"
+    Wait-ForResponsiveChild -ProcessId $secondChild.ProcessId
     $secondChildren = Get-CompanionChildren -ParentProcessId $secondParent.Id
     if ($secondChildren.Count -ne 1) {
         Save-ProcessSnapshot -Name "exactly-one-child-restart-failed"

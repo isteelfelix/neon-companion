@@ -271,8 +271,16 @@ def verify_implementation_contracts():
     assert "Get-CimInstance Win32_Process" in powershell
     assert "CloseMainWindow()" in powershell
     assert "protectedDataHashes" in powershell
-    for reason in ("PROCESS_SPAWN_TIMEOUT", "PIPE_CONNECTION", "RUNTIME_READY"):
+    for reason in (
+        "PROCESS_SPAWN_TIMEOUT",
+        "PIPE_CONNECTION",
+        "RUNTIME_READY",
+        "WINDOW_RESPONSIVENESS_TIMEOUT",
+    ):
         assert reason in powershell, f"missing Windows timeout diagnostic: {reason}"
+    assert "WaitForInputIdle(1000)" in powershell
+    assert "SendMessageTimeout" in powershell
+    assert "timeout-window-responsiveness" in powershell
     assert '"runtime_ready"' in parent_runtime and '"heartbeat"' in parent_runtime
     assert "WaitForConnectionAsync" in parent_runtime
     assert "ReadClientAsync(reader, pipe, token)" in parent_runtime
@@ -280,6 +288,10 @@ def verify_implementation_contracts():
     assert accept_client.index("ReadClientAsync(reader, pipe, token)") < accept_client.index(
         "SendProfileAndPreferences();"
     )
+    read_completed = "if (completed == readTask && !_runtimeReady)"
+    assert read_completed in accept_client
+    assert "IPC disconnected before runtime-ready handshake." in accept_client
+    assert accept_client.index(read_completed) < accept_client.index("await readTask;")
     assert '"runtime_ready"' in child_runtime and '"heartbeat"' in child_runtime
     assert "WriteLoopAsync" in child_runtime
     assert "Generic3DEnabled = false" in loader

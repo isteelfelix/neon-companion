@@ -240,8 +240,11 @@ namespace NeonCompanion.Runtime.Platform
                 NeonLogger.Log("[CompanionWindow] IPC connected: " + pipeName);
                 Task readTask = ReadClientAsync(reader, pipe, token);
                 SendProfileAndPreferences();
+                Task readyTask = WaitForRuntimeReadyAsync(token);
                 Task timeoutTask = Task.Delay(HandshakeTimeoutMilliseconds, token);
-                Task completed = await Task.WhenAny(readTask, WaitForRuntimeReadyAsync(token), timeoutTask);
+                Task completed = await Task.WhenAny(readTask, readyTask, timeoutTask);
+                if (completed == readTask && !_runtimeReady)
+                    throw new IOException("IPC disconnected before runtime-ready handshake.");
                 if (completed == timeoutTask && !_runtimeReady)
                     throw new TimeoutException("IPC connected, but runtime-ready handshake timed out.");
                 await readTask;
