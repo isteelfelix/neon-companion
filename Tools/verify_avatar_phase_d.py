@@ -256,6 +256,8 @@ def verify_implementation_contracts():
     required_tests = (
         "LegacyStaticAndSpriteProfilesRemainReadable",
         "GenericMappingAndFutureContractFallbackStayDeterministic",
+        "CompanionDockStateMachineCoversDetachHideRecoveryAndReturn",
+        "DockDetachDoesNotMutateProfileSessionOrVoiceRoute",
         "ChangedSourceIsRejectedBeforeCopy",
         "TemporaryPreviewObjectsUseEditModeSafeCleanup",
         "OversizedImageIsRejectedBeforeDecode",

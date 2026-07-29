@@ -15,6 +15,7 @@
   "companion.window.show": "Показать",
   "companion.window.hide": "Скрыть",
   "companion.window.return": "Вернуть в колонку",
+  "companion.window.detach": "Открепить",
   "companion.window.emergency": "Аварийное отключение пропуска кликов: Ctrl+Shift+F12",
   "companion.window.status.starting": "Запуск Companion Player…",
   "companion.window.status.running": "Companion Player запущен.",

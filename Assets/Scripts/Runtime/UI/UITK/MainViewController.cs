@@ -97,7 +97,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _rightTabBar;
         private Button _avatarTabBtn;
         private Button _terminalTabBtn;
-        private Button _companionModeBtn;
         private VisualElement _avatarContentHost;
         private VisualElement _terminalHost;
         private bool _rightPanelIsTerminal;
@@ -753,10 +752,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 Root = _root,
                 GetAppAsync = GetAppAsync,
+                GetAppSync = () => _app,
                 GetActiveAvatarId = () => _avatarGalleryController.ActiveAvatarId,
                 GetAvatarDisplayName = _avatarGalleryController.AvatarDisplayName,
                 CaptureBuiltInPreview = _avatarGalleryController.CaptureBuiltInPreview,
-                SetColumnCompanionMode = _layoutController.SetCompanionMode,
+                ShowTerminal = () => SwitchRightPanelTab(true),
+                ShowAvatar = () => SwitchRightPanelTab(false),
                 OpenAvatarSettings = _navigationController.ShowAvatars
             };
         }
@@ -828,7 +829,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
 
             _settingsController.RegisterCallbacks();
-            RegisterClick(_companionModeBtn, OnCompanionModeClicked);
 
             // Terminal tabs (defensive re-register)
             RegisterClick(_avatarTabBtn, OnAvatarTabClicked);
@@ -857,7 +857,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Terminal tabs
             UnregisterClick(_avatarTabBtn, OnAvatarTabClicked);
             UnregisterClick(_terminalTabBtn, OnTerminalTabClicked);
-            UnregisterClick(_companionModeBtn, OnCompanionModeClicked);
 
             _scrollBottomButtonSchedule?.Pause();
             _scrollBottomButtonSchedule = null;
@@ -887,10 +886,6 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             _rightTabBar.Add(_avatarTabBtn);
             _rightTabBar.Add(_terminalTabBtn);
-            _companionModeBtn = new Button();
-            _companionModeBtn.text = LocalizationExtensions.Get("companion.window.short", "Companion");
-            _companionModeBtn.AddToClassList("right-panel-tab");
-            _rightTabBar.Add(_companionModeBtn);
 
             // Insert tab bar as first child
             _avatarPanel.Insert(0, _rightTabBar);
@@ -975,10 +970,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             SwitchRightPanelTab(true);
         }
 
-        private void OnCompanionModeClicked()
-        {
-            _companionWindowController.EnableCompanionMode();
-        }
 
         private void EnsureTerminalController()
         {
@@ -1739,8 +1730,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _navThemesLabel?.Localize("settings.themes");
             _navSettingsLabel?.Localize("tab.settings");
             _navCloseLabel?.Localize("nav.close");
-            if (_companionModeBtn != null)
-                _companionModeBtn.text = LocalizationExtensions.Get("companion.window.short", "Companion");
             UpdatePanelToggleTooltips();
             ApplyStaticTemplateLocalization();
         }

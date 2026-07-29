@@ -17,17 +17,20 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             public VisualElement Root;
             public Func<Task<CompanionApp>> GetAppAsync;
+            public Func<CompanionApp> GetAppSync;
             public Func<string> GetActiveAvatarId;
             public Func<string, string> GetAvatarDisplayName;
             public Func<string, string> CaptureBuiltInPreview;
-            public Action<bool> SetColumnCompanionMode;
+            public Action ShowTerminal;
+            public Action ShowAvatar;
             public Action OpenAvatarSettings;
         }
 
         private Deps _d;
         private ICompanionWindowService _service;
         private CompanionWindowPreferences _preferences = new CompanionWindowPreferences();
-        private bool _modeEnabled;
+        private CompanionDockStateMachine _dockState =
+            new CompanionDockStateMachine(CompanionDockStates.Docked);
         private bool _loading;
         private bool _registered;
         private int _monitorIndex;
@@ -37,7 +40,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Label _subtitle;
         private Label _status;
         private Label _emergencyHint;
-        private Toggle _modeToggle;
         private Toggle _visibleToggle;
         private Toggle _pinnedToggle;
         private Toggle _clickThroughToggle;
@@ -47,9 +49,10 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _showButton;
         private Button _hideButton;
         private Button _returnButton;
+        private Button _detachButton;
 
         public bool IsAvailable => _service != null && _service.IsAvailable;
-        public bool IsModeEnabled => _modeEnabled;
+        public string DockState => _dockState.State;
 
         public void SetDeps(Deps deps)
         {
@@ -67,7 +70,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _subtitle = root.Q<Label>("companion-window-subtitle");
             _status = root.Q<Label>("companion-window-status");
             _emergencyHint = root.Q<Label>("companion-window-emergency");
-            _modeToggle = root.Q<Toggle>("companion-mode-toggle");
             _visibleToggle = root.Q<Toggle>("companion-visible-toggle");
             _pinnedToggle = root.Q<Toggle>("companion-pinned-toggle");
             _clickThroughToggle = root.Q<Toggle>("companion-click-through-toggle");
@@ -77,9 +79,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _showButton = root.Q<Button>("companion-show-button");
             _hideButton = root.Q<Button>("companion-hide-button");
             _returnButton = root.Q<Button>("companion-return-button");
+            _detachButton = root.Q<Button>("avatar-detach-button");
 
             Localize();
             SetDisplay(_card, DisplayStyle.None);
+            SetDisplay(_detachButton, DisplayStyle.None);
             _ = LoadAsync();
         }
 
@@ -91,8 +95,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _service.EventReceived -= OnServiceEvent;
                 _service.EventReceived += OnServiceEvent;
             }
-            if (_modeToggle != null)
-                _modeToggle.RegisterValueChangedCallback(OnModeChanged);
             if (_visibleToggle != null)
                 _visibleToggle.RegisterValueChangedCallback(OnVisibleChanged);
             if (_pinnedToggle != null)
@@ -105,13 +107,12 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_showButton, OnShowClicked);
             RegisterClick(_hideButton, OnHideClicked);
             RegisterClick(_returnButton, OnReturnClicked);
+            RegisterClick(_detachButton, OnDetachClicked);
         }
 
         public void UnregisterCallbacks()
         {
             _registered = false;
-            if (_modeToggle != null)
-                _modeToggle.UnregisterValueChangedCallback(OnModeChanged);
             if (_visibleToggle != null)
                 _visibleToggle.UnregisterValueChangedCallback(OnVisibleChanged);
             if (_pinnedToggle != null)
@@ -124,6 +125,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_showButton, OnShowClicked);
             UnregisterClick(_hideButton, OnHideClicked);
             UnregisterClick(_returnButton, OnReturnClicked);
+            UnregisterClick(_detachButton, OnDetachClicked);
             if (_service != null)
                 _service.EventReceived -= OnServiceEvent;
         }
@@ -141,11 +143,13 @@ namespace NeonCompanion.Runtime.UI.UITK
             _ = RefreshChildLanguageAsync();
         }
 
-        public void EnableCompanionMode()
+        public void Detach()
         {
             if (!IsAvailable)
                 return;
-            SetMode(true, true);
+            Transition(CompanionDockEvent.Detach);
+            _d.ShowTerminal?.Invoke();
+            _ = LaunchAsync();
         }
 
         public void OnAvatarChanged(string avatarId)
@@ -157,7 +161,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void OnAvatarMotionStateChanged(AvatarMotionState state)
         {
-            if (!IsAvailable || !_modeEnabled)
+            if (!IsAvailable || !_dockState.IsDetached)
                 return;
 
             string displayState;
@@ -181,7 +185,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void StopAvatarDisplay()
         {
-            if (IsAvailable && _modeEnabled)
+            if (IsAvailable && _dockState.IsDetached)
             {
                 _service.ClearVoicePlayback();
                 _service.SetState(CompanionDisplayStates.Stop);
@@ -190,13 +194,13 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void StartVoicePlayback(string text)
         {
-            if (IsAvailable && _modeEnabled)
+            if (IsAvailable && _dockState.IsDetached)
                 _service.StartVoicePlayback(text);
         }
 
         public void ClearVoicePlayback()
         {
-            if (IsAvailable && _modeEnabled)
+            if (IsAvailable && _dockState.IsDetached)
                 _service.ClearVoicePlayback();
         }
 
@@ -220,9 +224,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _service.EventReceived += OnServiceEvent;
             }
             SetDisplay(_card, DisplayStyle.Flex);
+            SetDisplay(_detachButton, DisplayStyle.Flex);
 
             AppSettings settings = app.Settings.Load() ?? new AppSettings();
-            _modeEnabled = settings.companionModeEnabled;
+            string persistedState = settings.companionDockState;
+            if ((string.IsNullOrWhiteSpace(persistedState) ||
+                persistedState == CompanionDockStates.Docked) &&
+                settings.companionModeEnabled)
+                persistedState = settings.companionWindowVisible
+                    ? CompanionDockStates.DetachedReady
+                    : CompanionDockStates.DetachedHidden;
+            _dockState = new CompanionDockStateMachine(persistedState);
             _preferences = new CompanionWindowPreferences
             {
                 visible = settings.companionWindowVisible,
@@ -241,7 +253,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _preferences.monitorIndex = _monitorIndex;
 
             _loading = true;
-            _modeToggle?.SetValueWithoutNotify(_modeEnabled);
             _visibleToggle?.SetValueWithoutNotify(_preferences.visible);
             _pinnedToggle?.SetValueWithoutNotify(_preferences.pinned);
             _clickThroughToggle?.SetValueWithoutNotify(_preferences.clickThrough);
@@ -250,9 +261,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             RefreshMonitorText();
             RefreshStatus();
 
-            _d.SetColumnCompanionMode?.Invoke(_modeEnabled);
-            if (_modeEnabled)
+            if (_dockState.State == CompanionDockStates.DetachedHidden)
+            {
+                _d.ShowTerminal?.Invoke();
+            }
+            else if (_dockState.State == CompanionDockStates.DetachedReady ||
+                _dockState.State == CompanionDockStates.DetachedStarting)
+            {
+                Transition(CompanionDockEvent.Detach);
+                _d.ShowTerminal?.Invoke();
                 await LaunchAsync(settings.activeAvatarId);
+            }
         }
 
         private async Task LaunchAsync(string requestedAvatarId = null)
@@ -316,43 +335,22 @@ namespace NeonCompanion.Runtime.UI.UITK
             return snapshot;
         }
 
-        private void SetMode(bool enabled, bool persist)
-        {
-            if (_loading || !IsAvailable)
-                return;
-            _modeEnabled = enabled;
-            _modeToggle?.SetValueWithoutNotify(enabled);
-            _d.SetColumnCompanionMode?.Invoke(enabled);
-
-            if (enabled)
-                _ = LaunchAsync();
-            else
-            {
-                _service.ClearVoicePlayback();
-                _service.SetState(CompanionDisplayStates.Stop);
-                _service.Stop();
-            }
-
-            RefreshStatus();
-            if (persist)
-                SaveSettings();
-        }
-
-        private void OnModeChanged(ChangeEvent<bool> evt)
-        {
-            SetMode(evt.newValue, true);
-        }
-
         private void OnVisibleChanged(ChangeEvent<bool> evt)
         {
             if (_loading || !IsAvailable)
                 return;
             _preferences.visible = evt.newValue;
             if (evt.newValue)
-                _service.Show();
+            {
+                Transition(CompanionDockEvent.Show);
+                _d.ShowTerminal?.Invoke();
+                _ = LaunchAsync();
+            }
             else
+            {
                 _service.Hide();
-            SaveSettings();
+                Transition(CompanionDockEvent.Hide);
+            }
         }
 
         private void OnPinnedChanged(ChangeEvent<bool> evt)
@@ -399,12 +397,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (!IsAvailable)
                 return;
-            if (!_service.IsRunning)
-                SetMode(true, true);
             _preferences.visible = true;
             _visibleToggle?.SetValueWithoutNotify(true);
-            _service.Show();
-            SaveSettings();
+            Transition(CompanionDockEvent.Show);
+            _d.ShowTerminal?.Invoke();
+            _ = LaunchAsync();
         }
 
         private void OnHideClicked(ClickEvent evt)
@@ -414,12 +411,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             _preferences.visible = false;
             _visibleToggle?.SetValueWithoutNotify(false);
             _service.Hide();
-            SaveSettings();
+            Transition(CompanionDockEvent.Hide);
         }
 
         private void OnReturnClicked(ClickEvent evt)
         {
-            SetMode(false, true);
+            ReturnToColumn();
+        }
+
+        private void OnDetachClicked(ClickEvent evt)
+        {
+            Detach();
+        }
+
+        private void ReturnToColumn()
+        {
+            if (!IsAvailable)
+                return;
+            _service.ClearVoicePlayback();
+            _service.SetState(CompanionDisplayStates.Stop);
+            _service.Stop();
+            Transition(CompanionDockEvent.ReturnToColumn);
+            _d.ShowAvatar?.Invoke();
         }
 
         private void OnServiceEvent(CompanionWindowEvent evt)
@@ -427,18 +440,19 @@ namespace NeonCompanion.Runtime.UI.UITK
             switch (evt.Kind)
             {
                 case CompanionWindowEventKind.Started:
+                    Transition(CompanionDockEvent.Started);
                     RefreshStatus(LocalizationExtensions.Get(
                         "companion.window.status.running",
                         "Companion player is running."));
                     break;
                 case CompanionWindowEventKind.Closed:
-                    _d.SetColumnCompanionMode?.Invoke(false);
+                    Transition(CompanionDockEvent.Closed);
                     RefreshStatus(LocalizationExtensions.Get(
                         "companion.window.status.closed",
                         "Companion player closed; chat remains active."));
                     break;
                 case CompanionWindowEventKind.Failed:
-                    _d.SetColumnCompanionMode?.Invoke(false);
+                    Transition(CompanionDockEvent.Fail);
                     RefreshStatus(LocalizationExtensions.Get(
                         "companion.window.status.failed",
                         "Companion player failed to start; chat remains active."));
@@ -447,7 +461,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _d.OpenAvatarSettings?.Invoke();
                     break;
                 case CompanionWindowEventKind.ReturnToColumn:
-                    SetMode(false, true);
+                    ReturnToColumn();
                     break;
                 case CompanionWindowEventKind.BoundsChanged:
                     _preferences.positionX = evt.X;
@@ -472,13 +486,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
         }
 
-        private async void SaveSettings()
+        private void SaveSettings()
         {
-            CompanionApp app = _d.GetAppAsync != null ? await _d.GetAppAsync() : null;
+            CompanionApp app = _d.GetAppSync != null ? _d.GetAppSync() : null;
             if (app == null)
                 return;
             AppSettings settings = app.Settings.Load() ?? new AppSettings();
-            settings.companionModeEnabled = _modeEnabled;
+            settings.companionDockState = _dockState.State;
+            settings.companionModeEnabled = _dockState.IsDetached;
             settings.companionWindowVisible = _preferences.visible;
             settings.companionWindowPinned = _preferences.pinned;
             settings.companionWindowClickThrough = _preferences.clickThrough;
@@ -489,6 +504,17 @@ namespace NeonCompanion.Runtime.UI.UITK
             app.Settings.Save(settings);
         }
 
+        private void Transition(CompanionDockEvent dockEvent)
+        {
+            _dockState.Apply(dockEvent);
+            _preferences.visible =
+                _dockState.State == CompanionDockStates.DetachedStarting ||
+                _dockState.State == CompanionDockStates.DetachedReady;
+            _visibleToggle?.SetValueWithoutNotify(_preferences.visible);
+            SaveSettings();
+            RefreshStatus();
+        }
+
         private void Localize()
         {
             if (_title != null)
@@ -497,10 +523,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _subtitle.text = LocalizationExtensions.Get(
                     "companion.window.subtitle",
                     "Render the selected avatar in an isolated Windows player.");
-            if (_modeToggle != null)
-                _modeToggle.label = LocalizationExtensions.Get(
-                    "companion.window.mode",
-                    "Use Companion mode");
             if (_visibleToggle != null)
                 _visibleToggle.label = LocalizationExtensions.Get("companion.window.visible", "Visible");
             if (_pinnedToggle != null)
@@ -519,6 +541,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _returnButton.text = LocalizationExtensions.Get(
                     "companion.window.return",
                     "Return to column");
+            if (_detachButton != null)
+                _detachButton.text = LocalizationExtensions.Get(
+                    "companion.window.detach",
+                    "Detach");
             if (_emergencyHint != null)
                 _emergencyHint.text = LocalizationExtensions.Get(
                     "companion.window.emergency",

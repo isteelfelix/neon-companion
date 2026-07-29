@@ -89,6 +89,7 @@ assert "StopAvatarDisplay" in chat
 assert "AvatarMotionStateChanged" in gallery
 
 for field in (
+    "companionDockState",
     "companionModeEnabled",
     "companionWindowVisible",
     "companionWindowPinned",
@@ -101,7 +102,6 @@ for field in (
     assert field in settings and field in controller, "missing persisted control: " + field
 
 for element in (
-    "companion-mode-toggle",
     "companion-visible-toggle",
     "companion-pinned-toggle",
     "companion-click-through-toggle",
@@ -111,11 +111,26 @@ for element in (
 ):
     assert element in uxml and element in controller, "missing UI wiring: " + element
 
+chat_uxml = read("Assets/UI/Chat/ChatView.uxml")
+assert "avatar-detach-button" in chat_uxml and "avatar-detach-button" in controller
+for state in (
+    "Docked",
+    "DetachedStarting",
+    "DetachedReady",
+    "DetachedHidden",
+    "Failed",
+):
+    assert "public const string " + state in protocol
+assert "CompanionDockStateMachine" in protocol
+assert "ShowTerminal" in controller and "ShowAvatar" in controller
+assert "SetCompanionMode" not in main
+assert "companionModeBtn" not in main
+
 english = json.loads(read("Assets/Resources/Localization/en.json"))
 russian = json.loads(read("Assets/Resources/Localization/ru.json"))
 for key in (
     "companion.window.title",
-    "companion.window.mode",
+    "companion.window.detach",
     "companion.window.click_through",
     "companion.window.emergency",
     "companion.window.return",

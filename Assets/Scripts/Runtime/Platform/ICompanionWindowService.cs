@@ -13,6 +13,108 @@ namespace NeonCompanion.Runtime.Platform
         public const string Stop = "stop";
     }
 
+    public static class CompanionDockStates
+    {
+        public const string Docked = "docked";
+        public const string DetachedStarting = "detached-starting";
+        public const string DetachedReady = "detached-ready";
+        public const string DetachedHidden = "detached-hidden";
+        public const string Failed = "failed";
+
+        public static string Normalize(string state)
+        {
+            switch (state)
+            {
+                case Docked:
+                case DetachedStarting:
+                case DetachedReady:
+                case DetachedHidden:
+                case Failed:
+                    return state;
+                default:
+                    return Docked;
+            }
+        }
+    }
+
+    public enum CompanionDockEvent
+    {
+        Detach,
+        Started,
+        Hide,
+        Show,
+        Closed,
+        Fail,
+        ReturnToColumn
+    }
+
+    public sealed class CompanionDockStateMachine
+    {
+        public CompanionDockStateMachine(string persistedState)
+        {
+            State = CompanionDockStates.Normalize(persistedState);
+        }
+
+        public string State { get; private set; }
+
+        public bool IsDetached
+        {
+            get
+            {
+                return State == CompanionDockStates.DetachedStarting ||
+                    State == CompanionDockStates.DetachedReady ||
+                    State == CompanionDockStates.DetachedHidden;
+            }
+        }
+
+        public bool NeedsLaunch
+        {
+            get { return State == CompanionDockStates.DetachedStarting; }
+        }
+
+        public string Apply(CompanionDockEvent dockEvent)
+        {
+            if (dockEvent == CompanionDockEvent.ReturnToColumn)
+                return Set(CompanionDockStates.Docked);
+            if (dockEvent == CompanionDockEvent.Fail)
+                return Set(CompanionDockStates.Failed);
+
+            switch (State)
+            {
+                case CompanionDockStates.Docked:
+                case CompanionDockStates.Failed:
+                    if (dockEvent == CompanionDockEvent.Detach ||
+                        dockEvent == CompanionDockEvent.Show)
+                        return Set(CompanionDockStates.DetachedStarting);
+                    break;
+                case CompanionDockStates.DetachedStarting:
+                    if (dockEvent == CompanionDockEvent.Started)
+                        return Set(CompanionDockStates.DetachedReady);
+                    if (dockEvent == CompanionDockEvent.Closed ||
+                        dockEvent == CompanionDockEvent.Hide)
+                        return Set(CompanionDockStates.DetachedHidden);
+                    break;
+                case CompanionDockStates.DetachedReady:
+                    if (dockEvent == CompanionDockEvent.Hide ||
+                        dockEvent == CompanionDockEvent.Closed)
+                        return Set(CompanionDockStates.DetachedHidden);
+                    break;
+                case CompanionDockStates.DetachedHidden:
+                    if (dockEvent == CompanionDockEvent.Show ||
+                        dockEvent == CompanionDockEvent.Detach)
+                        return Set(CompanionDockStates.DetachedStarting);
+                    break;
+            }
+            return State;
+        }
+
+        private string Set(string state)
+        {
+            State = state;
+            return State;
+        }
+    }
+
     [Serializable]
     public sealed class CompanionDisplaySnapshot
     {

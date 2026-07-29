@@ -74,7 +74,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _leftPanelVisible = true;   // десктоп: рейл показан
         private bool _rightPanelVisible = true;  // десктоп: аватар-панель показана
         private bool _avatarAutoHidden;
-        private bool _companionMode;
         private bool _drawerOpen;                 // телефон: drawer открыт
         private bool _avatarOverlayOpen;          // телефон: аватар-оверлей открыт
 
@@ -331,7 +330,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (shouldAutoHide && !_avatarAutoHidden)
             {
                 _avatarAutoHidden = true;
-                if (_rightPanelVisible && !_companionMode)
+                if (_rightPanelVisible)
                 {
                     SetDisplay(_d.AvatarPanel, DisplayStyle.None);
                     SetDisplay(_d.ResizeHandle, DisplayStyle.None);
@@ -478,20 +477,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             UpdatePanelToggleTooltips();
         }
 
-        public void SetCompanionMode(bool enabled)
-        {
-            _companionMode = enabled;
-            if (_formFactor == FormFactor.Phone)
-                return;
-
-            SetDisplay(_d.AvatarPanel, ShouldShowAvatarColumn() ? DisplayStyle.Flex : DisplayStyle.None);
-            SetDisplay(_d.ResizeHandle, ShouldShowAvatarColumn() ? DisplayStyle.Flex : DisplayStyle.None);
-            UpdatePanelToggleTooltips();
-        }
-
         private bool ShouldShowAvatarColumn()
         {
-            return _rightPanelVisible && !_avatarAutoHidden && !_companionMode;
+            return _rightPanelVisible && !_avatarAutoHidden;
         }
 
         public void UpdatePanelToggleTooltips()

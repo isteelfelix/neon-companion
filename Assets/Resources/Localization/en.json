@@ -15,6 +15,7 @@
   "companion.window.show": "Show",
   "companion.window.hide": "Hide",
   "companion.window.return": "Return to column",
+  "companion.window.detach": "Detach",
   "companion.window.emergency": "Emergency click-through release: Ctrl+Shift+F12",
   "companion.window.status.starting": "Starting Companion player…",
   "companion.window.status.running": "Companion player is running.",

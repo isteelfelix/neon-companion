@@ -23,7 +23,6 @@
                 <ui:Label name="companion-window-subtitle" text="Render the selected avatar in an isolated Windows player." class="companion-window-card__subtitle" />
                 <ui:Label name="companion-window-status" text="Companion player is stopped." class="companion-window-card__status" />
             </ui:VisualElement>
-            <ui:Toggle name="companion-mode-toggle" label="Use Companion mode" class="companion-window-card__toggle" />
             <ui:VisualElement class="companion-window-card__options">
                 <ui:Toggle name="companion-visible-toggle" label="Visible" />
                 <ui:Toggle name="companion-pinned-toggle" label="Always on top" />

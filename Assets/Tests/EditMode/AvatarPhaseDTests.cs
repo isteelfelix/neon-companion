@@ -119,6 +119,50 @@ namespace NeonCompanion.Tests
             Assert.AreEqual(profile.modelPath, snapshot.modelPath);
         }
 
+        [Test]
+        public void CompanionDockStateMachineCoversDetachHideRecoveryAndReturn()
+        {
+            var machine = new CompanionDockStateMachine(CompanionDockStates.Docked);
+
+            Assert.AreEqual(
+                CompanionDockStates.DetachedStarting,
+                machine.Apply(CompanionDockEvent.Detach));
+            Assert.IsTrue(machine.NeedsLaunch);
+            Assert.AreEqual(
+                CompanionDockStates.DetachedReady,
+                machine.Apply(CompanionDockEvent.Started));
+            Assert.AreEqual(
+                CompanionDockStates.DetachedHidden,
+                machine.Apply(CompanionDockEvent.Closed));
+            Assert.AreEqual(
+                CompanionDockStates.DetachedStarting,
+                machine.Apply(CompanionDockEvent.Show));
+            Assert.AreEqual(
+                CompanionDockStates.Failed,
+                machine.Apply(CompanionDockEvent.Fail));
+            Assert.AreEqual(
+                CompanionDockStates.Docked,
+                machine.Apply(CompanionDockEvent.ReturnToColumn));
+            Assert.IsFalse(machine.IsDetached);
+        }
+
+        [Test]
+        public void DockDetachDoesNotMutateProfileSessionOrVoiceRoute()
+        {
+            string activeProfileId = "avatar-a";
+            string sessionId = "session-a";
+            object voiceRoute = new object();
+            var machine = new CompanionDockStateMachine(CompanionDockStates.Docked);
+
+            machine.Apply(CompanionDockEvent.Detach);
+            machine.Apply(CompanionDockEvent.Started);
+            machine.Apply(CompanionDockEvent.ReturnToColumn);
+
+            Assert.AreEqual("avatar-a", activeProfileId);
+            Assert.AreEqual("session-a", sessionId);
+            Assert.IsNotNull(voiceRoute);
+        }
+
         [UnityTest]
         public IEnumerator ChangedSourceIsRejectedBeforeCopy()
         {

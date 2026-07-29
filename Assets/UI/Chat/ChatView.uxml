@@ -41,6 +41,7 @@
             </ui:VisualElement>
 
             <ui:VisualElement name="avatar-stage-hero" class="avatar-stage__hero">
+                <ui:Button name="avatar-detach-button" text="Открепить" class="btn btn--ghost" style="display: none;" />
                 <ui:VisualElement name="avatar-glow" class="halo" />
                 <ui:VisualElement name="avatar-circle" class="avatar">
                     <ui:VisualElement name="avatar-art" class="avatar__art avatar__art--neon" />

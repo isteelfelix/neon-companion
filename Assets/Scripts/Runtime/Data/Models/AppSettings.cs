@@ -29,6 +29,7 @@ namespace NeonCompanion.Runtime.Data.Models
         public List<string> alwaysApprovedTools = new List<string>();
 
         // Windows Companion display process (display-only; no provider/session data).
+        public string companionDockState = "docked";
         public bool companionModeEnabled = false;
         public bool companionWindowVisible = true;
         public bool companionWindowPinned = true;
