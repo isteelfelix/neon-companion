@@ -76,6 +76,41 @@ namespace NeonCompanion.Runtime.Avatar3D
             UpdateCameraTransform();
         }
 
+        /// <summary>World position of the render camera — the point Camera-mode gaze holds.</summary>
+        public Vector3 CameraWorldPosition
+        {
+            get
+            {
+                EnsureRenderScene();
+                return _camera != null ? _camera.transform.position : transform.position;
+            }
+        }
+
+        /// <summary>
+        /// Turns a point on the rendered image (viewport UV, origin bottom-left)
+        /// into the world point under it, at the depth of the framed model — the
+        /// cursor path's "RenderTexture UV → camera ray".
+        /// </summary>
+        public bool TryGetGazePoint(Vector2 viewportUv, out Vector3 worldPoint)
+        {
+            EnsureRenderScene();
+            if (_camera == null)
+            {
+                worldPoint = Vector3.zero;
+                return false;
+            }
+
+            Ray ray = _camera.ViewportPointToRay(new Vector3(
+                Mathf.Clamp01(viewportUv.x),
+                Mathf.Clamp01(viewportUv.y),
+                0f));
+            float depth = Vector3.Distance(_camera.transform.position, _targetCenter);
+            if (depth < 0.1f)
+                depth = _orbitDistance;
+            worldPoint = ray.GetPoint(depth);
+            return true;
+        }
+
         public void SetView(float scale, float offsetX, float offsetY)
         {
             _viewScale = Mathf.Clamp(scale > 0f ? scale : 1f, 0.5f, 2f);

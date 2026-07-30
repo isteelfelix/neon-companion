@@ -92,6 +92,7 @@ namespace NeonCompanion.Runtime.Platform
         private bool _contextMenuOpen;
         private bool _pointerInside;
         private string _activeReaction;
+        private bool _reactionIsEmotion;
         private float _reactionReturnAt;
         private Texture2D _hitTestReadback;
         private Texture2D _toolbarTexture;
@@ -410,11 +411,39 @@ namespace NeonCompanion.Runtime.Platform
             if (_avatar3DService == null || !_avatar3DService.IsLoaded)
                 return;
 
+            switch (_avatar3DService.GazeMode)
+            {
+                case AvatarGazeMode.Camera:
+                    if (_avatar3DRenderer != null)
+                        _avatar3DService.SetGazeTarget(
+                            _avatar3DRenderer.CameraWorldPosition);
+                    break;
+                case AvatarGazeMode.Cursor:
+                    UpdateVrmCursorGaze();
+                    break;
+            }
+        }
+
+        private void UpdateVrmCursorGaze()
+        {
             float horizontal;
             float vertical;
-            if (WindowsCompanionWindowNative.TryGetCursorNormalized(
+            if (!WindowsCompanionWindowNative.TryGetCursorNormalized(
                 out horizontal,
                 out vertical))
+                return;
+
+            // The cursor is normalized to [-0.5, 0.5] over the window the avatar
+            // fills; the render viewport is [0, 1] with y up. Resolving it through
+            // the camera ray lands the eyes on a real world point at the model's
+            // depth; the normalized fallback covers a frame with no camera yet.
+            Vector3 world;
+            if (_avatar3DRenderer != null &&
+                _avatar3DRenderer.TryGetGazePoint(
+                    new Vector2(horizontal + 0.5f, vertical + 0.5f),
+                    out world))
+                _avatar3DService.SetGazeTarget(world);
+            else
                 _avatar3DService.SetGazeNormalized(horizontal, vertical);
         }
 
@@ -562,11 +591,21 @@ namespace NeonCompanion.Runtime.Platform
                 return;
 
             _activeReaction = reaction.Trim().ToLowerInvariant();
+            _reactionIsEmotion = false;
             _reactionReturnAt = Time.unscaledTime + 1.2f;
             if (_avatar3DService != null && _avatar3DService.IsLoaded)
             {
-                if (!_avatar3DService.SetAnimation(_activeReaction))
-                    _avatar3DService.SetExpression(_activeReaction, 1f);
+                // A body clip wins if one exists; otherwise a named emotion, which
+                // fades in and resets on its own; a raw blendshape is the last
+                // resort, for reaction names that are neither.
+                if (_avatar3DService.SetAnimation(_activeReaction))
+                    return;
+                if (_avatar3DService.SetEmotion(_activeReaction))
+                {
+                    _reactionIsEmotion = true;
+                    return;
+                }
+                _avatar3DService.SetExpression(_activeReaction, 1f);
                 return;
             }
 
@@ -581,9 +620,14 @@ namespace NeonCompanion.Runtime.Platform
                 Time.unscaledTime < _reactionReturnAt)
                 return;
 
-            if (_avatar3DService != null && _avatar3DService.IsLoaded)
+            // An emotion reaction is left to the blender's own hold-and-fade; only
+            // a raw blendshape reaction needs winding back down by hand, since it
+            // sits pinned on the Manual layer until told otherwise.
+            if (_avatar3DService != null && _avatar3DService.IsLoaded &&
+                !_reactionIsEmotion)
                 _avatar3DService.SetExpression(_activeReaction, 0f);
             _activeReaction = null;
+            _reactionIsEmotion = false;
             ApplyState(_state);
         }
 

@@ -2168,8 +2168,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_avatar3DService != null && _avatar3DService.IsLoaded)
             {
-                if (!_avatar3DService.SetAnimation(reactionClipName))
-                    _avatar3DService.SetExpression(reactionClipName, 1f);
+                // Prefer a body clip, then a self-resetting emotion, then a raw
+                // blendshape. The emotion path is why a gallery reaction no longer
+                // sticks on the face — the blender fades it back out.
+                if (_avatar3DService.SetAnimation(reactionClipName))
+                    return;
+                if (_avatar3DService.SetEmotion(reactionClipName))
+                    return;
+                _avatar3DService.SetExpression(reactionClipName, 1f);
                 return;
             }
 

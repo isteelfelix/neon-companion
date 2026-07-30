@@ -23,6 +23,19 @@ namespace NeonCompanion.Runtime.Avatar3D
         /// </summary>
         bool SetEmotion(string emotionName);
         bool SetPose(string poseName);
+        AvatarGazeMode GazeMode { get; }
+
+        /// <summary>
+        /// Chooses how the eyes are aimed. <see cref="AvatarGazeMode.Camera"/> and
+        /// <see cref="AvatarGazeMode.Cursor"/> need a world point fed via
+        /// <see cref="SetGazeTarget"/> each frame; <see cref="AvatarGazeMode.None"/>
+        /// rests them.
+        /// </summary>
+        void SetGazeMode(AvatarGazeMode mode);
+
+        /// <summary>The world point the eyes should converge on this frame.</summary>
+        void SetGazeTarget(Vector3 worldPoint);
+
         void SetGazeNormalized(float horizontal, float vertical);
         Transform GetRuntimeTransform();
         GameObject GetRuntimeRoot();

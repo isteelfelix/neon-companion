@@ -16,6 +16,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private AvatarCapabilities _capabilities = new AvatarCapabilities();
         private readonly List<string> _availableAnimations = new List<string>();
         private readonly AvatarSceneState _scene = new AvatarSceneState();
+        private AvatarGazeMode _gazeMode = AvatarGazeMode.Cursor;
 
         public bool IsLoaded => _runtimeRoot != null && _scene.CanMutate;
         public IReadOnlyList<string> AvailableAnimations => _availableAnimations;
@@ -74,6 +75,10 @@ namespace NeonCompanion.Runtime.Avatar3D
             _availableAnimations.AddRange(loadResult.AnimationNames);
 
             _scene.MarkMounted();
+
+            // Carry over a gaze mode chosen before the model finished loading.
+            if (_vrmDriver != null)
+                _vrmDriver.SetGazeMode(_gazeMode);
 
             if (_availableAnimations.Contains("idle"))
                 SetAnimation("idle");
@@ -160,6 +165,24 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
+        public AvatarGazeMode GazeMode
+        {
+            get { return _gazeMode; }
+        }
+
+        public void SetGazeMode(AvatarGazeMode mode)
+        {
+            _gazeMode = mode;
+            if (_scene.CanMutate && _vrmDriver != null)
+                _vrmDriver.SetGazeMode(mode);
+        }
+
+        public void SetGazeTarget(Vector3 worldPoint)
+        {
+            if (_scene.CanMutate && _vrmDriver != null)
+                _vrmDriver.SetGazeTarget(worldPoint);
+        }
+
         public void SetGazeNormalized(float horizontal, float vertical)
         {
             if (_scene.CanMutate && _vrmDriver != null)
@@ -233,13 +256,15 @@ namespace NeonCompanion.Runtime.Avatar3D
         private string _activeState;
         private VrmExpressionComposer _composer;
         private VrmEmotionBlender _emotions;
-        private float _blinkTimer;
-        private float _blinkWeight;
+        private VrmIdleAnimator _idle;
         private Transform _head;
         private Transform _gazeTarget;
         private bool _useBuiltInMotionPack;
         private float _gazeHorizontal;
         private float _gazeVertical;
+        private AvatarGazeMode _gazeMode = AvatarGazeMode.Cursor;
+        private Vector3 _gazeTargetWorld;
+        private bool _hasGazeTargetWorld;
 
         /// <summary>
         /// Built on first use rather than in Awake: the driver is added to the
@@ -266,6 +291,16 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
+        private VrmIdleAnimator Idle
+        {
+            get
+            {
+                if (_idle == null)
+                    _idle = new VrmIdleAnimator(null);
+                return _idle;
+            }
+        }
+
         internal async Task<bool> InitializeAsync(
             Vrm10Instance vrm,
             AvatarCapabilities capabilities,
@@ -277,7 +312,6 @@ namespace NeonCompanion.Runtime.Avatar3D
             _runtime = _vrm != null ? _vrm.Runtime : null;
             _capabilities = capabilities ?? new AvatarCapabilities();
             _useBuiltInMotionPack = useBuiltInMotionPack;
-            _blinkTimer = 2.5f;
             if (_capabilities.hasGaze &&
                 _vrm.TryGetBoneTransform(HumanBodyBones.Head, out _head))
             {
@@ -377,10 +411,55 @@ namespace NeonCompanion.Runtime.Avatar3D
             return false;
         }
 
+        internal void SetGazeMode(AvatarGazeMode mode)
+        {
+            _gazeMode = mode;
+            // A world point from the previous mode is stale the moment the mode
+            // changes; drop it so None rests and a new source has to re-supply it.
+            _hasGazeTargetWorld = false;
+        }
+
+        internal void SetGazeTarget(Vector3 worldPoint)
+        {
+            _gazeTargetWorld = worldPoint;
+            _hasGazeTargetWorld = true;
+        }
+
         internal void SetGazeNormalized(float horizontal, float vertical)
         {
             _gazeHorizontal = Mathf.Clamp(horizontal, -0.5f, 0.5f);
             _gazeVertical = Mathf.Clamp(vertical, -0.5f, 0.5f);
+        }
+
+        /// <summary>
+        /// Where the look-at target sits this frame. The mode picks the base
+        /// point — a rest point ahead of the face, a world point a source fed us,
+        /// or the head-basis fallback for a source that only speaks normalized —
+        /// and the idle saccades ride on top of all three.
+        /// </summary>
+        private Vector3 ResolveGazePosition()
+        {
+            Vector3 rest = _head.position + transform.forward * 3f;
+
+            Vector3 basePoint;
+            if (_gazeMode == AvatarGazeMode.None)
+            {
+                basePoint = rest;
+            }
+            else if (_hasGazeTargetWorld)
+            {
+                basePoint = _gazeTargetWorld;
+            }
+            else
+            {
+                basePoint = rest +
+                    transform.right * _gazeHorizontal * 1.2f +
+                    transform.up * _gazeVertical * 0.8f;
+            }
+
+            return basePoint +
+                transform.right * Idle.GazeOffsetHorizontal * 1.2f +
+                transform.up * Idle.GazeOffsetVertical * 0.8f;
         }
 
         internal bool SetMouthShape(string shape)
@@ -542,20 +621,21 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void LateUpdate()
         {
+            float deltaTime = Time.unscaledDeltaTime;
+
+            // Advance the involuntary layer first: the gaze target built just
+            // below wants this frame's saccade offset folded in.
+            Idle.Tick(deltaTime);
+
             if (_gazeTarget != null && _head != null)
-            {
-                _gazeTarget.position = _head.position +
-                    transform.forward * 3f +
-                    transform.right * _gazeHorizontal * 1.2f +
-                    transform.up * _gazeVertical * 0.8f;
-            }
+                _gazeTarget.position = ResolveGazePosition();
 
             if (_vrm == null)
                 return;
 
             UpdateBlink();
             if (_emotions != null)
-                _emotions.Tick(Time.unscaledDeltaTime);
+                _emotions.Tick(deltaTime);
 
             // Everything above only declared what it wants. This is the one
             // place a frame's worth of intent reaches the model.
@@ -567,27 +647,18 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (!_capabilities.hasBlink)
                 return;
 
-            _blinkTimer -= Time.unscaledDeltaTime;
-            if (_blinkTimer > 0f)
-                return;
-
-            _blinkWeight += Time.unscaledDeltaTime * 10f;
-            if (_blinkWeight >= 2f)
+            float weight = Idle.BlinkWeight;
+            if (weight <= 0f)
             {
-                // The lid is back up. Releasing the layer lets the composer
-                // write the closing zero, or hand the eye back to an emotion
-                // that was squinting underneath.
+                // Eyes open. Release the layer rather than pin the lids at zero,
+                // so an emotion squinting underneath gets the eyelid back.
                 Composer.ClearLayer(VrmExpressionLayer.Blink);
-                _blinkWeight = 0f;
-                _blinkTimer = UnityEngine.Random.Range(2.5f, 5.5f);
                 return;
             }
 
-            float weight = _blinkWeight <= 1f ? _blinkWeight : 2f - _blinkWeight;
-            float clampedWeight = Mathf.Clamp01(weight);
-            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.Blink, clampedWeight);
-            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.BlinkLeft, clampedWeight);
-            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.BlinkRight, clampedWeight);
+            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.Blink, weight);
+            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.BlinkLeft, weight);
+            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.BlinkRight, weight);
         }
 
         private void ClearAnimation()
