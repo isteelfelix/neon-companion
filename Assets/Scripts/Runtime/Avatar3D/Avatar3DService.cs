@@ -225,9 +225,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Animation _activeAnimation;
         private Vrm10AnimationInstance _activeVrmAnimation;
         private string _activeState;
-        private ExpressionKey _activeMouthKey;
-        private Action<float> _activeMouthSetter;
-        private bool _hasActiveMouth;
+        private VrmExpressionComposer _composer;
         private float _blinkTimer;
         private float _blinkWeight;
         private Transform _head;
@@ -235,6 +233,21 @@ namespace NeonCompanion.Runtime.Avatar3D
         private bool _useBuiltInMotionPack;
         private float _gazeHorizontal;
         private float _gazeVertical;
+
+        /// <summary>
+        /// Built on first use rather than in Awake: the driver is added to the
+        /// model and driven straight away, and Awake does not run for a
+        /// component added outside play mode.
+        /// </summary>
+        private VrmExpressionComposer Composer
+        {
+            get
+            {
+                if (_composer == null)
+                    _composer = new VrmExpressionComposer(WriteExpressionWeight);
+                return _composer;
+            }
+        }
 
         internal async Task<bool> InitializeAsync(
             Vrm10Instance vrm,
@@ -322,7 +335,6 @@ namespace NeonCompanion.Runtime.Avatar3D
             _idleAnimation.gameObject.SetActive(true);
             _activeVrmAnimation = _idleAnimation;
             _runtime.VrmAnimation = _idleAnimation;
-            BindActiveMouthSetter();
 
             Animation animation =
                 _idleAnimation.GetComponentInChildren<Animation>(true);
@@ -369,20 +381,18 @@ namespace NeonCompanion.Runtime.Avatar3D
             ExpressionKey key;
             if (!TryResolveMouthKey(normalized, out key))
                 return false;
-            ClearMouth();
-            _activeMouthKey = key;
-            _hasActiveMouth = true;
-            BindActiveMouthSetter();
-            ApplyActiveMouth(1f);
+
+            // One viseme at a time. Emptying the layer first releases whichever
+            // key spoke last, so the composer closes it on the next flush
+            // instead of leaving two mouth shapes stacked.
+            Composer.ClearLayer(VrmExpressionLayer.Viseme);
+            Composer.Set(VrmExpressionLayer.Viseme, key, 1f);
             return true;
         }
 
         internal void ClearMouth()
         {
-            if (_vrm != null && _hasActiveMouth)
-                ApplyActiveMouth(0f);
-            _hasActiveMouth = false;
-            _activeMouthSetter = null;
+            Composer.ClearLayer(VrmExpressionLayer.Viseme);
         }
 
         internal bool SetExpression(string expressionName, float weight)
@@ -393,7 +403,11 @@ namespace NeonCompanion.Runtime.Avatar3D
             ExpressionKey key;
             if (!TryResolveExpressionKey(expressionName, out key))
                 return false;
-            ApplyExpressionWeight(key, Mathf.Clamp01(weight));
+
+            // A zero stays on the layer rather than dropping off it: callers
+            // wind a reaction back down with SetExpression(name, 0f) and expect
+            // that to hold, not to hand the key back to something else.
+            Composer.Set(VrmExpressionLayer.Emotion, key, Mathf.Clamp01(weight));
             return true;
         }
 
@@ -509,9 +523,15 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_vrm == null)
                 return;
 
-            if (_hasActiveMouth)
-                ApplyActiveMouth(1f);
+            UpdateBlink();
 
+            // Everything above only declared what it wants. This is the one
+            // place a frame's worth of intent reaches the model.
+            Composer.Apply();
+        }
+
+        private void UpdateBlink()
+        {
             if (!_capabilities.hasBlink)
                 return;
 
@@ -520,19 +540,22 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return;
 
             _blinkWeight += Time.unscaledDeltaTime * 10f;
-            float weight = _blinkWeight <= 1f ? _blinkWeight : 2f - _blinkWeight;
-            float clampedWeight = Mathf.Clamp01(weight);
-            ApplyExpressionWeight(ExpressionKey.Blink, clampedWeight);
-            ApplyExpressionWeight(ExpressionKey.BlinkLeft, clampedWeight);
-            ApplyExpressionWeight(ExpressionKey.BlinkRight, clampedWeight);
             if (_blinkWeight >= 2f)
             {
-                ApplyExpressionWeight(ExpressionKey.Blink, 0f);
-                ApplyExpressionWeight(ExpressionKey.BlinkLeft, 0f);
-                ApplyExpressionWeight(ExpressionKey.BlinkRight, 0f);
+                // The lid is back up. Releasing the layer lets the composer
+                // write the closing zero, or hand the eye back to an emotion
+                // that was squinting underneath.
+                Composer.ClearLayer(VrmExpressionLayer.Blink);
                 _blinkWeight = 0f;
                 _blinkTimer = UnityEngine.Random.Range(2.5f, 5.5f);
+                return;
             }
+
+            float weight = _blinkWeight <= 1f ? _blinkWeight : 2f - _blinkWeight;
+            float clampedWeight = Mathf.Clamp01(weight);
+            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.Blink, clampedWeight);
+            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.BlinkLeft, clampedWeight);
+            Composer.Set(VrmExpressionLayer.Blink, ExpressionKey.BlinkRight, clampedWeight);
         }
 
         private void ClearAnimation()
@@ -552,7 +575,6 @@ namespace NeonCompanion.Runtime.Avatar3D
             _activeAnimation = null;
             _activeVrmAnimation = null;
             _activeState = null;
-            _activeMouthSetter = null;
         }
 
         private void ClearAnimationResources()
@@ -564,28 +586,13 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
-        private void BindActiveMouthSetter()
-        {
-            _activeMouthSetter = null;
-            if (!_hasActiveMouth || _activeVrmAnimation == null)
-                return;
-
-            Action<float> setter;
-            if (_activeVrmAnimation.ExpressionSetterMap.TryGetValue(
-                _activeMouthKey,
-                out setter))
-                _activeMouthSetter = setter;
-        }
-
-        private void ApplyActiveMouth(float weight)
-        {
-            if (_activeMouthSetter != null)
-                _activeMouthSetter(weight);
-            else
-                _runtime.Expression.SetWeight(_activeMouthKey, weight);
-        }
-
-        private void ApplyExpressionWeight(ExpressionKey key, float weight)
+        /// <summary>
+        /// The composer's outlet to the model. A playing VRM animation routes
+        /// expression tracks through its own setter map, so a weight written
+        /// past it would be overwritten; resolving the route per write keeps it
+        /// correct across animation changes.
+        /// </summary>
+        private void WriteExpressionWeight(ExpressionKey key, float weight)
         {
             Action<float> setter;
             if (_activeVrmAnimation != null &&
@@ -594,12 +601,17 @@ namespace NeonCompanion.Runtime.Avatar3D
                 setter(weight);
                 return;
             }
-            _runtime.Expression.SetWeight(key, weight);
+
+            if (_runtime != null)
+                _runtime.Expression.SetWeight(key, weight);
         }
 
         private void OnDestroy()
         {
+            // No further frame will flush, so close the mouth by hand.
             ClearMouth();
+            if (_composer != null)
+                _composer.Apply();
             ClearAnimation();
             if (_gazeTarget != null)
                 DestroyOwnedObject(_gazeTarget.gameObject);
