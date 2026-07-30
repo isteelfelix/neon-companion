@@ -25,10 +25,10 @@ namespace NeonCompanion.Runtime.Avatar3D
         [Header("Portrait framing")]
         [Tooltip("Height of the framed slice as a fraction of the model's height " +
             "when the eyes can be located. Smaller is a tighter bust.")]
-        [SerializeField] private float _portraitHeightFraction = 0.46f;
+        [SerializeField] private float _portraitHeightFraction = 0.34f;
         [Tooltip("How far below the eyes to centre the frame, as a fraction of " +
             "the model's height, so the head sits in the upper third.")]
-        [SerializeField] private float _portraitEyeBias = 0.12f;
+        [SerializeField] private float _portraitEyeBias = 0.06f;
 
         private RenderTexture _renderTexture;
         private Camera _camera;
