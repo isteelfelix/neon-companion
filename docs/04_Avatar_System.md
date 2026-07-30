@@ -130,7 +130,7 @@ UniVRM, поэтому ошибочная модель не заменяет т�
 
 ### VRM runtime (Phase B)
 
-После успешного импорта путь пользователя: Avatars → 3D → выбрать VRM-файл →
+После успешного импорта путь пользователя: Avatars → VRM → выбрать VRM-файл →
 проверить preview и capability card → Save → выбрать созданную gallery tile →
 увидеть модель в основном preview. Capability card показывает фактически найденные
 humanoid bones, blink, gaze, expressions, lipsync и упакованные VRMA state clips.
@@ -145,9 +145,12 @@ state. Маршруты Hermes и Generic OpenAI TTS/STT не изменены.
 
 ### Windows Companion window (Phase C)
 
-На Windows Player пользователь может выбрать `Companion` в правой колонке или
-включить режим на странице Avatars. Основное окно скрывает avatar column, а тот же
-executable запускается вторым процессом с `--companion-player`. Дочерний процесс
+На Windows Player пользователь выбирает аватар в одной из четырёх независимых
+категорий: static 2D, sprite-sheet, generic 3D или VRM. Правая колонка всегда
+показывает только выбранный backend. При откреплении она остаётся на месте и
+переключается на терминал; пользователь может скрыть колонку штатной кнопкой
+макета. Тот же executable запускается вторым процессом с `--companion-player`.
+Дочерний процесс
 получает по случайно названному локальному named pipe только display snapshot:
 идентификатор/имя/тип профиля, локальные display asset paths или встроенный preview,
 state clip mapping и display transform. Provider config, API key, system prompt,
@@ -159,11 +162,12 @@ Player не создаёт второй AI-сеанс и не конкуриру
 передаёт состояния `idle`, `listening`, `thinking`, `speaking`, `stop`; Phase-B
 motion-pack/3D state mapping используется непосредственно display runtime.
 
-Окно интерактивно по умолчанию: его можно перетаскивать, показать/скрыть,
-закрепить поверх окон, выбрать монитор и масштаб, открыть настройки аватара,
-вернуться к колонке или закрыть отдельно. Click-through — только пользовательский
-toggle; `Ctrl+Shift+F12` аварийно возвращает интерактивность. Позиция и controls
-сохраняются в `AppSettings`. Закрытие/crash player не завершает chat parent, а
+Окно интерактивно по умолчанию: его можно перетаскивать за видимую модель,
+масштабировать колесом мыши либо кнопками hover-toolbar, показать/скрыть,
+закрепить поверх окон, выбрать монитор, открыть настройки аватара, вернуться к
+колонке или закрыть отдельно. Click-through действует только по прозрачным
+пикселям; `Ctrl+Shift+F12` аварийно возвращает интерактивность. Позиция, масштаб
+и controls сохраняются в `AppSettings`. Закрытие/crash player не завершает chat parent, а
 закрытие parent сначала посылает `stop`/shutdown и затем принудительно убирает
 зависший дочерний процесс. Android/iOS и Editor получают stub и никогда не spawn.
 

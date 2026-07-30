@@ -87,13 +87,19 @@ namespace NeonCompanion.Runtime.Platform
         private float _voicePositionSecs;
         private float _voiceDurationSecs;
         private bool _voiceHasPlaybackClock;
-        private Rect _hoverControlsRect = new Rect(8f, 8f, 264f, 34f);
+        private Rect _hoverControlsRect = new Rect(8f, 8f, 348f, 36f);
         private Rect _contextMenuRect = new Rect(8f, 8f, 220f, 248f);
         private bool _contextMenuOpen;
         private bool _pointerInside;
         private string _activeReaction;
         private float _reactionReturnAt;
         private Texture2D _hitTestReadback;
+        private Texture2D _toolbarTexture;
+        private Texture2D _buttonTexture;
+        private Texture2D _buttonHoverTexture;
+        private GUIStyle _toolbarStyle;
+        private GUIStyle _toolbarLabelStyle;
+        private GUIStyle _toolbarButtonStyle;
         private byte[] _hitTestAlpha;
         private float _nextHitTestCaptureAt;
         private const int HitTestMaskSize = 192;
@@ -262,6 +268,7 @@ namespace NeonCompanion.Runtime.Platform
             AdvanceVoicePlayback();
             AdvanceReaction();
             UpdateVrmGaze();
+            _pointerInside = WindowsCompanionWindowNative.IsCursorInsideWindow();
             UpdateHitTestMask();
 
             if (Time.unscaledTime >= _nextBoundsReport)
@@ -623,6 +630,7 @@ namespace NeonCompanion.Runtime.Platform
 
         private void OnGUI()
         {
+            EnsureGuiStyles();
             DrawAvatar();
 
             Event current = Event.current;
@@ -651,7 +659,25 @@ namespace NeonCompanion.Runtime.Platform
             if (_pointerInside && !_contextMenuOpen)
                 DrawHoverControls();
             if (_contextMenuOpen)
-                _contextMenuRect = GUI.Window(7332, _contextMenuRect, DrawContextMenu, string.Empty);
+                DrawContextMenu();
+
+            if (current != null &&
+                current.type == EventType.MouseDown &&
+                current.button == 0 &&
+                !_contextMenuOpen &&
+                !_hoverControlsRect.Contains(current.mousePosition) &&
+                GetAvatarRect().Contains(current.mousePosition))
+            {
+                WindowsCompanionWindowNative.BeginDrag();
+                current.Use();
+            }
+            else if (current != null &&
+                current.type == EventType.ScrollWheel &&
+                GetAvatarRect().Contains(current.mousePosition))
+            {
+                SetWindowScale(_preferences.scale - current.delta.y * 0.05f);
+                current.Use();
+            }
 
             WindowsCompanionWindowNative.SetControlRects(
                 _hoverControlsRect,
@@ -843,17 +869,28 @@ namespace NeonCompanion.Runtime.Platform
 
         private void DrawHoverControls()
         {
+            bool compact = Screen.width < 360;
+            _hoverControlsRect.width = compact
+                ? Mathf.Max(196f, Screen.width - 16f)
+                : 348f;
             _hoverControlsRect.x = Mathf.Max(8f, (Screen.width - _hoverControlsRect.width) * 0.5f);
-            GUI.Box(_hoverControlsRect, string.Empty);
+            GUI.Box(_hoverControlsRect, string.Empty, _toolbarStyle);
 
+            float x = _hoverControlsRect.x + 4f;
+            float dragWidth = compact ? 28f : 58f;
             Rect dragRect = new Rect(
-                _hoverControlsRect.x + 4f,
+                x,
                 _hoverControlsRect.y + 4f,
-                132f,
-                26f);
-            GUI.Label(dragRect, "⋮⋮ " + LocalizationExtensions.Get(
-                "companion.window.short",
-                "Companion"));
+                dragWidth,
+                28f);
+            GUI.Label(
+                dragRect,
+                compact
+                    ? "⋮⋮"
+                    : "⋮⋮ " + LocalizationExtensions.Get(
+                        "companion.window.short",
+                        "Companion"),
+                _toolbarLabelStyle);
             Event current = Event.current;
             if (current != null && current.type == EventType.MouseDown &&
                 current.button == 0 && dragRect.Contains(current.mousePosition))
@@ -861,19 +898,58 @@ namespace NeonCompanion.Runtime.Platform
                 WindowsCompanionWindowNative.BeginDrag();
                 current.Use();
             }
+            x += dragWidth + 4f;
 
             if (GUI.Button(
-                new Rect(_hoverControlsRect.x + 140f, _hoverControlsRect.y + 4f, 86f, 26f),
-                LocalizationExtensions.Get("companion.player.column", "Column")))
-                Send(new CompanionProcessMessage { type = "return_to_column" });
+                new Rect(x, _hoverControlsRect.y + 4f, 28f, 28f),
+                "−",
+                _toolbarButtonStyle))
+                SetWindowScale(_preferences.scale - 0.1f);
+            x += 30f;
+            if (!compact)
+            {
+                GUI.Label(
+                    new Rect(x, _hoverControlsRect.y + 4f, 44f, 28f),
+                    Mathf.RoundToInt(_preferences.scale * 100f) + "%",
+                    _toolbarLabelStyle);
+                x += 46f;
+            }
             if (GUI.Button(
-                new Rect(_hoverControlsRect.x + 230f, _hoverControlsRect.y + 4f, 30f, 26f),
-                "×"))
+                new Rect(x, _hoverControlsRect.y + 4f, 28f, 28f),
+                "+",
+                _toolbarButtonStyle))
+                SetWindowScale(_preferences.scale + 0.1f);
+            x += 32f;
+            float settingsWidth = compact ? 30f : 34f;
+            if (GUI.Button(
+                new Rect(x, _hoverControlsRect.y + 4f, settingsWidth, 28f),
+                "•••",
+                _toolbarButtonStyle))
+            {
+                _contextMenuRect.x = _hoverControlsRect.x;
+                _contextMenuRect.y = _hoverControlsRect.y + _hoverControlsRect.height + 4f;
+                _contextMenuOpen = true;
+            }
+            x += settingsWidth + 4f;
+            if (!compact)
+            {
+                if (GUI.Button(
+                    new Rect(x, _hoverControlsRect.y + 4f, 98f, 28f),
+                    LocalizationExtensions.Get("companion.player.column", "Column"),
+                    _toolbarButtonStyle))
+                    Send(new CompanionProcessMessage { type = "return_to_column" });
+                x += 102f;
+            }
+            if (GUI.Button(
+                new Rect(x, _hoverControlsRect.y + 4f, 30f, 28f),
+                "×",
+                _toolbarButtonStyle))
                 Application.Quit();
         }
 
-        private void DrawContextMenu(int id)
+        private void DrawContextMenu()
         {
+            GUI.Box(_contextMenuRect, string.Empty, _toolbarStyle);
             float width = _contextMenuRect.width - 8f;
             float y = 4f;
             if (ContextButton(
@@ -904,10 +980,31 @@ namespace NeonCompanion.Runtime.Platform
                 Send(new CompanionProcessMessage { type = "pinned", boolValue = _preferences.pinned });
                 _contextMenuOpen = false;
             }
+            if (ContextButton(
+                _preferences.clickThrough
+                    ? LocalizationExtensions.Get(
+                        "companion.player.click_through_off",
+                        "Disable background click-through")
+                    : LocalizationExtensions.Get(
+                        "companion.player.click_through_on",
+                        "Enable background click-through"),
+                width,
+                ref y))
+            {
+                _preferences.clickThrough = !_preferences.clickThrough;
+                WindowsCompanionWindowNative.SetClickThrough(_preferences.clickThrough);
+                Send(new CompanionProcessMessage
+                {
+                    type = "click_through",
+                    boolValue = _preferences.clickThrough
+                });
+                _contextMenuOpen = false;
+            }
 
             GUI.Label(
-                new Rect(4f, y, width, 22f),
-                LocalizationExtensions.Get("companion.player.scale", "Scale"));
+                new Rect(_contextMenuRect.x + 4f, _contextMenuRect.y + y, width, 22f),
+                LocalizationExtensions.Get("companion.player.scale", "Scale"),
+                _toolbarLabelStyle);
             y += 22f;
             float scaleButtonWidth = (width - 12f) / 4f;
             float[] scales = { 0.75f, 1f, 1.25f, 1.5f };
@@ -915,8 +1012,13 @@ namespace NeonCompanion.Runtime.Platform
             {
                 float scale = scales[i];
                 if (GUI.Button(
-                    new Rect(4f + (scaleButtonWidth + 4f) * i, y, scaleButtonWidth, 24f),
-                    Mathf.RoundToInt(scale * 100f) + "%"))
+                    new Rect(
+                        _contextMenuRect.x + 4f + (scaleButtonWidth + 4f) * i,
+                        _contextMenuRect.y + y,
+                        scaleButtonWidth,
+                        24f),
+                    Mathf.RoundToInt(scale * 100f) + "%",
+                    _toolbarButtonStyle))
                 {
                     SetWindowScale(scale);
                     _contextMenuOpen = false;
@@ -949,16 +1051,73 @@ namespace NeonCompanion.Runtime.Platform
             Event current = Event.current;
             if (current != null && current.type == EventType.MouseDown &&
                 current.button == 0 &&
-                !new Rect(0f, 0f, _contextMenuRect.width, _contextMenuRect.height)
-                    .Contains(current.mousePosition))
+                !_contextMenuRect.Contains(current.mousePosition))
                 _contextMenuOpen = false;
         }
 
-        private static bool ContextButton(string text, float width, ref float y)
+        private bool ContextButton(string text, float width, ref float y)
         {
-            bool clicked = GUI.Button(new Rect(4f, y, width, 26f), text);
+            bool clicked = GUI.Button(
+                new Rect(
+                    _contextMenuRect.x + 4f,
+                    _contextMenuRect.y + y,
+                    width,
+                    26f),
+                text,
+                _toolbarButtonStyle);
             y += 30f;
             return clicked;
+        }
+
+        private void EnsureGuiStyles()
+        {
+            if (_toolbarStyle != null)
+                return;
+
+            _toolbarTexture = CreateSolidTexture(new Color32(15, 17, 24, 242));
+            _buttonTexture = CreateSolidTexture(new Color32(31, 34, 46, 245));
+            _buttonHoverTexture = CreateSolidTexture(new Color32(91, 82, 214, 250));
+            _toolbarStyle = new GUIStyle(GUI.skin.box);
+            _toolbarStyle.normal.background = _toolbarTexture;
+            _toolbarStyle.border = new RectOffset(0, 0, 0, 0);
+            _toolbarLabelStyle = new GUIStyle(GUI.skin.label);
+            _toolbarLabelStyle.normal.textColor = new Color32(220, 223, 234, 255);
+            _toolbarLabelStyle.alignment = TextAnchor.MiddleCenter;
+            _toolbarLabelStyle.fontSize = 11;
+            _toolbarButtonStyle = new GUIStyle(GUI.skin.button);
+            _toolbarButtonStyle.normal.background = _buttonTexture;
+            _toolbarButtonStyle.hover.background = _buttonHoverTexture;
+            _toolbarButtonStyle.active.background = _buttonHoverTexture;
+            _toolbarButtonStyle.normal.textColor = new Color32(232, 234, 243, 255);
+            _toolbarButtonStyle.hover.textColor = Color.white;
+            _toolbarButtonStyle.active.textColor = Color.white;
+            _toolbarButtonStyle.alignment = TextAnchor.MiddleCenter;
+            _toolbarButtonStyle.fontSize = 11;
+            _toolbarButtonStyle.border = new RectOffset(0, 0, 0, 0);
+        }
+
+        private static Texture2D CreateSolidTexture(Color32 color)
+        {
+            var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            texture.SetPixel(0, 0, color);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        private void ReleaseGuiStyles()
+        {
+            if (_toolbarTexture != null)
+                Destroy(_toolbarTexture);
+            if (_buttonTexture != null)
+                Destroy(_buttonTexture);
+            if (_buttonHoverTexture != null)
+                Destroy(_buttonHoverTexture);
+            _toolbarTexture = null;
+            _buttonTexture = null;
+            _buttonHoverTexture = null;
+            _toolbarStyle = null;
+            _toolbarLabelStyle = null;
+            _toolbarButtonStyle = null;
         }
 
         private void SetWindowScale(float scale)
@@ -1158,6 +1317,7 @@ namespace NeonCompanion.Runtime.Platform
             SceneManager.sceneLoaded -= OnSceneLoaded;
             Send("diagnostic", "Display process shutting down.");
             ClearDisplayAssets();
+            ReleaseGuiStyles();
             _connected = false;
             CancellationTokenSource cancellation = _pipeCancellation;
             _pipeCancellation = null;
@@ -1450,6 +1610,20 @@ namespace NeonCompanion.Runtime.Platform
                 -0.5f,
                 0.5f);
             return true;
+        }
+
+        public static bool IsCursorInsideWindow()
+        {
+            Rect32 rect;
+            Point32 point;
+            if (!Resolve() ||
+                !GetWindowRect(_window, out rect) ||
+                !GetCursorPos(out point))
+                return false;
+            return point.X >= rect.Left &&
+                point.X < rect.Right &&
+                point.Y >= rect.Top &&
+                point.Y < rect.Bottom;
         }
 
         public static bool IsKeyDown(int key)

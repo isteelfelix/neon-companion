@@ -309,7 +309,7 @@ namespace NeonCompanion.Tests
         }
 
         [UnityTest]
-        public IEnumerator GenericCatalogWorkIsRejectedWhileBackendHidden()
+        public IEnumerator GenericCatalogLimitsAreRejectedBeforeRuntimeLoad()
         {
             string directory = CreateTemporaryDirectory();
             string nodesPath = Path.Combine(directory, "too-many-nodes.gltf");
@@ -329,7 +329,7 @@ namespace NeonCompanion.Tests
             while (!nodesTask.IsCompleted)
                 yield return null;
             Assert.IsFalse(nodesTask.Result.success);
-            Assert.AreEqual("unsupported_type", nodesTask.Result.errorCode);
+            Assert.AreEqual("scene_limit_exceeded", nodesTask.Result.errorCode);
 
             string trianglesPath = Path.Combine(directory, "too-many-triangles.gltf");
             long indexCount = (Avatar3DLoader.MaxTriangles + 1L) * 3L;
@@ -343,7 +343,7 @@ namespace NeonCompanion.Tests
             while (!trianglesTask.IsCompleted)
                 yield return null;
             Assert.IsFalse(trianglesTask.Result.success);
-            Assert.AreEqual("unsupported_type", trianglesTask.Result.errorCode);
+            Assert.AreEqual("scene_limit_exceeded", trianglesTask.Result.errorCode);
 
             string malformedPath = Path.Combine(directory, "wrong-length.glb");
             using (var stream = File.Create(malformedPath))
@@ -361,7 +361,7 @@ namespace NeonCompanion.Tests
             while (!malformedTask.IsCompleted)
                 yield return null;
             Assert.IsFalse(malformedTask.Result.success);
-            Assert.AreEqual("unsupported_type", malformedTask.Result.errorCode);
+            Assert.AreEqual("invalid_gltf", malformedTask.Result.errorCode);
         }
 
         [UnityTest]
@@ -383,9 +383,10 @@ namespace NeonCompanion.Tests
                     yield return null;
                 Assert.IsFalse(task.IsFaulted);
                 Avatar3DLoadResult result = task.Result;
-                Assert.IsFalse(result.Success);
-                Assert.IsNull(result.Instance);
-                StringAssert.Contains("not enabled", result.Error);
+                Assert.IsTrue(result.Success, result.Error);
+                Assert.IsNotNull(result.Instance);
+                Assert.Greater(result.RendererCount, 0);
+                UnityEngine.Object.DestroyImmediate(result.Instance);
             }
         }
 

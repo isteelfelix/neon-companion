@@ -112,6 +112,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ===== Breathing animation (avatar circle) =====
         private IVisualElementScheduledItem _breathSchedule;
         private long _breathStartMs;
+        private bool _avatarBreathingAllowed = true;
 
         // ===== Clear confirm =====
         private bool _clearDataConfirmPending;
@@ -834,9 +835,18 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void ApplyBreathingAnimation(bool enabled)
         {
-            if (enabled) StartBreathing();
+            if (enabled && _avatarBreathingAllowed) StartBreathing();
             else StopBreathing();
             ApplyThemesPreviewBreathing(enabled);
+        }
+
+        public void SetAvatarBreathingAllowed(bool allowed)
+        {
+            if (_avatarBreathingAllowed == allowed)
+                return;
+            _avatarBreathingAllowed = allowed;
+            bool requested = _settingsBreathing != null && _settingsBreathing.value;
+            ApplyBreathingAnimation(requested);
         }
 
         private void StartBreathing()

@@ -77,7 +77,8 @@ assert "services.Register<ICompanionWindowService>" in bootstrap
 
 assert "#if UNITY_STANDALONE_WIN && !UNITY_EDITOR" in factory
 assert "return new StubCompanionWindowService();" in factory
-assert "WsExTransparent" in player and "WsExNoActivate" in player
+assert "SetHitTestMask" in player and "HtTransparent" in player
+assert "WsExTransparent" not in player
 assert "SetTopmost" in player and "MoveToMonitor" in player and "BeginDrag" in player
 assert "0x7B" in player and "0x11" in player and "0x10" in player
 assert "clickThrough;" in protocol
@@ -131,6 +132,8 @@ for marker in (
     '"pinned"',
     '"visible"',
     '"scale"',
+    "SetWindowScale",
+    "IsCursorInsideWindow",
 ):
     assert marker in player, "missing Companion Pet interaction: " + marker
 assert "DrawControls" not in player, "legacy permanent Companion controls remain"

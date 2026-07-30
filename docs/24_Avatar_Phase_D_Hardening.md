@@ -3,7 +3,9 @@
 ## Scope and result
 
 Phase D hardens the approved Companion/avatar Phase A–C surface. It does not add
-formats, Live2D, or provider/TTS/STT routes.
+formats, Live2D, or provider/TTS/STT routes. The acceptance follow-up also removed
+the release gate that left the already specified generic GLB/glTF backend
+unreachable.
 
 The audit found and fixed four runtime gaps:
 
@@ -15,6 +17,13 @@ The audit found and fixed four runtime gaps:
   remain the final authority;
 - generic 3D keeps at most one inactive cached template instead of retaining every
   model selected during the process lifetime;
+- static, sprite-sheet, generic 3D and VRM use independent catalog views and a
+  monotonically versioned render request, so a stale 3D load cannot re-enable its
+  RenderTexture after the user switches to a 2D backend;
+- generic 3D calls the installed glTFast API directly and keeps its importer alive
+  for exactly as long as the single cached template;
+- the Windows Pet launches explicitly windowed and exposes body drag, wheel scale,
+  compact hover controls and transparent-pixel click-through;
 - stop/cancel/interrupt/barge-in completes the active TTS wait locally. A voice
   backend that never emits `OnPlaybackComplete` can no longer stall later speech
   for the 30-minute safety timeout.

@@ -19,6 +19,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<Task<CompanionApp>> GetAppAsync;
             public Func<CompanionApp> GetAppSync;
             public Func<string> GetActiveAvatarId;
+            public Func<string, AvatarProfile> GetAvatarProfile;
             public Func<string, string> GetAvatarDisplayName;
             public Func<string, string> CaptureBuiltInPreview;
             public Action ShowTerminal;
@@ -49,8 +50,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _monitorButton;
         private Label _scaleLabel;
         private Slider _scaleSlider;
-        private Button _showButton;
-        private Button _hideButton;
         private Button _returnButton;
         private Button _detachButton;
         private Button _configureButton;
@@ -85,8 +84,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             _monitorButton = root.Q<Button>("companion-monitor-button");
             _scaleLabel = root.Q<Label>("companion-scale-label");
             _scaleSlider = root.Q<Slider>("companion-scale-slider");
-            _showButton = root.Q<Button>("companion-show-button");
-            _hideButton = root.Q<Button>("companion-hide-button");
             _returnButton = root.Q<Button>("companion-return-button");
             _detachButton = root.Q<Button>("avatar-detach-button");
             _configureButton = root.Q<Button>("companion-configure-button");
@@ -117,8 +114,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_scaleSlider != null)
                 _scaleSlider.RegisterValueChangedCallback(OnScaleChanged);
             RegisterClick(_monitorButton, OnMonitorClicked);
-            RegisterClick(_showButton, OnShowClicked);
-            RegisterClick(_hideButton, OnHideClicked);
             RegisterClick(_returnButton, OnReturnClicked);
             RegisterClick(_detachButton, OnDetachClicked);
             RegisterClick(_configureButton, OnConfigureClicked);
@@ -139,8 +134,6 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_scaleSlider != null)
                 _scaleSlider.UnregisterValueChangedCallback(OnScaleChanged);
             UnregisterClick(_monitorButton, OnMonitorClicked);
-            UnregisterClick(_showButton, OnShowClicked);
-            UnregisterClick(_hideButton, OnHideClicked);
             UnregisterClick(_returnButton, OnReturnClicked);
             UnregisterClick(_detachButton, OnDetachClicked);
             UnregisterClick(_configureButton, OnConfigureClicked);
@@ -261,6 +254,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             SetDisplay(_card, DisplayStyle.Flex);
             SetDisplay(_detachButton, DisplayStyle.Flex);
+            _detachButton?.BringToFront();
 
             AppSettings settings = app.Settings.Load() ?? new AppSettings();
             string persistedState = settings.companionDockState;
@@ -296,6 +290,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _loading = false;
             RefreshMonitorText();
             RefreshStatus();
+            RefreshDetachButton();
 
             if (_dockState.State == CompanionDockStates.DetachedHidden)
             {
@@ -355,9 +350,16 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (app == null)
                 return null;
 
-            List<AvatarProfile> profiles = app.Avatars.GetAll();
-            AvatarProfile profile = profiles.FirstOrDefault(item =>
-                item != null && string.Equals(item.id, avatarId, StringComparison.Ordinal));
+            AvatarProfile profile = _d.GetAvatarProfile != null
+                ? _d.GetAvatarProfile(avatarId)
+                : null;
+            if (profile == null)
+            {
+                List<AvatarProfile> profiles = app.Avatars.GetAll();
+                profile = profiles.FirstOrDefault(item =>
+                    item != null &&
+                    string.Equals(item.id, avatarId, StringComparison.Ordinal));
+            }
             if (profile == null)
                 profile = BuiltInAvatarProfiles.TryCreate(avatarId);
             string name = _d.GetAvatarDisplayName != null
@@ -365,7 +367,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 : avatarId;
             CompanionDisplaySnapshot snapshot =
                 CompanionDisplaySnapshot.FromProfile(profile, avatarId, name);
-            if (profile == null && _d.CaptureBuiltInPreview != null)
+            bool hasDisplaySource = profile != null &&
+                (!string.IsNullOrWhiteSpace(profile.imagePath) ||
+                 !string.IsNullOrWhiteSpace(profile.modelPath) ||
+                 !string.IsNullOrWhiteSpace(profile.motionPackManifestPath) ||
+                 (profile.animationClips != null && profile.animationClips.Count > 0));
+            if (!hasDisplaySource && _d.CaptureBuiltInPreview != null)
             {
                 await Task.Yield();
                 snapshot.imagePngBase64 = _d.CaptureBuiltInPreview(avatarId);
@@ -431,30 +438,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             SaveSettings();
         }
 
-        private void OnShowClicked(ClickEvent evt)
-        {
-            if (!IsAvailable)
-                return;
-            _preferences.visible = true;
-            _visibleToggle?.SetValueWithoutNotify(true);
-            Transition(CompanionDockEvent.Show);
-            _d.ShowTerminal?.Invoke();
-            _ = LaunchAsync();
-        }
-
-        private void OnHideClicked(ClickEvent evt)
-        {
-            if (!IsAvailable)
-                return;
-            _preferences.visible = false;
-            _visibleToggle?.SetValueWithoutNotify(false);
-            _service.Hide();
-            Transition(CompanionDockEvent.Hide);
-        }
-
         private void OnReturnClicked(ClickEvent evt)
         {
-            ReturnToColumn();
+            if (_dockState.IsDetached)
+                ReturnToColumn();
+            else
+            {
+                SetDisplay(_settingsOverlay, DisplayStyle.None);
+                Detach();
+            }
         }
 
         private void OnDetachClicked(ClickEvent evt)
@@ -574,10 +566,36 @@ namespace NeonCompanion.Runtime.UI.UITK
             _visibleToggle?.SetValueWithoutNotify(_preferences.visible);
             SaveSettings();
             RefreshStatus();
+            RefreshDetachButton();
+        }
+
+        private void RefreshDetachButton()
+        {
+            SetDisplay(
+                _detachButton,
+                IsAvailable && !_dockState.IsDetached
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None);
+            _detachButton?.BringToFront();
+            if (_returnButton != null)
+                _returnButton.text = _dockState.IsDetached
+                    ? LocalizationExtensions.Get(
+                        "companion.window.return",
+                        "Return to column")
+                    : LocalizationExtensions.Get(
+                        "companion.window.detach",
+                        "Detach");
         }
 
         private void Localize()
         {
+            Label sectionTitle = _d.Root != null
+                ? _d.Root.Q<Label>("companion-window-section-title")
+                : null;
+            if (sectionTitle != null)
+                sectionTitle.text = LocalizationExtensions.Get(
+                    "companion.window.section",
+                    "Pet window");
             if (_title != null)
                 _title.text = LocalizationExtensions.Get("companion.window.short", "Companion");
             if (_settingsTitle != null)
@@ -600,20 +618,19 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _monitorButton.text = LocalizationExtensions.Get(
                     "companion.window.monitor",
                     "Monitor");
-            if (_showButton != null)
-                _showButton.text = LocalizationExtensions.Get("companion.window.show", "Show");
             if (_scaleLabel != null)
                 _scaleLabel.text = LocalizationExtensions.Get("companion.window.scale", "Scale");
-            if (_hideButton != null)
-                _hideButton.text = LocalizationExtensions.Get("companion.window.hide", "Hide");
             if (_returnButton != null)
                 _returnButton.text = LocalizationExtensions.Get(
                     "companion.window.return",
                     "Return to column");
             if (_detachButton != null)
-                _detachButton.text = LocalizationExtensions.Get(
+            {
+                _detachButton.text = "↗";
+                _detachButton.tooltip = LocalizationExtensions.Get(
                     "companion.window.detach",
                     "Detach");
+            }
             if (_configureButton != null)
                 _configureButton.text = LocalizationExtensions.Get(
                     "companion.window.configure",
@@ -640,9 +657,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         {
             if (_status == null)
                 return;
+            bool running = _service != null && _service.IsRunning;
+            bool failed = _dockState.State == CompanionDockStates.Failed;
+            _card?.EnableInClassList("companion-window-card--running", running);
+            _card?.EnableInClassList("companion-window-card--failed", failed);
             if (!string.IsNullOrWhiteSpace(message))
                 _status.text = message;
-            else if (_service != null && _service.IsRunning)
+            else if (running)
                 _status.text = LocalizationExtensions.Get(
                     "companion.window.status.running",
                     "Companion player is running.");

@@ -145,7 +145,8 @@ namespace NeonCompanion.Runtime.Platform
                 start.Arguments =
                     "--companion-player --companion-pipe " + Quote(pipeName) +
                     " --companion-parent-pid " + Process.GetCurrentProcess().Id +
-                    " -popupwindow -force-d3d11 -force-d3d11-bitblt-model" +
+                    " -screen-fullscreen 0 -window-mode borderless -popupwindow" +
+                    " -force-d3d11 -force-d3d11-bitblt-model" +
                     " -screen-width 420 -screen-height 560 -logFile " +
                     Quote(logPath);
 

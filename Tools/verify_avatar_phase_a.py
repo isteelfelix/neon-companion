@@ -65,13 +65,24 @@ for name in (
     "avatar-import-overlay",
     "avatar-import-static-btn",
     "avatar-import-sprite-btn",
+    "avatar-import-3d-btn",
     "avatar-import-vrm-btn",
     "avatar-import-preview-image",
     "avatar-import-save-btn",
     "avatar-capabilities-foldout",
 ):
     assert name in names, "missing UI element: " + name
-assert "avatar-import-3d-btn" not in names, "generic GLB/glTF import UI must stay isolated"
+for name in (
+    "viewmode-static-btn",
+    "viewmode-animated-btn",
+    "viewmode-generic3d-btn",
+    "viewmode-vrm-btn",
+    "gallery-static",
+    "gallery-animated",
+    "gallery-generic3d",
+    "gallery-vrm",
+):
+    assert name in names, "missing independent avatar backend UI: " + name
 
 for unsupported in (
     "z-index:",

@@ -18,6 +18,7 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="companion-window-card" class="companion-window-card" style="display: none;">
+            <ui:VisualElement name="companion-window-state-dot" class="companion-window-card__state-dot" />
             <ui:VisualElement class="companion-window-card__copy">
                 <ui:Label name="companion-window-title" text="Companion window" class="companion-window-card__title" />
                 <ui:Label name="companion-window-status" text="Companion player is stopped." class="companion-window-card__status" />
@@ -36,6 +37,7 @@
                     <ui:Button name="companion-settings-close-button" text="×" class="btn btn--ghost companion-settings-modal__close" />
                 </ui:VisualElement>
                 <ui:VisualElement class="companion-settings-modal__options">
+                    <ui:Label name="companion-window-section-title" text="Окно питомца" class="companion-settings-modal__section-title" />
                     <ui:Toggle name="companion-visible-toggle" label="Visible" class="companion-setting-toggle" />
                     <ui:Toggle name="companion-pinned-toggle" label="Always on top" class="companion-setting-toggle" />
                     <ui:Toggle name="companion-click-through-toggle" label="Click-through transparent background" class="companion-setting-toggle" />
@@ -48,8 +50,6 @@
                 <ui:Label name="companion-window-emergency" text="Emergency click-through release: Ctrl+Shift+F12" class="companion-settings-modal__hint" />
                 <ui:VisualElement class="companion-settings-modal__actions">
                     <ui:Button name="companion-avatar-settings-button" text="Avatar settings" class="btn" />
-                    <ui:Button name="companion-show-button" text="Show" class="btn" />
-                    <ui:Button name="companion-hide-button" text="Hide" class="btn" />
                     <ui:Button name="companion-return-button" text="Return to column" class="btn btn--primary" />
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -57,13 +57,16 @@
 
         <ui:VisualElement class="viewmode-row">
             <ui:Button name="viewmode-static-btn" class="viewmode-btn viewmode-btn--active">
-                <ui:Label text="Статика" />
+                <ui:Label name="viewmode-static-label" text="Статика" />
             </ui:Button>
             <ui:Button name="viewmode-animated-btn" class="viewmode-btn">
-                <ui:Label text="Анимация" />
+                <ui:Label name="viewmode-animated-label" text="Sprite-sheet" />
             </ui:Button>
-            <ui:Button name="viewmode-3d-btn" class="viewmode-btn">
-                <ui:Label text="VRM" />
+            <ui:Button name="viewmode-generic3d-btn" class="viewmode-btn">
+                <ui:Label name="viewmode-generic3d-label" text="3D" />
+            </ui:Button>
+            <ui:Button name="viewmode-vrm-btn" class="viewmode-btn">
+                <ui:Label name="viewmode-vrm-label" text="VRM" />
             </ui:Button>
         </ui:VisualElement>
 
@@ -200,8 +203,13 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
+            <!-- Runtime-validated generic 3D profiles are inserted here. -->
+            <ui:VisualElement name="gallery-generic3d" class="gallery">
+                <ui:Label name="avatar-gallery-generic3d-hint" text="Добавьте GLB или glTF в локальный каталог." class="gallery-empty-hint" />
+            </ui:VisualElement>
+
             <!-- Runtime-validated VRM profiles are inserted here. -->
-            <ui:VisualElement name="gallery-3d" class="gallery">
+            <ui:VisualElement name="gallery-vrm" class="gallery">
                 <ui:Label name="avatar-gallery-3d-hint" text="Добавьте VRM в локальный каталог." class="gallery-empty-hint" />
             </ui:VisualElement>
 
@@ -234,9 +242,29 @@
                         </ui:VisualElement>
                     </ui:Foldout>
 
-                    <ui:Foldout name="avatar-customization-foldout" text="Кастомизация" class="customize" value="false">
+                    <ui:Foldout name="avatar-customization-foldout" text="Отображение и оверлей" class="customize" value="true">
+                        <ui:VisualElement class="customize__group avatar-display-settings">
+                            <ui:Label name="avatar-display-settings-title" text="Отображение" class="label" />
+                            <ui:VisualElement class="avatar-display-setting">
+                                <ui:Label name="avatar-display-scale-label" text="Масштаб" class="avatar-display-setting__label" />
+                                <ui:Label name="avatar-display-scale-value" text="100%" class="avatar-display-setting__value" />
+                            </ui:VisualElement>
+                            <ui:Slider name="avatar-display-scale" low-value="0.5" high-value="2" value="1" show-input-field="false" class="avatar-display-slider" />
+                            <ui:VisualElement class="avatar-display-setting">
+                                <ui:Label name="avatar-display-x-label" text="По горизонтали" class="avatar-display-setting__label" />
+                                <ui:Label name="avatar-display-x-value" text="0%" class="avatar-display-setting__value" />
+                            </ui:VisualElement>
+                            <ui:Slider name="avatar-display-x" low-value="-0.35" high-value="0.35" value="0" show-input-field="false" class="avatar-display-slider" />
+                            <ui:VisualElement class="avatar-display-setting">
+                                <ui:Label name="avatar-display-y-label" text="По вертикали" class="avatar-display-setting__label" />
+                                <ui:Label name="avatar-display-y-value" text="0%" class="avatar-display-setting__value" />
+                            </ui:VisualElement>
+                            <ui:Slider name="avatar-display-y" low-value="-0.35" high-value="0.35" value="0" show-input-field="false" class="avatar-display-slider" />
+                            <ui:Label name="avatar-display-settings-hint" text="Эти параметры применяются в колонке и отдельном Pet-окне." class="avatar-display-settings__hint" />
+                            <ui:Button name="avatar-display-reset-btn" text="Сбросить отображение" class="btn avatar-display-reset" />
+                        </ui:VisualElement>
                         <ui:VisualElement class="customize__group">
-                            <ui:Label text="Эмодзи" class="label" />
+                            <ui:Label name="avatar-overlay-title" text="Оверлей" class="label" />
                             <ui:VisualElement name="customize-emoji-grid" class="customize__emoji-grid" />
                         </ui:VisualElement>
                         <ui:VisualElement class="preview-actions preview-actions--compact">
@@ -245,7 +273,7 @@
                         </ui:VisualElement>
                     </ui:Foldout>
 
-                    <ui:Foldout name="avatar-capabilities-foldout" text="Возможности" class="customize capability-card" value="true">
+                    <ui:Foldout name="avatar-capabilities-foldout" text="Возможности" class="customize capability-card" value="false">
                         <ui:Label name="avatar-capability-type" text="Тип: статичный 2D" class="capability-card__title" />
                         <ui:Label name="avatar-capability-render" text="Отображение: доступно" class="capability-card__fact" />
                         <ui:Label name="avatar-capability-animation" text="Анимация: недоступна" class="capability-card__fact" />
@@ -280,6 +308,7 @@
                 <ui:VisualElement class="avatar-import-types">
                     <ui:Button name="avatar-import-static-btn" text="Статичный 2D" class="avatar-import-type avatar-import-type--active" />
                     <ui:Button name="avatar-import-sprite-btn" text="Sprite-sheet" class="avatar-import-type" />
+                    <ui:Button name="avatar-import-3d-btn" text="3D" class="avatar-import-type" />
                     <ui:Button name="avatar-import-vrm-btn" text="VRM" class="avatar-import-type" />
                 </ui:VisualElement>
 

@@ -958,6 +958,37 @@
     padding: 12px;
 }
 
+.avatar-stage__hero--expanded {
+    padding: 0;
+}
+
+.avatar-stage__hero--expanded .avatar {
+    width: 100%;
+    height: 100%;
+    align-self: stretch;
+    border-radius: 0;
+    border-width: 0;
+    background-color: transparent;
+}
+
+.avatar-stage__hero--expanded .halo {
+    display: none;
+}
+
+.avatar-detach-button {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 34px;
+    min-width: 34px;
+    height: 30px;
+    padding: 0;
+    border-radius: 8px;
+    background-color: rgba(15, 17, 24, 0.82);
+    color: var(--text-1);
+    font-size: 15px;
+}
+
 .halo {
     position: absolute;
     width: 380px;

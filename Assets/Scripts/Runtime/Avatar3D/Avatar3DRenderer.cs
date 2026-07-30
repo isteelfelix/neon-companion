@@ -28,6 +28,11 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Transform _cameraPivot;
         private Transform _target;
         private Vector3 _targetCenter;
+        private float _targetHeight = 1f;
+        private float _framedDistance = 2f;
+        private float _viewScale = 1f;
+        private float _viewOffsetX;
+        private float _viewOffsetY;
 
         private Image _targetImage;
         private bool _dragging;
@@ -68,6 +73,18 @@ namespace NeonCompanion.Runtime.Avatar3D
             _target = modelRoot;
             EnsureRenderScene();
             FrameTarget();
+            UpdateCameraTransform();
+        }
+
+        public void SetView(float scale, float offsetX, float offsetY)
+        {
+            _viewScale = Mathf.Clamp(scale > 0f ? scale : 1f, 0.5f, 2f);
+            _viewOffsetX = Mathf.Clamp(offsetX, -0.35f, 0.35f);
+            _viewOffsetY = Mathf.Clamp(offsetY, -0.35f, 0.35f);
+            _orbitDistance = Mathf.Clamp(
+                _framedDistance / _viewScale,
+                _minDistance,
+                _maxDistance);
             UpdateCameraTransform();
         }
 
@@ -185,7 +202,11 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_cameraPivot == null)
                 return;
 
-            Vector3 pivot = _target != null ? _targetCenter : Vector3.zero;
+            Vector3 pivot = _target != null
+                ? _targetCenter -
+                    Vector3.right * (_viewOffsetX * _targetHeight) -
+                    Vector3.up * (_viewOffsetY * _targetHeight)
+                : Vector3.zero;
             _cameraPivot.position = pivot;
             _cameraPivot.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
 
@@ -202,6 +223,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_target == null)
             {
                 _targetCenter = Vector3.zero;
+                _targetHeight = 1f;
+                _framedDistance = 2f;
                 return;
             }
 
@@ -209,6 +232,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (renderers.Length == 0)
             {
                 _targetCenter = _target.position;
+                _targetHeight = 1f;
+                _framedDistance = 2f;
                 return;
             }
 
@@ -217,9 +242,17 @@ namespace NeonCompanion.Runtime.Avatar3D
                 bounds.Encapsulate(renderers[i].bounds);
 
             _targetCenter = bounds.center;
+            _targetHeight = Mathf.Max(bounds.size.y, 0.5f);
             float halfHeight = Mathf.Max(bounds.extents.y, 0.25f);
             float framedDistance = halfHeight / Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-            _orbitDistance = Mathf.Clamp(framedDistance * 1.15f, _minDistance, _maxDistance);
+            _framedDistance = Mathf.Clamp(
+                framedDistance * 1.15f,
+                _minDistance,
+                _maxDistance);
+            _orbitDistance = Mathf.Clamp(
+                _framedDistance / _viewScale,
+                _minDistance,
+                _maxDistance);
         }
 
         private void BindImageEvents()

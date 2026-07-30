@@ -270,7 +270,7 @@ def verify_implementation_contracts():
         "ChangedSourceIsRejectedBeforeCopy",
         "TemporaryPreviewObjectsUseEditModeSafeCleanup",
         "OversizedImageIsRejectedBeforeDecode",
-        "GenericCatalogWorkIsRejectedWhileBackendHidden",
+        "GenericCatalogLimitsAreRejectedBeforeRuntimeLoad",
         "GenericGltfAndGlbMappingsLoadThroughRuntime",
         "StopCancelsBackendWaitAndAllowsImmediateReplay",
         "VrmZeroAndOneFixturesLoadThroughUniVrm",
@@ -305,8 +305,18 @@ def verify_implementation_contracts():
     assert accept_client.index(read_completed) < accept_client.index("await readTask;")
     assert '"runtime_ready"' in child_runtime and '"heartbeat"' in child_runtime
     assert "WriteLoopAsync" in child_runtime
-    assert "Generic3DEnabled = false" in loader
-    assert "avatar-import-3d-btn" not in avatar_ui
+    assert "new GltfImport(" in loader
+    assert "InspectGeneric3DAsync(result)" in importer
+    assert "avatar-import-3d-btn" in avatar_ui
+    for element_name in (
+        "viewmode-static-btn",
+        "viewmode-animated-btn",
+        "viewmode-generic3d-btn",
+        "viewmode-vrm-btn",
+        "gallery-generic3d",
+        "gallery-vrm",
+    ):
+        assert element_name in avatar_ui
     assert "DestroyTemporaryObject" in importer
 
     asmdef = json.loads(

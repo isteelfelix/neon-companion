@@ -13,19 +13,20 @@
 
 .viewmode-row {
     flex-direction: row;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     background-color: var(--bg-2);
-    border-radius: 10px;
-    padding: 3px;
+    border-radius: 12px;
+    padding: 4px;
     align-self: flex-start;
     border-width: 1px;
     border-color: var(--line-2);
 }
 
 .viewmode-btn {
-    height: 28px;
-    padding: 0 18px;
-    border-radius: 7px;
+    min-width: 104px;
+    height: 32px;
+    padding: 0 16px;
+    border-radius: 8px;
     border-width: 0;
     background-color: transparent;
     color: var(--text-3);
@@ -365,15 +366,27 @@
     flex-direction: row;
     flex-wrap: wrap;
     align-content: flex-start;
-    margin-right: 22px;
+    margin-right: 20px;
+}
+
+.avtile__model-mark {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 44px;
+    color: rgba(255, 255, 255, 0.18);
+    font-size: 54px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-SemiBold.ttf");
 }
 
 /* ============== Avatar tile ============== */
 
 .avtile {
-    width: 23%;
-    height: 168px;
-    min-width: 130px;
+    width: 220px;
+    height: 164px;
+    min-width: 180px;
     border-radius: 14px;
     border-width: 1px;
     border-color: var(--line-1);
@@ -400,6 +413,7 @@
 
 /* ---- Tile color variants ---- */
 .avtile--neon   { background-color: #4f45d8; }
+.avtile--vrm    { background-color: #171923; }
 .avtile--yorha-2b { background-color: #24242b; }
 .avtile--aurora { background-color: #3faec0; }
 .avtile--ember  { background-color: #c84c2c; }
@@ -510,8 +524,8 @@
 /* ============== Preview card ============== */
 
 .previewcard {
-    width: 320px;
-    min-width: 304px;
+    width: 360px;
+    min-width: 340px;
     flex-shrink: 0;
     background-color: var(--bg-1);
     border-width: 1px;
@@ -689,6 +703,67 @@
     padding: 10px;
 }
 
+.avatar-preview-3d-image {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: var(--bg-0);
+}
+
+.avatar-display-setting {
+    min-height: 20px;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.avatar-display-setting__label {
+    flex-grow: 1;
+    color: var(--text-2);
+    font-size: 11px;
+}
+
+.avatar-display-setting__value {
+    min-width: 44px;
+    color: var(--text-1);
+    font-size: 11px;
+    -unity-text-align: middle-right;
+    -unity-font-definition: url("project://database/Assets/Fonts/GeistMono/GeistMono-Medium.ttf");
+}
+
+.avatar-display-slider {
+    height: 22px;
+}
+
+.avatar-display-slider .unity-base-slider__tracker {
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--bg-4);
+}
+
+.avatar-display-slider .unity-base-slider__dragger {
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
+    border-color: var(--accent);
+    border-radius: 7px;
+    background-color: var(--text-0);
+}
+
+.avatar-display-settings__hint {
+    margin-top: 8px;
+    color: var(--text-3);
+    font-size: 10px;
+    white-space: normal;
+}
+
+.avatar-display-reset {
+    align-self: flex-start;
+    margin-top: 10px;
+}
+
 .customize__emoji-grid {
     flex-direction: row;
     flex-wrap: wrap;
@@ -713,14 +788,30 @@
 .companion-window-card {
     flex-direction: row;
     align-items: center;
-    align-self: flex-start;
-    max-width: 440px;
-    padding: 8px 10px;
-    margin-bottom: 12px;
+    align-self: stretch;
+    min-height: 58px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
     border-width: 1px;
     border-color: var(--line-2);
     border-radius: var(--r-lg);
     background-color: var(--bg-1);
+}
+
+.companion-window-card__state-dot {
+    width: 9px;
+    height: 9px;
+    margin-right: 11px;
+    border-radius: 5px;
+    background-color: var(--text-3);
+}
+
+.companion-window-card--running .companion-window-card__state-dot {
+    background-color: #55d68b;
+}
+
+.companion-window-card--failed .companion-window-card__state-dot {
+    background-color: #e26372;
 }
 
 .companion-window-card__copy {
@@ -753,9 +844,9 @@
 }
 
 .companion-settings-modal {
-    width: 500px;
+    width: 480px;
     max-width: 94%;
-    padding: 20px;
+    padding: 22px;
     border-width: 1px;
     border-color: var(--line-2);
     border-radius: var(--r-xl);
@@ -794,12 +885,19 @@
 }
 
 .companion-settings-modal__options {
-    padding: 10px 12px;
-    margin-bottom: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
     border-width: 1px;
     border-color: var(--line-1);
     border-radius: var(--r-lg);
     background-color: var(--bg-2);
+}
+
+.companion-settings-modal__section-title {
+    color: var(--text-0);
+    font-size: 11px;
+    -unity-font-style: bold;
+    margin-bottom: 8px;
 }
 
 .companion-settings-modal__options > * {

@@ -17,6 +17,7 @@
   <Project Path="VRM10.MToon10.Tests.csproj" />
   <Project Path="VRM10.Tests.csproj" />
   <Project Path="UniHumanoid.Editor.Tests.csproj" />
+  <Project Path="NeonCompanion.PlayModeTests.csproj" />
   <Project Path="UniGLTF.UniUnlit.Editor.csproj" />
   <Project Path="NeonCompanion.Editor.csproj" />
   <Project Path="VrmLibTests.csproj" />

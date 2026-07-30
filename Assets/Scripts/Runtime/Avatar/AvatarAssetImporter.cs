@@ -81,8 +81,7 @@ namespace NeonCompanion.Runtime.Avatar
                         InspectMotionPack(result);
                         break;
                     case AvatarProfileTypes.Generic3D:
-                        Fail(result, "unsupported_type",
-                            "Generic GLB/glTF import is not enabled in this release.");
+                        await InspectGeneric3DAsync(result);
                         break;
                     case AvatarProfileTypes.Vrm:
                         await InspectVrmAsync(result);

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using System.Threading.Tasks;
+using GLTFast;
 using NeonCompanion.Runtime.Data.Models;
 using UniGLTF;
 using UniVRM10;
@@ -28,7 +28,6 @@ namespace NeonCompanion.Runtime.Avatar3D
 
     public static class Avatar3DLoader
     {
-        public const bool Generic3DEnabled = false;
         public const long MaxModelFileBytes = 100L * 1024L * 1024L;
         public const int MaxSceneNodes = 512;
         public const int MaxRenderers = 128;
@@ -85,11 +84,6 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             string ext = Path.GetExtension(fullPath).ToLowerInvariant();
-            if (!Generic3DEnabled && (ext == ".glb" || ext == ".gltf"))
-            {
-                result.Error = "Generic GLB/glTF runtime loading is not enabled in this release.";
-                return result;
-            }
             if (ext != ".glb" && ext != ".gltf" && ext != ".vrm")
             {
                 result.ErrorCode = "unsupported_format";
@@ -124,13 +118,14 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             try
             {
-                var importedRoot = await TryLoadWithGltfFastAsync(fullPath);
-                if (importedRoot == null)
+                ImportedGltf imported = await TryLoadWithGltfFastAsync(fullPath);
+                if (imported == null || imported.Root == null)
                 {
                     result.ErrorCode = "import_failed";
                     result.Error = "Unable to load model. glTFast package is not available or import failed.";
                     return result;
                 }
+                GameObject importedRoot = imported.Root;
 
                 importedRoot.name = Path.GetFileNameWithoutExtension(fullPath);
                 importedRoot.SetActive(false);
@@ -141,7 +136,8 @@ namespace NeonCompanion.Runtime.Avatar3D
                 {
                     result.ErrorCode = "empty_scene";
                     result.Error = "Model scene contains no renderers.";
-                    UnityEngine.Object.Destroy(importedRoot);
+                    DestroyLoadedObject(importedRoot);
+                    imported.Importer.Dispose();
                     return result;
                 }
                 if (result.SceneNodeCount > MaxSceneNodes ||
@@ -154,31 +150,39 @@ namespace NeonCompanion.Runtime.Avatar3D
                         "Detected " + result.SceneNodeCount + " nodes, " + result.RendererCount +
                         " renderers, " + result.TriangleCount + " triangles, " +
                         animationNames.Count + " animation clips.";
-                    UnityEngine.Object.Destroy(importedRoot);
+                    DestroyLoadedObject(importedRoot);
+                    imported.Importer.Dispose();
                     return result;
                 }
 
                 var template = UnityEngine.Object.Instantiate(importedRoot);
                 template.name = importedRoot.name + "_Template";
                 template.SetActive(false);
-                UnityEngine.Object.DontDestroyOnLoad(template);
+                if (Application.isPlaying)
+                    UnityEngine.Object.DontDestroyOnLoad(template);
 
                 CachedModel evicted;
                 lock (CacheLock)
                 {
                     evicted = _cachedModel;
                     _cachedPath = fullPath;
-                    _cachedModel = new CachedModel(template, animationNames);
+                    _cachedModel = new CachedModel(
+                        template,
+                        animationNames,
+                        imported.Importer);
                 }
                 if (evicted != null && evicted.Template != null &&
                     evicted.Template != template)
-                    UnityEngine.Object.Destroy(evicted.Template);
+                {
+                    DestroyLoadedObject(evicted.Template);
+                    evicted.Importer?.Dispose();
+                }
 
                 var liveInstance = UnityEngine.Object.Instantiate(template);
                 liveInstance.name = importedRoot.name;
                 liveInstance.SetActive(true);
 
-                UnityEngine.Object.Destroy(importedRoot);
+                DestroyLoadedObject(importedRoot);
 
                 result.Instance = liveInstance;
                 result.AnimationNames.AddRange(animationNames);
@@ -542,120 +546,26 @@ namespace NeonCompanion.Runtime.Avatar3D
                 rightEye != null;
         }
 
-        private static async Task<GameObject> TryLoadWithGltfFastAsync(string fullPath)
+        private static async Task<ImportedGltf> TryLoadWithGltfFastAsync(string fullPath)
         {
-            var gltfImportType = Type.GetType("GLTFast.GltfImport, glTFast");
-            if (gltfImportType == null)
-                return null;
-
-            object importer = Activator.CreateInstance(gltfImportType);
-            if (importer == null)
-                return null;
-
-            var loadMethod = FindMethod(gltfImportType, "Load", typeof(string));
-            if (loadMethod == null)
-                return null;
-
-            bool loaded = await InvokeLoadAsync(importer, loadMethod, fullPath);
+            var importer = new GltfImport(
+                deferAgent: new UninterruptedDeferAgent());
+            bool loaded = await importer.LoadFile(fullPath);
             if (!loaded)
+            {
+                importer.Dispose();
                 return null;
+            }
 
             var root = new GameObject("Avatar3DImportedRoot");
-            var instantiateMethod = FindInstantiateMethod(gltfImportType);
-            if (instantiateMethod == null)
+            bool instantiated = await importer.InstantiateMainSceneAsync(root.transform);
+            if (!instantiated)
             {
-                UnityEngine.Object.Destroy(root);
+                DestroyLoadedObject(root);
+                importer.Dispose();
                 return null;
             }
-
-            object instantiateResult = instantiateMethod.Invoke(
-                importer, BuildInvocationArguments(instantiateMethod, root.transform));
-            if (instantiateResult is bool ok && !ok)
-            {
-                UnityEngine.Object.Destroy(root);
-                return null;
-            }
-
-            return root;
-        }
-
-        private static MethodInfo FindMethod(Type type, string name, Type firstArg)
-        {
-            foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Public))
-            {
-                if (!string.Equals(method.Name, name, StringComparison.Ordinal))
-                    continue;
-
-                var parameters = method.GetParameters();
-                if (parameters.Length == 0)
-                    continue;
-
-                if (parameters[0].ParameterType == firstArg)
-                    return method;
-            }
-
-            return null;
-        }
-
-        private static MethodInfo FindInstantiateMethod(Type gltfImportType)
-        {
-            foreach (var method in gltfImportType.GetMethods(BindingFlags.Instance | BindingFlags.Public))
-            {
-                if (!string.Equals(method.Name, "InstantiateMainScene", StringComparison.Ordinal))
-                    continue;
-
-                var parameters = method.GetParameters();
-                if (parameters.Length > 0 && parameters[0].ParameterType == typeof(Transform))
-                    return method;
-            }
-
-            return null;
-        }
-
-        private static async Task<bool> InvokeLoadAsync(object importer, MethodInfo method, string fullPath)
-        {
-            object returnValue = method.Invoke(
-                importer, BuildInvocationArguments(method, fullPath));
-            if (returnValue is Task<bool> taskBool)
-                return await taskBool;
-
-            if (returnValue is Task task)
-            {
-                await task;
-                return true;
-            }
-
-            if (returnValue is bool immediate)
-                return immediate;
-
-            return false;
-        }
-
-        private static object[] BuildInvocationArguments(MethodInfo method, object firstArgument)
-        {
-            var parameters = method.GetParameters();
-            var arguments = new object[parameters.Length];
-            arguments[0] = firstArgument;
-            for (int i = 1; i < parameters.Length; i++)
-            {
-                Type parameterType = parameters[i].ParameterType;
-                object defaultValue = parameters[i].HasDefaultValue
-                    ? parameters[i].DefaultValue
-                    : null;
-                if (defaultValue != null &&
-                    defaultValue != DBNull.Value &&
-                    defaultValue != Missing.Value)
-                {
-                    arguments[i] = defaultValue;
-                }
-                else
-                {
-                    arguments[i] = parameterType.IsValueType
-                        ? Activator.CreateInstance(parameterType)
-                        : null;
-                }
-            }
-            return arguments;
+            return new ImportedGltf(root, importer);
         }
 
         private static List<string> CollectAnimationNames(GameObject root)
@@ -740,14 +650,31 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private sealed class CachedModel
         {
-            public CachedModel(GameObject template, List<string> animationNames)
+            public CachedModel(
+                GameObject template,
+                List<string> animationNames,
+                IDisposable importer)
             {
                 Template = template;
                 AnimationNames = animationNames ?? new List<string>();
+                Importer = importer;
             }
 
             public GameObject Template { get; }
             public List<string> AnimationNames { get; }
+            public IDisposable Importer { get; }
+        }
+
+        private sealed class ImportedGltf
+        {
+            public ImportedGltf(GameObject root, IDisposable importer)
+            {
+                Root = root;
+                Importer = importer;
+            }
+
+            public GameObject Root { get; }
+            public IDisposable Importer { get; }
         }
     }
 }
