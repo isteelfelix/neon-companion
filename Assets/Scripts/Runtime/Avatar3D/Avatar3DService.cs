@@ -15,18 +15,34 @@ namespace NeonCompanion.Runtime.Avatar3D
         private VrmAvatarDriver _vrmDriver;
         private AvatarCapabilities _capabilities = new AvatarCapabilities();
         private readonly List<string> _availableAnimations = new List<string>();
+        private readonly AvatarSceneState _scene = new AvatarSceneState();
 
-        public bool IsLoaded => _runtimeRoot != null;
+        public bool IsLoaded => _runtimeRoot != null && _scene.CanMutate;
         public IReadOnlyList<string> AvailableAnimations => _availableAnimations;
         public AvatarCapabilities Capabilities => _capabilities;
 
         public async Task<bool> LoadAvatar(string modelPath)
         {
-            var loadResult = await Avatar3DLoader.LoadAsync(modelPath);
-            if (!loadResult.Success || loadResult.Instance == null)
-                return false;
+            int generation = _scene.BeginLoad();
 
-            Unload();
+            var loadResult = await Avatar3DLoader.LoadAsync(modelPath);
+
+            // Unload() or a newer LoadAvatar() ran while we were loading: this
+            // result is orphaned, so destroy it rather than binding it.
+            if (!_scene.IsCurrent(generation))
+            {
+                DestroyOwnedObject(loadResult != null ? loadResult.Instance : null);
+                return false;
+            }
+
+            if (!loadResult.Success || loadResult.Instance == null)
+            {
+                _scene.MarkFailed();
+                return false;
+            }
+
+            DisposeCurrentModel();
+            _scene.BeginBinding();
             _runtimeRoot = loadResult.Instance;
             _animator = _runtimeRoot.GetComponentInChildren<Animator>(true);
             _legacyAnimation = _runtimeRoot.GetComponentInChildren<Animation>(true);
@@ -37,16 +53,27 @@ namespace NeonCompanion.Runtime.Avatar3D
                 bool driverReady = await _vrmDriver.InitializeAsync(
                     loadResult.VrmInstance,
                     _capabilities,
-                    BuiltInAvatarProfiles.IsResourcePath(modelPath));
+                    BuiltInAvatarProfiles.IsResourcePath(modelPath),
+                    generation,
+                    _scene);
+
+                // Unload() ran during driver init and already tore the model
+                // down; the driver cleaned up whatever it had loaded.
+                if (!_scene.IsCurrent(generation))
+                    return false;
+
                 if (!driverReady)
                 {
-                    Unload();
+                    DisposeCurrentModel();
+                    _scene.MarkFailed();
                     return false;
                 }
             }
 
             _availableAnimations.Clear();
             _availableAnimations.AddRange(loadResult.AnimationNames);
+
+            _scene.MarkMounted();
 
             if (_availableAnimations.Contains("idle"))
                 SetAnimation("idle");
@@ -81,18 +108,20 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         public bool SetMouthShape(string shape)
         {
-            return _vrmDriver != null && _vrmDriver.SetMouthShape(shape);
+            return _scene.CanMutate && _vrmDriver != null &&
+                _vrmDriver.SetMouthShape(shape);
         }
 
         public void ClearMouth()
         {
-            if (_vrmDriver != null)
+            if (_scene.CanMutate && _vrmDriver != null)
                 _vrmDriver.ClearMouth();
         }
 
         public bool SetExpression(string expressionName, float weight)
         {
-            return _vrmDriver != null && _vrmDriver.SetExpression(expressionName, weight);
+            return _scene.CanMutate && _vrmDriver != null &&
+                _vrmDriver.SetExpression(expressionName, weight);
         }
 
         public bool SetPose(string poseName)
@@ -127,7 +156,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         public void SetGazeNormalized(float horizontal, float vertical)
         {
-            if (_vrmDriver != null)
+            if (_scene.CanMutate && _vrmDriver != null)
                 _vrmDriver.SetGazeNormalized(horizontal, vertical);
         }
 
@@ -142,6 +171,18 @@ namespace NeonCompanion.Runtime.Avatar3D
         }
 
         public void Unload()
+        {
+            // Bumping the generation first is what lets a load that is still
+            // awaiting notice that it no longer owns the scene.
+            _scene.Reset();
+            DisposeCurrentModel();
+        }
+
+        /// <summary>
+        /// Releases the live model without invalidating the current load stamp.
+        /// Used when the owning load is replacing its own model.
+        /// </summary>
+        private void DisposeCurrentModel()
         {
             _availableAnimations.Clear();
             _animator = null;
@@ -170,26 +211,20 @@ namespace NeonCompanion.Runtime.Avatar3D
     [DefaultExecutionOrder(10000)]
     internal sealed class VrmAvatarDriver : MonoBehaviour
     {
-        private static readonly string[] BuiltInStates =
-        {
-            "idle",
-            "thinking",
-            "talking",
-            "listening",
-            "smile",
-            "confused"
-        };
+        /// <summary>
+        /// The built-in motion pack is a single looping idle. Emotion and speech
+        /// are carried by expressions and visemes rather than by body clips, so
+        /// there is nothing else to bake or to keep in sync with the face.
+        /// </summary>
+        private const string IdleState = "idle";
 
         private Vrm10Instance _vrm;
         private Vrm10Runtime _runtime;
         private AvatarCapabilities _capabilities;
-        private readonly Dictionary<string, Vrm10AnimationInstance> _animations =
-            new Dictionary<string, Vrm10AnimationInstance>(
-                StringComparer.OrdinalIgnoreCase);
+        private Vrm10AnimationInstance _idleAnimation;
         private Animation _activeAnimation;
         private Vrm10AnimationInstance _activeVrmAnimation;
         private string _activeState;
-        private bool _reactionPlaying;
         private ExpressionKey _activeMouthKey;
         private Action<float> _activeMouthSetter;
         private bool _hasActiveMouth;
@@ -204,7 +239,9 @@ namespace NeonCompanion.Runtime.Avatar3D
         internal async Task<bool> InitializeAsync(
             Vrm10Instance vrm,
             AvatarCapabilities capabilities,
-            bool useBuiltInMotionPack)
+            bool useBuiltInMotionPack,
+            int generation,
+            AvatarSceneState scene)
         {
             _vrm = vrm;
             _runtime = _vrm != null ? _vrm.Runtime : null;
@@ -226,66 +263,69 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_runtime == null || _runtime.ControlRig == null)
             {
                 Debug.LogWarning(
-                    "[NeonCompanion] Built-in VRM has no runtime control rig.");
+                    "[NeonCompanion] Built-in VRM has no runtime control rig; " +
+                    "continuing without body motion.");
+                return true;
+            }
+
+            Vrm10AnimationInstance animation =
+                await Avatar3DLoader.LoadBuiltInVrmAnimationAsync(IdleState);
+
+            // The scene was torn down while the clip was loading, so this clip
+            // has no owner: drop it here, because OnDestroy has already run.
+            if (!scene.IsCurrent(generation))
+            {
+                if (animation != null)
+                    DestroyOwnedObject(animation.gameObject);
                 return false;
             }
 
-            for (int i = 0; i < BuiltInStates.Length; i++)
+            // A missing or malformed idle must not sink the avatar: the face,
+            // gaze and lipsync are what the companion is actually built on.
+            if (animation == null ||
+                animation.ControlRig.Item1 == null ||
+                animation.ControlRig.Item2 == null)
             {
-                string state = BuiltInStates[i];
-                Vrm10AnimationInstance animation =
-                    await Avatar3DLoader.LoadBuiltInVrmAnimationAsync(state);
-                if (animation == null ||
-                    animation.ControlRig.Item1 == null ||
-                    animation.ControlRig.Item2 == null)
-                {
-                    if (animation != null)
-                        DestroyOwnedObject(animation.gameObject);
-                    Debug.LogWarning(
-                        "[NeonCompanion] Built-in VRM animation has no runtime control rig: " +
-                        state);
-                    ClearAnimationResources();
-                    return false;
-                }
-
-                animation.gameObject.name = "AvatarVRMA_" + state;
-                animation.transform.SetParent(transform.parent, false);
-                if (animation.BoxMan != null)
-                    animation.BoxMan.enabled = false;
-                animation.gameObject.SetActive(false);
-                _animations[state] = animation;
+                if (animation != null)
+                    DestroyOwnedObject(animation.gameObject);
+                Debug.LogWarning(
+                    "[NeonCompanion] Built-in idle animation is unusable; " +
+                    "continuing without body motion.");
+                return true;
             }
+
+            animation.gameObject.name = "AvatarVRMA_" + IdleState;
+            animation.transform.SetParent(transform.parent, false);
+            if (animation.BoxMan != null)
+                animation.BoxMan.enabled = false;
+            animation.gameObject.SetActive(false);
+            _idleAnimation = animation;
             return true;
         }
 
         internal bool SetAnimation(string state)
         {
             if (_vrm == null || !_capabilities.canAnimate ||
-                !_useBuiltInMotionPack || string.IsNullOrWhiteSpace(state))
+                _idleAnimation == null || string.IsNullOrWhiteSpace(state))
                 return false;
 
             string normalizedState = state.Trim().ToLowerInvariant();
-            bool requestedReaction =
-                normalizedState == "smile" || normalizedState == "confused";
-            if (!requestedReaction &&
-                normalizedState == _activeState &&
+            if (normalizedState != IdleState)
+                return false;
+
+            if (normalizedState == _activeState &&
                 _activeAnimation != null &&
                 _activeAnimation.isPlaying)
                 return true;
 
-            Vrm10AnimationInstance animationInstance;
-            if (!_animations.TryGetValue(normalizedState, out animationInstance) ||
-                animationInstance == null)
-                return false;
-
             StopActiveAnimation();
-            animationInstance.gameObject.SetActive(true);
-            _activeVrmAnimation = animationInstance;
-            _runtime.VrmAnimation = animationInstance;
+            _idleAnimation.gameObject.SetActive(true);
+            _activeVrmAnimation = _idleAnimation;
+            _runtime.VrmAnimation = _idleAnimation;
             BindActiveMouthSetter();
 
             Animation animation =
-                animationInstance.GetComponentInChildren<Animation>(true);
+                _idleAnimation.GetComponentInChildren<Animation>(true);
             if (animation == null)
             {
                 StopActiveAnimation();
@@ -296,13 +336,11 @@ namespace NeonCompanion.Runtime.Avatar3D
             {
                 if (animationState == null || animationState.clip == null)
                     continue;
-                animationState.wrapMode =
-                    requestedReaction ? WrapMode.Once : WrapMode.Loop;
+                animationState.wrapMode = WrapMode.Loop;
                 animation.clip = animationState.clip;
                 animation.Play();
                 _activeAnimation = animation;
                 _activeState = normalizedState;
-                _reactionPlaying = requestedReaction;
                 return true;
             }
 
@@ -460,14 +498,6 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void LateUpdate()
         {
-            if (_reactionPlaying && _activeAnimation != null &&
-                !_activeAnimation.isPlaying)
-            {
-                _reactionPlaying = false;
-                if (!SetAnimation("idle"))
-                    ClearAnimation();
-            }
-
             if (_gazeTarget != null && _head != null)
             {
                 _gazeTarget.position = _head.position +
@@ -523,17 +553,15 @@ namespace NeonCompanion.Runtime.Avatar3D
             _activeVrmAnimation = null;
             _activeState = null;
             _activeMouthSetter = null;
-            _reactionPlaying = false;
         }
 
         private void ClearAnimationResources()
         {
-            foreach (KeyValuePair<string, Vrm10AnimationInstance> pair in _animations)
+            if (_idleAnimation != null)
             {
-                if (pair.Value != null)
-                    DestroyOwnedObject(pair.Value.gameObject);
+                DestroyOwnedObject(_idleAnimation.gameObject);
+                _idleAnimation = null;
             }
-            _animations.Clear();
         }
 
         private void BindActiveMouthSetter()
