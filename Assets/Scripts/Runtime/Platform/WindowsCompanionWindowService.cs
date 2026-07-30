@@ -39,6 +39,37 @@ namespace NeonCompanion.Runtime.Platform
             MonitorEnumProc callback,
             IntPtr data);
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        private const int SwRestore = 9;
+
+        /// <summary>
+        /// Raises the main app window and restores it if minimised. The pet-window
+        /// "Avatar settings" action navigates the main UI, but that is invisible if
+        /// the window is behind others or minimised, so pull it forward first.
+        /// </summary>
+        private static void BringMainWindowToFront()
+        {
+            try
+            {
+                IntPtr handle =
+                    System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+                if (handle != IntPtr.Zero)
+                {
+                    ShowWindow(handle, SwRestore);
+                    SetForegroundWindow(handle);
+                }
+            }
+            catch (Exception)
+            {
+                // Best-effort: a missing handle just leaves the window where it is.
+            }
+        }
+
         private readonly object _writeLock = new object();
         private readonly ConcurrentQueue<CompanionWindowEvent> _events =
             new ConcurrentQueue<CompanionWindowEvent>();
@@ -399,6 +430,7 @@ namespace NeonCompanion.Runtime.Platform
                     _lastHeartbeatUtc = DateTime.UtcNow;
                     break;
                 case "open_avatar_settings":
+                    BringMainWindowToFront();
                     QueueEvent(CompanionWindowEventKind.OpenAvatarSettings, null);
                     break;
                 case "return_to_column":

@@ -87,12 +87,31 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
+        private bool _fullBodyFraming;
+
         public void SetModelRoot(Transform modelRoot)
         {
             _target = modelRoot;
             EnsureRenderScene();
             FrameTarget();
             UpdateCameraTransform();
+        }
+
+        /// <summary>
+        /// Frames the whole model instead of a portrait bust. Used by the library
+        /// preview, which should show the avatar head-to-toe regardless of the
+        /// per-user pet-window framing.
+        /// </summary>
+        public void SetFullBodyFraming(bool fullBody)
+        {
+            if (_fullBodyFraming == fullBody)
+                return;
+            _fullBodyFraming = fullBody;
+            if (_target != null)
+            {
+                FrameTarget();
+                UpdateCameraTransform();
+            }
         }
 
         /// <summary>World position of the render camera — the point Camera-mode gaze holds.</summary>
@@ -301,7 +320,13 @@ namespace NeonCompanion.Runtime.Avatar3D
             float focusY;
             float framedHalfHeight;
             float eyeY;
-            if (TryGetEyeHeight(out eyeY))
+            if (_fullBodyFraming)
+            {
+                // Head-to-toe with a little headroom, centred on the bounds.
+                focusY = bounds.center.y;
+                framedHalfHeight = Mathf.Max(bounds.extents.y * 1.08f, 0.25f);
+            }
+            else if (TryGetEyeHeight(out eyeY))
             {
                 // The companion is seen bust-up, so frame the face: centre a
                 // little below the eyes and show a slice of the body, not all of

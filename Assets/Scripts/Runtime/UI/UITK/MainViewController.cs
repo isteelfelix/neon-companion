@@ -152,6 +152,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private string _currentSessionTitle = string.Empty;
         private bool _isBound;
         private AvatarAnimationController _avatarAnimationController;
+        private Avatar3DRenderer _avatar3DPreviewRenderer;
         private AudioSource _notifySource; // U-40 notification sounds
         private AudioClip _notifyClip;
         private bool _isRefreshingLocalizedUi;
@@ -743,6 +744,17 @@ namespace NeonCompanion.Runtime.UI.UITK
                     if (r == null)
                         r = gameObject.AddComponent<Avatar3DRenderer>();
                     return r;
+                },
+                GetOrCreatePreviewRenderer = () =>
+                {
+                    if (_avatar3DPreviewRenderer == null)
+                    {
+                        var go = new GameObject("Avatar3DPreviewRenderer");
+                        go.transform.SetParent(transform, false);
+                        _avatar3DPreviewRenderer = go.AddComponent<Avatar3DRenderer>();
+                        _avatar3DPreviewRenderer.SetFullBodyFraming(true);
+                    }
+                    return _avatar3DPreviewRenderer;
                 },
                 ModelParent = transform
             };

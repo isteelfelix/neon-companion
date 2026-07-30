@@ -709,9 +709,11 @@ namespace NeonCompanion.Runtime.Platform
                 current.type == EventType.MouseDown &&
                 current.button == 0 &&
                 !_contextMenuOpen &&
+                !_preferences.pinned &&
                 !_hoverControlsRect.Contains(current.mousePosition) &&
                 GetAvatarRect().Contains(current.mousePosition))
             {
+                // Pinned means locked in place: a click no longer drags the window.
                 WindowsCompanionWindowNative.BeginDrag();
                 current.Use();
             }
@@ -937,7 +939,8 @@ namespace NeonCompanion.Runtime.Platform
                 _toolbarLabelStyle);
             Event current = Event.current;
             if (current != null && current.type == EventType.MouseDown &&
-                current.button == 0 && dragRect.Contains(current.mousePosition))
+                current.button == 0 && !_preferences.pinned &&
+                dragRect.Contains(current.mousePosition))
             {
                 WindowsCompanionWindowNative.BeginDrag();
                 current.Use();
@@ -975,15 +978,9 @@ namespace NeonCompanion.Runtime.Platform
                 _contextMenuOpen = true;
             }
             x += settingsWidth + 4f;
-            if (!compact)
-            {
-                if (GUI.Button(
-                    new Rect(x, _hoverControlsRect.y + 4f, 98f, 28f),
-                    LocalizationExtensions.Get("companion.player.column", "Column"),
-                    _toolbarButtonStyle))
-                    Send(new CompanionProcessMessage { type = "return_to_column" });
-                x += 102f;
-            }
+            // "Return to column" removed: the in-app column now lives on its own,
+            // in parallel with this window, so there is nothing to return to —
+            // Close simply dismisses the floating pet.
             if (GUI.Button(
                 new Rect(x, _hoverControlsRect.y + 4f, 30f, 28f),
                 "×",
@@ -1078,14 +1075,36 @@ namespace NeonCompanion.Runtime.Platform
                 Send(new CompanionProcessMessage { type = "open_avatar_settings" });
                 _contextMenuOpen = false;
             }
-            if (ContextButton(
-                LocalizationExtensions.Get("companion.player.return", "Return to column"),
-                width,
-                ref y))
+
+            // Emotion test row — the only hand-driven way to see the emotion blend,
+            // since otherwise emotions fire on agent reactions or touch alone.
+            if (_avatar3DService != null && _avatar3DService.IsLoaded)
             {
-                Send(new CompanionProcessMessage { type = "return_to_column" });
-                _contextMenuOpen = false;
+                GUI.Label(
+                    new Rect(_contextMenuRect.x + 4f, _contextMenuRect.y + y, width, 22f),
+                    LocalizationExtensions.Get("companion.player.emotion", "Emotion (test)"),
+                    _toolbarLabelStyle);
+                y += 22f;
+                string[] emotions = { "happy", "sad", "surprised", "angry" };
+                float emoWidth = (width - 12f) / 4f;
+                for (int i = 0; i < emotions.Length; i++)
+                {
+                    if (GUI.Button(
+                        new Rect(
+                            _contextMenuRect.x + 4f + (emoWidth + 4f) * i,
+                            _contextMenuRect.y + y,
+                            emoWidth,
+                            24f),
+                        emotions[i].Substring(0, 3),
+                        _toolbarButtonStyle))
+                    {
+                        _avatar3DService.SetEmotion(emotions[i]);
+                        _contextMenuOpen = false;
+                    }
+                }
+                y += 28f;
             }
+
             if (ContextButton(
                 LocalizationExtensions.Get("companion.player.close", "Close"),
                 width,

@@ -47,6 +47,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             // MonoBehaviour component access
             public Func<SpriteSheetAnimator> GetOrCreateAnimator;
             public Func<Avatar3DRenderer> GetOrCreateAvatar3DRenderer;
+            // A second renderer, framed full-body, so the library preview is
+            // independent of the column's portrait view and the pet-window settings.
+            public Func<Avatar3DRenderer> GetOrCreatePreviewRenderer;
             public Transform ModelParent;
         }
 
@@ -80,6 +83,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Image _preview3DImage;
         private SpriteSheetAnimator _avatarAnimator;
         private Avatar3DRenderer _avatar3DRenderer;
+        private Avatar3DRenderer _previewRenderer;
         private IAvatar3DService _avatar3DService;
         private Avatar3DStateClipMapping _active3DClipMapping;
         private AvatarMotionState _avatarMotionState = AvatarMotionState.Idle;
@@ -1964,6 +1968,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewHero.Add(_preview3DImage);
             _preview3DImage.SendToBack();
             SetDisplay(_preview3DImage, DisplayStyle.None);
+
+            if (_previewRenderer == null && _d.GetOrCreatePreviewRenderer != null)
+                _previewRenderer = _d.GetOrCreatePreviewRenderer();
         }
 
         private void HideAllAvatarImageOverlays()
@@ -2101,12 +2108,23 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 _avatar3DRenderer.SetModelRoot(_avatar3DService.GetRuntimeTransform());
-                _avatar3DRenderer.SetView(
-                    profile.avatarScale,
-                    profile.avatarOffsetX,
-                    profile.avatarOffsetY);
-                if (_preview3DImage != null)
+                // The in-app column uses its own default portrait framing plus
+                // interactive orbit. The avatarScale/offset settings belong to the
+                // pet window only, so they are deliberately NOT pushed here — a
+                // saved -0.3 vertical offset used to shove the model out of view.
+
+                // The preview is a separate, full-body render of the same model,
+                // so it never inherits the column's crop or the pet-window offsets.
+                if (_previewRenderer != null)
+                {
+                    _previewRenderer.SetModelRoot(_avatar3DService.GetRuntimeTransform());
+                    if (_preview3DImage != null)
+                        _preview3DImage.image = _previewRenderer.OutputTexture;
+                }
+                else if (_preview3DImage != null)
+                {
                     _preview3DImage.image = _avatar3DRenderer.OutputTexture;
+                }
                 SetDisplay(_avatar3DImage, DisplayStyle.Flex);
                 SetDisplay(_preview3DImage, DisplayStyle.Flex);
                 RefreshAvatarMotionState();
@@ -2134,6 +2152,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _active3DClipMapping = null;
             _avatar3DService?.Unload();
             _avatar3DRenderer?.ClearModel();
+            _previewRenderer?.ClearModel();
             if (_avatar3DImage != null)
                 SetDisplay(_avatar3DImage, DisplayStyle.None);
             if (_preview3DImage != null)
