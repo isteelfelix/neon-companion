@@ -124,6 +124,12 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _vrmDriver.SetExpression(expressionName, weight);
         }
 
+        public bool SetEmotion(string emotionName)
+        {
+            return _scene.CanMutate && _vrmDriver != null &&
+                _vrmDriver.SetEmotion(emotionName);
+        }
+
         public bool SetPose(string poseName)
         {
             if (!IsLoaded)
@@ -226,6 +232,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Vrm10AnimationInstance _activeVrmAnimation;
         private string _activeState;
         private VrmExpressionComposer _composer;
+        private VrmEmotionBlender _emotions;
         private float _blinkTimer;
         private float _blinkWeight;
         private Transform _head;
@@ -246,6 +253,16 @@ namespace NeonCompanion.Runtime.Avatar3D
                 if (_composer == null)
                     _composer = new VrmExpressionComposer(WriteExpressionWeight);
                 return _composer;
+            }
+        }
+
+        private VrmEmotionBlender Emotions
+        {
+            get
+            {
+                if (_emotions == null)
+                    _emotions = new VrmEmotionBlender(Composer);
+                return _emotions;
             }
         }
 
@@ -407,7 +424,20 @@ namespace NeonCompanion.Runtime.Avatar3D
             // A zero stays on the layer rather than dropping off it: callers
             // wind a reaction back down with SetExpression(name, 0f) and expect
             // that to hold, not to hand the key back to something else.
-            Composer.Set(VrmExpressionLayer.Emotion, key, Mathf.Clamp01(weight));
+            Composer.Set(VrmExpressionLayer.Manual, key, Mathf.Clamp01(weight));
+            return true;
+        }
+
+        internal bool SetEmotion(string emotionName)
+        {
+            if (_vrm == null || !_capabilities.hasExpressions)
+                return false;
+
+            AvatarEmotion emotion;
+            if (!VrmEmotionPalette.TryParse(emotionName, out emotion))
+                return false;
+
+            Emotions.SetEmotion(emotion);
             return true;
         }
 
@@ -524,6 +554,8 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return;
 
             UpdateBlink();
+            if (_emotions != null)
+                _emotions.Tick(Time.unscaledDeltaTime);
 
             // Everything above only declared what it wants. This is the one
             // place a frame's worth of intent reaches the model.

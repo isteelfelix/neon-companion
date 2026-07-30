@@ -15,11 +15,18 @@ namespace NeonCompanion.Runtime.Avatar3D
         /// <summary>The emotional face: long-lived, blended over seconds.</summary>
         Emotion = 0,
 
+        /// <summary>
+        /// A caller naming one key outright. Ranked above the emotional face
+        /// because asking for a specific expression is a deliberate act, and
+        /// below speech because speech is continuous and would fight it.
+        /// </summary>
+        Manual = 1,
+
         /// <summary>Speech: owns the mouth for as long as the companion talks.</summary>
-        Viseme = 1,
+        Viseme = 2,
 
         /// <summary>Reflexes. Involuntary and brief, so they answer to nobody.</summary>
-        Blink = 2
+        Blink = 3
     }
 
     /// <summary>How contributions to one key from several layers combine.</summary>
@@ -55,7 +62,7 @@ namespace NeonCompanion.Runtime.Avatar3D
     /// </summary>
     internal sealed class VrmExpressionComposer
     {
-        private const int LayerCount = 3;
+        private const int LayerCount = 4;
 
         private readonly Action<ExpressionKey, float> _write;
         private readonly Dictionary<ExpressionKey, float>[] _layers;
@@ -95,6 +102,18 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (values == null)
                 return;
             values[key] = Mathf.Clamp01(weight);
+        }
+
+        /// <summary>
+        /// Withdraws this layer's claim on one key. Use it when a contribution
+        /// has finished fading: holding the key at zero would keep it away from
+        /// the layers underneath, whereas releasing it hands it back.
+        /// </summary>
+        internal void Clear(VrmExpressionLayer layer, ExpressionKey key)
+        {
+            Dictionary<ExpressionKey, float> values = ResolveLayer(layer);
+            if (values != null)
+                values.Remove(key);
         }
 
         /// <summary>

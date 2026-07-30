@@ -15,6 +15,13 @@ namespace NeonCompanion.Runtime.Avatar3D
         bool SetMouthShape(string shape);
         void ClearMouth();
         bool SetExpression(string expressionName, float weight);
+
+        /// <summary>
+        /// Blends the face into a named emotional state, which then fades back to
+        /// neutral on its own. Unlike <see cref="SetExpression"/> this is a whole
+        /// composed face rather than one blendshape, and it needs no reset call.
+        /// </summary>
+        bool SetEmotion(string emotionName);
         bool SetPose(string poseName);
         void SetGazeNormalized(float horizontal, float vertical);
         Transform GetRuntimeTransform();
