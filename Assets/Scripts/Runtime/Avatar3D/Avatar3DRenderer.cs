@@ -22,6 +22,14 @@ namespace NeonCompanion.Runtime.Avatar3D
         [SerializeField] private float _orbitSensitivity = 0.2f;
         [SerializeField] private float _pinchSensitivity = 0.01f;
 
+        [Header("Portrait framing")]
+        [Tooltip("Height of the framed slice as a fraction of the model's height " +
+            "when the eyes can be located. Smaller is a tighter bust.")]
+        [SerializeField] private float _portraitHeightFraction = 0.46f;
+        [Tooltip("How far below the eyes to centre the frame, as a fraction of " +
+            "the model's height, so the head sits in the upper third.")]
+        [SerializeField] private float _portraitEyeBias = 0.12f;
+
         private RenderTexture _renderTexture;
         private Camera _camera;
         private Light _directionalLight;
@@ -38,7 +46,18 @@ namespace NeonCompanion.Runtime.Avatar3D
         private bool _dragging;
         private int _activePointerId = -1;
         private Vector2 _lastPointer;
+        private Vector2 _pointerDownLocal;
+        private bool _pointerMovedFar;
         private float _lastPinchDistance;
+
+        /// <summary>
+        /// A tap on the rendered image that landed on a touch zone. The renderer
+        /// only classifies the hit; the app decides how the companion reacts.
+        /// </summary>
+        public event System.Action<AvatarTouchRegion> Touched;
+
+        // A press that slides past this many pixels is an orbit, not a tap.
+        private const float TapMoveThreshold = 6f;
         private readonly Dictionary<int, Vector2> _touchPointers =
             new Dictionary<int, Vector2>();
 
@@ -276,10 +295,30 @@ namespace NeonCompanion.Runtime.Avatar3D
             for (int i = 1; i < renderers.Length; i++)
                 bounds.Encapsulate(renderers[i].bounds);
 
-            _targetCenter = bounds.center;
-            _targetHeight = Mathf.Max(bounds.size.y, 0.5f);
-            float halfHeight = Mathf.Max(bounds.extents.y, 0.25f);
-            float framedDistance = halfHeight / Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float totalHeight = Mathf.Max(bounds.size.y, 0.5f);
+            _targetHeight = totalHeight;
+
+            float focusY;
+            float framedHalfHeight;
+            float eyeY;
+            if (TryGetEyeHeight(out eyeY))
+            {
+                // The companion is seen bust-up, so frame the face: centre a
+                // little below the eyes and show a slice of the body, not all of
+                // it. The geometric bounds centre would sit near the hips.
+                focusY = eyeY - totalHeight * _portraitEyeBias;
+                framedHalfHeight = Mathf.Max(
+                    totalHeight * _portraitHeightFraction * 0.5f, 0.15f);
+            }
+            else
+            {
+                focusY = bounds.center.y;
+                framedHalfHeight = Mathf.Max(bounds.extents.y, 0.25f);
+            }
+
+            _targetCenter = new Vector3(bounds.center.x, focusY, bounds.center.z);
+            float framedDistance =
+                framedHalfHeight / Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
             _framedDistance = Mathf.Clamp(
                 framedDistance * 1.15f,
                 _minDistance,
@@ -288,6 +327,39 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _framedDistance / _viewScale,
                 _minDistance,
                 _maxDistance);
+        }
+
+        /// <summary>
+        /// The eyes' world height, from the humanoid rig. Averages the eye bones
+        /// when present, falls back to the head bone, and reports failure for a
+        /// non-humanoid model so framing falls back to the bounds centre. Reads
+        /// the rig through <see cref="Animator"/>, so it stays free of any VRM
+        /// dependency and works for any humanoid.
+        /// </summary>
+        private bool TryGetEyeHeight(out float worldY)
+        {
+            worldY = 0f;
+
+            Animator animator = _target.GetComponentInChildren<Animator>();
+            if (animator == null || !animator.isHuman)
+                return false;
+
+            Transform leftEye = animator.GetBoneTransform(HumanBodyBones.LeftEye);
+            Transform rightEye = animator.GetBoneTransform(HumanBodyBones.RightEye);
+            if (leftEye != null && rightEye != null)
+            {
+                worldY = (leftEye.position.y + rightEye.position.y) * 0.5f;
+                return true;
+            }
+
+            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+            if (head != null)
+            {
+                worldY = head.position.y;
+                return true;
+            }
+
+            return false;
         }
 
         private void BindImageEvents()
@@ -328,6 +400,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             _activePointerId = evt.pointerId;
             _lastPointer = new Vector2(evt.position.x, evt.position.y);
+            _pointerDownLocal = new Vector2(evt.localPosition.x, evt.localPosition.y);
+            _pointerMovedFar = false;
             _dragging = true;
             _targetImage?.CapturePointer(evt.pointerId);
         }
@@ -359,6 +433,11 @@ namespace NeonCompanion.Runtime.Avatar3D
             Vector2 deltaMove = pointerPos - _lastPointer;
             _lastPointer = pointerPos;
 
+            Vector2 local = new Vector2(evt.localPosition.x, evt.localPosition.y);
+            if ((local - _pointerDownLocal).sqrMagnitude >
+                TapMoveThreshold * TapMoveThreshold)
+                _pointerMovedFar = true;
+
             _yaw += deltaMove.x * _orbitSensitivity;
             _pitch = Mathf.Clamp(_pitch - deltaMove.y * _orbitSensitivity, _minPitch, _maxPitch);
         }
@@ -379,6 +458,10 @@ namespace NeonCompanion.Runtime.Avatar3D
             _dragging = false;
             _activePointerId = -1;
             _targetImage?.ReleasePointer(evt.pointerId);
+
+            // A press that never turned into an orbit is a tap: see what it hit.
+            if (!_pointerMovedFar)
+                TryTouchAt(new Vector2(evt.localPosition.x, evt.localPosition.y));
         }
 
         private void OnPointerCancel(PointerCancelEvent evt)
@@ -387,6 +470,50 @@ namespace NeonCompanion.Runtime.Avatar3D
             _dragging = false;
             _activePointerId = -1;
             _lastPinchDistance = GetCurrentPinchDistance();
+        }
+
+        /// <summary>
+        /// Casts a ray from the tapped point on the image into the scene and, if
+        /// it lands on a touch zone, reports the region. The image draws the
+        /// square render texture with ScaleAndCrop, so this treats the visible
+        /// rect as the viewport directly — precise enough for finger-sized zones,
+        /// not pixel-exact when the image aspect is far from square.
+        /// </summary>
+        private void TryTouchAt(Vector2 localPosition)
+        {
+            if (Touched == null || _camera == null || _targetImage == null)
+                return;
+
+            Rect rect = _targetImage.contentRect;
+            if (rect.width <= 0f || rect.height <= 0f)
+                return;
+
+            float u = Mathf.Clamp01(localPosition.x / rect.width);
+            float v = Mathf.Clamp01(1f - localPosition.y / rect.height);
+            Ray ray = _camera.ViewportPointToRay(new Vector3(u, v, 0f));
+
+            RaycastHit[] hits = Physics.RaycastAll(
+                ray,
+                _camera.farClipPlane,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Collide);
+
+            float nearest = float.MaxValue;
+            bool found = false;
+            AvatarTouchRegion region = AvatarTouchRegion.Head;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                VrmTouchZone zone =
+                    hits[i].collider.GetComponentInParent<VrmTouchZone>();
+                if (zone == null || hits[i].distance >= nearest)
+                    continue;
+                nearest = hits[i].distance;
+                region = zone.Region;
+                found = true;
+            }
+
+            if (found)
+                Touched(region);
         }
 
         private float GetCurrentPinchDistance()

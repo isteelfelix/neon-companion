@@ -113,8 +113,13 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         public bool SetMouthShape(string shape)
         {
+            return SetMouthShape(shape, 1f);
+        }
+
+        public bool SetMouthShape(string shape, float weight)
+        {
             return _scene.CanMutate && _vrmDriver != null &&
-                _vrmDriver.SetMouthShape(shape);
+                _vrmDriver.SetMouthShape(shape, weight);
         }
 
         public void ClearMouth()
@@ -257,6 +262,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private VrmExpressionComposer _composer;
         private VrmEmotionBlender _emotions;
         private VrmIdleAnimator _idle;
+        private VrmVisemeAnimator _visemes;
         private Transform _head;
         private Transform _gazeTarget;
         private bool _useBuiltInMotionPack;
@@ -265,6 +271,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private AvatarGazeMode _gazeMode = AvatarGazeMode.Cursor;
         private Vector3 _gazeTargetWorld;
         private bool _hasGazeTargetWorld;
+        private readonly List<GameObject> _touchZones = new List<GameObject>();
 
         /// <summary>
         /// Built on first use rather than in Awake: the driver is added to the
@@ -301,6 +308,16 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
+        private VrmVisemeAnimator Visemes
+        {
+            get
+            {
+                if (_visemes == null)
+                    _visemes = new VrmVisemeAnimator(Composer);
+                return _visemes;
+            }
+        }
+
         internal async Task<bool> InitializeAsync(
             Vrm10Instance vrm,
             AvatarCapabilities capabilities,
@@ -321,6 +338,10 @@ namespace NeonCompanion.Runtime.Avatar3D
                     VRM10ObjectLookAt.LookAtTargetTypes.SpecifiedTransform;
                 _vrm.LookAtTarget = _gazeTarget;
             }
+
+            // Touchable spheres on the reachable bones — independent of the motion
+            // pack, so a user's own VRM is just as pettable as the built-in one.
+            VrmTouchColliders.Build(_vrm.GetComponentInChildren<Animator>(), _touchZones);
 
             if (!_useBuiltInMotionPack)
                 return true;
@@ -462,7 +483,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 transform.up * Idle.GazeOffsetVertical * 0.8f;
         }
 
-        internal bool SetMouthShape(string shape)
+        internal bool SetMouthShape(string shape, float weight)
         {
             if (_vrm == null || !_capabilities.hasLipsync)
                 return false;
@@ -478,17 +499,15 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (!TryResolveMouthKey(normalized, out key))
                 return false;
 
-            // One viseme at a time. Emptying the layer first releases whichever
-            // key spoke last, so the composer closes it on the next flush
-            // instead of leaving two mouth shapes stacked.
-            Composer.ClearLayer(VrmExpressionLayer.Viseme);
-            Composer.Set(VrmExpressionLayer.Viseme, key, 1f);
+            // The animator owns the mouth from here: it eases the new viseme in,
+            // releases the last one, and keeps at most two voiced at once.
+            Visemes.SetShape(key, weight);
             return true;
         }
 
         internal void ClearMouth()
         {
-            Composer.ClearLayer(VrmExpressionLayer.Viseme);
+            Visemes.Clear();
         }
 
         internal bool SetExpression(string expressionName, float weight)
@@ -636,6 +655,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             UpdateBlink();
             if (_emotions != null)
                 _emotions.Tick(deltaTime);
+            if (_visemes != null)
+                _visemes.Tick(deltaTime);
 
             // Everything above only declared what it wants. This is the one
             // place a frame's worth of intent reaches the model.
@@ -711,13 +732,18 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void OnDestroy()
         {
-            // No further frame will flush, so close the mouth by hand.
-            ClearMouth();
+            // No further frame will flush, so shut the mouth outright rather than
+            // starting a release that never completes.
+            if (_visemes != null)
+                _visemes.ForceSilence();
             if (_composer != null)
                 _composer.Apply();
             ClearAnimation();
             if (_gazeTarget != null)
                 DestroyOwnedObject(_gazeTarget.gameObject);
+            for (int i = 0; i < _touchZones.Count; i++)
+                DestroyOwnedObject(_touchZones[i]);
+            _touchZones.Clear();
         }
 
         private static void DestroyOwnedObject(UnityEngine.Object value)

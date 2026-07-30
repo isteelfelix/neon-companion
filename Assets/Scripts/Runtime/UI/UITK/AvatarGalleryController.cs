@@ -1936,6 +1936,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             {
                 _avatar3DRenderer = _d.GetOrCreateAvatar3DRenderer();
                 _avatar3DRenderer.AttachTargetImage(_avatar3DImage);
+                _avatar3DRenderer.Touched -= OnAvatarTouched;
+                _avatar3DRenderer.Touched += OnAvatarTouched;
             }
 
             if (_avatar3DService == null)
@@ -2159,6 +2161,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 case AvatarMotionState.Listening: return "listening";
                 default:                          return "idle";
             }
+        }
+
+        private void OnAvatarTouched(AvatarTouchRegion region)
+        {
+            if (_avatar3DService == null || !_avatar3DService.IsLoaded)
+                return;
+            _avatar3DService.SetEmotion(AvatarTouchReactions.ForRegion(region));
         }
 
         private void PlayAvatarReaction(string reactionClipName)

@@ -13,6 +13,13 @@ namespace NeonCompanion.Runtime.Avatar3D
         Task<bool> LoadAvatar(string modelPath);
         bool SetAnimation(string clipName);
         bool SetMouthShape(string shape);
+
+        /// <summary>
+        /// Drives the mouth toward a viseme at a given intensity. The weight is
+        /// capped and eased in; a source without an amplitude can use the
+        /// single-argument overload, which asks for full intensity.
+        /// </summary>
+        bool SetMouthShape(string shape, float weight);
         void ClearMouth();
         bool SetExpression(string expressionName, float weight);
 
