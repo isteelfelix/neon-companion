@@ -111,9 +111,10 @@ namespace NeonCompanion.Runtime.Avatar3D
                 0f,
                 NoAccents);
 
+            // A smile reads as a quick one-shot; a long hold makes it linger oddly.
             palettes[AvatarEmotion.Happy] = new VrmEmotionPalette(
                 0.35f,
-                5f,
+                2.5f,
                 new VrmEmotionAccent[]
                 {
                     new VrmEmotionAccent(ExpressionKey.Happy, 0.8f),
