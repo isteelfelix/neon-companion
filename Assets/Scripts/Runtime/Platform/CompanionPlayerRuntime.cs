@@ -648,8 +648,9 @@ namespace NeonCompanion.Runtime.Platform
             if (!active && _streamMouthOpen <= 0.02f)
                 return;
 
+            // Calmer jaw than the audio path (~25% slower), matching the in-app column.
             float target = active ? _streamTargetOpen : 0f;
-            float speed = (target > _streamMouthOpen ? 11f : 7f) * Time.unscaledDeltaTime;
+            float speed = (target > _streamMouthOpen ? 8f : 5f) * Time.unscaledDeltaTime;
             _streamMouthOpen = Mathf.MoveTowards(_streamMouthOpen, target, speed);
 
             string shape = _streamViseme == Viseme.Silence ? "A" : _streamViseme.ToString();

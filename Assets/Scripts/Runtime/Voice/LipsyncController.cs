@@ -90,6 +90,10 @@ namespace NeonCompanion.Runtime.Voice
         private float _streamTargetOpen;
         private Viseme _streamViseme = Viseme.A;
         private const float StreamActivityHold = 0.22f;
+        // Imitation moves the jaw more languidly than the audio-driven path so it reads
+        // calmer, especially at slow streaming speeds.
+        private const float StreamMouthOpenSpeed  = 8f;
+        private const float StreamMouthCloseSpeed = 5f;
 
         // ── Initialisation ──────────────────────────────────────────────────────
 
@@ -187,7 +191,7 @@ namespace NeonCompanion.Runtime.Voice
                         (level - MouthSilenceLevel) /
                         (MouthLoudLevel - MouthSilenceLevel));
                 _streamActiveUntil = 0f;
-                ApplyMouth(avatar3D, "A", target);
+                ApplyMouth(avatar3D, "A", target, MouthOpenSpeed, MouthCloseSpeed);
                 return;
             }
 
@@ -198,19 +202,20 @@ namespace NeonCompanion.Runtime.Voice
             if (imitate)
             {
                 string shape = _streamViseme == Viseme.Silence ? "A" : _streamViseme.ToString();
-                ApplyMouth(avatar3D, shape, _streamTargetOpen);
+                ApplyMouth(avatar3D, shape, _streamTargetOpen, StreamMouthOpenSpeed, StreamMouthCloseSpeed);
                 return;
             }
 
-            ApplyMouth(avatar3D, "A", 0f);
+            ApplyMouth(avatar3D, "A", 0f, MouthOpenSpeed, MouthCloseSpeed);
         }
 
         // Eases the jaw toward a target opening for the given viseme and applies it,
         // releasing the mouth entirely when effectively closed.
-        private void ApplyMouth(IAvatar3DService avatar3D, string shape, float target)
+        private void ApplyMouth(IAvatar3DService avatar3D, string shape, float target,
+            float openSpeed, float closeSpeed)
         {
             float speed =
-                (target > _mouthOpen ? MouthOpenSpeed : MouthCloseSpeed) *
+                (target > _mouthOpen ? openSpeed : closeSpeed) *
                 Time.unscaledDeltaTime;
             _mouthOpen = Mathf.MoveTowards(_mouthOpen, target, speed);
 
