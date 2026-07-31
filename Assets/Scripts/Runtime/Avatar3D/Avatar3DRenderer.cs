@@ -49,6 +49,14 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Vector2 _pointerDownLocal;
         private bool _pointerMovedFar;
         private float _lastPinchDistance;
+        private bool _panning;
+        private int _activeButton = -1;
+
+        // In-app column mouse framing: right/middle-drag pans, wheel zooms. The pet
+        // window is framed by its own saved scale/offset instead, so these only
+        // ever run on the interactive column image (the preview ignores picking).
+        private const float PanSensitivity = 0.0025f;
+        private const float WheelZoomStep = 0.2f;
 
         /// <summary>
         /// A tap on the rendered image that landed on a touch zone. The renderer
@@ -396,6 +404,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             _targetImage.RegisterCallback<PointerMoveEvent>(OnPointerMove);
             _targetImage.RegisterCallback<PointerUpEvent>(OnPointerUp);
             _targetImage.RegisterCallback<PointerCancelEvent>(OnPointerCancel);
+            _targetImage.RegisterCallback<WheelEvent>(OnPointerWheel);
         }
 
         private void UnbindImageEvents()
@@ -407,6 +416,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             _targetImage.UnregisterCallback<PointerMoveEvent>(OnPointerMove);
             _targetImage.UnregisterCallback<PointerUpEvent>(OnPointerUp);
             _targetImage.UnregisterCallback<PointerCancelEvent>(OnPointerCancel);
+            _targetImage.UnregisterCallback<WheelEvent>(OnPointerWheel);
         }
 
         private void OnPointerDown(PointerDownEvent evt)
@@ -424,6 +434,9 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             _activePointerId = evt.pointerId;
+            _activeButton = evt.button;
+            // Left button orbits; right/middle drag pans the framing.
+            _panning = evt.button == 1 || evt.button == 2;
             _lastPointer = new Vector2(evt.position.x, evt.position.y);
             _pointerDownLocal = new Vector2(evt.localPosition.x, evt.localPosition.y);
             _pointerMovedFar = false;
@@ -463,8 +476,19 @@ namespace NeonCompanion.Runtime.Avatar3D
                 TapMoveThreshold * TapMoveThreshold)
                 _pointerMovedFar = true;
 
-            _yaw += deltaMove.x * _orbitSensitivity;
-            _pitch = Mathf.Clamp(_pitch - deltaMove.y * _orbitSensitivity, _minPitch, _maxPitch);
+            if (_panning)
+            {
+                // Grab-style pan: the model follows the cursor. Signs give a natural
+                // feel at the default front view; drives the column's own framing
+                // (independent of the pet window's saved offset).
+                _viewOffsetX += deltaMove.x * PanSensitivity;
+                _viewOffsetY -= deltaMove.y * PanSensitivity;
+            }
+            else
+            {
+                _yaw += deltaMove.x * _orbitSensitivity;
+                _pitch = Mathf.Clamp(_pitch - deltaMove.y * _orbitSensitivity, _minPitch, _maxPitch);
+            }
         }
 
         private void OnPointerUp(PointerUpEvent evt)
@@ -484,8 +508,13 @@ namespace NeonCompanion.Runtime.Avatar3D
             _activePointerId = -1;
             _targetImage?.ReleasePointer(evt.pointerId);
 
-            // A press that never turned into an orbit is a tap: see what it hit.
-            if (!_pointerMovedFar)
+            // A left-button press that never turned into an orbit is a tap: see what
+            // it hit. Right/middle drags are panning, never a touch.
+            bool wasPan = _panning;
+            int button = _activeButton;
+            _panning = false;
+            _activeButton = -1;
+            if (!_pointerMovedFar && !wasPan && button == 0)
                 TryTouchAt(new Vector2(evt.localPosition.x, evt.localPosition.y));
         }
 
@@ -494,7 +523,24 @@ namespace NeonCompanion.Runtime.Avatar3D
             _touchPointers.Remove(evt.pointerId);
             _dragging = false;
             _activePointerId = -1;
+            _panning = false;
+            _activeButton = -1;
             _lastPinchDistance = GetCurrentPinchDistance();
+        }
+
+        private void OnPointerWheel(WheelEvent evt)
+        {
+            if (_target == null)
+                return;
+
+            // Mouse-wheel zoom for the in-app column. Scrolling up (negative delta)
+            // pulls the camera in. Mirrors the touch pinch, which also drives
+            // _orbitDistance directly.
+            _orbitDistance = Mathf.Clamp(
+                _orbitDistance + evt.delta.y * WheelZoomStep,
+                _minDistance,
+                _maxDistance);
+            evt.StopPropagation();
         }
 
         /// <summary>
