@@ -690,8 +690,13 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
             }
 
-            SetDisplay(_avatarShade,  hasAnimation ? DisplayStyle.None : DisplayStyle.Flex);
-            SetDisplay(_avatarLetter, hasAnimation ? DisplayStyle.None : DisplayStyle.Flex);
+            // The "N" monogram + shade gradient are the fallback bubble decoration.
+            // They must be hidden for BOTH the 2D animated avatar AND any 3D/VRM
+            // render, otherwise they draw on top of the model (the letter sits
+            // after avatar-art in UXML, so it paints over the 3D image).
+            bool hideBubbleDecor = hasAnimation || is3D;
+            SetDisplay(_avatarShade,  hideBubbleDecor ? DisplayStyle.None : DisplayStyle.Flex);
+            SetDisplay(_avatarLetter, hideBubbleDecor ? DisplayStyle.None : DisplayStyle.Flex);
 
             ApplyAvatarLayout(hasAnimation, is3D);
             _d.SetBreathingAllowed?.Invoke(!is3D);
