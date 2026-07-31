@@ -21,8 +21,10 @@ namespace NeonCompanion.Runtime.Avatar3D
         // Radii in metres for a roughly human-scale model. Divided out by the
         // bone's world scale so an unusually scaled rig still gets sane spheres.
         private const float HeadRadius = 0.13f;
-        private const float HandRadius = 0.06f;
-        private const float ForearmRadius = 0.05f;
+        // Hands/forearms are small targets that also sit close to the body; slightly
+        // generous spheres make them reliably tappable (esp. the far-side arm).
+        private const float HandRadius = 0.085f;
+        private const float ForearmRadius = 0.07f;
 
         internal static void Build(Animator animator, List<GameObject> created)
         {

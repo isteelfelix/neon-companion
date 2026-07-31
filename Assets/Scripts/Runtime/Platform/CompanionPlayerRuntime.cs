@@ -1021,26 +1021,9 @@ namespace NeonCompanion.Runtime.Platform
                 Send(new CompanionProcessMessage { type = "pinned", boolValue = _preferences.pinned });
                 _contextMenuOpen = false;
             }
-            if (ContextButton(
-                _preferences.clickThrough
-                    ? LocalizationExtensions.Get(
-                        "companion.player.click_through_off",
-                        "Disable background click-through")
-                    : LocalizationExtensions.Get(
-                        "companion.player.click_through_on",
-                        "Enable background click-through"),
-                width,
-                ref y))
-            {
-                _preferences.clickThrough = !_preferences.clickThrough;
-                WindowsCompanionWindowNative.SetClickThrough(_preferences.clickThrough);
-                Send(new CompanionProcessMessage
-                {
-                    type = "click_through",
-                    boolValue = _preferences.clickThrough
-                });
-                _contextMenuOpen = false;
-            }
+            // Click-through toggle removed: the transparent background always passes
+            // clicks (Unity color-key transparency is click-through at the OS level)
+            // and the avatar always catches them, so the switch had nothing to do.
 
             GUI.Label(
                 new Rect(_contextMenuRect.x + 4f, _contextMenuRect.y + y, width, 22f),
@@ -1074,35 +1057,6 @@ namespace NeonCompanion.Runtime.Platform
             {
                 Send(new CompanionProcessMessage { type = "open_avatar_settings" });
                 _contextMenuOpen = false;
-            }
-
-            // Emotion test row — the only hand-driven way to see the emotion blend,
-            // since otherwise emotions fire on agent reactions or touch alone.
-            if (_avatar3DService != null && _avatar3DService.IsLoaded)
-            {
-                GUI.Label(
-                    new Rect(_contextMenuRect.x + 4f, _contextMenuRect.y + y, width, 22f),
-                    LocalizationExtensions.Get("companion.player.emotion", "Emotion (test)"),
-                    _toolbarLabelStyle);
-                y += 22f;
-                string[] emotions = { "happy", "sad", "surprised", "angry" };
-                float emoWidth = (width - 12f) / 4f;
-                for (int i = 0; i < emotions.Length; i++)
-                {
-                    if (GUI.Button(
-                        new Rect(
-                            _contextMenuRect.x + 4f + (emoWidth + 4f) * i,
-                            _contextMenuRect.y + y,
-                            emoWidth,
-                            24f),
-                        emotions[i].Substring(0, 3),
-                        _toolbarButtonStyle))
-                    {
-                        _avatar3DService.SetEmotion(emotions[i]);
-                        _contextMenuOpen = false;
-                    }
-                }
-                y += 28f;
             }
 
             if (ContextButton(
@@ -1556,7 +1510,10 @@ namespace NeonCompanion.Runtime.Platform
 
             MoveToMonitor(preferences);
             SetTopmost(preferences.pinned);
-            SetClickThrough(preferences.clickThrough);
+            // Click-through control was removed; keep the avatar always clickable so
+            // it can be dragged and touched. The transparent background still passes
+            // clicks on its own (color-key), which is the desired behaviour.
+            SetClickThrough(false);
             SetVisible(preferences.visible);
             return true;
         }

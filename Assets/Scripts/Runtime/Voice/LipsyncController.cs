@@ -70,6 +70,16 @@ namespace NeonCompanion.Runtime.Voice
         private bool   _hasLipsyncClip;
         private bool   _hasTalkingClip;
 
+        // Amplitude-driven 3D mouth. The jaw opening tracks the real audio output
+        // level, so it follows actual speech, freezes shut on pause (no samples),
+        // and works on every replay — none of which the text timer did.
+        private float _mouthOpen;
+        private static readonly float[] _outputSamples = new float[256];
+        private const float MouthSilenceLevel = 0.006f; // RMS below this = closed
+        private const float MouthLoudLevel    = 0.12f;   // RMS at/above this = fully open
+        private const float MouthOpenSpeed     = 11f;
+        private const float MouthCloseSpeed    = 7f;
+
         // ── Initialisation ──────────────────────────────────────────────────────
 
         public void Initialize(
@@ -117,30 +127,74 @@ namespace NeonCompanion.Runtime.Voice
 
         private void Update()
         {
+            // 3D VRM mouth is amplitude-driven from the real audio output.
+            UpdateMouth3D();
+
+            // Legacy 2D sprite / blend-shape-target lipsync keeps the text-timer scan.
             if (!_isActive || string.IsNullOrEmpty(_activeText))
                 return;
-
-            // Skip update if neither path can consume the result
-            IAvatar3DService avatar3D = _getAvatar3DService != null
-                ? _getAvatar3DService()
-                : null;
-            if (!_hasLipsyncClip && _blendShapeTarget == null &&
-                (avatar3D == null || !avatar3D.IsLoaded || !avatar3D.Capabilities.hasLipsync))
+            if (!_hasLipsyncClip && _blendShapeTarget == null)
                 return;
 
             _charTimer += Time.unscaledDeltaTime;
             int newIndex = Mathf.FloorToInt(_charTimer * TextCharsPerSecond);
-
             if (newIndex <= _charIndex)
                 return;
 
             _charIndex = newIndex;
-
-            var viseme = _charIndex < _activeText.Length
+            Viseme viseme = _charIndex < _activeText.Length
                 ? GetVisemeAt(_activeText, _charIndex)
                 : Viseme.Silence;
 
             ApplyViseme(viseme);
+        }
+
+        // Drives the 3D mouth from the current audio output loudness, but only while
+        // a voice clip is actually playing (live TTS or a chat-bubble replay — both
+        // report through the playback clock; a paused clip reads as not playing, so
+        // the jaw closes instead of flapping on).
+        private void UpdateMouth3D()
+        {
+            IAvatar3DService avatar3D = _getAvatar3DService != null
+                ? _getAvatar3DService()
+                : null;
+            if (avatar3D == null || !avatar3D.IsLoaded || !avatar3D.Capabilities.hasLipsync)
+                return;
+
+            bool speaking = _outputManager != null &&
+                _outputManager.GetCurrentPlaybackState().IsPlaying;
+
+            float target = 0f;
+            if (speaking)
+            {
+                float level = SampleOutputLevel();
+                target = level <= MouthSilenceLevel
+                    ? 0f
+                    : Mathf.Clamp01(
+                        (level - MouthSilenceLevel) /
+                        (MouthLoudLevel - MouthSilenceLevel));
+            }
+
+            float speed =
+                (target > _mouthOpen ? MouthOpenSpeed : MouthCloseSpeed) *
+                Time.unscaledDeltaTime;
+            _mouthOpen = Mathf.MoveTowards(_mouthOpen, target, speed);
+
+            if (_mouthOpen <= 0.02f)
+                avatar3D.ClearMouth();
+            else
+                avatar3D.SetMouthShape("A", _mouthOpen);
+        }
+
+        // RMS of the final audio mix this frame. Zero when nothing is audible, so a
+        // paused or finished clip closes the mouth on its own.
+        private static float SampleOutputLevel()
+        {
+            AudioListener.GetOutputData(_outputSamples, 0);
+            float sum = 0f;
+            for (int i = 0; i < _outputSamples.Length; i++)
+                sum += _outputSamples[i] * _outputSamples[i];
+            return Mathf.Sqrt(sum / _outputSamples.Length);
         }
 
         // ── Event handlers ──────────────────────────────────────────────────────
@@ -167,7 +221,8 @@ namespace NeonCompanion.Runtime.Voice
                 _spriteAnimator.Play(TalkingClipName);
             }
 
-            Apply3DViseme(firstViseme);
+            // 3D mouth is driven per-frame from the audio level in UpdateMouth3D();
+            // nothing to prime here.
         }
 
         private void StopLipsync()

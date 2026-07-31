@@ -2132,6 +2132,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
                 SetDisplay(_avatar3DImage, DisplayStyle.Flex);
                 SetDisplay(_preview3DImage, DisplayStyle.Flex);
+                UpdateVrmTileThumbnail(profile.id);
                 RefreshAvatarMotionState();
             }
             finally
@@ -2277,7 +2278,10 @@ namespace NeonCompanion.Runtime.UI.UITK
             }
             else
             {
+                // Placeholder until a live render is available; replaced by the
+                // column render texture in UpdateVrmTileThumbnail once the model loads.
                 var modelMark = new Label("3D");
+                modelMark.name = "avtile-model-mark";
                 modelMark.AddToClassList("avtile__model-mark");
                 modelMark.pickingMode = PickingMode.Ignore;
                 tile.Add(modelMark);
@@ -2303,6 +2307,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             string capturedId = profile.id;
             tile.RegisterCallback<ClickEvent>(_ => SelectAvatar(capturedId));
             return tile;
+        }
+
+        // Swaps the tile's "3D" placeholder for the live column render once the model
+        // is loaded, so the gallery shows the actual avatar instead of a text badge.
+        private void UpdateVrmTileThumbnail(string avatarId)
+        {
+            if (_avatar3DRenderer == null || string.IsNullOrEmpty(avatarId))
+                return;
+
+            VisualElement tile;
+            if (!_customAvatarTiles.TryGetValue(avatarId, out tile) || tile == null)
+                return;
+
+            RenderTexture rt = _avatar3DRenderer.OutputTexture as RenderTexture;
+            if (rt == null)
+                return;
+
+            tile.style.backgroundImage =
+                new StyleBackground(Background.FromRenderTexture(rt));
+            Label mark = tile.Q<Label>("avtile-model-mark");
+            if (mark != null)
+                SetDisplay(mark, DisplayStyle.None);
         }
 
         private VisualElement GalleryForProfile(AvatarProfile profile)

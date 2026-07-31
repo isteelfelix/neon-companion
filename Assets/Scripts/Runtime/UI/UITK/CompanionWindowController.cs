@@ -81,6 +81,14 @@ namespace NeonCompanion.Runtime.UI.UITK
             _visibleToggle = root.Q<Toggle>("companion-visible-toggle");
             _pinnedToggle = root.Q<Toggle>("companion-pinned-toggle");
             _clickThroughToggle = root.Q<Toggle>("companion-click-through-toggle");
+            // Click-through control removed (see CompanionPlayerRuntime): the toggle
+            // could not change the background pass-through, so hide it and leave it
+            // unbound. Nulling the field makes every guarded use below skip it.
+            if (_clickThroughToggle != null)
+            {
+                _clickThroughToggle.style.display = DisplayStyle.None;
+                _clickThroughToggle = null;
+            }
             _monitorButton = root.Q<Button>("companion-monitor-button");
             _scaleLabel = root.Q<Label>("companion-scale-label");
             _scaleSlider = root.Q<Slider>("companion-scale-slider");
