@@ -324,6 +324,11 @@ namespace NeonCompanion.Runtime.Platform
                 case "stream_text":
                     FeedStreamingText(message.text);
                     break;
+                case "emotion":
+                    if (_avatar3DService != null && _avatar3DService.IsLoaded &&
+                        !string.IsNullOrWhiteSpace(message.text))
+                        _avatar3DService.SetEmotion(message.text);
+                    break;
                 case "preferences":
                     ApplyPreferences(message.preferences);
                     break;
@@ -648,9 +653,9 @@ namespace NeonCompanion.Runtime.Platform
             if (!active && _streamMouthOpen <= 0.02f)
                 return;
 
-            // Calmer jaw than the audio path (~25% slower), matching the in-app column.
+            // Calmer jaw than the audio path, matching the in-app column.
             float target = active ? _streamTargetOpen : 0f;
-            float speed = (target > _streamMouthOpen ? 8f : 5f) * Time.unscaledDeltaTime;
+            float speed = (target > _streamMouthOpen ? 5f : 3f) * Time.unscaledDeltaTime;
             _streamMouthOpen = Mathf.MoveTowards(_streamMouthOpen, target, speed);
 
             string shape = _streamViseme == Viseme.Silence ? "A" : _streamViseme.ToString();

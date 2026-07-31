@@ -18,6 +18,9 @@ namespace NeonCompanion.Runtime.Data.Models
         // Move the avatar's mouth to the streaming text when no voice is playing.
         // Real audio always takes priority over this imitation.
         public bool streamingMouthImitation = true;
+        // React with facial emotions to emojis in the assistant's replies (read from
+        // the visible stream in real time). Master switch for the emotion reactions.
+        public bool avatarEmotionReactions = true;
         public bool enterToSend = true;
         public bool useSystemPrompt = true;
         public bool encryptKeys = false;

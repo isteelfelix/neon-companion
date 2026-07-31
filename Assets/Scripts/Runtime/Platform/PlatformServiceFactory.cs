@@ -180,6 +180,7 @@ namespace NeonCompanion.Runtime.Platform
         public void ClearVoicePlayback() { }
         public void TriggerReaction(string reaction) { }
         public void SendStreamingText(string text) { }
+        public void SendEmotion(string emotion) { }
         public void UpdatePreferences(CompanionWindowPreferences preferences) { }
         public void Show() { }
         public void Hide() { }

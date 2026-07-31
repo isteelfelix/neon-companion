@@ -241,6 +241,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _service.SendStreamingText(text);
         }
 
+        public void SendEmotion(string emotion)
+        {
+            if (IsAvailable && _dockState.IsDetached)
+                _service.SendEmotion(emotion);
+        }
+
         public void TriggerReaction(string reaction)
         {
             if (IsAvailable && _dockState.IsDetached)

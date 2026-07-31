@@ -216,6 +216,9 @@ namespace NeonCompanion.Runtime.Platform
         // Streamed assistant text as it becomes visible, so the pet can imitate the
         // mouth while a response streams in with no audio.
         void SendStreamingText(string text);
+        // Directly set the pet's facial emotion (emoji-driven reactions), bypassing the
+        // transient reaction machinery.
+        void SendEmotion(string emotion);
         void UpdatePreferences(CompanionWindowPreferences preferences);
         void Show();
         void Hide();

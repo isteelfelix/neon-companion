@@ -92,8 +92,8 @@ namespace NeonCompanion.Runtime.Voice
         private const float StreamActivityHold = 0.22f;
         // Imitation moves the jaw more languidly than the audio-driven path so it reads
         // calmer, especially at slow streaming speeds.
-        private const float StreamMouthOpenSpeed  = 8f;
-        private const float StreamMouthCloseSpeed = 5f;
+        private const float StreamMouthOpenSpeed  = 5f;
+        private const float StreamMouthCloseSpeed = 3f;
 
         // ── Initialisation ──────────────────────────────────────────────────────
 

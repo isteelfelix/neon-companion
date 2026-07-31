@@ -247,6 +247,12 @@ namespace NeonCompanion.Runtime.Platform
                 Send(new CompanionProcessMessage { type = "reaction", text = reaction });
         }
 
+        public void SendEmotion(string emotion)
+        {
+            if (!string.IsNullOrWhiteSpace(emotion))
+                Send(new CompanionProcessMessage { type = "emotion", text = emotion });
+        }
+
         public void SendStreamingText(string text)
         {
             if (!string.IsNullOrEmpty(text))

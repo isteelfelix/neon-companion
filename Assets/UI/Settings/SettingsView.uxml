@@ -63,6 +63,14 @@
 
                 <ui:VisualElement class="settings-row">
                     <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Живые эмоции по эмодзи" class="settings-row__name" />
+                        <ui:Label text="Мимика реагирует на эмодзи в ответах ассистента в реальном времени." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-emotion-reactions" class="settings-toggle" value="true" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
                         <ui:Label text="Enter → отправить" class="settings-row__name" />
                     </ui:VisualElement>
                     <ui:Toggle name="settings-enter-to-send" class="settings-toggle" value="true" />

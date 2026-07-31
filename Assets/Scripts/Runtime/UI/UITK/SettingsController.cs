@@ -54,6 +54,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Toggle _settingsHistory;
         private Toggle _settingsStreaming;
         private Toggle _settingsStreamingMouth;
+        private Toggle _settingsEmotionReactions;
         private Toggle _settingsEnterToSend;
         private Toggle _settingsSystemPrompt;
         private Toggle _settingsVoiceIo;
@@ -156,6 +157,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsHistory      = root.Q<Toggle>("settings-save-history");
             _settingsStreaming     = root.Q<Toggle>("settings-streaming");
             _settingsStreamingMouth = root.Q<Toggle>("settings-streaming-mouth");
+            _settingsEmotionReactions = root.Q<Toggle>("settings-emotion-reactions");
             _settingsEnterToSend  = root.Q<Toggle>("settings-enter-to-send");
             _settingsSystemPrompt = root.Q<Toggle>("settings-system-prompt");
             _settingsVoiceIo      = root.Q<Toggle>("settings-voice-io");
@@ -353,6 +355,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterToggleChanged(_settingsHistory,      _ => SaveSettings());
             RegisterToggleChanged(_settingsStreaming,     _ => SaveSettings());
             RegisterToggleChanged(_settingsStreamingMouth, _ => SaveSettings());
+            RegisterToggleChanged(_settingsEmotionReactions, _ => SaveSettings());
             RegisterToggleChanged(_settingsEnterToSend,   _ => SaveSettings());
             RegisterToggleChanged(_settingsSystemPrompt, _ => SaveSettings());
             RegisterToggleChanged(_settingsVoiceIo,      _ => { SaveSettings(); _deps.RefreshVoiceControls?.Invoke(); RefreshVoiceSection(); });
@@ -577,6 +580,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _settingsHistory?.SetValueWithoutNotify(s.saveChatHistory);
                 _settingsStreaming?.SetValueWithoutNotify(s.streaming);
                 _settingsStreamingMouth?.SetValueWithoutNotify(s.streamingMouthImitation);
+                _settingsEmotionReactions?.SetValueWithoutNotify(s.avatarEmotionReactions);
                 _settingsEnterToSend?.SetValueWithoutNotify(s.enterToSend);
                 _settingsSystemPrompt?.SetValueWithoutNotify(s.useSystemPrompt);
                 _settingsVoiceIo?.SetValueWithoutNotify(s.voiceIOEnabled);
@@ -668,6 +672,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsHistory != null)      s.saveChatHistory    = _settingsHistory.value;
                 if (_settingsStreaming != null)     s.streaming          = _settingsStreaming.value;
                 if (_settingsStreamingMouth != null) s.streamingMouthImitation = _settingsStreamingMouth.value;
+                if (_settingsEmotionReactions != null) s.avatarEmotionReactions = _settingsEmotionReactions.value;
                 if (_settingsEnterToSend != null)   s.enterToSend       = _settingsEnterToSend.value;
                 if (_settingsSystemPrompt != null)  s.useSystemPrompt   = _settingsSystemPrompt.value;
                 if (_settingsVoiceIo != null)       s.voiceIOEnabled     = _settingsVoiceIo.value;

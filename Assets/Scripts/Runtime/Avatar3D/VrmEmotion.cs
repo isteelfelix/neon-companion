@@ -66,13 +66,17 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         internal readonly VrmEmotionAccent[] Accents;
 
+        // Reactive use (emoji-driven, per-sentence) wants punchier emotions than the
+        // authored 5s holds, so every hold is scaled down here in one place.
+        private const float HoldScale = 0.4f;
+
         private VrmEmotionPalette(
             float blendSeconds,
             float holdSeconds,
             VrmEmotionAccent[] accents)
         {
             BlendSeconds = blendSeconds;
-            HoldSeconds = holdSeconds;
+            HoldSeconds = holdSeconds * HoldScale;
             Accents = accents ?? NoAccents;
         }
 

@@ -563,25 +563,95 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         private bool _imitateMouthCached;
-        private float _imitateMouthReadAt = -999f;
+        private bool _emotionReactionsCached;
+        private float _streamFlagsReadAt = -999f;
 
-        // Fan out just-revealed streaming text to both mouths: the in-app column (via
-        // the voice controller) always, and the separate pet process only when the
-        // imitation setting is on (cached to avoid a settings read per character).
+        // Streaming emotion reactions: emoji parsing state and a change cooldown so a
+        // flurry of emojis doesn't make the face twitch.
+        private char _emotionCarrySurrogate;
+        private string _lastFiredEmotion;
+        private float _lastEmotionAt = -999f;
+        private const float EmotionCooldown = 0.5f;
+
+        // Fan out just-revealed streaming text: the in-app column mouth (via the voice
+        // controller) always, the separate pet process mouth when its setting is on,
+        // and emoji-driven facial emotions when that setting is on. Settings are cached
+        // together to avoid a read per revealed character.
         private void OnStreamingTextRevealed(string text)
         {
             _voiceController.FeedStreamingMouthText(text);
 
             float now = Time.unscaledTime;
-            if (now - _imitateMouthReadAt > 0.5f)
+            if (now - _streamFlagsReadAt > 0.5f)
             {
-                _imitateMouthReadAt = now;
+                _streamFlagsReadAt = now;
                 NeonCompanion.Runtime.Data.Models.AppSettings st =
                     _app != null && _app.Settings != null ? _app.Settings.Load() : null;
                 _imitateMouthCached = st != null && st.streamingMouthImitation;
+                _emotionReactionsCached = st != null && st.avatarEmotionReactions;
             }
+
             if (_imitateMouthCached)
                 _companionWindowController.SendStreamingText(text);
+
+            if (_emotionReactionsCached)
+                ScanEmotionsFromStream(text);
+        }
+
+        // Reads emoji code points out of the revealed chunk (carrying a split surrogate
+        // pair across chunks) and fires the mapped emotion, rate-limited by a cooldown.
+        private void ScanEmotionsFromStream(string chunk)
+        {
+            if (string.IsNullOrEmpty(chunk))
+                return;
+
+            string s = chunk;
+            if (_emotionCarrySurrogate != '\0')
+            {
+                s = _emotionCarrySurrogate + chunk;
+                _emotionCarrySurrogate = '\0';
+            }
+
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                int codePoint;
+                if (char.IsHighSurrogate(c))
+                {
+                    if (i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                    {
+                        codePoint = char.ConvertToUtf32(c, s[i + 1]);
+                        i++;
+                    }
+                    else
+                    {
+                        _emotionCarrySurrogate = c;
+                        break;
+                    }
+                }
+                else
+                {
+                    codePoint = c;
+                }
+
+                string emotion;
+                if (NeonCompanion.Runtime.Avatar3D.EmojiEmotion.TryMap(codePoint, out emotion))
+                    TryFireEmotion(emotion);
+            }
+        }
+
+        private void TryFireEmotion(string emotion)
+        {
+            float now = Time.unscaledTime;
+            if (now - _lastEmotionAt < EmotionCooldown)
+                return;
+            _lastEmotionAt = now;
+            _lastFiredEmotion = emotion;
+
+            var svc = _avatarGalleryController.GetAvatar3DServiceInstance();
+            if (svc != null)
+                svc.SetEmotion(emotion);
+            _companionWindowController.SendEmotion(emotion);
         }
 
         private ChatController.Deps BuildChatControllerDeps()
@@ -1528,8 +1598,20 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         private void TriggerAvatarSmile()
         {
+            // Emoji-driven emotions already set the mood from the reply's content, so
+            // skip the legacy blanket smile — otherwise every response ends on a forced
+            // happy that doubles up in the column and misses the pet's emotion channel.
+            if (IsEmotionReactionsEnabled())
+                return;
             _avatarGalleryController.TriggerAvatarSmile();
             _companionWindowController.TriggerReaction("smile");
+        }
+
+        private bool IsEmotionReactionsEnabled()
+        {
+            NeonCompanion.Runtime.Data.Models.AppSettings st =
+                _app != null && _app.Settings != null ? _app.Settings.Load() : null;
+            return st != null && st.avatarEmotionReactions;
         }
 
         private void TriggerAvatarConfused()
