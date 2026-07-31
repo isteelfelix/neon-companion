@@ -12,6 +12,12 @@ namespace NeonCompanion.Runtime.Data.Models
         public string activeAvatarId = "neon";
         public bool saveChatHistory = true;
         public bool streaming = true;
+        // 100 = render tokens as the provider delivers them; below 100 paces the
+        // reveal from a buffer for a smoother typewriter feel.
+        public int chatStreamingSpeedPercent = 100;
+        // Move the avatar's mouth to the streaming text when no voice is playing.
+        // Real audio always takes priority over this imitation.
+        public bool streamingMouthImitation = true;
         public bool enterToSend = true;
         public bool useSystemPrompt = true;
         public bool encryptKeys = false;

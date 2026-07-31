@@ -92,6 +92,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private ChatAttachmentManager _attachmentManager;
         private ChatService _currentChatService;
         private ChatStreamingCoordinator _streamingCoordinator;
+        private int _streamingSpeedPercent = 100;
+        private float _streamingSpeedReadAt = -999f;
         private ToolCallApprovalController _approvalController;
         private string _chatSubtitle = string.Empty;
 
@@ -133,6 +135,29 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public bool IsSending => _streamingCoordinator != null && _streamingCoordinator.IsSending;
         public bool IsStreamingResponse => _streamingCoordinator != null && _streamingCoordinator.IsStreaming;
+
+        // Current streaming reveal speed (10..100). Cached and refreshed at most twice a
+        // second so the per-frame reveal pacer never hits disk.
+        private int GetStreamingSpeedPercent()
+        {
+            float now = UnityEngine.Time.realtimeSinceStartup;
+            if (now - _streamingSpeedReadAt > 0.5f)
+            {
+                _streamingSpeedReadAt = now;
+                try
+                {
+                    var app = _d.GetAppAsync != null ? _d.GetAppAsync().Result : null;
+                    var s = app != null ? app.Settings.Load() : null;
+                    if (s != null)
+                        _streamingSpeedPercent = UnityEngine.Mathf.Clamp(s.chatStreamingSpeedPercent, 1, 100);
+                }
+                catch (Exception)
+                {
+                    // Keep the last cached value if settings are momentarily unavailable.
+                }
+            }
+            return _streamingSpeedPercent;
+        }
         public string ChatSubtitle => _chatSubtitle;
         public string SessionSearchQuery => _searchController != null ? _searchController.SessionSearchQuery : string.Empty;
 
@@ -186,6 +211,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 () => _d.GetChatServiceAsync().Result,
                 _d.PlayNotificationSound);
 
+            // Streaming reveal speed comes from settings; cached and refreshed at most
+            // twice a second so the per-frame pacer never touches disk.
             _streamingCoordinator = new ChatStreamingCoordinator(
                 _d.MessagesList,
                 ScrollTranscriptToBottom,
@@ -199,7 +226,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _d.StopButton,
                 _approvalController,
                 () => _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamEnd(),
-                _d.RefreshAvatarMotionState);
+                _d.RefreshAvatarMotionState,
+                GetStreamingSpeedPercent,
+                null);
 
             _messageListRenderer = new ChatMessageListRenderer(
                 _d.MessagesList,
@@ -631,6 +660,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 {
                     _streamingCoordinator.Begin();
                     await chat.SendMessageAsync(message, pendingAttachments, _streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
+                    // Let the reveal pacer finish drawing any buffered tail before the
+                    // streamed bubble is torn down and replaced by the final render.
+                    await _streamingCoordinator.DrainRevealAsync();
                     _streamingCoordinator.ClearThinkingBubble();
                     _approvalController?.ClearToolProgress();
                     _approvalController?.Dismiss();
@@ -1095,6 +1127,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     {
                         _streamingCoordinator.Begin();
                         await RegenerateOrRewindAsync(chat, _streamingCoordinator.OnToken, _streamingCoordinator.OnToolProgress);
+                        await _streamingCoordinator.DrainRevealAsync();
                         _streamingCoordinator.ClearThinkingBubble();
                         _approvalController?.ClearToolProgress();
                         _approvalController?.Dismiss();

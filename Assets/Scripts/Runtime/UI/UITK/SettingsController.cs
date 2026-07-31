@@ -77,6 +77,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _settingsVoiceSection;
         private NeonDropdown _settingsInputDevice;
         private Slider _settingsOutputVolume;
+        private Slider _settingsStreamingSpeed;
 
         // ===== Settings action buttons =====
         private Button _settingsOpenFolderBtn;
@@ -179,6 +180,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             _settingsVoiceSection = root.Q<VisualElement>("settings-voice-section");
             _settingsInputDevice  = root.Q<NeonDropdown>("settings-input-device");
             _settingsOutputVolume = root.Q<Slider>("settings-output-volume");
+            _settingsStreamingSpeed = root.Q<Slider>("settings-streaming-speed");
 
             // Settings action buttons
             _settingsOpenFolderBtn = root.Q<Button>("settings-open-folder");
@@ -369,6 +371,9 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (_settingsOutputVolume != null)
                 _settingsOutputVolume.RegisterCallback<ChangeEvent<float>>(OnVoiceOutputVolumeChanged);
 
+            if (_settingsStreamingSpeed != null)
+                _settingsStreamingSpeed.RegisterCallback<ChangeEvent<float>>(OnStreamingSpeedChanged);
+
             RegisterClick(_settingsOpenFolderBtn,  OnOpenFolderClicked);
             RegisterClick(_settingsExportBtn,      OnExportChatsClicked);
             RegisterClick(_settingsClearChatsBtn,  OnClearChatsClicked);
@@ -400,6 +405,9 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_settingsOutputVolume != null)
                 _settingsOutputVolume.UnregisterCallback<ChangeEvent<float>>(OnVoiceOutputVolumeChanged);
+
+            if (_settingsStreamingSpeed != null)
+                _settingsStreamingSpeed.UnregisterCallback<ChangeEvent<float>>(OnStreamingSpeedChanged);
 
             UnregisterClick(_settingsOpenFolderBtn,  OnOpenFolderClicked);
             UnregisterClick(_settingsExportBtn,      OnExportChatsClicked);
@@ -624,6 +632,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 PopulateVoiceDeviceDropdown(s.inputDeviceName);
                 if (_settingsOutputVolume != null)
                     _settingsOutputVolume.SetValueWithoutNotify(s.outputVolume);
+                if (_settingsStreamingSpeed != null)
+                    _settingsStreamingSpeed.SetValueWithoutNotify(s.chatStreamingSpeedPercent);
                 RefreshVoiceSection();
                 loaded = true;
             }
@@ -665,6 +675,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsToolPermission != null) s.toolPermissionMode = ResolvePermissionMode(_settingsToolPermission.value);
                 if (_settingsInputDevice != null)   s.inputDeviceName     = _settingsInputDevice.value ?? string.Empty;
                 if (_settingsOutputVolume != null)  s.outputVolume        = _settingsOutputVolume.value;
+                if (_settingsStreamingSpeed != null) s.chatStreamingSpeedPercent = Mathf.Clamp(Mathf.RoundToInt(_settingsStreamingSpeed.value), 1, 100);
 
                 s.avatarShape      = _avatarShape;
                 s.uiTheme          = _uiTheme;
@@ -1275,6 +1286,11 @@ namespace NeonCompanion.Runtime.UI.UITK
         }
 
         private void OnVoiceOutputVolumeChanged(ChangeEvent<float> evt)
+        {
+            SaveSettings();
+        }
+
+        private void OnStreamingSpeedChanged(ChangeEvent<float> evt)
         {
             SaveSettings();
         }

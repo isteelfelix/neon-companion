@@ -39,6 +39,18 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         private Label _statsLabel;
         private IVisualElementScheduledItem _statsSchedule;
 
+        // Reveal pacer: tokens land in _segmentBuffer immediately, but only the first
+        // _revealedLen characters are shown. A scheduled tick advances the reveal at a
+        // rate derived from the streaming-speed percent (100 = show everything at once).
+        private readonly Func<int> _getStreamingSpeedPercent;
+        private readonly Action<string> _onTextRevealed;
+        private IVisualElementScheduledItem _paceSchedule;
+        private int _revealedLen;
+        private float _lastPaceTime;
+        private float _paceAccumulator;
+        private bool _pacingSuspended;
+        private const float PaceMaxCharsPerSecond = 90f;
+
         internal bool IsStreaming { get; private set; }
         internal bool IsSending { get; private set; }
         internal DateTime StartTime { get { return _startTime; } }
@@ -57,8 +69,12 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             Button stopButton,
             ToolCallApprovalController approvalController,
             Action onStreamEnd,
-            Action refreshAvatarMotionState)
+            Action refreshAvatarMotionState,
+            Func<int> getStreamingSpeedPercent,
+            Action<string> onTextRevealed)
         {
+            _getStreamingSpeedPercent = getStreamingSpeedPercent;
+            _onTextRevealed = onTextRevealed;
             _messagesList = messagesList;
             _scrollToBottom = scrollToBottom;
             _createMessageElement = createMessageElement;
@@ -170,6 +186,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             IsStreaming = false;
             _textBuffer.Length = 0;
             _segmentBuffer.Length = 0;
+            _revealedLen = 0;
+            StopPaceSchedule();
 
             _typingDots = new VisualElement();
             _typingDots.AddToClassList("typing--inline");
@@ -226,6 +244,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                 _segmentBuffer.Length = 0;
                 _segmentBuffer.Append(text);
                 _label.SetMarkdown(_segmentBuffer.ToString());
+                _revealedLen = _segmentBuffer.Length;
+                StopPaceSchedule();
             }
 
             UpdateStats();
@@ -242,6 +262,9 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
         {
             if (segments == null)
                 return;
+            // A catch-up replay of already-received segments shows instantly; the pacer
+            // is only for live tokens.
+            _pacingSuspended = true;
             for (int i = 0; i < segments.Count; i++)
             {
                 var seg = segments[i];
@@ -265,6 +288,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
                     OnToolProgress(info);
                 }
             }
+            _pacingSuspended = false;
         }
 
         internal void OnToken(string token)
@@ -283,7 +307,7 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             {
                 _textBuffer.Append(token);
                 _segmentBuffer.Append(token);
-                _label.SetMarkdown(_segmentBuffer.ToString());
+                RenderPaced();
             }
 
             if (!string.IsNullOrEmpty(token))
@@ -293,10 +317,122 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
             _scrollToBottom?.Invoke();
         }
 
+        // Shows the buffered text either instantly (100% / suspended) or lets the pace
+        // schedule advance the reveal so the reader sees a smooth typewriter stream.
+        private void RenderPaced()
+        {
+            if (_label == null)
+                return;
+
+            int percent = _getStreamingSpeedPercent != null ? _getStreamingSpeedPercent() : 100;
+            if (_pacingSuspended || percent >= 100)
+            {
+                RevealTo(_segmentBuffer.Length);
+                return;
+            }
+            EnsurePaceSchedule();
+        }
+
+        // Reveals up to `target` characters of the current segment, emitting the newly
+        // shown text so the streaming lipsync imitation can follow the visible tokens.
+        private void RevealTo(int target)
+        {
+            if (_label == null)
+                return;
+            if (target > _segmentBuffer.Length)
+                target = _segmentBuffer.Length;
+            if (target <= _revealedLen)
+                return;
+
+            string newly = _segmentBuffer.ToString(_revealedLen, target - _revealedLen);
+            _revealedLen = target;
+            _label.SetMarkdown(_segmentBuffer.ToString(0, _revealedLen));
+            _onTextRevealed?.Invoke(newly);
+            _scrollToBottom?.Invoke();
+        }
+
+        private void EnsurePaceSchedule()
+        {
+            if (_paceSchedule != null || _messagesList == null)
+                return;
+            _lastPaceTime = UnityEngine.Time.realtimeSinceStartup;
+            _paceAccumulator = 0f;
+            _paceSchedule = _messagesList.schedule.Execute(PaceTick).Every(16);
+        }
+
+        private void PaceTick()
+        {
+            if (_label == null)
+                return;
+
+            float now = UnityEngine.Time.realtimeSinceStartup;
+            float dt = now - _lastPaceTime;
+            _lastPaceTime = now;
+
+            int percent = _getStreamingSpeedPercent != null ? _getStreamingSpeedPercent() : 100;
+            if (percent >= 100)
+            {
+                RevealTo(_segmentBuffer.Length);
+                return;
+            }
+
+            // Accumulate fractional characters so low percentages reveal genuinely
+            // slowly. A per-tick floor of 1 would pin the rate at ~60 c/s regardless
+            // of the setting, which made every low value feel identically fast.
+            float cps = PaceMaxCharsPerSecond * (percent / 100f);
+            _paceAccumulator += cps * dt;
+            int step = (int)_paceAccumulator;
+            if (step <= 0)
+                return;
+            _paceAccumulator -= step;
+            RevealTo(_revealedLen + step);
+        }
+
+        private void StopPaceSchedule()
+        {
+            if (_paceSchedule != null)
+            {
+                _paceSchedule.Pause();
+                _paceSchedule = null;
+            }
+        }
+
+        // Show every buffered character now — used when a segment closes or the stream
+        // ends so paced text is never left truncated.
+        private void FlushReveal()
+        {
+            RevealTo(_segmentBuffer.Length);
+            StopPaceSchedule();
+        }
+
+        // Waits until the pacer has revealed all buffered text at its own rate, so the
+        // tail is drawn smoothly instead of dumped when the last token arrives. Returns
+        // immediately when pacing is off or the reveal has already caught up. A tick
+        // guard caps the wait so a stalled panel can never hang the send flow.
+        internal async System.Threading.Tasks.Task DrainRevealAsync()
+        {
+            int lastLen = -1;
+            int stallTicks = 0;
+            // Bail only on a genuine stall (~4s with no reveal progress); a legitimately
+            // slow reveal keeps advancing and runs to completion regardless of length.
+            while (_label != null &&
+                   _revealedLen < _segmentBuffer.Length &&
+                   stallTicks < 250)
+            {
+                stallTicks = _revealedLen == lastLen ? stallTicks + 1 : 0;
+                lastLen = _revealedLen;
+                await System.Threading.Tasks.Task.Delay(16);
+            }
+        }
+
         internal void ResetStreamingSegment()
         {
+            // Show whatever is still buffered before this segment's label is dropped,
+            // so switching to a tool card never leaves paced text cut off.
+            FlushReveal();
             _label = null;
             _segmentBuffer.Length = 0;
+            _revealedLen = 0;
         }
 
         internal Label PauseStatsSchedule()
@@ -327,6 +463,8 @@ namespace NeonCompanion.Runtime.UI.UITK.Chat
 
         internal void Abort()
         {
+            // Reveal any paced-but-hidden tail before the label reference is dropped.
+            FlushReveal();
             StopTypingAnimation();
             StopStatsUpdate();
             if (_typingDots != null)

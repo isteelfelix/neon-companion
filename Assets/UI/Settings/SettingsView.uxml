@@ -47,6 +47,14 @@
 
                 <ui:VisualElement class="settings-row">
                     <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Скорость вывода стриминга" class="settings-row__name" />
+                        <ui:Label text="100% — как отдаёт провайдер; ниже — плавнее из буфера." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Slider name="settings-streaming-speed" low-value="1" high-value="100" value="100" show-input-field="true" class="slider-input" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
                         <ui:Label text="Enter → отправить" class="settings-row__name" />
                     </ui:VisualElement>
                     <ui:Toggle name="settings-enter-to-send" class="settings-toggle" value="true" />
