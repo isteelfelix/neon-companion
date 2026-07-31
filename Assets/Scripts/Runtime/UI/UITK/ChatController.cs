@@ -57,6 +57,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             public Func<Task<CompanionApp>> GetAppAsync;
             public Func<Task> LoadSessionsAsync;
             public Action<string> ShowSystemMessage;
+            // Streamed assistant text as it becomes visible, for streaming mouth imitation.
+            public Action<string> FeedStreamingMouthText;
             // Navigation
             public Action ShowHistory;
             public Action ShowChat;
@@ -149,7 +151,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                     var app = _d.GetAppAsync != null ? _d.GetAppAsync().Result : null;
                     var s = app != null ? app.Settings.Load() : null;
                     if (s != null)
-                        _streamingSpeedPercent = UnityEngine.Mathf.Clamp(s.chatStreamingSpeedPercent, 1, 100);
+                        _streamingSpeedPercent = UnityEngine.Mathf.Clamp(s.chatStreamingSpeedPercent, 10, 100);
                 }
                 catch (Exception)
                 {
@@ -228,7 +230,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 () => _d.GetAvatarAnimationController?.Invoke()?.TriggerStreamEnd(),
                 _d.RefreshAvatarMotionState,
                 GetStreamingSpeedPercent,
-                null);
+                text => _d.FeedStreamingMouthText?.Invoke(text));
 
             _messageListRenderer = new ChatMessageListRenderer(
                 _d.MessagesList,

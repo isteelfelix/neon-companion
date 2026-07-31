@@ -50,7 +50,15 @@
                         <ui:Label text="Скорость вывода стриминга" class="settings-row__name" />
                         <ui:Label text="100% — как отдаёт провайдер; ниже — плавнее из буфера." class="settings-row__sub" />
                     </ui:VisualElement>
-                    <ui:Slider name="settings-streaming-speed" low-value="1" high-value="100" value="100" show-input-field="true" class="slider-input" />
+                    <ui:Slider name="settings-streaming-speed" low-value="10" high-value="100" value="100" show-input-field="true" class="slider-input" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="settings-row">
+                    <ui:VisualElement class="settings-row__copy">
+                        <ui:Label text="Имитация губ при стриминге" class="settings-row__name" />
+                        <ui:Label text="Двигать рот под текст, когда нет голоса. Звук всегда в приоритете." class="settings-row__sub" />
+                    </ui:VisualElement>
+                    <ui:Toggle name="settings-streaming-mouth" class="settings-toggle" value="true" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="settings-row">

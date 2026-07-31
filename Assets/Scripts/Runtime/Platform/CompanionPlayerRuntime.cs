@@ -87,6 +87,14 @@ namespace NeonCompanion.Runtime.Platform
         private float _voicePositionSecs;
         private float _voiceDurationSecs;
         private bool _voiceHasPlaybackClock;
+
+        // Streaming-text mouth imitation (mirrors the in-app column). Fed the visible
+        // streamed characters; drives the jaw only while no voice text is active.
+        private Viseme _streamViseme = Viseme.A;
+        private float _streamTargetOpen;
+        private float _streamActiveUntil;
+        private float _streamMouthOpen;
+        private const float StreamActivityHold = 0.22f;
         private Rect _hoverControlsRect = new Rect(8f, 8f, 348f, 36f);
         private Rect _contextMenuRect = new Rect(8f, 8f, 220f, 248f);
         private bool _contextMenuOpen;
@@ -267,6 +275,7 @@ namespace NeonCompanion.Runtime.Platform
 
             AdvanceAnimation();
             AdvanceVoicePlayback();
+            AdvanceStreamingMouth();
             AdvanceReaction();
             UpdateVrmGaze();
             _pointerInside = WindowsCompanionWindowNative.IsCursorInsideWindow();
@@ -311,6 +320,9 @@ namespace NeonCompanion.Runtime.Platform
                     break;
                 case "reaction":
                     TriggerReaction(message.text);
+                    break;
+                case "stream_text":
+                    FeedStreamingText(message.text);
                     break;
                 case "preferences":
                     ApplyPreferences(message.preferences);
@@ -583,6 +595,68 @@ namespace NeonCompanion.Runtime.Platform
             _voiceHasPlaybackClock = false;
             if (_avatar3DService != null && _avatar3DService.IsLoaded)
                 _avatar3DService.ClearMouth();
+        }
+
+        // Sets the imitation target from the last informative character of the just-
+        // revealed streaming chunk and refreshes the activity window.
+        private void FeedStreamingText(string revealed)
+        {
+            if (string.IsNullOrEmpty(revealed))
+                return;
+
+            for (int i = revealed.Length - 1; i >= 0; i--)
+            {
+                char c = char.ToLowerInvariant(revealed[i]);
+                Viseme v = LipsyncController.GetVisemeAt(revealed, i);
+                if (v != Viseme.Silence)
+                {
+                    _streamViseme = v;
+                    _streamTargetOpen = UnityEngine.Random.Range(0.6f, 0.95f);
+                    _streamActiveUntil = Time.unscaledTime + StreamActivityHold;
+                    return;
+                }
+                if (char.IsLetterOrDigit(c))
+                {
+                    _streamTargetOpen = UnityEngine.Random.Range(0.22f, 0.4f);
+                    _streamActiveUntil = Time.unscaledTime + StreamActivityHold;
+                    return;
+                }
+                if (c == ' ' || c == '\n' || c == '\t' || char.IsPunctuation(c))
+                {
+                    _streamTargetOpen = 0f;
+                    _streamActiveUntil = Time.unscaledTime + StreamActivityHold;
+                    return;
+                }
+            }
+        }
+
+        // Imitates talking from the streamed text, but only when no voice text owns the
+        // mouth (voice playback has priority) and while text is still flowing.
+        private void AdvanceStreamingMouth()
+        {
+            if (_avatar3DService == null || !_avatar3DService.IsLoaded ||
+                !_avatar3DService.Capabilities.hasLipsync)
+                return;
+
+            if (!string.IsNullOrEmpty(_voiceText))
+            {
+                _streamMouthOpen = 0f;
+                return;
+            }
+
+            bool active = Time.unscaledTime < _streamActiveUntil;
+            if (!active && _streamMouthOpen <= 0.02f)
+                return;
+
+            float target = active ? _streamTargetOpen : 0f;
+            float speed = (target > _streamMouthOpen ? 11f : 7f) * Time.unscaledDeltaTime;
+            _streamMouthOpen = Mathf.MoveTowards(_streamMouthOpen, target, speed);
+
+            string shape = _streamViseme == Viseme.Silence ? "A" : _streamViseme.ToString();
+            if (_streamMouthOpen <= 0.02f)
+                _avatar3DService.ClearMouth();
+            else
+                _avatar3DService.SetMouthShape(shape, _streamMouthOpen);
         }
 
         private void TriggerReaction(string reaction)

@@ -80,18 +80,31 @@ namespace NeonCompanion.Runtime.Voice
         private const float MouthOpenSpeed     = 11f;
         private const float MouthCloseSpeed    = 7f;
 
+        // Streaming-text mouth imitation, used only when no audio is playing. Fed the
+        // visible streaming characters; each informative char sets a viseme target and
+        // refreshes an activity window so the jaw closes shortly after text stops.
+        private Func<bool> _isStreamingMouthEnabled;
+        private bool _streamMouthEnabled;
+        private float _streamEnabledReadAt = -999f;
+        private float _streamActiveUntil;
+        private float _streamTargetOpen;
+        private Viseme _streamViseme = Viseme.A;
+        private const float StreamActivityHold = 0.22f;
+
         // ── Initialisation ──────────────────────────────────────────────────────
 
         public void Initialize(
             VoiceOutputManager outputManager,
             VoiceInputManager inputManager,
             Func<SpriteSheetAnimator> getSpriteAnimator,
-            Func<IAvatar3DService> getAvatar3DService)
+            Func<IAvatar3DService> getAvatar3DService,
+            Func<bool> isStreamingMouthEnabled = null)
         {
             _outputManager = outputManager;
             _inputManager  = inputManager;
             _getSpriteAnimator = getSpriteAnimator;
             _getAvatar3DService = getAvatar3DService;
+            _isStreamingMouthEnabled = isStreamingMouthEnabled;
             RefreshTargets();
 
             if (_outputManager != null)
@@ -164,17 +177,38 @@ namespace NeonCompanion.Runtime.Voice
             bool speaking = _outputManager != null &&
                 _outputManager.GetCurrentPlaybackState().IsPlaying;
 
-            float target = 0f;
             if (speaking)
             {
+                // Real audio always wins: the jaw tracks the actual output loudness.
                 float level = SampleOutputLevel();
-                target = level <= MouthSilenceLevel
+                float target = level <= MouthSilenceLevel
                     ? 0f
                     : Mathf.Clamp01(
                         (level - MouthSilenceLevel) /
                         (MouthLoudLevel - MouthSilenceLevel));
+                _streamActiveUntil = 0f;
+                ApplyMouth(avatar3D, "A", target);
+                return;
             }
 
+            // No audio: imitate speech while streaming text is still flowing. The
+            // enabled flag was already applied when the activity window was set in
+            // FeedStreamingText, so this stays a cheap per-frame check.
+            bool imitate = Time.unscaledTime < _streamActiveUntil;
+            if (imitate)
+            {
+                string shape = _streamViseme == Viseme.Silence ? "A" : _streamViseme.ToString();
+                ApplyMouth(avatar3D, shape, _streamTargetOpen);
+                return;
+            }
+
+            ApplyMouth(avatar3D, "A", 0f);
+        }
+
+        // Eases the jaw toward a target opening for the given viseme and applies it,
+        // releasing the mouth entirely when effectively closed.
+        private void ApplyMouth(IAvatar3DService avatar3D, string shape, float target)
+        {
             float speed =
                 (target > _mouthOpen ? MouthOpenSpeed : MouthCloseSpeed) *
                 Time.unscaledDeltaTime;
@@ -183,7 +217,51 @@ namespace NeonCompanion.Runtime.Voice
             if (_mouthOpen <= 0.02f)
                 avatar3D.ClearMouth();
             else
-                avatar3D.SetMouthShape("A", _mouthOpen);
+                avatar3D.SetMouthShape(shape, _mouthOpen);
+        }
+
+        // Feeds the just-revealed streaming text so the mouth can imitate talking when
+        // no audio is playing. Sets the viseme/opening from the last informative
+        // character and refreshes the activity window; real audio overrides all of it.
+        public void FeedStreamingText(string revealed)
+        {
+            if (string.IsNullOrEmpty(revealed))
+                return;
+
+            // Cache the enabled flag (settings read hits disk); refresh at most twice a
+            // second. When off, never open the activity window so the mouth stays shut.
+            float nowEnabledCheck = Time.unscaledTime;
+            if (nowEnabledCheck - _streamEnabledReadAt > 0.5f)
+            {
+                _streamEnabledReadAt = nowEnabledCheck;
+                _streamMouthEnabled = _isStreamingMouthEnabled != null && _isStreamingMouthEnabled();
+            }
+            if (!_streamMouthEnabled)
+                return;
+
+            for (int i = revealed.Length - 1; i >= 0; i--)
+            {
+                char c = char.ToLowerInvariant(revealed[i]);
+                if (CharToViseme.TryGetValue(c, out var v))
+                {
+                    _streamViseme = v;
+                    _streamTargetOpen = UnityEngine.Random.Range(0.6f, 0.95f);
+                    _streamActiveUntil = Time.unscaledTime + StreamActivityHold;
+                    return;
+                }
+                if (char.IsLetterOrDigit(c))
+                {
+                    _streamTargetOpen = UnityEngine.Random.Range(0.22f, 0.4f);
+                    _streamActiveUntil = Time.unscaledTime + StreamActivityHold;
+                    return;
+                }
+                if (c == ' ' || c == '\n' || c == '\t' || char.IsPunctuation(c))
+                {
+                    _streamTargetOpen = 0f;
+                    _streamActiveUntil = Time.unscaledTime + StreamActivityHold;
+                    return;
+                }
+            }
         }
 
         // RMS of the final audio mix this frame. Zero when nothing is audible, so a

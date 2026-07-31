@@ -235,6 +235,12 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _service.ClearVoicePlayback();
         }
 
+        public void SendStreamingText(string text)
+        {
+            if (IsAvailable && _dockState.IsDetached)
+                _service.SendStreamingText(text);
+        }
+
         public void TriggerReaction(string reaction)
         {
             if (IsAvailable && _dockState.IsDetached)

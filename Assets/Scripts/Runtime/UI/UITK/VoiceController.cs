@@ -166,7 +166,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                     _voiceOutputManager,
                     _voiceInputManager,
                     _d.GetAvatarAnimator,
-                    _d.GetAvatar3DService);
+                    _d.GetAvatar3DService,
+                    IsStreamingMouthImitationEnabled);
             }
 
             BindVoiceAnimationEvents();
@@ -179,6 +180,20 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             RefreshVoiceControls();
             await Task.CompletedTask;
+        }
+
+        // Forwards the visible streaming text to the lipsync driver so the mouth can
+        // imitate speech while a response streams in without audio.
+        public void FeedStreamingMouthText(string revealed)
+        {
+            if (_lipsyncController != null)
+                _lipsyncController.FeedStreamingText(revealed);
+        }
+
+        private bool IsStreamingMouthImitationEnabled()
+        {
+            AppSettings settings = _d.GetAppSettings != null ? _d.GetAppSettings() : null;
+            return settings != null && settings.streamingMouthImitation;
         }
 
         private void BindProviderChangeEvents(ChatService chat)

@@ -247,6 +247,12 @@ namespace NeonCompanion.Runtime.Platform
                 Send(new CompanionProcessMessage { type = "reaction", text = reaction });
         }
 
+        public void SendStreamingText(string text)
+        {
+            if (!string.IsNullOrEmpty(text))
+                Send(new CompanionProcessMessage { type = "stream_text", text = text });
+        }
+
         public void UpdatePreferences(CompanionWindowPreferences preferences)
         {
             _preferences = preferences ?? new CompanionWindowPreferences();

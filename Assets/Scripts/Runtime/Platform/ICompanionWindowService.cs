@@ -213,6 +213,9 @@ namespace NeonCompanion.Runtime.Platform
         void UpdateVoicePlayback(float positionSecs, float durationSecs, bool isPlaying);
         void ClearVoicePlayback();
         void TriggerReaction(string reaction);
+        // Streamed assistant text as it becomes visible, so the pet can imitate the
+        // mouth while a response streams in with no audio.
+        void SendStreamingText(string text);
         void UpdatePreferences(CompanionWindowPreferences preferences);
         void Show();
         void Hide();

@@ -562,6 +562,28 @@ namespace NeonCompanion.Runtime.UI.UITK
             };
         }
 
+        private bool _imitateMouthCached;
+        private float _imitateMouthReadAt = -999f;
+
+        // Fan out just-revealed streaming text to both mouths: the in-app column (via
+        // the voice controller) always, and the separate pet process only when the
+        // imitation setting is on (cached to avoid a settings read per character).
+        private void OnStreamingTextRevealed(string text)
+        {
+            _voiceController.FeedStreamingMouthText(text);
+
+            float now = Time.unscaledTime;
+            if (now - _imitateMouthReadAt > 0.5f)
+            {
+                _imitateMouthReadAt = now;
+                NeonCompanion.Runtime.Data.Models.AppSettings st =
+                    _app != null && _app.Settings != null ? _app.Settings.Load() : null;
+                _imitateMouthCached = st != null && st.streamingMouthImitation;
+            }
+            if (_imitateMouthCached)
+                _companionWindowController.SendStreamingText(text);
+        }
+
         private ChatController.Deps BuildChatControllerDeps()
         {
             return new ChatController.Deps
@@ -603,6 +625,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 OpenModelPickerAsync = () => _providersController.OpenModelPickerAsync(),
                 GetAvatarDisplayName = () => _avatarGalleryController.AvatarDisplayName(_avatarGalleryController.ActiveAvatarId),
                 PlayNotificationSound = PlayNotificationBeep,
+                FeedStreamingMouthText = OnStreamingTextRevealed,
                 ToggleAudioFile = path => _voiceController.ToggleMessageAudio(path),
                 SeekAudioFile = (path, normalized) => _voiceController.SeekMessageAudio(path, normalized),
                 StopVoiceOutput = _voiceController.StopVoiceOutput,
