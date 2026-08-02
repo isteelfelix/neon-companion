@@ -21,7 +21,9 @@ BUST_DRAG = 0.22
 BUST_GRAVITY = 0.06
 EXPECTED_BUST_SPRINGS = 2
 EXPECTED_BUST_JOINTS = 4
-EXPECTED_BUST_CLOTHING_VERTICES = 240
+EXPECTED_BUST_CLOTHING_VERTICES = 356
+BUST_CLOTHING_TRANSFER_DISTANCE = 0.06
+BUST_CLOTHING_TRANSFER_MIN_WEIGHT = 0.02
 
 COMPONENT_FORMATS = {
     5121: ("B", 1),
@@ -99,6 +101,18 @@ def write_float4_accessor(document, binary, accessor_index, values):
         struct.pack_into("<ffff", binary, offset + index * stride, *value)
 
 
+def write_ubyte4_accessor(document, binary, accessor_index, values):
+    accessor, component_format, component_count, offset, stride = (
+        accessor_layout(document, accessor_index)
+    )
+    if component_format != "B" or component_count != 4:
+        raise ValueError("joint accessor must be an unsigned-byte VEC4")
+    if len(values) != accessor["count"]:
+        raise ValueError("joint accessor length changed")
+    for index, value in enumerate(values):
+        struct.pack_into("<BBBB", binary, offset + index * stride, *value)
+
+
 def material_name(document, primitive):
     material_index = primitive.get("material")
     if material_index is None:
@@ -147,23 +161,63 @@ def bust_weight_data(document, binary):
             ]
             return positions, joints, weights, totals
 
-        body_positions, _, _, body_totals = primitive_data(body)
+        body_positions, body_joints, body_weights, body_totals = (
+            primitive_data(body)
+        )
+        body_bust_weights = []
+        for joints, weights in zip(body_joints, body_weights):
+            body_bust_weights.append({
+                slot: weight
+                for slot, weight in zip(joints, weights)
+                if skin_joints[slot] in bust_nodes and weight > 0.0
+            })
         clothing = []
         for primitive in mesh["primitives"]:
             name = material_name(document, primitive)
             if "Tops" not in name or "CLOTH" not in name:
                 continue
             clothing.append((primitive, primitive_data(primitive)))
-        return skin_joints, bust_nodes, body_positions, body_totals, clothing
+        return (
+            skin_joints,
+            bust_nodes,
+            body_positions,
+            body_totals,
+            body_bust_weights,
+            clothing,
+        )
     raise AssertionError("Neon skinned body mesh was not found")
 
 
-def nearest_body_total(position, body_positions, body_totals):
-    nearest = min(
+def nearest_body_index(position, body_positions):
+    return min(
         range(len(body_positions)),
         key=lambda index: squared_distance(position, body_positions[index]),
     )
-    return body_totals[nearest]
+
+
+def nearest_body_total(position, body_positions, body_totals):
+    return body_totals[nearest_body_index(position, body_positions)]
+
+
+def bust_transfer_bounds(body_positions, body_totals):
+    weighted = [
+        position
+        for position, total in zip(body_positions, body_totals)
+        if total >= BUST_CLOTHING_TRANSFER_MIN_WEIGHT
+    ]
+    return tuple(
+        (min(position[axis] for position in weighted),
+         max(position[axis] for position in weighted))
+        for axis in range(3)
+    )
+
+
+def inside_transfer_bounds(position, bounds):
+    return all(
+        lower - BUST_CLOTHING_TRANSFER_DISTANCE <= position[axis]
+        <= upper + BUST_CLOTHING_TRANSFER_DISTANCE
+        for axis, (lower, upper) in enumerate(bounds)
+    )
 
 
 def apply_bust_clothing_weights(document, remaining_chunks):
@@ -173,40 +227,114 @@ def apply_bust_clothing_weights(document, remaining_chunks):
         bust_nodes,
         body_positions,
         body_totals,
+        body_bust_weights,
         clothing,
     ) = bust_weight_data(document, binary)
+    transfer_bounds = bust_transfer_bounds(body_positions, body_totals)
     weighted_vertices = 0
     changed_vertices = 0
     for primitive, data in clothing:
         positions, joints, weights, totals = data
         changed = False
+        mutable_joints = [list(vertex) for vertex in joints]
         mutable_weights = [list(vertex) for vertex in weights]
         for vertex_index, current_total in enumerate(totals):
-            if current_total <= 0.000001:
+            if (
+                current_total <= 0.000001
+                and not inside_transfer_bounds(
+                    positions[vertex_index], transfer_bounds
+                )
+            ):
+                continue
+            body_index = nearest_body_index(
+                positions[vertex_index], body_positions
+            )
+            target_total = body_totals[body_index]
+            distance = squared_distance(
+                positions[vertex_index], body_positions[body_index]
+            ) ** 0.5
+            should_add_bust = (
+                current_total <= 0.000001
+                and target_total >= BUST_CLOTHING_TRANSFER_MIN_WEIGHT
+                and distance <= BUST_CLOTHING_TRANSFER_DISTANCE
+            )
+            if current_total <= 0.000001 and not should_add_bust:
                 continue
             weighted_vertices += 1
-            target_total = max(
-                current_total,
-                nearest_body_total(
-                    positions[vertex_index], body_positions, body_totals
-                ),
-            )
-            if target_total <= current_total + 0.000001:
-                continue
 
-            bust_scale = target_total / current_total
-            other_scale = (
-                (1.0 - target_total) / (1.0 - current_total)
-                if current_total < 0.999999
-                else 0.0
-            )
-            for slot in range(4):
-                joint_node = skin_joints[joints[vertex_index][slot]]
-                scale = bust_scale if joint_node in bust_nodes else other_scale
-                mutable_weights[vertex_index][slot] *= scale
+            current = {}
+            for slot, weight in zip(
+                joints[vertex_index], weights[vertex_index]
+            ):
+                current[slot] = current.get(slot, 0.0) + weight
+
+            desired_bust = {
+                slot: weight
+                for slot, weight in current.items()
+                if skin_joints[slot] in bust_nodes and weight > 0.0
+            }
+            for slot, weight in body_bust_weights[body_index].items():
+                current_weight = desired_bust.get(slot, 0.0)
+                if weight > current_weight + 0.000001:
+                    desired_bust[slot] = weight
+            desired_total = sum(desired_bust.values())
+            if desired_total > 1.0:
+                # At the bra's center seam the nearest body vertex may belong
+                # to the opposite side. Component-wise maxima can then combine
+                # both breasts above 1.0 and drift on every repeated run. Use
+                # the nearest body's coherent Bust vector for those vertices.
+                desired_bust = dict(body_bust_weights[body_index])
+                desired_total = sum(desired_bust.values())
+
+            other = {
+                slot: weight
+                for slot, weight in current.items()
+                if skin_joints[slot] not in bust_nodes and weight > 0.0
+            }
+            other_total = sum(other.values())
+            if other_total > 0.0:
+                other_scale = (1.0 - desired_total) / other_total
+                other = {
+                    slot: weight * other_scale
+                    for slot, weight in other.items()
+                }
+
+            bust_items = sorted(
+                desired_bust.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[:4]
+            remaining_slots = 4 - len(bust_items)
+            other_items = sorted(
+                other.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[:remaining_slots]
+            strongest = bust_items + other_items
+            while len(strongest) < 4:
+                strongest.append((strongest[0][0], 0.0))
+            total = sum(weight for _, weight in strongest)
+            new_joints = [slot for slot, _ in strongest]
+            new_weights = [weight / total for _, weight in strongest]
+            if (
+                new_joints == list(joints[vertex_index])
+                and all(
+                    abs(left - right) <= 0.000001
+                    for left, right in zip(
+                        new_weights, weights[vertex_index]
+                    )
+                )
+            ):
+                continue
+            mutable_joints[vertex_index] = new_joints
+            mutable_weights[vertex_index] = new_weights
             changed_vertices += 1
             changed = True
         if changed:
+            write_ubyte4_accessor(
+                document,
+                binary,
+                primitive["attributes"]["JOINTS_0"],
+                mutable_joints,
+            )
             write_float4_accessor(
                 document,
                 binary,
@@ -218,19 +346,36 @@ def apply_bust_clothing_weights(document, remaining_chunks):
 
 def verify_bust_clothing_weights(document, remaining_chunks):
     binary = binary_chunk(remaining_chunks)
-    _, _, body_positions, body_totals, clothing = bust_weight_data(
-        document, binary
-    )
+    (
+        _,
+        _,
+        body_positions,
+        body_totals,
+        _,
+        clothing,
+    ) = bust_weight_data(document, binary)
+    transfer_bounds = bust_transfer_bounds(body_positions, body_totals)
     weighted_vertices = 0
     for _, data in clothing:
         positions, _, _, totals = data
         for position, current_total in zip(positions, totals):
-            if current_total <= 0.000001:
+            if (
+                current_total <= 0.000001
+                and not inside_transfer_bounds(position, transfer_bounds)
+            ):
+                continue
+            body_index = nearest_body_index(position, body_positions)
+            target_total = body_totals[body_index]
+            distance = squared_distance(
+                position, body_positions[body_index]
+            ) ** 0.5
+            should_have_bust = (
+                target_total >= BUST_CLOTHING_TRANSFER_MIN_WEIGHT
+                and distance <= BUST_CLOTHING_TRANSFER_DISTANCE
+            )
+            if current_total <= 0.000001 and not should_have_bust:
                 continue
             weighted_vertices += 1
-            target_total = nearest_body_total(
-                position, body_positions, body_totals
-            )
             assert current_total + 0.00001 >= target_total, (
                 current_total,
                 target_total,
