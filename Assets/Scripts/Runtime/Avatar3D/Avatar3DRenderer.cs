@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using NeonCompanion.Runtime.Data.Models;
 using NeonCompanion.Runtime.Rendering;
+using UniGLTF.SpringBoneJobs.Blittables;
+using UniVRM10;
+using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UIElements;
@@ -64,6 +67,26 @@ namespace NeonCompanion.Runtime.Avatar3D
         private const float PanSensitivity = 0.0025f;
         private const float WheelZoomStep = 0.2f;
 
+        // ===== Model spin =====
+        //
+        // A left drag turns the model itself rather than orbiting the camera around a
+        // statue. That distinction is the whole point: VRM spring bones (hair, bust,
+        // skirt, sleeves) react to the model's motion through the world, so orbiting a
+        // camera around a motionless character produces no secondary motion at all.
+        private float _modelYaw;
+        private float _appliedModelYaw;
+        private float _modelYawVelocity;
+        private bool _modelYawDirty;
+        private Vrm10Instance _vrmInstance;
+        private bool _vrmUsesCenteredSprings;
+
+        // Exponential decay of the spin after release, per second, and the ceiling on
+        // how fast a flick can throw her.
+        private const float ModelSpinDamping = 5f;
+        private const float MaxModelSpin = 720f;
+        private const float MinModelSpin = 4f;
+        private const float CenteredSpringForce = 0.35f;
+
         // ===== Quality =====
 
         private AvatarGraphicsSettings _graphics = new AvatarGraphicsSettings();
@@ -121,7 +144,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         /// </summary>
         public event System.Action<AvatarTouchRegion> Touched;
 
-        // A press that slides past this many pixels is an orbit, not a tap.
+        // A press that slides past this many pixels is a drag, not a tap.
         private const float TapMoveThreshold = 6f;
         private readonly Dictionary<int, Vector2> _touchPointers =
             new Dictionary<int, Vector2>();
@@ -140,6 +163,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_targetImage == image)
                 return;
 
+            if (_targetImage != null && image == null)
+                ClearSpringMotionForce();
             UnbindImageEvents();
             _targetImage = image;
             BindImageEvents();
@@ -159,7 +184,13 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         public void SetModelRoot(Transform modelRoot)
         {
+            if (_target != modelRoot)
+            {
+                ClearSpringMotionForce();
+                ResetModelSpin();
+            }
             _target = modelRoot;
+            FindVrmSpringBones();
             EnsureRenderScene();
             FrameTarget();
             UpdateCameraTransform();
@@ -231,7 +262,11 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         public void ClearModel()
         {
+            ClearSpringMotionForce();
             _target = null;
+            _vrmInstance = null;
+            _vrmUsesCenteredSprings = false;
+            ResetModelSpin();
             UpdateCameraTransform();
         }
 
@@ -244,6 +279,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void OnDisable()
         {
+            ClearSpringMotionForce();
+            ResetModelSpin();
             GraphicsQualityService.Changed -= OnGraphicsChanged;
             UnbindImageEvents();
             _touchPointers.Clear();
@@ -252,6 +289,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void OnDestroy()
         {
+            ClearSpringMotionForce();
             GraphicsQualityService.Changed -= OnGraphicsChanged;
             UnbindImageEvents();
             TearDownRenderScene();
@@ -263,6 +301,108 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return;
             _graphics = settings;
             _graphicsDirty = true;
+        }
+
+        /// <summary>
+        /// The model's own rotation is integrated here rather than in
+        /// <see cref="LateUpdate"/>. It has to run on every frame even when rendering
+        /// is throttled, and Update lands before UniVRM solves its spring bones in
+        /// LateUpdate, so the authored hair/clothing/body springs see the motion.
+        /// </summary>
+        private void Update()
+        {
+            if (_target == null)
+                return;
+
+            float deltaTime = Time.deltaTime;
+            if (deltaTime > 0f && !_dragging && Mathf.Abs(_modelYawVelocity) > MinModelSpin)
+            {
+                // Coast after release, so a flick keeps turning her and the hair keeps
+                // trailing instead of stopping dead with the pointer.
+                _modelYaw += _modelYawVelocity * deltaTime;
+                _modelYawVelocity *= Mathf.Exp(-ModelSpinDamping * deltaTime);
+                _modelYawDirty = true;
+            }
+            else if (!_dragging)
+            {
+                _modelYawVelocity = 0f;
+            }
+
+            if (_modelYawDirty)
+            {
+                _modelYawDirty = false;
+                float yawDelta = _modelYaw - _appliedModelYaw;
+                _appliedModelYaw = _modelYaw;
+
+                // Apply only our delta. The runtime root is shared by the portrait and
+                // full-body preview renderers, and other avatar APIs may also set its
+                // pose; assigning an absolute rotation here would overwrite them.
+                _target.localRotation =
+                    _target.localRotation * Quaternion.Euler(0f, yawDelta, 0f);
+            }
+
+            ApplySpringMotionForce();
+        }
+
+        private void ResetModelSpin()
+        {
+            _modelYaw = 0f;
+            _appliedModelYaw = 0f;
+            _modelYawVelocity = 0f;
+            _modelYawDirty = false;
+        }
+
+        private void FindVrmSpringBones()
+        {
+            _vrmInstance = _target != null
+                ? _target.GetComponentInChildren<Vrm10Instance>(true)
+                : null;
+            _vrmUsesCenteredSprings = false;
+            if (_vrmInstance == null || _vrmInstance.SpringBone == null)
+                return;
+
+            List<Vrm10InstanceSpringBone.Spring> springs =
+                _vrmInstance.SpringBone.Springs;
+            if (springs == null)
+                return;
+            for (int i = 0; i < springs.Count; i++)
+            {
+                if (springs[i] != null && springs[i].Center != null)
+                {
+                    _vrmUsesCenteredSprings = true;
+                    return;
+                }
+            }
+        }
+
+        private void ApplySpringMotionForce()
+        {
+            // A centered VRM stores its previous tails in the center's local space.
+            // Rotating the whole model rotates that history too, cancelling most of
+            // the visible inertia. Feed the same drag into UniVRM as a small lateral
+            // force so authored stiffness, drag, gravity and colliders still decide
+            // the actual motion. Only the interactive renderer owns this input; the
+            // separate read-only preview must not overwrite it with zero every frame.
+            if (_targetImage == null || !_vrmUsesCenteredSprings || _vrmInstance == null)
+                return;
+
+            float normalizedSpin = Mathf.Clamp(
+                _modelYawVelocity / MaxModelSpin, -1f, 1f);
+            Vector3 force = -_target.right * normalizedSpin * CenteredSpringForce;
+            SetSpringMotionForce(force);
+        }
+
+        private void ClearSpringMotionForce()
+        {
+            if (_vrmInstance != null && _vrmUsesCenteredSprings && _targetImage != null)
+                SetSpringMotionForce(Vector3.zero);
+        }
+
+        private void SetSpringMotionForce(Vector3 force)
+        {
+            _vrmInstance.Runtime.SpringBone.SetModelLevel(
+                _vrmInstance.transform,
+                new BlittableModelLevel(new float3(force.x, force.y, force.z)));
         }
 
         private void LateUpdate()
@@ -854,8 +994,10 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             _activePointerId = evt.pointerId;
             _activeButton = evt.button;
-            // Left button orbits; right/middle drag pans the framing.
+            // Left button turns the model; right/middle drag pans the framing.
             _panning = evt.button == 1 || evt.button == 2;
+            if (!_panning)
+                _modelYawVelocity = 0f;
             _lastPointer = new Vector2(evt.position.x, evt.position.y);
             _pointerDownLocal = new Vector2(evt.localPosition.x, evt.localPosition.y);
             _pointerMovedFar = false;
@@ -905,7 +1047,22 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
             else
             {
-                _yaw += deltaMove.x * _orbitSensitivity;
+                // Horizontal turns the model, vertical still tilts the camera — a
+                // character cannot credibly be tipped over, but she can be spun.
+                float yawDelta = deltaMove.x * _orbitSensitivity;
+                _modelYaw += yawDelta;
+                _modelYawDirty = true;
+
+                float deltaTime = Time.deltaTime;
+                if (deltaTime > 0.0001f)
+                {
+                    // Smoothed, because pointer moves can arrive several times a frame
+                    // and a raw delta/dt reads as jitter on release.
+                    float instantaneous = Mathf.Clamp(
+                        yawDelta / deltaTime, -MaxModelSpin, MaxModelSpin);
+                    _modelYawVelocity = Mathf.Lerp(_modelYawVelocity, instantaneous, 0.5f);
+                }
+
                 _pitch = Mathf.Clamp(_pitch - deltaMove.y * _orbitSensitivity, _minPitch, _maxPitch);
             }
         }
@@ -927,7 +1084,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             _activePointerId = -1;
             _targetImage?.ReleasePointer(evt.pointerId);
 
-            // A left-button press that never turned into an orbit is a tap: see what
+            // A left-button press that never turned into a drag is a tap: see what
             // it hit. Right/middle drags are panning, never a touch.
             bool wasPan = _panning;
             int button = _activeButton;
@@ -944,6 +1101,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             _activePointerId = -1;
             _panning = false;
             _activeButton = -1;
+            _modelYawVelocity = 0f;
             _lastPinchDistance = GetCurrentPinchDistance();
         }
 

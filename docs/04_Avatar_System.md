@@ -143,6 +143,12 @@ humanoid bones, blink, gaze, expressions, lipsync и упакованные VRMA
 Recording, stop, cancel, interrupt и barge-in немедленно очищают speaking/mouth
 state. Маршруты Hermes и Generic OpenAI TTS/STT не изменены.
 
+Авторская вторичная физика VRM берётся напрямую из `VRMC_springBone`; приложение
+не генерирует пружины или коллайдеры заново. Горизонтальный mouse-drag в основном 3D
+preview вращает корень модели, поэтому волосы, одежда и body springs получают
+ускорение и обсчитываются UniVRM. После быстрого отпускания остаётся короткая
+инерция; вертикальный drag по-прежнему меняет наклон камеры.
+
 ### Windows Companion window (Phase C)
 
 На Windows Player пользователь выбирает аватар в одной из четырёх независимых
