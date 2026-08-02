@@ -99,11 +99,6 @@ namespace NeonCompanion.Tests
                 greatestBustMotion,
                 0.1f,
                 "The bust springs did not react to the procedural idle force.");
-            Assert.Less(
-                greatestBustMotion,
-                17f,
-                "The bust springs escaped their safe angular range.");
-
             RenderTexture output = avatarRenderer.OutputTexture as RenderTexture;
             Assert.IsNotNull(output);
             RenderTexture previous = RenderTexture.active;

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UniGLTF.SpringBoneJobs;
 using UniGLTF.SpringBoneJobs.Blittables;
 using UniVRM10;
 using Unity.Mathematics;
@@ -33,8 +32,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private const float IdleForwardForce = 0.04f;
         private const float IdleLiftForce = 0.014f;
         private const float IdleSeparationForce = 0.006f;
-        private const float TurnForce = 0.24f;
-        private const float BustAngleLimitDegrees = 8f;
+        private const float TurnForce = 0.42f;
 
         public int BustJointCount
         {
@@ -147,16 +145,10 @@ namespace NeonCompanion.Runtime.Avatar3D
                         new float3(direction.x, direction.y, direction.z),
                         driven.Original.dragForce,
                         driven.Original.radius,
-                        driven.Original.anglelimitType == AnglelimitTypes.None
-                            ? (float)AnglelimitTypes.Cone
-                            : (float)driven.Original.anglelimitType,
-                        driven.Original.anglelimitType == AnglelimitTypes.None
-                            ? BustAngleLimitDegrees * Mathf.Deg2Rad
-                            : driven.Original.anglelimit1,
+                        (float)driven.Original.anglelimitType,
+                        driven.Original.anglelimit1,
                         driven.Original.anglelimit2,
-                        driven.Original.anglelimitType == AnglelimitTypes.None
-                            ? quaternion.identity
-                            : driven.Original.anglelimitOffset));
+                        driven.Original.anglelimitOffset));
             }
         }
 
