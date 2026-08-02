@@ -11,7 +11,9 @@ using NeonCompanion.Runtime.Avatar;
 using NeonCompanion.Runtime.Avatar3D;
 using NeonCompanion.Runtime.Core;
 using NeonCompanion.Runtime.Data.Models;
+using NeonCompanion.Runtime.Data.Storage;
 using NeonCompanion.Runtime.Localization;
+using NeonCompanion.Runtime.Rendering;
 using NeonCompanion.Runtime.Voice;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -118,8 +120,7 @@ namespace NeonCompanion.Runtime.Platform
         {
             DontDestroyOnLoad(gameObject);
             Application.runInBackground = true;
-            QualitySettings.vSyncCount = 0;
-            Application.targetFrameRate = 30;
+            ApplyStartupGraphics();
             ConfigureTransparentCamera();
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
@@ -242,6 +243,17 @@ namespace NeonCompanion.Runtime.Platform
 
             if (!_nativeApplied)
                 _nativeApplied = WindowsCompanionWindowNative.Apply(_preferences);
+
+            // This process blits the avatar texture with IMGUI rather than attaching a UI
+            // Toolkit image, so the renderer cannot measure itself — hand it the rect the
+            // avatar is actually drawn into, in device pixels.
+            if (_avatar3DRenderer != null)
+            {
+                Rect avatarRect = GetAvatarRect();
+                _avatar3DRenderer.SetManualRenderSize(
+                    Mathf.RoundToInt(avatarRect.width),
+                    Mathf.RoundToInt(avatarRect.height));
+            }
 
             if (Time.unscaledTime >= _nextParentCheck)
             {
@@ -711,6 +723,40 @@ namespace NeonCompanion.Runtime.Platform
             ApplyState(_state);
         }
 
+        /// <summary>
+        /// Reads the shared settings file before the parent's handshake arrives, so the
+        /// very first frames already use the user's quality instead of a hard-coded
+        /// fallback. Both processes run the same player, so persistentDataPath — and with
+        /// it the settings file — is the same one the main window writes.
+        /// </summary>
+        private void ApplyStartupGraphics()
+        {
+            AvatarGraphicsSettings graphics = null;
+            try
+            {
+                var storage = new JsonFileStorage();
+                AppSettings settings = storage.Load<AppSettings>(AppPaths.SettingsFile);
+                if (settings != null)
+                    graphics = settings.NormalizeGraphics();
+            }
+            catch (Exception ex)
+            {
+                NeonLogger.LogWarning(
+                    "[CompanionPlayer] Could not read graphics settings, using defaults: " + ex.Message);
+            }
+
+            if (graphics == null)
+            {
+                // Same conservative floor this process used before the settings existed.
+                graphics = new AvatarGraphicsSettings();
+                graphics.vSync = false;
+                graphics.targetFrameRate = 30;
+                graphics.avatarFrameRate = 30;
+            }
+
+            GraphicsQualityService.Apply(graphics);
+        }
+
         private void ApplyPreferences(CompanionWindowPreferences preferences)
         {
             if (preferences == null)
@@ -722,6 +768,8 @@ namespace NeonCompanion.Runtime.Platform
                 _language = preferences.language;
                 LocalizationExtensions.SetLocalizationService(new JsonLocalizationService(_language));
             }
+            if (preferences.graphics != null)
+                GraphicsQualityService.Apply(preferences.graphics);
             _nativeApplied = WindowsCompanionWindowNative.Apply(_preferences);
         }
 

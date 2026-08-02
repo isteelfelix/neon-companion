@@ -173,6 +173,12 @@ namespace NeonCompanion.Runtime.Platform
         public string language = "en";
         public int positionX = int.MinValue;
         public int positionY = int.MinValue;
+
+        /// <summary>
+        /// Render quality for the pet window. The same block the main window uses, so both
+        /// processes draw the companion at identical quality.
+        /// </summary>
+        public AvatarGraphicsSettings graphics = new AvatarGraphicsSettings();
     }
 
     public enum CompanionWindowEventKind

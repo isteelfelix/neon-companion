@@ -56,5 +56,22 @@ namespace NeonCompanion.Runtime.Data.Models
         // Voice (universal)
         public string inputDeviceName = "";   // microphone device name (empty = system default)
         public float outputVolume = 0.8f;     // 0.0-1.0
+
+        // Avatar render quality. Shared with the pet-window process, which reads the same
+        // settings file. Never null after Load — see NormalizeGraphics.
+        public AvatarGraphicsSettings graphics = new AvatarGraphicsSettings();
+
+        /// <summary>
+        /// Repairs the graphics block after deserialization. A settings file written before
+        /// this feature existed has no "graphics" key at all, and JsonUtility leaves the
+        /// field at its initialized default; a hand-edited one may hold out-of-range values.
+        /// </summary>
+        public AvatarGraphicsSettings NormalizeGraphics()
+        {
+            if (graphics == null)
+                graphics = new AvatarGraphicsSettings();
+            graphics.Normalize();
+            return graphics;
+        }
     }
 }

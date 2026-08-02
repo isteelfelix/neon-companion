@@ -39,6 +39,12 @@ namespace NeonCompanion.Runtime.UI.UITK
         public Action ResetProvidersCountUi;
         public Action<string> SetCurrentSessionId;
         public Action<string> SetCurrentSessionTitle;
+
+        /// <summary>The renderer behind the in-app avatar column, for the graphics diagnostics rows.</summary>
+        public Func<Avatar3D.Avatar3DRenderer> GetAvatar3DRenderer;
+
+        /// <summary>Re-sends the saved graphics settings to the pet-window process, if it is running.</summary>
+        public Action PublishGraphicsSettings;
     }
 
     internal sealed class SettingsController
@@ -106,6 +112,9 @@ namespace NeonCompanion.Runtime.UI.UITK
         private VisualElement _themesPreviewAvatar;
         private long _themesBreathStartMs;
         private IVisualElementScheduledItem _themesBreathSchedule;
+
+        // ===== Graphics (built in C#, see SettingsGraphicsCard) =====
+        private SettingsGraphicsCard _graphicsCard;
 
         // ===== UI theme (accent palette, U-13) =====
         private VisualElement _appRoot;
@@ -217,6 +226,15 @@ namespace NeonCompanion.Runtime.UI.UITK
             BuildThemePaletteCard(root);
             SetUiTheme(_uiTheme, save: false);
 
+            _graphicsCard = new SettingsGraphicsCard();
+            _graphicsCard.Init(root, new SettingsGraphicsCard.Deps
+            {
+                Save = SaveSettings,
+                GetRenderer = () => _deps != null && _deps.GetAvatar3DRenderer != null
+                    ? _deps.GetAvatar3DRenderer()
+                    : null
+            });
+
             UpdateClearDataButtonState();
         }
 
@@ -258,6 +276,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             // Also refresh permission mode dropdown labels/choices on language change (no MainViewController edit)
             RefreshPermissionModeDropdown();
+            _graphicsCard?.RefreshLocalization();
         }
 
         internal void RefreshPluginStatus(CompanionApp app)
@@ -591,6 +610,10 @@ namespace NeonCompanion.Runtime.UI.UITK
                 _settingsShowHalo?.SetValueWithoutNotify(s.showHalo);
                 _settingsBreathing?.SetValueWithoutNotify(s.breathingAnimation);
 
+                // Applies to the engine immediately — the avatar renderers pick it up
+                // through GraphicsQualityService.Changed.
+                _graphicsCard?.SetSettings(s.NormalizeGraphics());
+
                 if (_settingsLanguage != null)
                     _settingsLanguage.SetValueWithoutNotify(s.language == "en"
                         ? LocalizationExtensions.Get("settings.language.english", "English")
@@ -687,6 +710,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 if (_settingsOutputVolume != null)  s.outputVolume        = _settingsOutputVolume.value;
                 if (_settingsStreamingSpeed != null) s.chatStreamingSpeedPercent = Mathf.Clamp(Mathf.RoundToInt(_settingsStreamingSpeed.value), 10, 100);
 
+                if (_graphicsCard != null) s.graphics = _graphicsCard.Settings;
+
                 s.avatarShape      = _avatarShape;
                 s.uiTheme          = _uiTheme;
                 s.activeAvatarId   = _deps.GetActiveAvatarId?.Invoke() ?? "neon";
@@ -707,6 +732,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 }
 
                 app.Settings.Save(s);
+                _deps.PublishGraphicsSettings?.Invoke();
 
                 if (chatService != null)
                     chatService.SaveChatHistory = s.saveChatHistory;

@@ -4,6 +4,8 @@
     "references": [
         "GUID:e47c917724578cc43b5506c17a27e9a0",
         "GUID:a42927d1d4a3b4cda9b076a7adecb9cc",
+        "GUID:15fc0a57446b3144c949da3e2b9737a9",
+        "GUID:df380645f10b7bc4b97d4f5eb6303d95",
         "UniGLTF",
     "UniGLTF.Utils",
     "Unity.Timeline"

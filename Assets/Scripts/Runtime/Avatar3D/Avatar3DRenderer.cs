@@ -1,5 +1,9 @@
+using System;
 using System.Collections.Generic;
+using NeonCompanion.Runtime.Data.Models;
+using NeonCompanion.Runtime.Rendering;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.Avatar3D
@@ -7,8 +11,8 @@ namespace NeonCompanion.Runtime.Avatar3D
     public sealed class Avatar3DRenderer : MonoBehaviour
     {
         [Header("Render")]
-        [SerializeField] private int _textureWidth = 1024;
-        [SerializeField] private int _textureHeight = 1024;
+        [Tooltip("Fallback render size used only until the target image has been laid out.")]
+        [SerializeField] private int _fallbackTextureSize = 1024;
         [SerializeField] private Color _clearColor = new Color(0f, 0f, 0f, 0f);
 
         [Header("Camera")]
@@ -33,6 +37,8 @@ namespace NeonCompanion.Runtime.Avatar3D
         private RenderTexture _renderTexture;
         private Camera _camera;
         private Light _directionalLight;
+        private Light _fillLight;
+        private Light _rimLight;
         private Transform _cameraPivot;
         private Transform _target;
         private Vector3 _targetCenter;
@@ -57,6 +63,68 @@ namespace NeonCompanion.Runtime.Avatar3D
         // ever run on the interactive column image (the preview ignores picking).
         private const float PanSensitivity = 0.0025f;
         private const float WheelZoomStep = 0.2f;
+
+        // ===== Quality =====
+
+        private AvatarGraphicsSettings _graphics = new AvatarGraphicsSettings();
+        private bool _graphicsDirty = true;
+        private float _nextRenderAt;
+        private int _renderWidth;
+        private int _renderHeight;
+        private int _manualWidth;
+        private int _manualHeight;
+
+        // What the last allocation actually got, which is not always what was asked for —
+        // an unsupported HDR format falls back to ARGB32. Comparing against the request
+        // instead would see a mismatch every frame and reallocate forever.
+        private RenderTextureFormat _createdFormat = RenderTextureFormat.ARGB32;
+        private int _createdMsaa = 1;
+
+        // Rig state, applied on every render span rather than held on the Light components,
+        // because the lights themselves are toggled off between renders.
+        private bool _fillLightActive = true;
+        private bool _rimLightActive = true;
+        private Color _ambientColor = new Color(0.35f, 0.35f, 0.35f, 1f);
+
+        // Smallest side a render target may have, and the relative size change that is
+        // worth a reallocation. Without the threshold every pixel of a panel drag would
+        // allocate a new texture.
+        private const int MinRenderSize = 128;
+        private const float ResizeThreshold = 0.04f;
+
+        // Rolling average of how often the avatar is actually re-rendered, for the
+        // diagnostics row in the graphics settings card.
+        private float _measuredFps;
+        private float _lastRenderTime;
+
+        /// <summary>Current render target size in device pixels. Zero before the first frame.</summary>
+        public Vector2Int RenderSize
+        {
+            get { return new Vector2Int(_renderWidth, _renderHeight); }
+        }
+
+        /// <summary>Smoothed rate at which this renderer re-renders the avatar.</summary>
+        public float MeasuredFps
+        {
+            get { return _measuredFps; }
+        }
+
+        /// <summary>
+        /// Tells the renderer how large its output is drawn, in device pixels, for hosts
+        /// that composite the texture themselves instead of attaching a UI Toolkit image.
+        /// The render scale is applied on top of this.
+        /// </summary>
+        public void SetManualRenderSize(int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+                return;
+            if (_manualWidth == width && _manualHeight == height)
+                return;
+
+            _manualWidth = width;
+            _manualHeight = height;
+            UpdateRenderTextureSize(true);
+        }
 
         /// <summary>
         /// A tap on the rendered image that landed on a touch zone. The renderer
@@ -90,6 +158,9 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_targetImage != null)
             {
                 EnsureRenderScene();
+                // The render target is sized from this image, so a new target means the
+                // old texture is the wrong shape.
+                UpdateRenderTextureSize(true);
                 _targetImage.image = _renderTexture;
                 _targetImage.scaleMode = ScaleMode.ScaleAndCrop;
             }
@@ -175,8 +246,16 @@ namespace NeonCompanion.Runtime.Avatar3D
             UpdateCameraTransform();
         }
 
+        private void OnEnable()
+        {
+            GraphicsQualityService.Changed += OnGraphicsChanged;
+            if (GraphicsQualityService.HasApplied)
+                OnGraphicsChanged(GraphicsQualityService.Current);
+        }
+
         private void OnDisable()
         {
+            GraphicsQualityService.Changed -= OnGraphicsChanged;
             UnbindImageEvents();
             _touchPointers.Clear();
             _lastPinchDistance = 0f;
@@ -184,8 +263,17 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void OnDestroy()
         {
+            GraphicsQualityService.Changed -= OnGraphicsChanged;
             UnbindImageEvents();
             TearDownRenderScene();
+        }
+
+        private void OnGraphicsChanged(AvatarGraphicsSettings settings)
+        {
+            if (settings == null)
+                return;
+            _graphics = settings;
+            _graphicsDirty = true;
         }
 
         private void LateUpdate()
@@ -193,20 +281,104 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_camera == null || _target == null)
                 return;
 
+            if (_graphicsDirty)
+            {
+                _graphicsDirty = false;
+                ApplyCameraQuality();
+                ApplyLightingQuality();
+                UpdateRenderTextureSize(true);
+            }
+
+            // Off-screen or collapsed views cost nothing: the last rendered frame stays in
+            // the texture, so re-showing the panel is instant.
+            if (_graphics.pauseAvatarWhenHidden && !IsTargetVisible())
+                return;
+
+            float now = Time.unscaledTime;
+            if (now < _nextRenderAt)
+                return;
+
+            int fps = _graphics.avatarFrameRate;
+            float interval = fps > 0 ? 1f / fps : 0f;
+            // Anchor on "now" rather than accumulating, so a stall cannot build up a
+            // backlog of catch-up renders.
+            _nextRenderAt = now + interval;
+
+            float delta = now - _lastRenderTime;
+            if (delta > 0.0001f && delta < 1f)
+                _measuredFps = Mathf.Lerp(_measuredFps, 1f / delta, 0.1f);
+            _lastRenderTime = now;
+
+            UpdateRenderTextureSize(false);
             UpdateCameraTransform();
-            _camera.Render();
+
+            // Lights are scene-global, and the app runs two renderers at once (the avatar
+            // column and the gallery preview). Each rig is switched on only for the span of
+            // its own synchronous Render call, so neither camera is lit by the other's rig.
+            SetRigEnabled(true);
+            try
+            {
+                _camera.Render();
+            }
+            finally
+            {
+                SetRigEnabled(false);
+            }
+        }
+
+        private void SetRigEnabled(bool enabled)
+        {
+            if (_directionalLight != null)
+                _directionalLight.enabled = enabled;
+            if (_fillLight != null)
+                _fillLight.enabled = enabled && _fillLightActive;
+            if (_rimLight != null)
+                _rimLight.enabled = enabled && _rimLightActive;
+
+            if (!enabled)
+                return;
+
+            // Pin the main light instead of letting URP pick the brightest directional
+            // light — otherwise a strong rim would take over and shadow from behind.
+            RenderSettings.sun = _directionalLight;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = _ambientColor;
+        }
+
+        /// <summary>
+        /// Walks up from the target image: any collapsed ancestor, a detached panel or a
+        /// zero-sized rect all mean nothing of this render would be seen.
+        ///
+        /// Hosts that draw the output texture themselves (the pet window blits it with
+        /// IMGUI) never attach an image; they own their own visibility, so this reports
+        /// visible and lets them stop the component instead.
+        /// </summary>
+        private bool IsTargetVisible()
+        {
+            if (_targetImage == null)
+                return true;
+
+            if (_targetImage.panel == null || !_targetImage.visible)
+                return false;
+
+            Rect rect = _targetImage.contentRect;
+            if (rect.width < 1f || rect.height < 1f || float.IsNaN(rect.width))
+                return false;
+
+            VisualElement current = _targetImage;
+            while (current != null)
+            {
+                if (current.resolvedStyle.display == DisplayStyle.None)
+                    return false;
+                current = current.parent;
+            }
+            return true;
         }
 
         private void EnsureRenderScene()
         {
             if (_renderTexture == null)
-            {
-                _renderTexture = new RenderTexture(_textureWidth, _textureHeight, 24, RenderTextureFormat.ARGB32)
-                {
-                    name = "Avatar3DRenderTexture"
-                };
-                _renderTexture.Create();
-            }
+                CreateRenderTexture(_fallbackTextureSize, _fallbackTextureSize);
 
             if (_cameraPivot == null)
             {
@@ -227,22 +399,286 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _camera.fieldOfView = 32f;
                 _camera.targetTexture = _renderTexture;
                 _camera.enabled = false;
+                ApplyCameraQuality();
             }
 
+            // OutputTexture calls this every frame in the pet window, so only touch the
+            // lighting when a light was actually just created.
+            if (EnsureLights())
+                ApplyLightingQuality();
+        }
+
+        /// <summary>Creates any missing light in the rig. Returns true when something was created.</summary>
+        private bool EnsureLights()
+        {
+            bool created = false;
             if (_directionalLight == null)
             {
-                var lightGo = new GameObject("Avatar3D_KeyLight");
-                lightGo.transform.SetParent(_cameraPivot, false);
-                lightGo.transform.localRotation = Quaternion.Euler(40f, -35f, 0f);
+                _directionalLight = CreateLight("Avatar3D_KeyLight", Quaternion.Euler(40f, -35f, 0f));
+                created = true;
+            }
+            if (_fillLight == null)
+            {
+                _fillLight = CreateLight("Avatar3D_FillLight", Quaternion.Euler(15f, 40f, 0f));
+                created = true;
+            }
+            if (_rimLight == null)
+            {
+                _rimLight = CreateLight("Avatar3D_RimLight", Quaternion.Euler(-12f, 165f, 0f));
+                created = true;
+            }
+            return created;
+        }
 
-                _directionalLight = lightGo.AddComponent<Light>();
-                _directionalLight.type = LightType.Directional;
-                _directionalLight.intensity = 1.1f;
-                _directionalLight.color = Color.white;
+        /// <summary>
+        /// Lights hang off the camera pivot, so the rig turns with the view and the
+        /// companion keeps the same portrait lighting from every orbit angle.
+        /// </summary>
+        private Light CreateLight(string lightName, Quaternion localRotation)
+        {
+            var lightGo = new GameObject(lightName);
+            lightGo.transform.SetParent(_cameraPivot, false);
+            lightGo.transform.localRotation = localRotation;
+
+            Light light = lightGo.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.color = Color.white;
+            light.shadows = LightShadows.None;
+            // Off until this renderer's own render span — see SetRigEnabled.
+            light.enabled = false;
+            return light;
+        }
+
+        // ============================================================
+        // Quality
+        // ============================================================
+
+        private void ApplyCameraQuality()
+        {
+            if (_camera == null)
+                return;
+
+            _camera.allowHDR = _graphics.hdr;
+            _camera.allowMSAA = string.Equals(
+                _graphics.antialiasing, GraphicsOptions.AaMsaa, StringComparison.Ordinal);
+
+            UniversalAdditionalCameraData data = _camera.GetUniversalAdditionalCameraData();
+            if (data == null)
+                return;
+
+            // The project's default renderer is the 2D one; the avatar needs the 3D
+            // renderer for shadows, post-processing and the post-AA passes.
+            int rendererIndex = GraphicsQualityService.AvatarRendererIndex;
+            if (rendererIndex >= 0)
+                data.SetRenderer(rendererIndex);
+
+            bool fxaa = string.Equals(
+                _graphics.antialiasing, GraphicsOptions.AaFxaa, StringComparison.Ordinal);
+            bool smaa = string.Equals(
+                _graphics.antialiasing, GraphicsOptions.AaSmaa, StringComparison.Ordinal);
+
+            if (fxaa)
+                data.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+            else if (smaa)
+                data.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            else
+                data.antialiasing = AntialiasingMode.None;
+
+            data.antialiasingQuality = ResolveAntialiasingQuality(_graphics.smaaQuality);
+
+            // URP only runs the post-AA passes as part of post-processing, so FXAA/SMAA
+            // force the stack on even when every effect is switched off.
+            data.renderPostProcessing = _graphics.postProcessing || fxaa || smaa;
+        }
+
+        private static AntialiasingQuality ResolveAntialiasingQuality(string quality)
+        {
+            if (string.Equals(quality, GraphicsOptions.QualityLow, StringComparison.Ordinal))
+                return AntialiasingQuality.Low;
+            if (string.Equals(quality, GraphicsOptions.QualityMedium, StringComparison.Ordinal))
+                return AntialiasingQuality.Medium;
+            return AntialiasingQuality.High;
+        }
+
+        private void ApplyLightingQuality()
+        {
+            if (_directionalLight != null)
+            {
+                _directionalLight.intensity = _graphics.keyLightIntensity;
+                _directionalLight.useColorTemperature = true;
+                _directionalLight.colorTemperature = _graphics.lightTemperature;
+
+                if (!_graphics.shadows)
+                    _directionalLight.shadows = LightShadows.None;
+                else if (_graphics.softShadows)
+                    _directionalLight.shadows = LightShadows.Soft;
+                else
+                    _directionalLight.shadows = LightShadows.Hard;
             }
 
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.35f, 0.35f, 0.35f, 1f);
+            _fillLightActive = _graphics.fillLightIntensity > 0.001f;
+            if (_fillLight != null)
+                _fillLight.intensity = _graphics.fillLightIntensity;
+
+            _rimLightActive = _graphics.rimLightIntensity > 0.001f;
+            if (_rimLight != null)
+                _rimLight.intensity = _graphics.rimLightIntensity;
+
+            float ambient = _graphics.ambientIntensity;
+            _ambientColor = new Color(ambient, ambient, ambient, 1f);
+
+            // Left off outside the render span — see SetRigEnabled.
+            SetRigEnabled(false);
+        }
+
+        // ============================================================
+        // Render target sizing
+        // ============================================================
+
+        /// <summary>
+        /// Sizes the render target from the target image's own on-screen size in device
+        /// pixels, times the user's render scale. That replaces the old fixed 1024x1024
+        /// texture, which was simultaneously blurry (stretched into a tall column) and
+        /// wasteful (rendering pixels the crop threw away).
+        /// </summary>
+        private void UpdateRenderTextureSize(bool force)
+        {
+            int width;
+            int height;
+            if (!TryMeasureTarget(out width, out height))
+                return;
+
+            if (!force && _renderTexture != null)
+            {
+                float widthDelta = Mathf.Abs(width - _renderWidth) / (float)Mathf.Max(_renderWidth, 1);
+                float heightDelta = Mathf.Abs(height - _renderHeight) / (float)Mathf.Max(_renderHeight, 1);
+                if (widthDelta < ResizeThreshold && heightDelta < ResizeThreshold)
+                    return;
+            }
+
+            if (_renderTexture != null &&
+                _renderTexture.width == width &&
+                _renderTexture.height == height &&
+                _createdFormat == ResolveFormat() &&
+                _createdMsaa == DesiredMsaa())
+                return;
+
+            CreateRenderTexture(width, height);
+
+            if (_camera != null)
+                _camera.targetTexture = _renderTexture;
+            if (_targetImage != null)
+                _targetImage.image = _renderTexture;
+        }
+
+        private bool TryMeasureTarget(out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+
+            float sourceWidth;
+            float sourceHeight;
+            float pointsToPixels = 1f;
+
+            if (_targetImage != null && _targetImage.panel != null)
+            {
+                Rect rect = _targetImage.contentRect;
+                if (rect.width < 1f || rect.height < 1f ||
+                    float.IsNaN(rect.width) || float.IsNaN(rect.height))
+                    return false;
+
+                sourceWidth = rect.width;
+                sourceHeight = rect.height;
+
+                // UI Toolkit lays out in points; with a scaled panel those are not device
+                // pixels. The panel's own root width against the screen gives the exact
+                // factor for any PanelSettings scale mode.
+                VisualElement panelRoot = _targetImage.panel.visualTree;
+                if (panelRoot != null && panelRoot.layout.width > 1f)
+                    pointsToPixels = Screen.width / panelRoot.layout.width;
+                if (pointsToPixels < 0.1f || pointsToPixels > 8f || float.IsNaN(pointsToPixels))
+                    pointsToPixels = 1f;
+            }
+            else if (_manualWidth > 0 && _manualHeight > 0)
+            {
+                // Host-driven size — already in device pixels.
+                sourceWidth = _manualWidth;
+                sourceHeight = _manualHeight;
+            }
+            else
+            {
+                return false;
+            }
+
+            float scale = pointsToPixels * _graphics.renderScale;
+            width = Mathf.RoundToInt(sourceWidth * scale);
+            height = Mathf.RoundToInt(sourceHeight * scale);
+
+            int longest = Mathf.Max(width, height);
+            if (longest > _graphics.maxRenderSize)
+            {
+                float clampScale = _graphics.maxRenderSize / (float)longest;
+                width = Mathf.RoundToInt(width * clampScale);
+                height = Mathf.RoundToInt(height * clampScale);
+            }
+
+            width = Mathf.Max(width, MinRenderSize);
+            height = Mathf.Max(height, MinRenderSize);
+            return true;
+        }
+
+        /// <summary>
+        /// The format actually used, after checking hardware support. Both candidates carry
+        /// alpha on purpose: URP decides whether post-processing may write the alpha channel
+        /// from the target's format, and without it the transparent background goes opaque.
+        /// </summary>
+        private RenderTextureFormat ResolveFormat()
+        {
+            RenderTextureFormat wanted = _graphics.hdr
+                ? RenderTextureFormat.ARGBHalf
+                : RenderTextureFormat.ARGB32;
+            return SystemInfo.SupportsRenderTextureFormat(wanted)
+                ? wanted
+                : RenderTextureFormat.ARGB32;
+        }
+
+        private int DesiredMsaa()
+        {
+            if (!string.Equals(_graphics.antialiasing, GraphicsOptions.AaMsaa, StringComparison.Ordinal))
+                return 1;
+            return _graphics.msaaSamples;
+        }
+
+        private void CreateRenderTexture(int width, int height)
+        {
+            RenderTexture previous = _renderTexture;
+
+            RenderTextureFormat format = ResolveFormat();
+            int msaa = DesiredMsaa();
+
+            var created = new RenderTexture(width, height, 24, format);
+            created.name = "Avatar3DRenderTexture";
+            created.antiAliasing = msaa;
+            created.filterMode = FilterMode.Bilinear;
+            created.wrapMode = TextureWrapMode.Clamp;
+            created.useMipMap = false;
+            created.Create();
+
+            _renderTexture = created;
+            _renderWidth = width;
+            _renderHeight = height;
+            _createdFormat = format;
+            _createdMsaa = msaa;
+
+            if (previous != null)
+            {
+                if (_camera != null && _camera.targetTexture == previous)
+                    _camera.targetTexture = created;
+                if (_targetImage != null && _targetImage.image == previous)
+                    _targetImage.image = created;
+                previous.Release();
+                Destroy(previous);
+            }
         }
 
         private void TearDownRenderScene()
@@ -256,8 +692,22 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             if (_directionalLight != null)
             {
+                if (RenderSettings.sun == _directionalLight)
+                    RenderSettings.sun = null;
                 Destroy(_directionalLight.gameObject);
                 _directionalLight = null;
+            }
+
+            if (_fillLight != null)
+            {
+                Destroy(_fillLight.gameObject);
+                _fillLight = null;
+            }
+
+            if (_rimLight != null)
+            {
+                Destroy(_rimLight.gameObject);
+                _rimLight = null;
             }
 
             if (_cameraPivot != null)

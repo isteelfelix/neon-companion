@@ -294,7 +294,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 scale = Mathf.Clamp(settings.companionWindowScale, 0.5f, 2f),
                 language = settings.language,
                 positionX = settings.companionWindowPositionX,
-                positionY = settings.companionWindowPositionY
+                positionY = settings.companionWindowPositionY,
+                graphics = settings.NormalizeGraphics()
             };
             _monitorIndex = Mathf.Clamp(
                 _preferences.monitorIndex,
@@ -361,6 +362,23 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
             AppSettings settings = app.Settings.Load() ?? new AppSettings();
             _preferences.language = settings.language;
+            _service.UpdatePreferences(_preferences);
+        }
+
+        /// <summary>
+        /// Pushes the current graphics settings to the running pet-window process so both
+        /// windows re-render at the same quality without a restart. A no-op when the
+        /// companion window is not running.
+        /// </summary>
+        internal async Task PublishGraphicsAsync()
+        {
+            if (!IsAvailable)
+                return;
+            CompanionApp app = _d.GetAppAsync != null ? await _d.GetAppAsync() : null;
+            if (app == null)
+                return;
+            AppSettings settings = app.Settings.Load() ?? new AppSettings();
+            _preferences.graphics = settings.NormalizeGraphics();
             _service.UpdatePreferences(_preferences);
         }
 
