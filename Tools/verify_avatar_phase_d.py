@@ -150,6 +150,27 @@ def verify_assets_and_runtime():
     assert vrm_path.stat().st_size <= MAX_MODEL_BYTES
     assert "VRMC_vrm" in vrm.get("extensions", {})
     assert vrm["extensions"]["VRMC_vrm"].get("specVersion", "").startswith("1.")
+    spring_bone = vrm["extensions"].get("VRMC_springBone", {})
+    nodes = vrm.get("nodes", [])
+    coat_springs = []
+    for spring in spring_bone.get("springs", []):
+        joints = spring.get("joints", [])
+        if joints and "CoatSkirt" in nodes[joints[0]["node"]].get("name", ""):
+            coat_springs.append(spring)
+    assert len(coat_springs) == 18
+    coat_joint_count = 0
+    for spring in coat_springs:
+        assert spring.get("name") == "CoatSkirt"
+        for joint in spring["joints"]:
+            node_name = nodes[joint["node"]].get("name", "")
+            if node_name.endswith("_end"):
+                continue
+            assert joint.get("stiffness") == 0.28, node_name
+            assert joint.get("dragForce") == 0.22, node_name
+            assert joint.get("gravityPower") == 0.08, node_name
+            assert joint.get("gravityDir") == [0.0, -1.0, 0.0], node_name
+            coat_joint_count += 1
+    assert coat_joint_count == 42
     facts = catalog_facts(vrm)
     assert within_catalog_limits(facts), facts
     observation.update(facts)
