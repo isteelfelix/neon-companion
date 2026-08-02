@@ -16,6 +16,11 @@ COAT_DRAG = 0.22
 COAT_GRAVITY = 0.08
 EXPECTED_COAT_SPRINGS = 18
 EXPECTED_COAT_JOINTS = 42
+BUST_STIFFNESS = 0.32
+BUST_DRAG = 0.22
+BUST_GRAVITY = 0.06
+EXPECTED_BUST_SPRINGS = 2
+EXPECTED_BUST_JOINTS = 4
 
 
 def read_glb(path):
@@ -45,6 +50,17 @@ def coat_springs(document):
     return matches
 
 
+def bust_springs(document):
+    nodes = document["nodes"]
+    spring_bone = document["extensions"]["VRMC_springBone"]
+    matches = []
+    for spring in spring_bone["springs"]:
+        joints = spring.get("joints", [])
+        if joints and "Bust" in nodes[joints[0]["node"]].get("name", ""):
+            matches.append(spring)
+    return matches
+
+
 def apply_profile(document):
     nodes = document["nodes"]
     springs = coat_springs(document)
@@ -60,7 +76,21 @@ def apply_profile(document):
             joint["gravityPower"] = COAT_GRAVITY
             joint["gravityDir"] = [0.0, -1.0, 0.0]
             tuned_joints += 1
-    return len(springs), tuned_joints
+
+    bust = bust_springs(document)
+    tuned_bust_joints = 0
+    for spring in bust:
+        spring["name"] = "Bust"
+        for joint in spring["joints"]:
+            node_name = nodes[joint["node"]].get("name", "")
+            if node_name.endswith("_end"):
+                continue
+            joint["stiffness"] = BUST_STIFFNESS
+            joint["dragForce"] = BUST_DRAG
+            joint["gravityPower"] = BUST_GRAVITY
+            joint["gravityDir"] = [0.0, -1.0, 0.0]
+            tuned_bust_joints += 1
+    return len(springs), tuned_joints, len(bust), tuned_bust_joints
 
 
 def verify_profile(document):
@@ -80,7 +110,23 @@ def verify_profile(document):
             assert joint.get("gravityDir") == [0.0, -1.0, 0.0], node_name
             tuned_joints += 1
     assert tuned_joints == EXPECTED_COAT_JOINTS, tuned_joints
-    return len(springs), tuned_joints
+
+    bust = bust_springs(document)
+    assert len(bust) == EXPECTED_BUST_SPRINGS, len(bust)
+    tuned_bust_joints = 0
+    for spring in bust:
+        assert spring.get("name") == "Bust"
+        for joint in spring["joints"]:
+            node_name = nodes[joint["node"]].get("name", "")
+            if node_name.endswith("_end"):
+                continue
+            assert joint.get("stiffness") == BUST_STIFFNESS, node_name
+            assert joint.get("dragForce") == BUST_DRAG, node_name
+            assert joint.get("gravityPower") == BUST_GRAVITY, node_name
+            assert joint.get("gravityDir") == [0.0, -1.0, 0.0], node_name
+            tuned_bust_joints += 1
+    assert tuned_bust_joints == EXPECTED_BUST_JOINTS, tuned_bust_joints
+    return len(springs), tuned_joints, len(bust), tuned_bust_joints
 
 
 def write_glb(path, document, remaining_chunks):
@@ -124,17 +170,26 @@ def main():
 
     document, remaining_chunks = read_glb(VRM_PATH)
     if not args.check:
-        spring_count, joint_count = apply_profile(document)
-        if spring_count != EXPECTED_COAT_SPRINGS or joint_count != EXPECTED_COAT_JOINTS:
+        spring_count, joint_count, bust_count, bust_joint_count = apply_profile(document)
+        if (
+            spring_count != EXPECTED_COAT_SPRINGS
+            or joint_count != EXPECTED_COAT_JOINTS
+            or bust_count != EXPECTED_BUST_SPRINGS
+            or bust_joint_count != EXPECTED_BUST_JOINTS
+        ):
             raise AssertionError(
-                f"unexpected coat inventory: {spring_count} springs, {joint_count} joints"
+                "unexpected secondary-motion inventory: "
+                f"coat={spring_count}/{joint_count}, "
+                f"bust={bust_count}/{bust_joint_count}"
             )
         write_glb(VRM_PATH, document, remaining_chunks)
         document, _ = read_glb(VRM_PATH)
 
-    spring_count, joint_count = verify_profile(document)
+    spring_count, joint_count, bust_count, bust_joint_count = verify_profile(document)
     print(
-        f"Neon coat physics OK: {spring_count} springs, {joint_count} tuned joints"
+        "Neon secondary motion OK: "
+        f"coat={spring_count} springs/{joint_count} joints, "
+        f"bust={bust_count} springs/{bust_joint_count} joints"
     )
 
 

@@ -171,6 +171,25 @@ def verify_assets_and_runtime():
             assert joint.get("gravityDir") == [0.0, -1.0, 0.0], node_name
             coat_joint_count += 1
     assert coat_joint_count == 42
+    bust_springs = []
+    for spring in spring_bone.get("springs", []):
+        joints = spring.get("joints", [])
+        if joints and "Bust" in nodes[joints[0]["node"]].get("name", ""):
+            bust_springs.append(spring)
+    assert len(bust_springs) == 2
+    bust_joint_count = 0
+    for spring in bust_springs:
+        assert spring.get("name") == "Bust"
+        for joint in spring["joints"]:
+            node_name = nodes[joint["node"]].get("name", "")
+            if node_name.endswith("_end"):
+                continue
+            assert joint.get("stiffness") == 0.32, node_name
+            assert joint.get("dragForce") == 0.22, node_name
+            assert joint.get("gravityPower") == 0.06, node_name
+            assert joint.get("gravityDir") == [0.0, -1.0, 0.0], node_name
+            bust_joint_count += 1
+    assert bust_joint_count == 4
     facts = catalog_facts(vrm)
     assert within_catalog_limits(facts), facts
     observation.update(facts)
