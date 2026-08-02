@@ -317,9 +317,104 @@
     border-bottom-width: 0;
 }
 
+/* ============================================================
+   Tab bar (built in C# — see SettingsController.BuildSettingsTabs)
+   ============================================================ */
+
+.settings-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line-1);
+    margin-bottom: 10px;
+}
+
+.settings-tab {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 13px;
+    margin: 0 2px 0 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(0, 0, 0, 0);
+    border-radius: 0;
+    font-size: 12px;
+    color: var(--text-3);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
+    transition-property: color, border-bottom-color;
+    transition-duration: 0.12s;
+}
+
+.settings-tab:hover {
+    background-color: rgba(0, 0, 0, 0);
+    border-color: rgba(0, 0, 0, 0);
+    border-bottom-color: var(--line-2);
+    color: var(--text-1);
+}
+
+.settings-tab--active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.settings-tab--active:hover {
+    border-bottom-color: var(--accent);
+    color: var(--accent);
+}
+
+.settings-tab__icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 7px;
+    flex-shrink: 0;
+    -unity-background-image-tint-color: var(--text-3);
+}
+
+.settings-tab:hover .settings-tab__icon {
+    -unity-background-image-tint-color: var(--text-1);
+}
+
+.settings-tab--active .settings-tab__icon {
+    -unity-background-image-tint-color: var(--accent);
+}
+
+/* ---- Group caption inside a card ---- */
+
+.settings-group {
+    font-size: 11px;
+    color: var(--text-3);
+    -unity-font-definition: url("project://database/Assets/Fonts/Geist/Geist-Medium.ttf");
+    margin-top: 10px;
+    margin-bottom: 2px;
+}
+
+/* ---- Slider row: track plus a fixed-width readout ---- */
+
+.settings-slider-row {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.settings-slider-row > .slider-input {
+    min-width: 130px;
+    max-width: 150px;
+}
+
+.settings-slider-value {
+    min-width: 62px;
+    margin-left: 8px;
+    -unity-text-align: middle-right;
+}
+
 /* ---- Page-specific icons ---- */
 
 .icon--globe    { background-image: url("project://database/Assets/UI/Icons/globe.svg"); }
+.icon--sliders  { background-image: url("project://database/Assets/UI/Icons/sliders.svg"); }
+.icon--monitor  { background-image: url("project://database/Assets/UI/Icons/monitor.svg"); }
+.icon--database { background-image: url("project://database/Assets/UI/Icons/database.svg"); }
+.icon--cpu      { background-image: url("project://database/Assets/UI/Icons/cpu.svg"); }
 .icon--shield   { background-image: url("project://database/Assets/UI/Icons/shield.svg"); }
 .icon--folder   { background-image: url("project://database/Assets/UI/Icons/folder.svg"); }
 .icon--bolt     { background-image: url("project://database/Assets/UI/Icons/bolt.svg"); }

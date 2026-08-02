@@ -92,21 +92,10 @@ namespace NeonCompanion.Runtime.Avatar3D
         private const int MinRenderSize = 128;
         private const float ResizeThreshold = 0.04f;
 
-        // Rolling average of how often the avatar is actually re-rendered, for the
-        // diagnostics row in the graphics settings card.
-        private float _measuredFps;
-        private float _lastRenderTime;
-
         /// <summary>Current render target size in device pixels. Zero before the first frame.</summary>
         public Vector2Int RenderSize
         {
             get { return new Vector2Int(_renderWidth, _renderHeight); }
-        }
-
-        /// <summary>Smoothed rate at which this renderer re-renders the avatar.</summary>
-        public float MeasuredFps
-        {
-            get { return _measuredFps; }
         }
 
         /// <summary>
@@ -290,8 +279,9 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             // Off-screen or collapsed views cost nothing: the last rendered frame stays in
-            // the texture, so re-showing the panel is instant.
-            if (_graphics.pauseAvatarWhenHidden && !IsTargetVisible())
+            // the texture, so re-showing the panel is instant. Always on — there is no
+            // reason a user would want to burn frames on something they cannot see.
+            if (!IsTargetVisible())
                 return;
 
             float now = Time.unscaledTime;
@@ -303,11 +293,6 @@ namespace NeonCompanion.Runtime.Avatar3D
             // Anchor on "now" rather than accumulating, so a stall cannot build up a
             // backlog of catch-up renders.
             _nextRenderAt = now + interval;
-
-            float delta = now - _lastRenderTime;
-            if (delta > 0.0001f && delta < 1f)
-                _measuredFps = Mathf.Lerp(_measuredFps, 1f / delta, 0.1f);
-            _lastRenderTime = now;
 
             UpdateRenderTextureSize(false);
             UpdateCameraTransform();
@@ -459,8 +444,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return;
 
             _camera.allowHDR = _graphics.hdr;
-            _camera.allowMSAA = string.Equals(
-                _graphics.antialiasing, GraphicsOptions.AaMsaa, StringComparison.Ordinal);
+            _camera.allowMSAA = _graphics.MsaaSamples > 1;
 
             UniversalAdditionalCameraData data = _camera.GetUniversalAdditionalCameraData();
             if (data == null)
@@ -472,10 +456,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (rendererIndex >= 0)
                 data.SetRenderer(rendererIndex);
 
-            bool fxaa = string.Equals(
-                _graphics.antialiasing, GraphicsOptions.AaFxaa, StringComparison.Ordinal);
-            bool smaa = string.Equals(
-                _graphics.antialiasing, GraphicsOptions.AaSmaa, StringComparison.Ordinal);
+            bool fxaa = _graphics.UsesFxaa;
+            bool smaa = _graphics.UsesSmaa;
 
             if (fxaa)
                 data.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
@@ -484,47 +466,36 @@ namespace NeonCompanion.Runtime.Avatar3D
             else
                 data.antialiasing = AntialiasingMode.None;
 
-            data.antialiasingQuality = ResolveAntialiasingQuality(_graphics.smaaQuality);
+            data.antialiasingQuality = AntialiasingQuality.High;
 
             // URP only runs the post-AA passes as part of post-processing, so FXAA/SMAA
             // force the stack on even when every effect is switched off.
             data.renderPostProcessing = _graphics.postProcessing || fxaa || smaa;
         }
 
-        private static AntialiasingQuality ResolveAntialiasingQuality(string quality)
-        {
-            if (string.Equals(quality, GraphicsOptions.QualityLow, StringComparison.Ordinal))
-                return AntialiasingQuality.Low;
-            if (string.Equals(quality, GraphicsOptions.QualityMedium, StringComparison.Ordinal))
-                return AntialiasingQuality.Medium;
-            return AntialiasingQuality.High;
-        }
-
         private void ApplyLightingQuality()
         {
             if (_directionalLight != null)
             {
-                _directionalLight.intensity = _graphics.keyLightIntensity;
-                _directionalLight.useColorTemperature = true;
-                _directionalLight.colorTemperature = _graphics.lightTemperature;
+                _directionalLight.intensity = _graphics.KeyLightIntensity;
 
-                if (!_graphics.shadows)
+                if (!_graphics.ShadowsEnabled)
                     _directionalLight.shadows = LightShadows.None;
-                else if (_graphics.softShadows)
+                else if (_graphics.SoftShadows)
                     _directionalLight.shadows = LightShadows.Soft;
                 else
                     _directionalLight.shadows = LightShadows.Hard;
             }
 
-            _fillLightActive = _graphics.fillLightIntensity > 0.001f;
+            _fillLightActive = _graphics.FillLightIntensity > 0.001f;
             if (_fillLight != null)
-                _fillLight.intensity = _graphics.fillLightIntensity;
+                _fillLight.intensity = _graphics.FillLightIntensity;
 
-            _rimLightActive = _graphics.rimLightIntensity > 0.001f;
+            _rimLightActive = _graphics.RimLightIntensity > 0.001f;
             if (_rimLight != null)
-                _rimLight.intensity = _graphics.rimLightIntensity;
+                _rimLight.intensity = _graphics.RimLightIntensity;
 
-            float ambient = _graphics.ambientIntensity;
+            float ambient = _graphics.AmbientIntensity;
             _ambientColor = new Color(ambient, ambient, ambient, 1f);
 
             // Left off outside the render span — see SetRigEnabled.
@@ -644,9 +615,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private int DesiredMsaa()
         {
-            if (!string.Equals(_graphics.antialiasing, GraphicsOptions.AaMsaa, StringComparison.Ordinal))
-                return 1;
-            return _graphics.msaaSamples;
+            return _graphics.MsaaSamples;
         }
 
         private void CreateRenderTexture(int width, int height)

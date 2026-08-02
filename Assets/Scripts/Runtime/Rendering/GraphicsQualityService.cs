@@ -117,10 +117,7 @@ namespace NeonCompanion.Runtime.Rendering
             if (urp == null)
                 return;
 
-            int msaa = 1;
-            if (string.Equals(settings.antialiasing, GraphicsOptions.AaMsaa, StringComparison.Ordinal))
-                msaa = settings.msaaSamples;
-
+            int msaa = settings.MsaaSamples;
             if (urp.msaaSampleCount != msaa)
                 urp.msaaSampleCount = msaa;
 
@@ -130,11 +127,11 @@ namespace NeonCompanion.Runtime.Rendering
             // supportsMainLightShadows has an internal setter, so shadows are switched off
             // by collapsing the shadow distance instead — URP skips the shadow passes when
             // it reaches zero. Per-light LightShadows is handled by Avatar3DRenderer.
-            float shadowDistance = settings.shadows ? 12f : 0f;
+            float shadowDistance = settings.ShadowsEnabled ? 12f : 0f;
             if (!Mathf.Approximately(urp.shadowDistance, shadowDistance))
                 urp.shadowDistance = shadowDistance;
 
-            if (settings.shadows && urp.mainLightShadowmapResolution != settings.shadowResolution)
+            if (settings.ShadowsEnabled && urp.mainLightShadowmapResolution != settings.shadowResolution)
                 urp.mainLightShadowmapResolution = settings.shadowResolution;
         }
 

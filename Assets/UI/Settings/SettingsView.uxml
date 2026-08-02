@@ -15,7 +15,7 @@
         <ui:ScrollView class="settings-scroll">
 
             <!-- ===== General ===== -->
-            <ui:VisualElement class="settings-card">
+            <ui:VisualElement name="settings-card-general" class="settings-card">
                 <ui:VisualElement class="settings-card__head">
                     <ui:VisualElement class="icon icon--globe settings-card__icon" />
                     <ui:Label text="Общие" class="settings-card__title" />
@@ -139,7 +139,7 @@
             </ui:VisualElement>
 
             <!-- ===== Security ===== -->
-            <ui:VisualElement class="settings-card">
+            <ui:VisualElement name="settings-card-security" class="settings-card">
                 <ui:VisualElement class="settings-card__head">
                     <ui:VisualElement class="icon icon--shield settings-card__icon" />
                     <ui:Label text="Безопасность" class="settings-card__title" />
@@ -163,7 +163,7 @@
             </ui:VisualElement>
 
             <!-- ===== Data ===== -->
-            <ui:VisualElement class="settings-card">
+            <ui:VisualElement name="settings-card-data" class="settings-card">
                 <ui:VisualElement class="settings-card__head">
                     <ui:VisualElement class="icon icon--folder settings-card__icon" />
                     <ui:Label text="Данные" class="settings-card__title" />
@@ -212,7 +212,7 @@
             </ui:VisualElement>
 
             <!-- ===== Plugins ===== -->
-            <ui:VisualElement class="settings-card">
+            <ui:VisualElement name="settings-card-plugins" class="settings-card">
                 <ui:VisualElement class="settings-card__head">
                     <ui:VisualElement class="icon icon--bolt settings-card__icon" />
                     <ui:Label text="Плагины" class="settings-card__title" />
@@ -230,7 +230,7 @@
             </ui:VisualElement>
 
             <!-- ===== About ===== -->
-            <ui:VisualElement class="settings-card">
+            <ui:VisualElement name="settings-card-about" class="settings-card">
                 <ui:VisualElement class="settings-card__head">
                     <ui:VisualElement class="icon icon--info settings-card__icon" />
                     <ui:Label text="О приложении" class="settings-card__title" />

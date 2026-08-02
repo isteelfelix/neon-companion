@@ -25,12 +25,10 @@ namespace NeonCompanion.Runtime.Rendering
         private static VolumeProfile _profile;
         private static Bloom _bloom;
         private static Tonemapping _tonemapping;
-        private static ColorAdjustments _colorAdjustments;
-        private static Vignette _vignette;
 
         /// <summary>
         /// True when post-processing can run without flattening the avatar's transparent
-        /// background. Drives the warning shown next to the post-processing switch.
+        /// background.
         /// </summary>
         internal static bool AlphaOutputAllowed
         {
@@ -59,10 +57,28 @@ namespace NeonCompanion.Runtime.Rendering
                 return;
 
             _volume.enabled = true;
-            ApplyBloom(settings);
-            ApplyTonemapping(settings);
-            ApplyColorAdjustments(settings);
-            ApplyVignette(settings);
+
+            if (_bloom != null)
+            {
+                _bloom.active = settings.bloom > 0.001f;
+                _bloom.intensity.Override(settings.bloom);
+                // Measured against the built-in VRM at the default key light: the render
+                // never exceeds ~0.63 luminance, so URP's default threshold of 0.9 would
+                // make the bloom slider do nothing at all. At 0.45 only the genuine
+                // highlights — eye catchlights and hair specular, well under 1% of the
+                // avatar — pick it up.
+                _bloom.threshold.Override(0.45f);
+                _bloom.scatter.Override(0.7f);
+            }
+
+            // Neutral rather than a user choice: it maps the HDR range onto the display
+            // without shifting hue, which is what a character portrait wants. ACES would
+            // push the palette around for no benefit here.
+            if (_tonemapping != null)
+            {
+                _tonemapping.active = true;
+                _tonemapping.mode.Override(TonemappingMode.Neutral);
+            }
         }
 
         private static void EnsureVolume()
@@ -82,74 +98,12 @@ namespace NeonCompanion.Runtime.Rendering
 
             _bloom = _profile.Add<Bloom>(true);
             _tonemapping = _profile.Add<Tonemapping>(true);
-            _colorAdjustments = _profile.Add<ColorAdjustments>(true);
-            _vignette = _profile.Add<Vignette>(true);
 
             _volume = _host.AddComponent<Volume>();
             _volume.isGlobal = true;
             _volume.priority = 1f;
             _volume.weight = 1f;
             _volume.profile = _profile;
-        }
-
-        private static void ApplyBloom(AvatarGraphicsSettings settings)
-        {
-            if (_bloom == null)
-                return;
-
-            _bloom.active = settings.bloom > 0.001f;
-            _bloom.intensity.Override(settings.bloom);
-            // Measured against the built-in VRM at the default key light: the render never
-            // exceeds ~0.63 luminance, so URP's default threshold of 0.9 would make the
-            // bloom slider do nothing at all. At 0.45 only the genuine highlights — eye
-            // catchlights and hair specular, well under 1% of the avatar — pick it up.
-            _bloom.threshold.Override(0.45f);
-            _bloom.scatter.Override(0.7f);
-        }
-
-        private static void ApplyTonemapping(AvatarGraphicsSettings settings)
-        {
-            if (_tonemapping == null)
-                return;
-
-            if (string.Equals(settings.tonemapping, GraphicsOptions.TonemapAces, System.StringComparison.Ordinal))
-            {
-                _tonemapping.active = true;
-                _tonemapping.mode.Override(TonemappingMode.ACES);
-            }
-            else if (string.Equals(settings.tonemapping, GraphicsOptions.TonemapNeutral, System.StringComparison.Ordinal))
-            {
-                _tonemapping.active = true;
-                _tonemapping.mode.Override(TonemappingMode.Neutral);
-            }
-            else
-            {
-                _tonemapping.active = false;
-                _tonemapping.mode.Override(TonemappingMode.None);
-            }
-        }
-
-        private static void ApplyColorAdjustments(AvatarGraphicsSettings settings)
-        {
-            if (_colorAdjustments == null)
-                return;
-
-            bool needed = Mathf.Abs(settings.saturation) > 0.01f ||
-                          Mathf.Abs(settings.contrast) > 0.01f;
-            _colorAdjustments.active = needed;
-            _colorAdjustments.saturation.Override(settings.saturation);
-            _colorAdjustments.contrast.Override(settings.contrast);
-        }
-
-        private static void ApplyVignette(AvatarGraphicsSettings settings)
-        {
-            if (_vignette == null)
-                return;
-
-            _vignette.active = settings.vignette > 0.001f;
-            _vignette.intensity.Override(settings.vignette);
-            _vignette.smoothness.Override(0.5f);
-            _vignette.rounded.Override(true);
         }
     }
 }

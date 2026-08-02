@@ -513,8 +513,6 @@ namespace NeonCompanion.Runtime.UI.UITK
                 },
                 GetAvatarViewMode = () => _avatarGalleryController.AvatarViewModeSetting,
                 SetAvatarViewMode = mode => _avatarGalleryController.SetAvatarViewModeFromSetting(mode),
-                // Read-only lookup: the diagnostics rows must not bring a renderer to life.
-                GetAvatar3DRenderer = () => gameObject.GetComponent<Avatar3D.Avatar3DRenderer>(),
                 PublishGraphicsSettings = () => { _ = _companionWindowController.PublishGraphicsAsync(); },
                 RefreshVoiceControls  = RefreshVoiceControls,
                 RequestRefreshLocalizedUi = RefreshLocalizedUiAsync,

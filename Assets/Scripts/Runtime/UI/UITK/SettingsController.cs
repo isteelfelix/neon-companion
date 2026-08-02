@@ -40,9 +40,6 @@ namespace NeonCompanion.Runtime.UI.UITK
         public Action<string> SetCurrentSessionId;
         public Action<string> SetCurrentSessionTitle;
 
-        /// <summary>The renderer behind the in-app avatar column, for the graphics diagnostics rows.</summary>
-        public Func<Avatar3D.Avatar3DRenderer> GetAvatar3DRenderer;
-
         /// <summary>Re-sends the saved graphics settings to the pet-window process, if it is running.</summary>
         public Action PublishGraphicsSettings;
     }
@@ -115,6 +112,14 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         // ===== Graphics (built in C#, see SettingsGraphicsCard) =====
         private SettingsGraphicsCard _graphicsCard;
+
+        // ===== Settings page tabs (built in C#) =====
+        private readonly List<Button> _settingsTabButtons = new List<Button>();
+        private readonly List<Label> _settingsTabLabels = new List<Label>();
+        private readonly List<List<VisualElement>> _settingsTabCards =
+            new List<List<VisualElement>>();
+        private ScrollView _settingsScroll;
+        private int _activeSettingsTab;
 
         // ===== UI theme (accent palette, U-13) =====
         private VisualElement _appRoot;
@@ -229,11 +234,11 @@ namespace NeonCompanion.Runtime.UI.UITK
             _graphicsCard = new SettingsGraphicsCard();
             _graphicsCard.Init(root, new SettingsGraphicsCard.Deps
             {
-                Save = SaveSettings,
-                GetRenderer = () => _deps != null && _deps.GetAvatar3DRenderer != null
-                    ? _deps.GetAvatar3DRenderer()
-                    : null
+                Save = SaveSettings
             });
+
+            // After the graphics card, so its element is already in the scroll view.
+            BuildSettingsTabs(root);
 
             UpdateClearDataButtonState();
         }
@@ -277,6 +282,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             // Also refresh permission mode dropdown labels/choices on language change (no MainViewController edit)
             RefreshPermissionModeDropdown();
             _graphicsCard?.RefreshLocalization();
+            RefreshSettingsTabLabels();
         }
 
         internal void RefreshPluginStatus(CompanionApp app)
@@ -767,6 +773,124 @@ namespace NeonCompanion.Runtime.UI.UITK
         // ============================================================
         // UI theme (accent palette, U-13)
         // ============================================================
+
+        // ============================================================
+        // Settings page tabs
+        // ============================================================
+
+        /// <summary>
+        /// Splits the settings page into tabs instead of one long scroll. The cards
+        /// themselves are untouched — each tab just shows its own subset — so a card can be
+        /// moved between tabs by editing this table alone.
+        /// </summary>
+        private void BuildSettingsTabs(VisualElement root)
+        {
+            var area = root.Q<VisualElement>("settings-area");
+            _settingsScroll = root.Q<ScrollView>(className: "settings-scroll");
+            if (area == null || _settingsScroll == null)
+                return;
+
+            var existing = root.Q<VisualElement>("settings-tabs");
+            if (existing != null)
+                existing.RemoveFromHierarchy();
+
+            _settingsTabButtons.Clear();
+            _settingsTabLabels.Clear();
+            _settingsTabCards.Clear();
+
+            string[][] cardNames =
+            {
+                new string[] { "settings-card-general" },
+                new string[] { "settings-graphics-card" },
+                new string[] { "settings-card-security", "settings-card-data" },
+                new string[] { "settings-card-plugins", "settings-card-about" }
+            };
+            string[] labelKeys =
+            {
+                "settings.tab.general", "settings.tab.graphics",
+                "settings.tab.data", "settings.tab.system"
+            };
+            string[] labelFallbacks = { "Общие", "Графика", "Данные", "Система" };
+            string[] iconClasses = { "icon--sliders", "icon--monitor", "icon--database", "icon--cpu" };
+
+            var bar = new VisualElement();
+            bar.name = "settings-tabs";
+            bar.AddToClassList("settings-tabs");
+
+            for (int i = 0; i < cardNames.Length; i++)
+            {
+                var cards = new List<VisualElement>();
+                for (int j = 0; j < cardNames[i].Length; j++)
+                {
+                    VisualElement card = root.Q<VisualElement>(cardNames[i][j]);
+                    if (card != null)
+                        cards.Add(card);
+                }
+                _settingsTabCards.Add(cards);
+
+                // Captured outside the click handler — the loop variable itself would be
+                // shared by every button.
+                int index = i;
+                var button = new Button(() => SelectSettingsTab(index));
+                button.AddToClassList("settings-tab");
+
+                var icon = new VisualElement();
+                icon.AddToClassList("icon");
+                icon.AddToClassList(iconClasses[i]);
+                icon.AddToClassList("settings-tab__icon");
+                icon.pickingMode = PickingMode.Ignore;
+                button.Add(icon);
+
+                var label = new Label(LocalizationExtensions.Get(labelKeys[i], labelFallbacks[i]));
+                label.pickingMode = PickingMode.Ignore;
+                button.Add(label);
+
+                _settingsTabButtons.Add(button);
+                _settingsTabLabels.Add(label);
+                bar.Add(button);
+            }
+
+            int headIndex = area.IndexOf(area.Q<VisualElement>(className: "page__head"));
+            area.Insert(headIndex >= 0 ? headIndex + 1 : 0, bar);
+
+            SelectSettingsTab(_activeSettingsTab);
+        }
+
+        private void SelectSettingsTab(int index)
+        {
+            if (_settingsTabCards.Count == 0)
+                return;
+            if (index < 0 || index >= _settingsTabCards.Count)
+                index = 0;
+            _activeSettingsTab = index;
+
+            for (int i = 0; i < _settingsTabCards.Count; i++)
+            {
+                bool active = i == index;
+                if (i < _settingsTabButtons.Count)
+                    _settingsTabButtons[i].EnableInClassList("settings-tab--active", active);
+
+                List<VisualElement> cards = _settingsTabCards[i];
+                for (int j = 0; j < cards.Count; j++)
+                    cards[j].style.display = active ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+
+            // A tab switch is a new page, not a continuation of the last one's scroll.
+            if (_settingsScroll != null)
+                _settingsScroll.scrollOffset = Vector2.zero;
+        }
+
+        private void RefreshSettingsTabLabels()
+        {
+            string[] keys =
+            {
+                "settings.tab.general", "settings.tab.graphics",
+                "settings.tab.data", "settings.tab.system"
+            };
+            string[] fallbacks = { "Общие", "Графика", "Данные", "Система" };
+            for (int i = 0; i < _settingsTabLabels.Count && i < keys.Length; i++)
+                _settingsTabLabels[i].text = LocalizationExtensions.Get(keys[i], fallbacks[i]);
+        }
 
         private void BuildThemePaletteCard(VisualElement root)
         {

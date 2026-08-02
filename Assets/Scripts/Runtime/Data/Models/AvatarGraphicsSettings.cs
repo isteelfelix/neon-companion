@@ -16,21 +16,19 @@ namespace NeonCompanion.Runtime.Data.Models
         public const string PresetUltra = "ultra";
         public const string PresetCustom = "custom";
 
-        // antialiasing
+        // antialiasing — the MSAA level is part of the mode so the UI needs one control
+        // instead of a mode dropdown plus a dependent level dropdown.
         public const string AaOff = "off";
-        public const string AaMsaa = "msaa";
         public const string AaFxaa = "fxaa";
         public const string AaSmaa = "smaa";
+        public const string AaMsaa2 = "msaa2";
+        public const string AaMsaa4 = "msaa4";
+        public const string AaMsaa8 = "msaa8";
 
-        // tonemapping
-        public const string TonemapOff = "off";
-        public const string TonemapNeutral = "neutral";
-        public const string TonemapAces = "aces";
-
-        // quality tiers used by SMAA
-        public const string QualityLow = "low";
-        public const string QualityMedium = "medium";
-        public const string QualityHigh = "high";
+        // shadows
+        public const string ShadowsOff = "off";
+        public const string ShadowsHard = "hard";
+        public const string ShadowsSoft = "soft";
 
         public static readonly string[] Presets =
         {
@@ -39,50 +37,41 @@ namespace NeonCompanion.Runtime.Data.Models
 
         public static readonly string[] AntialiasingModes =
         {
-            AaOff, AaMsaa, AaFxaa, AaSmaa
+            AaOff, AaFxaa, AaSmaa, AaMsaa2, AaMsaa4, AaMsaa8
         };
 
-        public static readonly string[] TonemappingModes =
+        public static readonly string[] ShadowModes =
         {
-            TonemapOff, TonemapNeutral, TonemapAces
+            ShadowsOff, ShadowsHard, ShadowsSoft
         };
     }
 
     /// <summary>
-    /// Everything the avatar's render path exposes to the user. Applied by
-    /// <c>GraphicsQualityService</c>; persisted inside <see cref="AppSettings"/> so the
-    /// pet-window process reads the same values from the same file.
+    /// The avatar's render quality. Deliberately small: only knobs a user can hear
+    /// themselves ask for. Everything else — HDR, texture mip limit, shadow map size,
+    /// resolution ceiling — is derived from the preset and never shown, because those are
+    /// consequences of a quality choice rather than choices of their own.
+    ///
+    /// Applied by <c>GraphicsQualityService</c>; persisted inside <see cref="AppSettings"/>
+    /// so the pet-window process reads the same values from the same file.
     /// </summary>
     [Serializable]
     public class AvatarGraphicsSettings
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public int version = CurrentVersion;
 
-        /// <summary>One of <see cref="GraphicsOptions.Presets"/>. Set to "custom" as soon as a single knob is touched.</summary>
+        /// <summary>One of <see cref="GraphicsOptions.Presets"/>. Becomes "custom" as soon as a knob is touched.</summary>
         public string preset = GraphicsOptions.PresetHigh;
 
-        // ===== Resolution =====
+        // ===== Shown in the settings UI =====
 
-        /// <summary>Multiplier on the avatar view's own pixel size. 0.5 halves it, 2.0 supersamples.</summary>
+        /// <summary>Render resolution relative to the avatar view's on-screen size. Above 1 supersamples.</summary>
         public float renderScale = 1f;
 
-        /// <summary>Hard ceiling on the render texture's longest side. Guards against 4K panels.</summary>
-        public int maxRenderSize = 2048;
-
-        // ===== Anti-aliasing =====
-
         /// <summary>One of <see cref="GraphicsOptions.AntialiasingModes"/>.</summary>
-        public string antialiasing = GraphicsOptions.AaMsaa;
-
-        /// <summary>MSAA samples on the avatar render texture: 2, 4 or 8. Only read when <see cref="antialiasing"/> is "msaa".</summary>
-        public int msaaSamples = 4;
-
-        /// <summary>SMAA tier, one of the quality tiers. Only read when <see cref="antialiasing"/> is "smaa".</summary>
-        public string smaaQuality = GraphicsOptions.QualityHigh;
-
-        // ===== Frame pacing =====
+        public string antialiasing = GraphicsOptions.AaMsaa4;
 
         public bool vSync = true;
 
@@ -92,56 +81,95 @@ namespace NeonCompanion.Runtime.Data.Models
         /// <summary>How often the avatar itself is re-rendered, independent of the UI frame rate.</summary>
         public int avatarFrameRate = 60;
 
-        /// <summary>Stop re-rendering the avatar while its view is off-screen or the panel is hidden.</summary>
-        public bool pauseAvatarWhenHidden = true;
+        /// <summary>Master multiplier over the whole three-point light rig and the ambient term.</summary>
+        public float brightness = 1f;
 
-        // ===== Lighting rig =====
-
-        public float keyLightIntensity = 1.1f;
-        public float fillLightIntensity = 0.35f;
-        public float rimLightIntensity = 0.9f;
-
-        /// <summary>Key light colour temperature in Kelvin. 6500 is neutral white.</summary>
-        public float lightTemperature = 6500f;
-
-        public float ambientIntensity = 0.35f;
-
-        // ===== Shadows =====
-
-        public bool shadows = true;
-        public bool softShadows = true;
-
-        /// <summary>Main light shadowmap resolution: 256, 512, 1024, 2048 or 4096.</summary>
-        public int shadowResolution = 1024;
-
-        // ===== Post-processing =====
+        /// <summary>One of <see cref="GraphicsOptions.ShadowModes"/>.</summary>
+        public string shadows = GraphicsOptions.ShadowsSoft;
 
         public bool postProcessing = true;
-
-        /// <summary>Render the avatar into a half-float target so bloom has headroom above 1.0.</summary>
-        public bool hdr = true;
-
-        /// <summary>One of <see cref="GraphicsOptions.TonemappingModes"/>.</summary>
-        public string tonemapping = GraphicsOptions.TonemapNeutral;
 
         /// <summary>Bloom intensity. 0 disables the effect entirely.</summary>
         public float bloom = 0.35f;
 
-        /// <summary>Vignette intensity, 0..1. 0 disables the effect.</summary>
-        public float vignette = 0.15f;
+        // ===== Derived from the preset, never shown =====
 
-        /// <summary>Colour saturation offset, -100..100.</summary>
-        public float saturation = 0f;
+        /// <summary>Ceiling on the render target's longest side, so a 4K panel cannot run away.</summary>
+        public int maxRenderSize = 2048;
 
-        /// <summary>Contrast offset, -100..100.</summary>
-        public float contrast = 0f;
+        /// <summary>Main light shadowmap resolution.</summary>
+        public int shadowResolution = 1024;
 
-        // ===== Textures =====
+        /// <summary>Half-float render target, so bloom has headroom above 1.0. Follows post-processing.</summary>
+        public bool hdr = true;
 
         /// <summary>Mipmap limit: 0 = full resolution, 1 = half, 2 = quarter.</summary>
         public int textureQuality = 0;
 
         public bool anisotropicFiltering = true;
+
+        // ===== Derived lighting =====
+        //
+        // The rig ratios are fixed: a portrait wants a dominant key, a soft fill that keeps
+        // the shadow side readable, and a rim that lifts the silhouette off the background.
+        // Exposing all three as separate sliders only lets the user break a good default.
+
+        public float KeyLightIntensity
+        {
+            get { return 1.1f * brightness; }
+        }
+
+        public float FillLightIntensity
+        {
+            get { return 0.35f * brightness; }
+        }
+
+        public float RimLightIntensity
+        {
+            get { return 0.9f * brightness; }
+        }
+
+        public float AmbientIntensity
+        {
+            get { return 0.35f * brightness; }
+        }
+
+        // ===== Antialiasing helpers =====
+
+        /// <summary>MSAA sample count for the current mode, or 1 when MSAA is not selected.</summary>
+        public int MsaaSamples
+        {
+            get
+            {
+                if (string.Equals(antialiasing, GraphicsOptions.AaMsaa2, StringComparison.Ordinal))
+                    return 2;
+                if (string.Equals(antialiasing, GraphicsOptions.AaMsaa4, StringComparison.Ordinal))
+                    return 4;
+                if (string.Equals(antialiasing, GraphicsOptions.AaMsaa8, StringComparison.Ordinal))
+                    return 8;
+                return 1;
+            }
+        }
+
+        public bool UsesFxaa
+        {
+            get { return string.Equals(antialiasing, GraphicsOptions.AaFxaa, StringComparison.Ordinal); }
+        }
+
+        public bool UsesSmaa
+        {
+            get { return string.Equals(antialiasing, GraphicsOptions.AaSmaa, StringComparison.Ordinal); }
+        }
+
+        public bool ShadowsEnabled
+        {
+            get { return !string.Equals(shadows, GraphicsOptions.ShadowsOff, StringComparison.Ordinal); }
+        }
+
+        public bool SoftShadows
+        {
+            get { return string.Equals(shadows, GraphicsOptions.ShadowsSoft, StringComparison.Ordinal); }
+        }
 
         /// <summary>Deep copy — used to diff against the presets and to hand a snapshot to the pet window.</summary>
         public AvatarGraphicsSettings Clone()
@@ -150,29 +178,17 @@ namespace NeonCompanion.Runtime.Data.Models
             copy.version = version;
             copy.preset = preset;
             copy.renderScale = renderScale;
-            copy.maxRenderSize = maxRenderSize;
             copy.antialiasing = antialiasing;
-            copy.msaaSamples = msaaSamples;
-            copy.smaaQuality = smaaQuality;
             copy.vSync = vSync;
             copy.targetFrameRate = targetFrameRate;
             copy.avatarFrameRate = avatarFrameRate;
-            copy.pauseAvatarWhenHidden = pauseAvatarWhenHidden;
-            copy.keyLightIntensity = keyLightIntensity;
-            copy.fillLightIntensity = fillLightIntensity;
-            copy.rimLightIntensity = rimLightIntensity;
-            copy.lightTemperature = lightTemperature;
-            copy.ambientIntensity = ambientIntensity;
+            copy.brightness = brightness;
             copy.shadows = shadows;
-            copy.softShadows = softShadows;
-            copy.shadowResolution = shadowResolution;
             copy.postProcessing = postProcessing;
-            copy.hdr = hdr;
-            copy.tonemapping = tonemapping;
             copy.bloom = bloom;
-            copy.vignette = vignette;
-            copy.saturation = saturation;
-            copy.contrast = contrast;
+            copy.maxRenderSize = maxRenderSize;
+            copy.shadowResolution = shadowResolution;
+            copy.hdr = hdr;
             copy.textureQuality = textureQuality;
             copy.anisotropicFiltering = anisotropicFiltering;
             return copy;
@@ -185,38 +201,27 @@ namespace NeonCompanion.Runtime.Data.Models
         /// </summary>
         public void Normalize()
         {
-            version = CurrentVersion;
             preset = NormalizeChoice(preset, GraphicsOptions.Presets, GraphicsOptions.PresetHigh);
             antialiasing = NormalizeChoice(
-                antialiasing, GraphicsOptions.AntialiasingModes, GraphicsOptions.AaMsaa);
-            tonemapping = NormalizeChoice(
-                tonemapping, GraphicsOptions.TonemappingModes, GraphicsOptions.TonemapNeutral);
-
-            if (!string.Equals(smaaQuality, GraphicsOptions.QualityLow, StringComparison.Ordinal) &&
-                !string.Equals(smaaQuality, GraphicsOptions.QualityMedium, StringComparison.Ordinal) &&
-                !string.Equals(smaaQuality, GraphicsOptions.QualityHigh, StringComparison.Ordinal))
-                smaaQuality = GraphicsOptions.QualityHigh;
+                antialiasing, GraphicsOptions.AntialiasingModes, GraphicsOptions.AaMsaa4);
+            shadows = NormalizeChoice(
+                shadows, GraphicsOptions.ShadowModes, GraphicsOptions.ShadowsSoft);
 
             renderScale = Clamp(renderScale, 0.5f, 2f);
-            maxRenderSize = NearestOf(maxRenderSize, 1024, 1536, 2048, 3072, 4096);
-            msaaSamples = NearestOf(msaaSamples, 2, 4, 8);
-            shadowResolution = NearestOf(shadowResolution, 256, 512, 1024, 2048, 4096);
+            brightness = Clamp(brightness, 0.4f, 1.8f);
+            bloom = Clamp(bloom, 0f, 2f);
 
             targetFrameRate = targetFrameRate <= 0 ? 0 : ClampInt(targetFrameRate, 15, 360);
             avatarFrameRate = ClampInt(avatarFrameRate, 15, 240);
 
-            keyLightIntensity = Clamp(keyLightIntensity, 0f, 3f);
-            fillLightIntensity = Clamp(fillLightIntensity, 0f, 3f);
-            rimLightIntensity = Clamp(rimLightIntensity, 0f, 3f);
-            lightTemperature = Clamp(lightTemperature, 3000f, 12000f);
-            ambientIntensity = Clamp(ambientIntensity, 0f, 1.5f);
-
-            bloom = Clamp(bloom, 0f, 2f);
-            vignette = Clamp(vignette, 0f, 1f);
-            saturation = Clamp(saturation, -100f, 100f);
-            contrast = Clamp(contrast, -100f, 100f);
-
+            maxRenderSize = NearestOf(maxRenderSize, 1024, 1536, 2048, 3072, 4096);
+            shadowResolution = NearestOf(shadowResolution, 256, 512, 1024, 2048, 4096);
             textureQuality = ClampInt(textureQuality, 0, 2);
+
+            // A settings file written before version 2 has the old field layout; the fields
+            // that survived are still valid, and the ones that did not are simply absent,
+            // which leaves them at the defaults above.
+            version = CurrentVersion;
         }
 
         /// <summary>Overwrites every knob with the named preset. "custom" is left untouched.</summary>
@@ -233,102 +238,73 @@ namespace NeonCompanion.Runtime.Data.Models
             {
                 case GraphicsOptions.PresetLow:
                     renderScale = 0.75f;
-                    maxRenderSize = 1024;
                     antialiasing = GraphicsOptions.AaOff;
-                    msaaSamples = 2;
                     avatarFrameRate = 30;
-                    shadows = false;
-                    softShadows = false;
-                    shadowResolution = 512;
+                    brightness = 1f;
+                    shadows = GraphicsOptions.ShadowsOff;
                     postProcessing = false;
-                    hdr = false;
-                    tonemapping = GraphicsOptions.TonemapOff;
                     bloom = 0f;
-                    vignette = 0f;
-                    keyLightIntensity = 1.1f;
-                    fillLightIntensity = 0.3f;
-                    rimLightIntensity = 0f;
-                    ambientIntensity = 0.4f;
+                    maxRenderSize = 1024;
+                    shadowResolution = 512;
+                    hdr = false;
                     textureQuality = 1;
                     anisotropicFiltering = false;
                     break;
 
                 case GraphicsOptions.PresetMedium:
                     renderScale = 1f;
-                    maxRenderSize = 1536;
                     antialiasing = GraphicsOptions.AaFxaa;
-                    msaaSamples = 2;
                     avatarFrameRate = 60;
-                    shadows = false;
-                    softShadows = false;
-                    shadowResolution = 512;
+                    brightness = 1f;
+                    shadows = GraphicsOptions.ShadowsHard;
                     postProcessing = true;
-                    hdr = false;
-                    tonemapping = GraphicsOptions.TonemapNeutral;
                     bloom = 0.2f;
-                    vignette = 0.1f;
-                    keyLightIntensity = 1.1f;
-                    fillLightIntensity = 0.35f;
-                    rimLightIntensity = 0.6f;
-                    ambientIntensity = 0.35f;
+                    maxRenderSize = 1536;
+                    shadowResolution = 512;
+                    hdr = true;
                     textureQuality = 0;
                     anisotropicFiltering = true;
                     break;
 
                 case GraphicsOptions.PresetUltra:
                     renderScale = 1.5f;
-                    maxRenderSize = 3072;
-                    antialiasing = GraphicsOptions.AaMsaa;
-                    msaaSamples = 8;
+                    antialiasing = GraphicsOptions.AaMsaa8;
                     avatarFrameRate = 120;
-                    shadows = true;
-                    softShadows = true;
-                    shadowResolution = 2048;
+                    brightness = 1f;
+                    shadows = GraphicsOptions.ShadowsSoft;
                     postProcessing = true;
-                    hdr = true;
-                    tonemapping = GraphicsOptions.TonemapAces;
                     bloom = 0.45f;
-                    vignette = 0.15f;
-                    keyLightIntensity = 1.15f;
-                    fillLightIntensity = 0.4f;
-                    rimLightIntensity = 1f;
-                    ambientIntensity = 0.32f;
+                    maxRenderSize = 3072;
+                    shadowResolution = 2048;
+                    hdr = true;
                     textureQuality = 0;
                     anisotropicFiltering = true;
                     break;
 
                 default: // high
                     renderScale = 1f;
-                    maxRenderSize = 2048;
-                    antialiasing = GraphicsOptions.AaMsaa;
-                    msaaSamples = 4;
+                    antialiasing = GraphicsOptions.AaMsaa4;
                     avatarFrameRate = 60;
-                    shadows = true;
-                    softShadows = true;
-                    shadowResolution = 1024;
+                    brightness = 1f;
+                    shadows = GraphicsOptions.ShadowsSoft;
                     postProcessing = true;
-                    hdr = true;
-                    tonemapping = GraphicsOptions.TonemapNeutral;
                     bloom = 0.35f;
-                    vignette = 0.15f;
-                    keyLightIntensity = 1.1f;
-                    fillLightIntensity = 0.35f;
-                    rimLightIntensity = 0.9f;
-                    ambientIntensity = 0.35f;
+                    maxRenderSize = 2048;
+                    shadowResolution = 1024;
+                    hdr = true;
                     textureQuality = 0;
                     anisotropicFiltering = true;
                     break;
             }
 
-            // Preset-independent knobs keep their user value.
             preset = id;
             Normalize();
         }
 
         /// <summary>
-        /// True when every knob still matches the named preset. Lets the UI show a real
-        /// preset name instead of dropping to "custom" the moment a slider is nudged back
-        /// to its preset value.
+        /// True when every visible knob still matches the named preset. Lets the UI show a
+        /// real preset name instead of dropping to "custom" the moment a slider is nudged
+        /// back to its preset value.
         /// </summary>
         public bool MatchesPreset(string presetId)
         {
@@ -339,28 +315,20 @@ namespace NeonCompanion.Runtime.Data.Models
             var reference = new AvatarGraphicsSettings();
             reference.ApplyPreset(presetId);
 
-            return Mathf01(renderScale, reference.renderScale) &&
-                   maxRenderSize == reference.maxRenderSize &&
+            return Approximately(renderScale, reference.renderScale) &&
                    string.Equals(antialiasing, reference.antialiasing, StringComparison.Ordinal) &&
-                   msaaSamples == reference.msaaSamples &&
                    avatarFrameRate == reference.avatarFrameRate &&
-                   shadows == reference.shadows &&
-                   softShadows == reference.softShadows &&
-                   shadowResolution == reference.shadowResolution &&
+                   Approximately(brightness, reference.brightness) &&
+                   string.Equals(shadows, reference.shadows, StringComparison.Ordinal) &&
                    postProcessing == reference.postProcessing &&
-                   hdr == reference.hdr &&
-                   string.Equals(tonemapping, reference.tonemapping, StringComparison.Ordinal) &&
-                   Mathf01(bloom, reference.bloom) &&
-                   Mathf01(vignette, reference.vignette) &&
-                   Mathf01(keyLightIntensity, reference.keyLightIntensity) &&
-                   Mathf01(fillLightIntensity, reference.fillLightIntensity) &&
-                   Mathf01(rimLightIntensity, reference.rimLightIntensity) &&
-                   Mathf01(ambientIntensity, reference.ambientIntensity) &&
-                   textureQuality == reference.textureQuality &&
-                   anisotropicFiltering == reference.anisotropicFiltering;
+                   Approximately(bloom, reference.bloom);
         }
 
-        /// <summary>Re-derives <see cref="preset"/> after a knob changed: a named preset if it still matches, "custom" otherwise.</summary>
+        /// <summary>
+        /// Re-derives <see cref="preset"/> after a knob changed: a named preset if it still
+        /// matches, "custom" otherwise. A named match also pulls in that preset's hidden
+        /// fields, so the derived settings never drift out of step with the visible ones.
+        /// </summary>
         public void RefreshPresetLabel()
         {
             for (int i = 0; i < GraphicsOptions.Presets.Length; i++)
@@ -370,15 +338,18 @@ namespace NeonCompanion.Runtime.Data.Models
                     continue;
                 if (MatchesPreset(candidate))
                 {
-                    preset = candidate;
+                    ApplyPreset(candidate);
                     return;
                 }
             }
 
             preset = GraphicsOptions.PresetCustom;
+            // Custom keeps the user's visible choices but still needs sane hidden values.
+            hdr = postProcessing;
+            Normalize();
         }
 
-        private static bool Mathf01(float a, float b)
+        private static bool Approximately(float a, float b)
         {
             float diff = a - b;
             if (diff < 0f)
