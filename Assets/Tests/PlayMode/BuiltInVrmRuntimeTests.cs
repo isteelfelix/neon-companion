@@ -41,6 +41,65 @@ namespace NeonCompanion.Tests
             for (int i = 0; i < 10; i++)
                 yield return null;
 
+            BustSpringAnimator bustAnimator =
+                vrm.GetComponent<BustSpringAnimator>();
+            Assert.IsNotNull(bustAnimator);
+            Assert.AreEqual(4, bustAnimator.BustJointCount);
+
+            Quaternion[] initialBustRotations = new Quaternion[4];
+            int bustIndex = 0;
+            for (int springIndex = 0;
+                springIndex < vrm.SpringBone.Springs.Count;
+                springIndex++)
+            {
+                Vrm10InstanceSpringBone.Spring spring =
+                    vrm.SpringBone.Springs[springIndex];
+                if (spring == null || string.IsNullOrEmpty(spring.Name) ||
+                    !spring.Name.Contains("Bust"))
+                    continue;
+                for (int jointIndex = 0;
+                    jointIndex < spring.Joints.Count - 1;
+                    jointIndex++)
+                {
+                    initialBustRotations[bustIndex] =
+                        spring.Joints[jointIndex].transform.localRotation;
+                    bustIndex++;
+                }
+            }
+
+            float greatestBustMotion = 0f;
+            for (int frame = 0; frame < 90; frame++)
+            {
+                yield return null;
+                bustIndex = 0;
+                for (int springIndex = 0;
+                    springIndex < vrm.SpringBone.Springs.Count;
+                    springIndex++)
+                {
+                    Vrm10InstanceSpringBone.Spring spring =
+                        vrm.SpringBone.Springs[springIndex];
+                    if (spring == null || string.IsNullOrEmpty(spring.Name) ||
+                        !spring.Name.Contains("Bust"))
+                        continue;
+                    for (int jointIndex = 0;
+                        jointIndex < spring.Joints.Count - 1;
+                        jointIndex++)
+                    {
+                        float motion = Quaternion.Angle(
+                            initialBustRotations[bustIndex],
+                            spring.Joints[jointIndex].transform.localRotation);
+                        greatestBustMotion = Mathf.Max(
+                            greatestBustMotion,
+                            motion);
+                        bustIndex++;
+                    }
+                }
+            }
+            Assert.Greater(
+                greatestBustMotion,
+                0.1f,
+                "The bust springs did not react to the procedural idle force.");
+
             RenderTexture output = avatarRenderer.OutputTexture as RenderTexture;
             Assert.IsNotNull(output);
             RenderTexture previous = RenderTexture.active;

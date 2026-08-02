@@ -79,6 +79,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private bool _modelYawDirty;
         private Vrm10Instance _vrmInstance;
         private bool _vrmUsesCenteredSprings;
+        private BustSpringAnimator _bustSpringAnimator;
 
         // Exponential decay of the spin after release, per second, and the ceiling on
         // how fast a flick can throw her.
@@ -263,10 +264,11 @@ namespace NeonCompanion.Runtime.Avatar3D
         public void ClearModel()
         {
             ClearSpringMotionForce();
+            ResetModelSpin();
             _target = null;
             _vrmInstance = null;
             _vrmUsesCenteredSprings = false;
-            ResetModelSpin();
+            _bustSpringAnimator = null;
             UpdateCameraTransform();
         }
 
@@ -346,6 +348,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void ResetModelSpin()
         {
+            if (_targetImage != null && _bustSpringAnimator != null)
+                _bustSpringAnimator.SetTurnVelocity(0f);
             _modelYaw = 0f;
             _appliedModelYaw = 0f;
             _modelYawVelocity = 0f;
@@ -358,8 +362,16 @@ namespace NeonCompanion.Runtime.Avatar3D
                 ? _target.GetComponentInChildren<Vrm10Instance>(true)
                 : null;
             _vrmUsesCenteredSprings = false;
+            _bustSpringAnimator = null;
             if (_vrmInstance == null || _vrmInstance.SpringBone == null)
                 return;
+
+            _bustSpringAnimator =
+                _vrmInstance.GetComponent<BustSpringAnimator>();
+            if (_bustSpringAnimator == null)
+                _bustSpringAnimator =
+                    _vrmInstance.gameObject.AddComponent<BustSpringAnimator>();
+            _bustSpringAnimator.Configure(_vrmInstance);
 
             List<Vrm10InstanceSpringBone.Spring> springs =
                 _vrmInstance.SpringBone.Springs;
@@ -388,6 +400,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             float normalizedSpin = Mathf.Clamp(
                 _modelYawVelocity / MaxModelSpin, -1f, 1f);
+            if (_bustSpringAnimator != null)
+                _bustSpringAnimator.SetTurnVelocity(normalizedSpin);
             Vector3 force = -_target.right * normalizedSpin * CenteredSpringForce;
             SetSpringMotionForce(force);
         }
