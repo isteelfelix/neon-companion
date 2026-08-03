@@ -1,6 +1,15 @@
 <linker>
   <!-- Avatar3DLoader resolves glTFast through reflection for package-version tolerance. -->
   <assembly fullname="glTFast" preserve="all" />
-  <!-- Runtime VRM import is a direct UniVRM API call and must survive IL2CPP stripping. -->
+  <!-- Runtime VRM/VRMA import is a chain of direct UniVRM API calls plus generated
+       serializers; every link must survive IL2CPP stripping or a device import fails
+       where the Editor succeeds (materials, humanoid mapping, springbone, animation). -->
   <assembly fullname="VRM10" preserve="all" />
+  <assembly fullname="VRM10.MToon10" preserve="all" />
+  <assembly fullname="VrmLib" preserve="all" />
+  <assembly fullname="FastSpringBone10" preserve="all" />
+  <assembly fullname="UniGLTF" preserve="all" />
+  <assembly fullname="UniGLTF.Utils" preserve="all" />
+  <assembly fullname="UniGLTF.UniUnlit" preserve="all" />
+  <assembly fullname="UniHumanoid" preserve="all" />
 </linker>
