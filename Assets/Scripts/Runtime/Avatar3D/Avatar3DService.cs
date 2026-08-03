@@ -262,6 +262,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private VrmExpressionComposer _composer;
         private VrmEmotionBlender _emotions;
         private VrmIdleAnimator _idle;
+        private VrmBodyIdleAnimator _bodyIdle;
         private VrmVisemeAnimator _visemes;
         private Transform _head;
         private Transform _gazeTarget;
@@ -308,6 +309,16 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
+        private VrmBodyIdleAnimator BodyIdle
+        {
+            get
+            {
+                if (_bodyIdle == null)
+                    _bodyIdle = new VrmBodyIdleAnimator(null);
+                return _bodyIdle;
+            }
+        }
+
         private VrmVisemeAnimator Visemes
         {
             get
@@ -318,7 +329,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
-        internal async Task<bool> InitializeAsync(
+        internal Task<bool> InitializeAsync(
             Vrm10Instance vrm,
             AvatarCapabilities capabilities,
             bool useBuiltInMotionPack,
@@ -339,53 +350,17 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _vrm.LookAtTarget = _gazeTarget;
             }
 
-            // Touchable spheres on the reachable bones — independent of the motion
-            // pack, so a user's own VRM is just as pettable as the built-in one.
+            // Touchable spheres on the reachable bones — every VRM is pettable.
             VrmTouchColliders.Build(_vrm.GetComponentInChildren<Animator>(), _touchZones);
 
-            if (!_useBuiltInMotionPack)
-                return true;
-            if (_runtime == null || _runtime.ControlRig == null)
-            {
-                Debug.LogWarning(
-                    "[NeonCompanion] Built-in VRM has no runtime control rig; " +
-                    "continuing without body motion.");
-                return true;
-            }
-
-            Vrm10AnimationInstance animation =
-                await Avatar3DLoader.LoadBuiltInVrmAnimationAsync(IdleState);
-
-            // The scene was torn down while the clip was loading, so this clip
-            // has no owner: drop it here, because OnDestroy has already run.
-            if (!scene.IsCurrent(generation))
-            {
-                if (animation != null)
-                    DestroyOwnedObject(animation.gameObject);
-                return false;
-            }
-
-            // A missing or malformed idle must not sink the avatar: the face,
-            // gaze and lipsync are what the companion is actually built on.
-            if (animation == null ||
-                animation.ControlRig.Item1 == null ||
-                animation.ControlRig.Item2 == null)
-            {
-                if (animation != null)
-                    DestroyOwnedObject(animation.gameObject);
-                Debug.LogWarning(
-                    "[NeonCompanion] Built-in idle animation is unusable; " +
-                    "continuing without body motion.");
-                return true;
-            }
-
-            animation.gameObject.name = "AvatarVRMA_" + IdleState;
-            animation.transform.SetParent(transform.parent, false);
-            if (animation.BoxMan != null)
-                animation.BoxMan.enabled = false;
-            animation.gameObject.SetActive(false);
-            _idleAnimation = animation;
-            return true;
+            // Body idle is procedural now: breathing + a planted weight shift + a
+            // stream of small head breaks, driven onto the control rig in Update().
+            // It rides the normalized rig, so EVERY VRM gets it with no baked clip
+            // and no per-model rig. The built-in .vrma pack path in Avatar3DLoader
+            // stays available but dormant (SetAnimation is a no-op while
+            // _idleAnimation is null), so a hand-authored clip could be re-enabled
+            // later without rebuilding this.
+            return Task.FromResult(true);
         }
 
         internal bool SetAnimation(string state)
@@ -636,6 +611,25 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             key = ExpressionKey.Happy;
             return false;
+        }
+
+        private void Update()
+        {
+            // Body idle writes the control rig here, in the Update phase, so it
+            // lands before Vrm10Instance.Process() runs in LateUpdate and springBone
+            // (hair, cloth) follows the same frame. No baked clip is ever set, so
+            // VrmAnimation stays null and Process skips its retarget step.
+            if (_vrm == null || _runtime == null || _runtime.ControlRig == null)
+                return;
+            BodyIdle.Tick(Time.unscaledDeltaTime);
+            BodyIdle.Apply(ApplyBodyBone);
+        }
+
+        private void ApplyBodyBone(HumanBodyBones bone, Quaternion normalizedLocalRotation)
+        {
+            Transform controlBone = _runtime.ControlRig.GetBoneTransform(bone);
+            if (controlBone != null)
+                controlBone.localRotation = normalizedLocalRotation;
         }
 
         private void LateUpdate()
