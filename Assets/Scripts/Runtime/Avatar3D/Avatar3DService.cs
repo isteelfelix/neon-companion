@@ -264,6 +264,11 @@ namespace NeonCompanion.Runtime.Avatar3D
         private VrmIdleAnimator _idle;
         private VrmBodyIdleAnimator _bodyIdle;
         private VrmVisemeAnimator _visemes;
+
+        // The neutral "arms down" seed pose, shared by every avatar (normalized, so
+        // model-independent) and loaded once from the built-in idle clip.
+        private static Dictionary<HumanBodyBones, Quaternion> _sharedRestPose;
+        private static bool _restPoseLoaded;
         private Transform _head;
         private Transform _gazeTarget;
         private bool _useBuiltInMotionPack;
@@ -329,7 +334,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
-        internal Task<bool> InitializeAsync(
+        internal async Task<bool> InitializeAsync(
             Vrm10Instance vrm,
             AvatarCapabilities capabilities,
             bool useBuiltInMotionPack,
@@ -353,14 +358,69 @@ namespace NeonCompanion.Runtime.Avatar3D
             // Touchable spheres on the reachable bones — every VRM is pettable.
             VrmTouchColliders.Build(_vrm.GetComponentInChildren<Animator>(), _touchZones);
 
-            // Body idle is procedural now: breathing + a planted weight shift + a
-            // stream of small head breaks, driven onto the control rig in Update().
-            // It rides the normalized rig, so EVERY VRM gets it with no baked clip
-            // and no per-model rig. The built-in .vrma pack path in Avatar3DLoader
-            // stays available but dormant (SetAnimation is a no-op while
-            // _idleAnimation is null), so a hand-authored clip could be re-enabled
-            // later without rebuilding this.
-            return Task.FromResult(true);
+            // Body idle is procedural (breathing + a planted weight shift + head
+            // breaks), driven onto the control rig in Update() so EVERY VRM gets it
+            // with no per-model rig. The idle authors only DELTAS from a neutral
+            // standing pose — but a VRM control-rig's identity is the T-POSE (arms
+            // out), so we seed that neutral "arms down" pose once from the built-in
+            // idle clip's first frame (a normalized pose that retargets to any VRM)
+            // and layer the deltas onto it. SetAnimation stays a no-op (the clip is
+            // never played), so VrmAnimation is null and Process skips its retarget.
+            await EnsureRestPoseAsync();
+            return true;
+        }
+
+        /// <summary>
+        /// The neutral standing pose (arms down) as normalized control-rig rotations,
+        /// loaded once from the built-in idle clip's first frame and shared by every
+        /// avatar. A VRM's control rig sits at the T-pose when untouched, so without
+        /// this seed the arms splay out; the pose is normalized, so the built-in
+        /// clip's values apply to any humanoid VRM.
+        /// </summary>
+        private async Task EnsureRestPoseAsync()
+        {
+            if (_restPoseLoaded)
+                return;
+            _restPoseLoaded = true;
+
+            Vrm10AnimationInstance clip =
+                await Avatar3DLoader.LoadBuiltInVrmAnimationAsync(IdleState);
+            if (clip == null)
+                return;
+
+            try
+            {
+                // Sample the first frame so the provider reports the standing pose
+                // rather than the T-pose the clip skeleton was built at.
+                Animation clipAnimation = clip.GetComponentInChildren<Animation>(true);
+                if (clipAnimation != null)
+                {
+                    foreach (AnimationState state in clipAnimation)
+                    {
+                        state.enabled = true;
+                        state.weight = 1f;
+                        state.time = 0f;
+                        break;
+                    }
+                    clipAnimation.Sample();
+                }
+
+                INormalizedPoseProvider provider = clip.ControlRig.Item1;
+                ITPoseProvider tpose = clip.ControlRig.Item2;
+                if (provider != null && tpose != null)
+                {
+                    Dictionary<HumanBodyBones, Quaternion> pose =
+                        new Dictionary<HumanBodyBones, Quaternion>();
+                    foreach (var pair in tpose.EnumerateBoneParentPairs())
+                        pose[pair.Bone] =
+                            provider.GetNormalizedLocalRotation(pair.Bone, pair.Parent);
+                    _sharedRestPose = pose;
+                }
+            }
+            finally
+            {
+                DestroyOwnedObject(clip.gameObject);
+            }
         }
 
         internal bool SetAnimation(string state)
@@ -615,14 +675,38 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void Update()
         {
-            // Body idle writes the control rig here, in the Update phase, so it
-            // lands before Vrm10Instance.Process() runs in LateUpdate and springBone
-            // (hair, cloth) follows the same frame. No baked clip is ever set, so
-            // VrmAnimation stays null and Process skips its retarget step.
+            // Body idle writes the control rig here, in the Update phase, so it lands
+            // before Vrm10Instance.Process() runs in LateUpdate and springBone (hair,
+            // cloth) follows the same frame. VrmAnimation stays null, so Process skips
+            // its retarget step and only maps what we set here.
             if (_vrm == null || _runtime == null || _runtime.ControlRig == null)
                 return;
+
             BodyIdle.Tick(Time.unscaledDeltaTime);
-            BodyIdle.Apply(ApplyBodyBone);
+            IReadOnlyDictionary<HumanBodyBones, Quaternion> deltas = BodyIdle.Pose;
+
+            if (_sharedRestPose == null)
+            {
+                // No neutral seed (clip missing): apply the deltas alone. The arms
+                // read as a T-pose, but breathing, the head breaks and the face run.
+                BodyIdle.Apply(ApplyBodyBone);
+                return;
+            }
+
+            // Seat every bone at the neutral standing pose so the arms hang instead of
+            // holding the control-rig T-pose, then multiply the idle delta onto the
+            // bones it actually drives.
+            foreach (KeyValuePair<HumanBodyBones, Quaternion> rest in _sharedRestPose)
+            {
+                Transform controlBone = _runtime.ControlRig.GetBoneTransform(rest.Key);
+                if (controlBone == null)
+                    continue;
+                Quaternion delta;
+                if (deltas.TryGetValue(rest.Key, out delta))
+                    controlBone.localRotation = rest.Value * delta;
+                else
+                    controlBone.localRotation = rest.Value;
+            }
         }
 
         private void ApplyBodyBone(HumanBodyBones bone, Quaternion normalizedLocalRotation)

@@ -11,6 +11,7 @@
   <Project Path="UniGLTF.Editor.csproj" />
   <Project Path="UniHumanoid.Editor.csproj" />
   <Project Path="VrmLib.csproj" />
+  <Project Path="NeonCompanion.EditModeTests.csproj" />
   <Project Path="UniGLTF.UniUnlit.csproj" />
   <Project Path="UniGLTF.Tests.csproj" />
   <Project Path="UniGLTF.Utils.csproj" />
@@ -18,7 +19,6 @@
   <Project Path="VRM10.Tests.csproj" />
   <Project Path="UniHumanoid.Editor.Tests.csproj" />
   <Project Path="NeonCompanion.Editor.csproj" />
-  <Project Path="NeonCompanion.EditModeTests.csproj" />
   <Project Path="NeonCompanion.PlayModeTests.csproj" />
   <Project Path="UniGLTF.UniUnlit.Editor.csproj" />
   <Project Path="VrmLibTests.csproj" />
