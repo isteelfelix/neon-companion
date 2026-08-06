@@ -28,6 +28,21 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- App Link: intercept OAuth callback redirect from system browser/Custom Tab.
+                 When the IdP redirects to {gateway}/auth/callback?code=...&state=..., Android
+                 delivers the URL to the app instead of loading it in the browser. The app
+                 replays the callback via its own UnityWebRequest carrying the PKCE cookie,
+                 so it receives the session Set-Cookie directly (no foreign cookie jar access).
+                 autoVerify=false: works for any gateway host; user sees a disambiguation
+                 dialog. Add /.well-known/assetlinks.json on the gateway + per-host
+                 autoVerify=true for silent interception. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:pathPrefix="/auth/callback" />
+            </intent-filter>
         </activity>
 
             <activity android:name="com.neoncompanion.speech.NeonSpeechRecognitionActivity"
