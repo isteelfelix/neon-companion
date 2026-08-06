@@ -119,7 +119,27 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 return result;
             }
 
-            // Mobile cannot use local CDP browser capture; rely only on the native handoff path.
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // Android: App Link OAuth flow (system browser Custom Tab + deep link callback).
+            // The app replays the gateway callback via its own HttpWebRequest carrying the
+            // PKCE cookie, so it receives the session Set-Cookie directly — no embedded
+            // browser, no foreign cookie jar access.
+            HermesAppLinkResult appLink = await HermesAppLinkAuth.LoginAsync(baseUrl);
+            if (appLink.Ok)
+            {
+                result.Ok = true;
+                result.CookieHeader = appLink.CookieHeader;
+                result.Method = "app_link";
+                return result;
+            }
+
+            result.Method = "app_link";
+            result.Error = appLink.Error;
+            if (string.IsNullOrEmpty(result.Error))
+                result.Error = "Android App Link sign-in did not complete.";
+            return result;
+#else
+            // iOS / other mobile: native handoff fallback.
             HermesBrowserOAuthResult handoff = await CaptureViaNativeHandoffAsync(
                 baseUrl,
                 loginUrl,
@@ -135,6 +155,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     + "Use token mode or enable /auth/native/handoff on the server.";
             }
             return result;
+#endif
         }
 
         // ------------------------------------------------------------------
