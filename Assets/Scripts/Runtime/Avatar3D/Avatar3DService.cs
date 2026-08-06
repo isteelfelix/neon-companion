@@ -263,6 +263,7 @@ namespace NeonCompanion.Runtime.Avatar3D
         private VrmEmotionBlender _emotions;
         private VrmIdleAnimator _idle;
         private VrmBodyIdleAnimator _bodyIdle;
+        private Vector3? _hipsRestLocalPos;
         private VrmVisemeAnimator _visemes;
 
         // The neutral "arms down" seed pose, shared by every avatar (normalized, so
@@ -683,37 +684,42 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return;
 
             BodyIdle.Tick(Time.unscaledDeltaTime);
-            IReadOnlyDictionary<HumanBodyBones, Quaternion> deltas = BodyIdle.Pose;
+            IReadOnlyDictionary<HumanBodyBones, Quaternion> pose = BodyIdle.Pose;
 
-            if (_sharedRestPose == null)
+            // Drive every captured bone at its absolute normalized local rotation —
+            // exactly what Vrm10Retarget does from a VRM animation, but fed from the
+            // smoothed baked capture. Normalized rotations apply to any VRM as-is.
+            foreach (KeyValuePair<HumanBodyBones, Quaternion> entry in pose)
             {
-                // No neutral seed (clip missing): apply the deltas alone. The arms
-                // read as a T-pose, but breathing, the head breaks and the face run.
-                BodyIdle.Apply(ApplyBodyBone);
-                return;
+                Transform controlBone = _runtime.ControlRig.GetBoneTransform(entry.Key);
+                if (controlBone != null)
+                    controlBone.localRotation = entry.Value;
             }
 
-            // Seat every bone at the neutral standing pose so the arms hang instead of
-            // holding the control-rig T-pose, then multiply the idle delta onto the
-            // bones it actually drives.
-            foreach (KeyValuePair<HumanBodyBones, Quaternion> rest in _sharedRestPose)
+            // Seat any humanoid bone the capture doesn't cover at the neutral rest.
+            if (_sharedRestPose != null)
             {
-                Transform controlBone = _runtime.ControlRig.GetBoneTransform(rest.Key);
-                if (controlBone == null)
-                    continue;
-                Quaternion delta;
-                if (deltas.TryGetValue(rest.Key, out delta))
-                    controlBone.localRotation = rest.Value * delta;
-                else
-                    controlBone.localRotation = rest.Value;
+                foreach (KeyValuePair<HumanBodyBones, Quaternion> rest in _sharedRestPose)
+                {
+                    if (pose.ContainsKey(rest.Key))
+                        continue;
+                    Transform controlBone = _runtime.ControlRig.GetBoneTransform(rest.Key);
+                    if (controlBone != null)
+                        controlBone.localRotation = rest.Value;
+                }
             }
-        }
 
-        private void ApplyBodyBone(HumanBodyBones bone, Quaternion normalizedLocalRotation)
-        {
-            Transform controlBone = _runtime.ControlRig.GetBoneTransform(bone);
-            if (controlBone != null)
-                controlBone.localRotation = normalizedLocalRotation;
+            // Weight shift also translates the hips. HipsNormalizedDelta is per unit
+            // hip height, so scale it by this avatar's own rest hip height (captured
+            // once) — the same hip-height scaling Vrm10Retarget applies.
+            Transform hipsBone = _runtime.ControlRig.GetBoneTransform(HumanBodyBones.Hips);
+            if (hipsBone != null)
+            {
+                if (!_hipsRestLocalPos.HasValue)
+                    _hipsRestLocalPos = hipsBone.localPosition;
+                Vector3 restHips = _hipsRestLocalPos.Value;
+                hipsBone.localPosition = restHips + BodyIdle.HipsNormalizedDelta * restHips.y;
+            }
         }
 
         private void LateUpdate()

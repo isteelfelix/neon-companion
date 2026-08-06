@@ -17,18 +17,43 @@ namespace NeonCompanion.Tests
         }
 
         [Test]
-        public void OneTickMovesTheBreathingChain()
+        public void OneTickDrivesTheWholeCapturedBody()
         {
+            // Absolute normalized rotations for every captured bone — torso, head,
+            // the full arm chain, legs, and (unlike the first attempt) the fingers.
             var idle = new VrmBodyIdleAnimator(new Random(1));
-            idle.Tick(0.7f); // a quarter breath in, so the chain is off-rest
+            idle.Tick(0.5f);
 
             Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.Spine));
-            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.Chest));
             Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.Head));
-            Assert.Greater(
-                Quaternion.Angle(idle.Pose[HumanBodyBones.Chest], Quaternion.identity),
-                0.01f,
-                "The chest never left its rest rotation — nothing is breathing.");
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftUpperArm));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftHand));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftUpperLeg));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftFoot));
+        }
+
+        [Test]
+        public void TheFingersAreDriven()
+        {
+            // The whole point of going through UniVRM's retarget: the finger bones
+            // come across with correct Unity enum names and actually move.
+            var idle = new VrmBodyIdleAnimator(new Random(1));
+            idle.Tick(0.5f);
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftIndexProximal));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.RightThumbProximal));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftLittleDistal));
+        }
+
+        [Test]
+        public void TheMotionProgressesOverTime()
+        {
+            var idle = new VrmBodyIdleAnimator(new Random(1));
+            idle.Tick(0.3f);
+            Quaternion early = idle.Pose[HumanBodyBones.LeftLowerArm];
+            idle.Tick(1.2f);
+            Quaternion later = idle.Pose[HumanBodyBones.LeftLowerArm];
+            Assert.Greater(Quaternion.Angle(early, later), 0.1f,
+                "The forearm did not move between two times — the clip is frozen.");
         }
 
         [Test]
@@ -37,87 +62,46 @@ namespace NeonCompanion.Tests
             var idle = new VrmBodyIdleAnimator(new Random(2));
             idle.Tick(Frame);
             Quaternion head = idle.Pose[HumanBodyBones.Head];
+            Vector3 hips = idle.HipsNormalizedDelta;
 
             idle.Tick(0f);
             idle.Tick(-0.5f);
 
-            // The pose is left exactly as the last real tick produced it.
             Assert.AreEqual(0f, Quaternion.Angle(head, idle.Pose[HumanBodyBones.Head]), 1e-4f);
+            Assert.AreEqual(hips, idle.HipsNormalizedDelta);
         }
 
         [Test]
-        public void TheFeetStayPlanted_NoHipsOrLegAreEverDriven()
+        public void TheWeightShiftMovesHipsLegsAndTranslatesTheHips()
         {
-            var idle = new VrmBodyIdleAnimator(new Random(4));
-            for (int i = 0; i < 60 * 90; i++) // 90 s, crosses many breaks
+            var idle = new VrmBodyIdleAnimator(new Random(3));
+            Quaternion firstLeg = Quaternion.identity;
+            bool legMoved = false;
+            bool hipsTranslated = false;
+            idle.Tick(0.1f);
+            firstLeg = idle.Pose[HumanBodyBones.LeftUpperLeg];
+            for (int i = 0; i < 60 * 30; i++)
             {
                 idle.Tick(Frame);
-                AssertUntouched(idle, HumanBodyBones.Hips);
-                AssertUntouched(idle, HumanBodyBones.LeftUpperLeg);
-                AssertUntouched(idle, HumanBodyBones.RightUpperLeg);
-                AssertUntouched(idle, HumanBodyBones.LeftLowerLeg);
-                AssertUntouched(idle, HumanBodyBones.RightLowerLeg);
+                if (Quaternion.Angle(firstLeg, idle.Pose[HumanBodyBones.LeftUpperLeg]) > 0.5f)
+                    legMoved = true;
+                if (idle.HipsNormalizedDelta.magnitude > 1e-4f)
+                    hipsTranslated = true;
             }
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.Hips), "Hips not driven.");
+            Assert.IsTrue(legMoved, "The legs never moved — no weight shift.");
+            Assert.IsTrue(hipsTranslated, "The hips never translated — weight shift is incomplete.");
         }
 
         [Test]
-        public void TheArmsAreAliveToTheWrist_NoFingerIsDriven()
+        public void HeadMotionIsContinuous_IncludingTheLoopWrap()
         {
-            var idle = new VrmBodyIdleAnimator(new Random(6));
-            idle.Tick(0.9f); // off-rest, past the arm sines' zero crossing
-
-            // The whole arm chain breathes now — that's the "not hanging like a
-            // mannequin" the mocap idle gave us.
-            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftUpperArm));
-            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.RightUpperArm));
-            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftLowerArm));
-            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.RightLowerArm));
-            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftHand));
-            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.RightHand));
-            Assert.Greater(
-                Quaternion.Angle(idle.Pose[HumanBodyBones.LeftUpperArm], Quaternion.identity),
-                0.01f,
-                "The upper arm never left its rest rotation — the arm is dead.");
-
-            // Fingers stay at the modelled pose — the idle never touches them.
-            for (int i = 0; i < 60 * 90; i++)
-            {
-                idle.Tick(Frame);
-                AssertUntouched(idle, HumanBodyBones.LeftIndexProximal);
-                AssertUntouched(idle, HumanBodyBones.RightThumbProximal);
-                AssertUntouched(idle, HumanBodyBones.LeftLittleDistal);
-            }
-        }
-
-        [Test]
-        public void AnIdleBreakEventuallyFires()
-        {
-            var idle = new VrmBodyIdleAnimator(new Random(8));
-            bool fired = false;
-            for (int i = 0; i < 60 * 20; i++)
-            {
-                idle.Tick(Frame);
-                if (idle.ActiveGesture >= 0)
-                {
-                    fired = true;
-                    break;
-                }
-            }
-            Assert.IsTrue(fired, "No idle break fired within 20 s.");
-        }
-
-        [Test]
-        public void HeadMotionIsContinuousAcrossBreakBoundaries()
-        {
-            // The port's whole point: gestures accumulate onto the base drift and
-            // ease with a C2 envelope, so the head never snaps when a break starts
-            // or ends. Overwriting instead of stacking (the old bug) spiked this.
             var idle = new VrmBodyIdleAnimator(new Random(13));
             idle.Tick(Frame);
             Quaternion previous = idle.Pose[HumanBodyBones.Head];
             float worst = 0f;
 
-            for (int i = 0; i < 60 * 120; i++) // 2 min, dozens of breaks
+            for (int i = 0; i < 60 * 70; i++) // > 2 loops, crosses the seam twice
             {
                 idle.Tick(Frame);
                 Quaternion current = idle.Pose[HumanBodyBones.Head];
@@ -127,35 +111,41 @@ namespace NeonCompanion.Tests
                 previous = current;
             }
 
-            // Normal per-frame head motion peaks well under a degree; a snap on a
-            // break boundary would be several degrees in a single frame.
             Assert.Less(worst, 1.5f,
                 "The head jerked " + worst.ToString("0.00") +
-                " deg in one frame — a break is snapping, not easing.");
+                " deg in one frame — the loop is snapping, not easing.");
         }
 
         [Test]
-        public void SameSeedReplaysTheSameMotion()
+        public void TheLoopIsSeamless()
+        {
+            var a = new VrmBodyIdleAnimator(new Random(0));
+            a.Tick(0.02f);
+            Quaternion atStart = a.Pose[HumanBodyBones.Head];
+
+            var b = new VrmBodyIdleAnimator(new Random(0));
+            b.Tick(VrmIdleClipData.Period - 0.02f);
+            Quaternion beforeWrap = b.Pose[HumanBodyBones.Head];
+
+            Assert.Less(Quaternion.Angle(atStart, beforeWrap), 2.0f,
+                "The head pose at the loop seam is discontinuous.");
+        }
+
+        [Test]
+        public void TheMotionIsDeterministic()
         {
             var a = new VrmBodyIdleAnimator(new Random(42));
-            var b = new VrmBodyIdleAnimator(new Random(42));
+            var b = new VrmBodyIdleAnimator(new Random(7));
             for (int i = 0; i < 60 * 60; i++)
             {
                 a.Tick(Frame);
                 b.Tick(Frame);
-                Assert.AreEqual(a.ActiveGesture, b.ActiveGesture);
                 Assert.AreEqual(
                     0f,
                     Quaternion.Angle(a.Pose[HumanBodyBones.Head], b.Pose[HumanBodyBones.Head]),
                     1e-4f);
+                Assert.AreEqual(a.HipsNormalizedDelta, b.HipsNormalizedDelta);
             }
-        }
-
-        private static void AssertUntouched(VrmBodyIdleAnimator idle, HumanBodyBones bone)
-        {
-            Assert.IsFalse(
-                idle.Pose.ContainsKey(bone),
-                bone + " was driven — it must stay at its modelled pose.");
         }
     }
 }

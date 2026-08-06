@@ -5,334 +5,193 @@ using UnityEngine;
 namespace NeonCompanion.Runtime.Avatar3D
 {
     /// <summary>
-    /// The body's idle life: slow breathing and a planted weight shift under a
-    /// stream of small, deliberate head "breaks" (glances, tilts, a nod) — the
-    /// base-idle-plus-idle-breaks pattern a game plays so a standing character
-    /// never reads as frozen.
+    /// The body's idle life, played back from a real mocap capture (<c>idle.vrma</c>)
+    /// rather than hand-authored: breathing, arm motion, a foot-to-foot weight shift,
+    /// and — once per loop — a small "adjusts her sleeves" moment.
     /// <para>
-    /// Pure signal generation, like <see cref="VrmIdleAnimator"/>. Each tick it
-    /// accumulates a normalized local rotation per humanoid bone and hands the set
-    /// to a sink; the driver writes them onto the VRM control rig (identity there =
-    /// the modelled arms-down pose, so a plain delta needs no re-basing and works
-    /// on any VRM). Randomness is injected so a test can pin the cadence.
+    /// The capture is stored as a <b>band-limited Fourier series</b> per bone (see
+    /// <see cref="VrmIdleClipData"/>). Each bone's motion is the rotation DELTA from
+    /// the clip's mean pose; dropping the high harmonics removes the 30 fps mocap
+    /// jitter, and a Fourier series is C-infinity continuous and exactly periodic
+    /// over the clip length, so the idle <b>loops with no seam</b>. Because it is a
+    /// delta from the mean, any constant rest-pose difference between the capture rig
+    /// and this VRM's control rig cancels — the driver applies <c>rest * delta</c>, so
+    /// the arms hang at each avatar's own rest and only the captured MOTION rides on
+    /// top. The only glTF→Unity conversion baked in is handedness (ReverseZ).
     /// </para>
     /// <para>
-    /// Rotations ACCUMULATE (breath + sway + a gesture on the same bone multiply
-    /// together). The sandbox port hinged on this: writing instead of stacking made
-    /// a gesture swallow the base drift and snap it back on release — a visible jerk.
+    /// Pure signal generation, like <see cref="VrmIdleAnimator"/>: each tick it fills
+    /// a per-bone delta set plus a hips position offset and hands them to the driver.
+    /// Fingers are left at the modelled pose (the capture's fingers were incidental).
     /// </para>
     /// </summary>
     internal sealed class VrmBodyIdleAnimator
     {
-        // Flip to -1f if a nod reads as looking UP on device: this is the one axis
-        // with an inherent direction (yaw/roll are symmetric or random-signed), so
-        // a single constant reconciles the three.js sandbox with Unity's handedness.
-        private const float PitchDir = 1f;
+        // Playback speed multiplier. 0.9 plays the capture 10% slower; the loop stays
+        // seamless (same periodic function, evaluated slower).
+        private const float PlaybackSpeed = 0.9f;
 
-        // Breathing — the chest lifts on a slow sine, the spine takes a share, the
-        // shoulders follow.
-        private const float BreathHz = 0.24f;
-        private const float BreathAmp = 0.033f;
-        private const float BreathShoulder = 0.5f;
-
-        // Weight shift — two incommensurate sines so it never visibly loops. Driven
-        // from the SPINE, never the hips: rotating hips with no leg IK swings the
-        // legs like a pendulum. From the spine up the feet stay planted.
-        private const float SwayPeriodA = 9.0f;
-        private const float SwayPeriodB = 13.7f;
-        private const float SwayAmp = 0.02f;
-
-        // Slow posture drift carried on the neck and head.
-        private const float DriftPeriod = 21.0f;
-        private const float DriftYaw = 0.045f;
-        private const float DriftPitch = 0.02f;
-
-        // Head "looking around" — a continuous slow scan on two incommensurate
-        // periods, on TOP of the drift above and the discrete glance breaks below.
-        // From the mocap idle the head carried ~30° peak-to-peak of yaw at a ~8 s
-        // beat; kept well under that here so the breaks still have room to add.
-        private const float LookPeriodA = 7.7f;
-        private const float LookPeriodB = 16.3f;
-        private const float LookYaw = 0.11f;
-        private const float LookPitch = 0.03f;
-
-        // Arm life — the arms must not hang like a mannequin. A gentle in/out swing
-        // carried upper arm → forearm → hand, each on its own period so the two
-        // sides never mirror and nothing loops. Periods/reach are taken from a mocap
-        // idle (a ~6 s upper-body sway, forearms a touch faster). SIGNS/AXES are the
-        // first tuning knob if a limb swings the wrong way on the model — same story
-        // as PitchDir; a single sign flip reconciles the capture with the rig.
-        private const float ArmPeriodL = 5.8f;
-        private const float ArmPeriodR = 7.7f;
-        private const float ForearmPeriodL = 6.4f;
-        private const float ForearmPeriodR = 4.9f;
-        private const float HandPeriodL = 11.5f;
-        private const float HandPeriodR = 8.3f;
-        private const float ArmAmp = 0.09f;      // ~10° peak-to-peak on the upper arm
-        private const float ForearmAmp = 0.09f;
-        private const float HandAmp = 0.10f;
-
-        // Idle-break scheduling (seconds between breaks).
-        private const float BreakMin = 4.0f;
-        private const float BreakMax = 9.0f;
-
-        // Gesture library. Parallel arrays keep it allocation-free and C# 9 friendly
-        // (no switch expressions). Duration is [easeIn, hold, easeOut]; weight biases
-        // the random picker. Index maps to the switch in ApplyGesture.
-        private static readonly float[][] GestureDur =
+        // Uprightness correction. The capture's neutral stance leans back ("hanging by
+        // the shoulders"). We keep the MOTION but pull each posture bone's AVERAGE pose
+        // toward vertical by this fraction (0 = the capture's leaned stance untouched,
+        // 1 = fully upright). In normalized space "upright" for these bones is identity,
+        // so no external reference pose is needed. Arms/hands/head keep their capture
+        // posture (their identity is the T-pose, which is NOT what we want there).
+        // 0 = off: the current capture is already upright, so no correction is applied.
+        // Left in as a knob in case a future capture leans.
+        private const float Uprightness = 0f;
+        private static readonly HumanBodyBones[] PostureBones =
         {
-            new float[] { 1.3f, 2.4f, 1.5f }, // 0 WeightShift
-            new float[] { 1.3f, 1.6f, 1.5f }, // 1 GlanceDiag
-            new float[] { 1.5f, 1.5f, 1.6f }, // 2 NodDown
-            new float[] { 1.4f, 2.0f, 1.5f }, // 3 SoftTilt
-            new float[] { 1.9f, 2.4f, 1.9f }, // 4 TurnDiag
-            new float[] { 1.5f, 1.3f, 1.6f }, // 5 LookUp
+            HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest,
+            HumanBodyBones.UpperChest,
+            HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg,
+            HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg,
+            HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot,
         };
-        private static readonly float[] GestureWeight =
-        {
-            1.0f, 1.6f, 1.3f, 1.1f, 1.1f, 0.7f,
-        };
-        private const int GestureCount = 6;
 
-        private readonly System.Random _random;
+        private readonly float _period;
+        private readonly int _harmonics;
+        private readonly HumanBodyBones[] _bones;
+        private readonly float[][] _rot;     // per bone: 4 components * (1 + 2*harmonics)
+        private readonly float[] _hipsDelta; // 3 components * (1 + 2*harmonics)
+        private readonly float[] _cos;
+        private readonly float[] _sin;
+        private readonly Quaternion[] _correction; // constant per bone; identity = none
         private readonly Dictionary<HumanBodyBones, Quaternion> _pose =
             new Dictionary<HumanBodyBones, Quaternion>();
 
         private float _time;
-        private int _active;       // -1 while resting between breaks
-        private float _gestureTime;
-        private int _dir;          // yaw side of the active gesture
-        private int _dir2;         // vertical (pitch) side of the active gesture
-        private float _wait;
+        private Vector3 _hipsNormalizedDelta;
 
+        // random is kept for call-site/DI compatibility; the motion is now fully
+        // determined by the captured clip, so it is unused.
         internal VrmBodyIdleAnimator(System.Random random)
         {
-            _random = random != null ? random : new System.Random();
-            _active = -1;
-            _wait = 3.5f;
+            _period = VrmIdleClipData.Period;
+            _harmonics = VrmIdleClipData.Harmonics;
+            _cos = new float[_harmonics + 1];
+            _sin = new float[_harmonics + 1];
+
+            int stride = 4 * (1 + 2 * _harmonics);
+            float[] rot = DecodeFloats(VrmIdleClipData.RotCoeffs);
+            string[] names = VrmIdleClipData.Bones;
+            _bones = new HumanBodyBones[names.Length];
+            _rot = new float[names.Length][];
+            for (int i = 0; i < names.Length; i++)
+            {
+                _bones[i] = (HumanBodyBones)Enum.Parse(typeof(HumanBodyBones), names[i]);
+                float[] block = new float[stride];
+                Array.Copy(rot, i * stride, block, 0, stride);
+                _rot[i] = block;
+            }
+            _hipsDelta = DecodeFloats(VrmIdleClipData.HipsDeltaCoeffs);
+            _correction = BuildCorrections(stride);
         }
 
-        /// <summary>The bones the last <see cref="Tick"/> wants to move, and to what.</summary>
+        // For each posture bone, Corr = Slerp(mean, identity, Uprightness) * mean^-1.
+        // Applied on the left of the reconstructed rotation it swaps the leaned average
+        // for an uprighted one while leaving the motion (residual) untouched. Non-posture
+        // bones get identity.
+        private Quaternion[] BuildCorrections(int stride)
+        {
+            Quaternion[] corr = new Quaternion[_bones.Length];
+            HashSet<HumanBodyBones> posture = new HashSet<HumanBodyBones>(PostureBones);
+            int per = 1 + 2 * _harmonics;
+            for (int i = 0; i < _bones.Length; i++)
+            {
+                if (Uprightness <= 0f || !posture.Contains(_bones[i]))
+                {
+                    corr[i] = Quaternion.identity;
+                    continue;
+                }
+                float[] c = _rot[i];
+                Quaternion mean = new Quaternion(c[0 * per], c[1 * per], c[2 * per], c[3 * per]);
+                float n = Mathf.Sqrt(mean.x * mean.x + mean.y * mean.y + mean.z * mean.z + mean.w * mean.w);
+                if (n < 1e-6f)
+                {
+                    corr[i] = Quaternion.identity;
+                    continue;
+                }
+                float inv = 1f / n;
+                mean = new Quaternion(mean.x * inv, mean.y * inv, mean.z * inv, mean.w * inv);
+                Quaternion upright = Quaternion.Slerp(mean, Quaternion.identity, Uprightness);
+                corr[i] = upright * Quaternion.Inverse(mean);
+            }
+            return corr;
+        }
+
+        private static float[] DecodeFloats(string base64)
+        {
+            byte[] bytes = Convert.FromBase64String(base64);
+            float[] values = new float[bytes.Length / 4];
+            Buffer.BlockCopy(bytes, 0, values, 0, bytes.Length);
+            return values;
+        }
+
+        /// <summary>Absolute normalized local rotation per captured bone this frame.</summary>
         internal IReadOnlyDictionary<HumanBodyBones, Quaternion> Pose => _pose;
 
-        /// <summary>Index of the running idle break, or -1 while resting. For tests.</summary>
-        internal int ActiveGesture => _active;
+        /// <summary>
+        /// Hips weight-shift offset as a NORMALIZED delta (metres per unit hip height).
+        /// The driver scales it by the target avatar's own hip height, matching
+        /// <c>Vrm10Retarget</c>, so it transfers to any VRM.
+        /// </summary>
+        internal Vector3 HipsNormalizedDelta => _hipsNormalizedDelta;
 
         internal void Tick(float deltaTime)
         {
             if (deltaTime <= 0f)
                 return;
-            _time += deltaTime;
+            _time += deltaTime * PlaybackSpeed;
+            if (_time >= _period)
+                _time -= _period * Mathf.Floor(_time / _period);
+
+            float w = 2f * Mathf.PI / _period;
+            for (int k = 0; k <= _harmonics; k++)
+            {
+                float a = w * k * _time;
+                _cos[k] = Mathf.Cos(a);
+                _sin[k] = Mathf.Sin(a);
+            }
+
             _pose.Clear();
-            Breathing();
-            Sway();
-            Drift();
-            ArmLife();
-            TickGesture(deltaTime);
-        }
-
-        internal void Apply(Action<HumanBodyBones, Quaternion> sink)
-        {
-            if (sink == null)
-                return;
-            foreach (KeyValuePair<HumanBodyBones, Quaternion> entry in _pose)
-                sink(entry.Key, entry.Value);
-        }
-
-        // ── base layers ──
-
-        private void Breathing()
-        {
-            float breath = Mathf.Sin(_time * BreathHz * 2f * Mathf.PI);
-            AddRot(HumanBodyBones.Spine, breath * BreathAmp * 0.35f, 0f, 0f);
-            AddRot(HumanBodyBones.Chest, breath * BreathAmp * 0.5f, 0f, 0f);
-            AddRot(HumanBodyBones.UpperChest, breath * BreathAmp, 0f, 0f);
-            float shoulder = breath * BreathAmp * BreathShoulder;
-            AddRot(HumanBodyBones.LeftShoulder, 0f, 0f, -shoulder);
-            AddRot(HumanBodyBones.RightShoulder, 0f, 0f, shoulder);
-        }
-
-        private void Sway()
-        {
-            float sway = SwaySignal();
-            AddRot(HumanBodyBones.Spine, 0f, 0f, sway * SwayAmp);
-            AddRot(HumanBodyBones.Chest, 0f, 0f, -sway * SwayAmp * 0.5f);
-            float breath = Mathf.Sin(_time * BreathHz * 2f * Mathf.PI);
-            AddRot(HumanBodyBones.LeftShoulder, 0f, 0f, sway * SwayAmp * 0.3f + breath * 0.006f);
-            AddRot(HumanBodyBones.RightShoulder, 0f, 0f, sway * SwayAmp * 0.3f - breath * 0.006f);
-        }
-
-        private void Drift()
-        {
-            float sway = SwaySignal();
-            float drift = Mathf.Sin(_time / DriftPeriod * 2f * Mathf.PI);
-            // Continuous "looking around": two incommensurate periods so the head
-            // scans without ever settling into a loop. The discrete glance breaks
-            // ride on top of this.
-            float look =
-                Mathf.Sin(_time / LookPeriodA * 2f * Mathf.PI) * 0.6f +
-                Mathf.Sin(_time / LookPeriodB * 2f * Mathf.PI + 0.8f) * 0.4f;
-            AddRot(HumanBodyBones.Neck,
-                look * LookPitch * 0.4f,
-                drift * DriftYaw * 0.3f + look * LookYaw * 0.4f,
-                -sway * SwayAmp * 0.4f);
-            AddRot(HumanBodyBones.Head,
-                drift * DriftPitch * Mathf.Sin(_time * 0.13f) + look * LookPitch,
-                drift * DriftYaw + look * LookYaw,
-                -sway * SwayAmp * 0.3f);
-        }
-
-        // The arms breathe with the body instead of hanging: a slow swing on the
-        // upper arm, a phase-lagged bend on the forearm, a wrist float on the hand.
-        // Left and right run on different periods, so the pose never reads as
-        // symmetric and never repeats. Fingers are left at the modelled pose.
-        private void ArmLife()
-        {
-            float upperL = Mathf.Sin(_time / ArmPeriodL * 2f * Mathf.PI);
-            float upperR = Mathf.Sin(_time / ArmPeriodR * 2f * Mathf.PI + 1.3f);
-            AddRot(HumanBodyBones.LeftUpperArm, ArmAmp * 0.3f * upperL, 0f, ArmAmp * upperL);
-            AddRot(HumanBodyBones.RightUpperArm, ArmAmp * 0.3f * upperR, 0f, -ArmAmp * upperR);
-
-            float foreL = Mathf.Sin(_time / ForearmPeriodL * 2f * Mathf.PI + 0.5f);
-            float foreR = Mathf.Sin(_time / ForearmPeriodR * 2f * Mathf.PI + 2.1f);
-            AddRot(HumanBodyBones.LeftLowerArm, ForearmAmp * foreL, ForearmAmp * 0.3f * foreL, 0f);
-            AddRot(HumanBodyBones.RightLowerArm, ForearmAmp * foreR, -ForearmAmp * 0.3f * foreR, 0f);
-
-            float handL = Mathf.Sin(_time / HandPeriodL * 2f * Mathf.PI + 1.7f);
-            float handR = Mathf.Sin(_time / HandPeriodR * 2f * Mathf.PI + 0.4f);
-            AddRot(HumanBodyBones.LeftHand, HandAmp * handL, HandAmp * 0.4f * handL, 0f);
-            AddRot(HumanBodyBones.RightHand, HandAmp * handR, -HandAmp * 0.4f * handR, 0f);
-        }
-
-        private float SwaySignal()
-        {
-            return Mathf.Sin(_time / SwayPeriodA * 2f * Mathf.PI) * 0.6f +
-                Mathf.Sin(_time / SwayPeriodB * 2f * Mathf.PI) * 0.4f;
-        }
-
-        // ── idle breaks ──
-
-        private void TickGesture(float deltaTime)
-        {
-            if (_active < 0)
+            int per = 1 + 2 * _harmonics;
+            for (int i = 0; i < _bones.Length; i++)
             {
-                _wait -= deltaTime;
-                if (_wait > 0f)
-                    return;
-                _active = PickGesture();
-                _gestureTime = 0f;
-                _dir = NextSign();
-                _dir2 = NextSign();
+                float[] c = _rot[i];
+                float x = Reconstruct(c, 0 * per);
+                float y = Reconstruct(c, 1 * per);
+                float z = Reconstruct(c, 2 * per);
+                float wq = Reconstruct(c, 3 * per);
+                float n = Mathf.Sqrt(x * x + y * y + z * z + wq * wq);
+                if (n > 1e-6f)
+                {
+                    float inv = 1f / n;
+                    Quaternion q = new Quaternion(x * inv, y * inv, z * inv, wq * inv);
+                    _pose[_bones[i]] = _correction[i] * q;
+                }
+                else
+                {
+                    _pose[_bones[i]] = _correction[i];
+                }
             }
 
-            float[] dur = GestureDur[_active];
-            float total = dur[0] + dur[1] + dur[2];
-            _gestureTime += deltaTime;
-            ApplyGesture(_active, Envelope(_gestureTime, dur[0], dur[1], dur[2]), _dir, _dir2);
-            if (_gestureTime >= total)
-            {
-                _active = -1;
-                _wait = BreakMin + (float)_random.NextDouble() * (BreakMax - BreakMin);
-            }
+            _hipsNormalizedDelta = new Vector3(
+                Reconstruct(_hipsDelta, 0 * per),
+                Reconstruct(_hipsDelta, 1 * per),
+                Reconstruct(_hipsDelta, 2 * per));
         }
 
-        private int PickGesture()
+        // value(t) = mean + Σ Ak*cos(k w t) + Bk*sin(k w t), coefficients laid out as
+        // [mean, A1, B1, A2, B2, ...] starting at offset.
+        private float Reconstruct(float[] coeffs, int offset)
         {
-            float total = 0f;
-            for (int i = 0; i < GestureCount; i++)
-                total += GestureWeight[i];
-            float r = (float)_random.NextDouble() * total;
-            for (int i = 0; i < GestureCount; i++)
+            float v = coeffs[offset];
+            for (int k = 1; k <= _harmonics; k++)
             {
-                r -= GestureWeight[i];
-                if (r <= 0f)
-                    return i;
+                v += coeffs[offset + 2 * k - 1] * _cos[k] + coeffs[offset + 2 * k] * _sin[k];
             }
-            return 0;
-        }
-
-        // k = eased 0..1 weight; d = yaw side; d2 = vertical side (+down / -up).
-        private void ApplyGesture(int index, float k, int d, int d2)
-        {
-            float df = d;
-            float d2f = d2;
-            if (index == 0) // WeightShift — spine-driven, feet planted
-            {
-                AddRot(HumanBodyBones.Spine, 0f, 0f, 0.045f * df * k);
-                AddRot(HumanBodyBones.Chest, 0f, 0f, -0.028f * df * k);
-                AddRot(HumanBodyBones.Neck, 0f, 0f, 0.015f * df * k);
-                AddRot(HumanBodyBones.Head, 0.018f * k, 0.045f * df * k, 0.012f * df * k);
-            }
-            else if (index == 1) // GlanceDiag — yaw + a little pitch
-            {
-                AddRot(HumanBodyBones.Neck, 0.025f * d2f * k, 0.075f * df * k, 0f);
-                AddRot(HumanBodyBones.Head, 0.045f * d2f * k, 0.10f * df * k, 0.02f * df * k);
-            }
-            else if (index == 2) // NodDown — gentle look down, slight side
-            {
-                AddRot(HumanBodyBones.Neck, 0.055f * k, 0.02f * df * k, 0f);
-                AddRot(HumanBodyBones.Head, 0.085f * k, 0.03f * df * k, 0.01f * df * k);
-            }
-            else if (index == 3) // SoftTilt — roll with some pitch → diagonal
-            {
-                AddRot(HumanBodyBones.Neck, 0.025f * d2f * k, 0.02f * df * k, 0.045f * df * k);
-                AddRot(HumanBodyBones.Head, 0.045f * d2f * k, 0.04f * df * k, 0.06f * df * k);
-            }
-            else if (index == 4) // TurnDiag — deliberate diagonal turn, longer hold
-            {
-                AddRot(HumanBodyBones.Neck, 0.03f * d2f * k, 0.10f * df * k, 0.008f * df * k);
-                AddRot(HumanBodyBones.Head, 0.05f * d2f * k, 0.14f * df * k, 0.02f * df * k);
-            }
-            else if (index == 5) // LookUp — subtle glance up to a side
-            {
-                AddRot(HumanBodyBones.Neck, -0.04f * k, 0.03f * df * k, 0f);
-                AddRot(HumanBodyBones.Head, -0.06f * k, 0.055f * df * k, 0f);
-            }
-        }
-
-        // ── helpers ──
-
-        private void AddRot(HumanBodyBones bone, float pitch, float yaw, float roll)
-        {
-            Quaternion delta = Quaternion.Euler(
-                PitchDir * pitch * Mathf.Rad2Deg,
-                yaw * Mathf.Rad2Deg,
-                roll * Mathf.Rad2Deg);
-            Quaternion current;
-            if (_pose.TryGetValue(bone, out current))
-                _pose[bone] = current * delta;
-            else
-                _pose[bone] = delta;
-        }
-
-        private int NextSign()
-        {
-            return _random.NextDouble() < 0.5 ? -1 : 1;
-        }
-
-        /// <summary>
-        /// Quintic smootherstep envelope: zero first AND second derivative at both
-        /// ends, so a break eases in and out with no acceleration pop. The base idle
-        /// is the shared enter/exit pose (every term scales by the returned weight).
-        /// </summary>
-        private static float Envelope(float t, float easeIn, float hold, float easeOut)
-        {
-            if (t < easeIn)
-                return Smooth(t / easeIn);
-            if (t < easeIn + hold)
-                return 1f;
-            if (t < easeIn + hold + easeOut)
-                return 1f - Smooth((t - easeIn - hold) / easeOut);
-            return 0f;
-        }
-
-        private static float Smooth(float x)
-        {
-            if (x <= 0f)
-                return 0f;
-            if (x >= 1f)
-                return 1f;
-            return x * x * x * (x * (x * 6f - 15f) + 10f);
+            return v;
         }
     }
 }
