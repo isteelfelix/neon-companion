@@ -54,7 +54,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
     public static class HermesBrowserOAuthLogin
     {
         private const int DefaultTimeoutSeconds = 180;
-        private const int CdpPollMs = 750;
+        private const int CdpPollMs = 300;
         private const int BrowserStartGraceMs = 2500;
 
         /// <summary>
@@ -63,7 +63,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         /// </summary>
         public static async Task<HermesBrowserOAuthResult> CaptureSessionAsync(
             string rawBaseUrl,
-            int timeoutSeconds = DefaultTimeoutSeconds)
+            int timeoutSeconds = DefaultTimeoutSeconds,
+            CancellationToken cancellationToken = default)
         {
             HermesBrowserOAuthResult result = new HermesBrowserOAuthResult();
             string baseUrl = HermesRemoteAuth.NormalizeBaseUrl(rawBaseUrl);
@@ -86,20 +87,53 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 return result;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Prefer CDP capture (Desktop parity). Fall back to native handoff if the
             // gateway implements it and no local Chromium browser is available.
-            HermesBrowserOAuthResult cdp = await CaptureViaChromiumCdpAsync(loginUrl, host, timeoutSeconds);
-            if (cdp.Ok)
-                return cdp;
+            bool mobile = Application.platform == RuntimePlatform.Android
+                || Application.platform == RuntimePlatform.IPhonePlayer;
 
-            HermesBrowserOAuthResult handoff = await CaptureViaNativeHandoffAsync(baseUrl, loginUrl, timeoutSeconds);
+            if (!mobile)
+            {
+                HermesBrowserOAuthResult cdp = await CaptureViaChromiumCdpAsync(
+                    loginUrl,
+                    host,
+                    timeoutSeconds,
+                    cancellationToken);
+                if (cdp.Ok)
+                    return cdp;
+
+                HermesBrowserOAuthResult handoffDesktop = await CaptureViaNativeHandoffAsync(
+                    baseUrl,
+                    loginUrl,
+                    timeoutSeconds,
+                    cancellationToken);
+                if (handoffDesktop.Ok)
+                    return handoffDesktop;
+
+                // Prefer the more specific CDP error when both failed.
+                result.Error = !string.IsNullOrEmpty(cdp.Error) ? cdp.Error : handoffDesktop.Error;
+                if (string.IsNullOrEmpty(result.Error))
+                    result.Error = "Browser sign-in did not complete.";
+                return result;
+            }
+
+            // Mobile cannot use local CDP browser capture; rely only on the native handoff path.
+            HermesBrowserOAuthResult handoff = await CaptureViaNativeHandoffAsync(
+                baseUrl,
+                loginUrl,
+                timeoutSeconds,
+                cancellationToken);
             if (handoff.Ok)
                 return handoff;
 
-            // Prefer the more specific CDP error when both failed.
-            result.Error = !string.IsNullOrEmpty(cdp.Error) ? cdp.Error : handoff.Error;
+            result.Error = handoff.Error;
             if (string.IsNullOrEmpty(result.Error))
-                result.Error = "Browser sign-in did not complete.";
+            {
+                result.Error = "Mobile browser sign-in requires Hermes native handoff support on the gateway. "
+                    + "Use token mode or enable /auth/native/handoff on the server.";
+            }
             return result;
         }
 
@@ -110,7 +144,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private static async Task<HermesBrowserOAuthResult> CaptureViaChromiumCdpAsync(
             string loginUrl,
             string gatewayHost,
-            int timeoutSeconds)
+            int timeoutSeconds,
+            CancellationToken cancellationToken)
         {
             HermesBrowserOAuthResult result = new HermesBrowserOAuthResult();
             result.Method = "cdp";
@@ -167,6 +202,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
                 while (DateTime.UtcNow < deadline)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     if (process.HasExited)
                     {
                         result.Error = "Sign-in browser closed before authentication completed.";
@@ -191,6 +228,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 int graceLeft = BrowserStartGraceMs;
                 while (graceLeft > 0 && DateTime.UtcNow < deadline)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     await Task.Delay(100);
                     graceLeft -= 100;
                     await Task.Yield();
@@ -209,6 +247,8 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
                 while (DateTime.UtcNow < deadline)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     if (process.HasExited)
                     {
                         // One last cookie read after close — cookies may already be written.
@@ -450,7 +490,18 @@ namespace NeonCompanion.Runtime.Api.Hermes
             }
 
             string preferred = preferredUrl ?? string.Empty;
+            string preferredHost = string.Empty;
+            try
+            {
+                if (!string.IsNullOrEmpty(preferred))
+                    preferredHost = new Uri(preferred).Host ?? string.Empty;
+            }
+            catch
+            {
+                preferredHost = string.Empty;
+            }
             string fallback = null;
+            string hostFallback = null;
 
             for (int i = 0; i < arr.Count; i++)
             {
@@ -477,6 +528,13 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     return wsUrl;
                 }
 
+                if (!string.IsNullOrEmpty(preferredHost)
+                    && pageUrl.IndexOf(preferredHost, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    if (hostFallback == null)
+                        hostFallback = wsUrl;
+                }
+
                 // Prefer targets that already navigated to something (not about:blank only).
                 if (fallback == null)
                     fallback = wsUrl;
@@ -484,6 +542,9 @@ namespace NeonCompanion.Runtime.Api.Hermes
                          && !string.IsNullOrEmpty(pageUrl))
                     fallback = wsUrl;
             }
+
+            if (!string.IsNullOrEmpty(hostFallback))
+                return hostFallback;
 
             return fallback;
         }
@@ -689,10 +750,19 @@ namespace NeonCompanion.Runtime.Api.Hermes
         private static async Task<HermesBrowserOAuthResult> CaptureViaNativeHandoffAsync(
             string baseUrl,
             string loginUrl,
-            int timeoutSeconds)
+            int timeoutSeconds,
+            CancellationToken cancellationToken)
         {
             HermesBrowserOAuthResult result = new HermesBrowserOAuthResult();
             result.Method = "native_handoff";
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!HttpListener.IsSupported)
+            {
+                result.Error = "Native OAuth handoff is not supported on this platform.";
+                return result;
+            }
 
             int port = GetFreeLoopbackPort();
             if (port <= 0)
@@ -758,9 +828,14 @@ namespace NeonCompanion.Runtime.Api.Hermes
             {
                 Application.OpenURL(handoffUrl);
 
-                Task delayTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
-                Task finished = await Task.WhenAny(tcs.Task, delayTask);
-                if (finished != tcs.Task)
+                DateTime deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+                while (!tcs.Task.IsCompleted && DateTime.UtcNow < deadline)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await Task.Delay(150);
+                }
+
+                if (!tcs.Task.IsCompleted)
                 {
                     result.Error = "Timed out waiting for native OAuth handoff.";
                     return result;
@@ -833,8 +908,22 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     if (http == null)
                         return false;
                     int code = (int)http.StatusCode;
-                    // 302 to login or 200 page = supported; 404 = not.
-                    return code != 404;
+                    // Treat redirects and auth-gated responses as "route exists".
+                    if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308)
+                    {
+                        string location = http.Headers["Location"] ?? string.Empty;
+                        if (location.IndexOf("redirect_uri", StringComparison.OrdinalIgnoreCase) >= 0)
+                            return true;
+                        if (location.IndexOf("/auth/", StringComparison.OrdinalIgnoreCase) >= 0)
+                            return true;
+                        return false;
+                    }
+
+                    if (code == 401 || code == 403)
+                        return true;
+
+                    // 200 is often a gateway catch-all/fallback page for a missing route.
+                    return false;
                 }
             }
             catch (WebException wex)
@@ -843,11 +932,11 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 if (http == null)
                     return false;
                 int code = (int)http.StatusCode;
-                // 401/302/400 with body can still mean the route exists (auth gate).
-                if (code == 404)
-                    return false;
-                return code == 301 || code == 302 || code == 303 || code == 307 || code == 308
-                    || code == 401 || code == 403 || code == 400 || code == 200;
+                if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308)
+                    return true;
+                if (code == 401 || code == 403)
+                    return true;
+                return false;
             }
             catch
             {

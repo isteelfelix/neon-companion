@@ -5,6 +5,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using NeonCompanion.Runtime.Api;
 using NeonCompanion.Runtime.Api.Hermes;
@@ -497,7 +498,9 @@ namespace NeonCompanion.Runtime.Core
         /// openOauthLoginWindow), adopt + securely persist the cookie, mint ws-ticket via reconnect.
         /// Returns true when signed in and reconnect was attempted.
         /// </summary>
-        public async Task<bool> HermesBrowserLoginAsync(string baseUrl = null)
+        public async Task<bool> HermesBrowserLoginAsync(
+            string baseUrl = null,
+            CancellationToken cancellationToken = default)
         {
             if (CurrentMode != BackendMode.Hermes)
             {
@@ -526,7 +529,15 @@ namespace NeonCompanion.Runtime.Core
             HermesBrowserOAuthResult capture;
             try
             {
-                capture = await HermesBrowserOAuthLogin.CaptureSessionAsync(url);
+                capture = await HermesBrowserOAuthLogin.CaptureSessionAsync(
+                    url,
+                    cancellationToken: cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                LastConnectionError = "Browser sign-in was canceled.";
+                OnError?.Invoke(LastConnectionError);
+                return false;
             }
             catch (Exception ex)
             {

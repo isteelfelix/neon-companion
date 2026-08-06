@@ -153,6 +153,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private bool _gatewayEventsHooked;
         private HermesAuthProbeResult _lastProbe;
         private string _probedAuthProvider; // auto-detected; never shown as a user field
+        private CancellationTokenSource _gatewayBrowserLoginCts;
+        private bool _awaitingMobileBrowserReturn;
         // Last transport state seen, so a Connected edge triggers exactly one reload.
         private TransportState _lastTransportState = TransportState.Disconnected;
 
@@ -234,6 +236,8 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SyncGlobalBackendModeUi(initialMode);
                 _d.GlobalBackendMode.RegisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
             }
+
+            Application.focusChanged += OnApplicationFocusChanged;
         }
 
         public void UnregisterCallbacks()
@@ -267,6 +271,16 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             if (_d.GlobalBackendMode != null)
                 _d.GlobalBackendMode.UnregisterCallback<ChangeEvent<string>>(OnGlobalBackendModeChanged);
+
+            Application.focusChanged -= OnApplicationFocusChanged;
+
+            if (_gatewayBrowserLoginCts != null)
+            {
+                _gatewayBrowserLoginCts.Cancel();
+                _gatewayBrowserLoginCts.Dispose();
+                _gatewayBrowserLoginCts = null;
+            }
+            _awaitingMobileBrowserReturn = false;
 
             if (_profileStrip != null)
             {
@@ -3660,7 +3674,45 @@ namespace NeonCompanion.Runtime.UI.UITK
                     "Complete sign-in in the browser window…"),
                 false);
 
-            bool ok = await selector.HermesBrowserLoginAsync(baseUrl);
+            bool isMobile = Application.platform == RuntimePlatform.Android
+                || Application.platform == RuntimePlatform.IPhonePlayer;
+
+            if (_gatewayBrowserLoginCts != null)
+            {
+                _gatewayBrowserLoginCts.Cancel();
+                _gatewayBrowserLoginCts.Dispose();
+                _gatewayBrowserLoginCts = null;
+            }
+
+            CancellationToken token = CancellationToken.None;
+            if (isMobile)
+            {
+                _awaitingMobileBrowserReturn = true;
+                _gatewayBrowserLoginCts = new CancellationTokenSource();
+                token = _gatewayBrowserLoginCts.Token;
+
+                SetGatewayStatusMessage(
+                    LocalizationExtensions.Get(
+                        "providers.gateway.browser.mobile_wait",
+                        "Complete sign-in in the browser, then return to the app."),
+                    false);
+            }
+
+            bool ok;
+            try
+            {
+                ok = await selector.HermesBrowserLoginAsync(baseUrl, token);
+            }
+            finally
+            {
+                _awaitingMobileBrowserReturn = false;
+                if (_gatewayBrowserLoginCts != null)
+                {
+                    _gatewayBrowserLoginCts.Dispose();
+                    _gatewayBrowserLoginCts = null;
+                }
+            }
+
             if (ok)
             {
                 var chat = _d.GetChatServiceSync != null ? _d.GetChatServiceSync() : null;
@@ -3683,6 +3735,45 @@ namespace NeonCompanion.Runtime.UI.UITK
                     "Browser sign-in did not complete. Try Connect again.");
             }
             SetGatewayStatusMessage(err, true);
+        }
+
+        private void OnApplicationFocusChanged(bool hasFocus)
+        {
+            if (!hasFocus || !_awaitingMobileBrowserReturn || _gatewayBrowserLoginCts == null)
+                return;
+
+            bool isMobile = Application.platform == RuntimePlatform.Android
+                || Application.platform == RuntimePlatform.IPhonePlayer;
+            if (!isMobile)
+                return;
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector != null && selector.HasRemoteSession)
+                return;
+
+            _ = CancelPendingMobileBrowserLoginIfStillWaitingAsync();
+        }
+
+        private async Task CancelPendingMobileBrowserLoginIfStillWaitingAsync()
+        {
+            // On some devices focus returns to Unity before the browser callback/settle finishes.
+            // Give the auth flow a short grace period before treating it as stuck.
+            await Task.Delay(1500);
+
+            if (!_awaitingMobileBrowserReturn || _gatewayBrowserLoginCts == null)
+                return;
+
+            bool isMobile = Application.platform == RuntimePlatform.Android
+                || Application.platform == RuntimePlatform.IPhonePlayer;
+            if (!isMobile)
+                return;
+
+            var selector = GlobalBackendSelector.Instance;
+            if (selector != null && selector.HasRemoteSession)
+                return;
+
+            if (!_gatewayBrowserLoginCts.IsCancellationRequested)
+                _gatewayBrowserLoginCts.Cancel();
         }
 
         private async Task ConnectTokenGatewayAsync()
