@@ -47,6 +47,31 @@ namespace NeonCompanion.Runtime.Avatar3D
         private const float DriftYaw = 0.045f;
         private const float DriftPitch = 0.02f;
 
+        // Head "looking around" — a continuous slow scan on two incommensurate
+        // periods, on TOP of the drift above and the discrete glance breaks below.
+        // From the mocap idle the head carried ~30° peak-to-peak of yaw at a ~8 s
+        // beat; kept well under that here so the breaks still have room to add.
+        private const float LookPeriodA = 7.7f;
+        private const float LookPeriodB = 16.3f;
+        private const float LookYaw = 0.11f;
+        private const float LookPitch = 0.03f;
+
+        // Arm life — the arms must not hang like a mannequin. A gentle in/out swing
+        // carried upper arm → forearm → hand, each on its own period so the two
+        // sides never mirror and nothing loops. Periods/reach are taken from a mocap
+        // idle (a ~6 s upper-body sway, forearms a touch faster). SIGNS/AXES are the
+        // first tuning knob if a limb swings the wrong way on the model — same story
+        // as PitchDir; a single sign flip reconciles the capture with the rig.
+        private const float ArmPeriodL = 5.8f;
+        private const float ArmPeriodR = 7.7f;
+        private const float ForearmPeriodL = 6.4f;
+        private const float ForearmPeriodR = 4.9f;
+        private const float HandPeriodL = 11.5f;
+        private const float HandPeriodR = 8.3f;
+        private const float ArmAmp = 0.09f;      // ~10° peak-to-peak on the upper arm
+        private const float ForearmAmp = 0.09f;
+        private const float HandAmp = 0.10f;
+
         // Idle-break scheduling (seconds between breaks).
         private const float BreakMin = 4.0f;
         private const float BreakMax = 9.0f;
@@ -102,6 +127,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             Breathing();
             Sway();
             Drift();
+            ArmLife();
             TickGesture(deltaTime);
         }
 
@@ -140,11 +166,42 @@ namespace NeonCompanion.Runtime.Avatar3D
         {
             float sway = SwaySignal();
             float drift = Mathf.Sin(_time / DriftPeriod * 2f * Mathf.PI);
-            AddRot(HumanBodyBones.Neck, 0f, drift * DriftYaw * 0.3f, -sway * SwayAmp * 0.4f);
+            // Continuous "looking around": two incommensurate periods so the head
+            // scans without ever settling into a loop. The discrete glance breaks
+            // ride on top of this.
+            float look =
+                Mathf.Sin(_time / LookPeriodA * 2f * Mathf.PI) * 0.6f +
+                Mathf.Sin(_time / LookPeriodB * 2f * Mathf.PI + 0.8f) * 0.4f;
+            AddRot(HumanBodyBones.Neck,
+                look * LookPitch * 0.4f,
+                drift * DriftYaw * 0.3f + look * LookYaw * 0.4f,
+                -sway * SwayAmp * 0.4f);
             AddRot(HumanBodyBones.Head,
-                drift * DriftPitch * Mathf.Sin(_time * 0.13f),
-                drift * DriftYaw,
+                drift * DriftPitch * Mathf.Sin(_time * 0.13f) + look * LookPitch,
+                drift * DriftYaw + look * LookYaw,
                 -sway * SwayAmp * 0.3f);
+        }
+
+        // The arms breathe with the body instead of hanging: a slow swing on the
+        // upper arm, a phase-lagged bend on the forearm, a wrist float on the hand.
+        // Left and right run on different periods, so the pose never reads as
+        // symmetric and never repeats. Fingers are left at the modelled pose.
+        private void ArmLife()
+        {
+            float upperL = Mathf.Sin(_time / ArmPeriodL * 2f * Mathf.PI);
+            float upperR = Mathf.Sin(_time / ArmPeriodR * 2f * Mathf.PI + 1.3f);
+            AddRot(HumanBodyBones.LeftUpperArm, ArmAmp * 0.3f * upperL, 0f, ArmAmp * upperL);
+            AddRot(HumanBodyBones.RightUpperArm, ArmAmp * 0.3f * upperR, 0f, -ArmAmp * upperR);
+
+            float foreL = Mathf.Sin(_time / ForearmPeriodL * 2f * Mathf.PI + 0.5f);
+            float foreR = Mathf.Sin(_time / ForearmPeriodR * 2f * Mathf.PI + 2.1f);
+            AddRot(HumanBodyBones.LeftLowerArm, ForearmAmp * foreL, ForearmAmp * 0.3f * foreL, 0f);
+            AddRot(HumanBodyBones.RightLowerArm, ForearmAmp * foreR, -ForearmAmp * 0.3f * foreR, 0f);
+
+            float handL = Mathf.Sin(_time / HandPeriodL * 2f * Mathf.PI + 1.7f);
+            float handR = Mathf.Sin(_time / HandPeriodR * 2f * Mathf.PI + 0.4f);
+            AddRot(HumanBodyBones.LeftHand, HandAmp * handL, HandAmp * 0.4f * handL, 0f);
+            AddRot(HumanBodyBones.RightHand, HandAmp * handR, -HandAmp * 0.4f * handR, 0f);
         }
 
         private float SwaySignal()

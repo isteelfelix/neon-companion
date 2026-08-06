@@ -61,18 +61,31 @@ namespace NeonCompanion.Tests
         }
 
         [Test]
-        public void NoArmBonesAreDriven_OnlyShouldersMove()
+        public void TheArmsAreAliveToTheWrist_NoFingerIsDriven()
         {
             var idle = new VrmBodyIdleAnimator(new Random(6));
+            idle.Tick(0.9f); // off-rest, past the arm sines' zero crossing
+
+            // The whole arm chain breathes now — that's the "not hanging like a
+            // mannequin" the mocap idle gave us.
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftUpperArm));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.RightUpperArm));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftLowerArm));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.RightLowerArm));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.LeftHand));
+            Assert.IsTrue(idle.Pose.ContainsKey(HumanBodyBones.RightHand));
+            Assert.Greater(
+                Quaternion.Angle(idle.Pose[HumanBodyBones.LeftUpperArm], Quaternion.identity),
+                0.01f,
+                "The upper arm never left its rest rotation — the arm is dead.");
+
+            // Fingers stay at the modelled pose — the idle never touches them.
             for (int i = 0; i < 60 * 90; i++)
             {
                 idle.Tick(Frame);
-                AssertUntouched(idle, HumanBodyBones.LeftUpperArm);
-                AssertUntouched(idle, HumanBodyBones.RightUpperArm);
-                AssertUntouched(idle, HumanBodyBones.LeftLowerArm);
-                AssertUntouched(idle, HumanBodyBones.RightLowerArm);
-                AssertUntouched(idle, HumanBodyBones.LeftHand);
-                AssertUntouched(idle, HumanBodyBones.RightHand);
+                AssertUntouched(idle, HumanBodyBones.LeftIndexProximal);
+                AssertUntouched(idle, HumanBodyBones.RightThumbProximal);
+                AssertUntouched(idle, HumanBodyBones.LeftLittleDistal);
             }
         }
 
