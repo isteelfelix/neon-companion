@@ -11,6 +11,11 @@ using UnityEngine.UIElements;
 
 namespace NeonCompanion.Runtime.Avatar3D
 {
+    // Render AFTER VrmAvatarDriver (order 10000): the driver's foot IK edits the model
+    // bones in its LateUpdate, and the next frame's Vrm10 Process() re-copies the control
+    // rig over them — so the render must capture the pose in the same frame, after the IK,
+    // or the IK is never seen.
+    [DefaultExecutionOrder(11000)]
     public sealed class Avatar3DRenderer : MonoBehaviour
     {
         [Header("Render")]

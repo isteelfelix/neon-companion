@@ -263,8 +263,18 @@ namespace NeonCompanion.Runtime.Avatar3D
         private VrmEmotionBlender _emotions;
         private VrmIdleAnimator _idle;
         private VrmBodyIdleAnimator _bodyIdle;
-        private Vector3? _hipsRestLocalPos;
         private VrmVisemeAnimator _visemes;
+
+        // Foot IK — the captured animation does NOT keep the feet planted (they drift
+        // ~12% of leg length), so we lock each foot to where it rests and solve the knee
+        // so the pelvis/body can move over planted feet. 1 = fully locked, 0 = off.
+        private const float FootIkWeight = 1f;
+        private Transform _lUpperLeg, _lLowerLeg, _lFoot;
+        private Transform _rUpperLeg, _rLowerLeg, _rFoot;
+        private bool _legsCached;
+        private bool _footRestCaptured;
+        private Vector3 _lFootRestPos, _rFootRestPos;
+        private Quaternion _lFootRestRot, _rFootRestRot;
 
         // The neutral "arms down" seed pose, shared by every avatar (normalized, so
         // model-independent) and loaded once from the built-in idle clip.
@@ -709,17 +719,10 @@ namespace NeonCompanion.Runtime.Avatar3D
                 }
             }
 
-            // Weight shift also translates the hips. HipsNormalizedDelta is per unit
-            // hip height, so scale it by this avatar's own rest hip height (captured
-            // once) — the same hip-height scaling Vrm10Retarget applies.
-            Transform hipsBone = _runtime.ControlRig.GetBoneTransform(HumanBodyBones.Hips);
-            if (hipsBone != null)
-            {
-                if (!_hipsRestLocalPos.HasValue)
-                    _hipsRestLocalPos = hipsBone.localPosition;
-                Vector3 restHips = _hipsRestLocalPos.Value;
-                hipsBone.localPosition = restHips + BodyIdle.HipsNormalizedDelta * restHips.y;
-            }
+            // The avatar root is left exactly where it was placed — a standard VRM's
+            // armature root already sits on the floor, so posing the standard bones is
+            // all that's needed. (Earlier grounding code moved the root and was itself
+            // what lifted her off the floor.)
         }
 
         private void LateUpdate()
@@ -745,6 +748,111 @@ namespace NeonCompanion.Runtime.Avatar3D
             // Everything above only declared what it wants. This is the one
             // place a frame's worth of intent reaches the model.
             Composer.Apply();
+
+            // Foot IK runs last, on the rendered model bones, after Process() has posed
+            // them — it plants the feet the captured rotations would otherwise drift.
+            ApplyFootIk();
+        }
+
+        private void ApplyFootIk()
+        {
+            if (FootIkWeight <= 0f || _vrm == null)
+                return;
+            if (!_legsCached)
+            {
+                _legsCached = true;
+                // The mesh is skinned to the Animator's humanoid bones (what Process
+                // writes to), NOT the control-rig proxy that _vrm.TryGetBoneTransform
+                // returns — editing the proxy after Process never reaches the render.
+                Animator animator = GetComponentInChildren<Animator>(true);
+                if (animator != null && animator.isHuman)
+                {
+                    _lUpperLeg = animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+                    _lLowerLeg = animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
+                    _lFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                    _rUpperLeg = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+                    _rLowerLeg = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
+                    _rFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                }
+            }
+            if (_lFoot == null || _rFoot == null)
+                return;
+
+            // First pass: remember where the feet naturally rest, stored in the avatar
+            // root's LOCAL space so the lock turns WITH the model when it is spun (a
+            // world-space lock left the feet planted while the body twisted around them).
+            if (!_footRestCaptured)
+            {
+                _footRestCaptured = true;
+                _lFootRestPos = transform.InverseTransformPoint(_lFoot.position);
+                _lFootRestRot = Quaternion.Inverse(transform.rotation) * _lFoot.rotation;
+                _rFootRestPos = transform.InverseTransformPoint(_rFoot.position);
+                _rFootRestRot = Quaternion.Inverse(transform.rotation) * _rFoot.rotation;
+                return;
+            }
+
+            SolveLeg(_lUpperLeg, _lLowerLeg, _lFoot, _lFootRestPos, _lFootRestRot);
+            SolveLeg(_rUpperLeg, _rLowerLeg, _rFoot, _rFootRestPos, _rFootRestRot);
+        }
+
+        private void SolveLeg(Transform upper, Transform lower, Transform foot,
+            Vector3 restLocalPos, Quaternion restLocalRot)
+        {
+            if (upper == null || lower == null || foot == null)
+                return;
+            // Convert the root-relative lock back to world for this frame's orientation.
+            Vector3 restPos = transform.TransformPoint(restLocalPos);
+            Quaternion restRot = transform.rotation * restLocalRot;
+            Vector3 goal = Vector3.Lerp(foot.position, restPos, FootIkWeight);
+            // Pole a step in front of the hip so the knee always bends the way the
+            // avatar faces, even when the leg is nearly straight.
+            SolveTwoBoneIk(upper, lower, foot, goal, upper.position + transform.forward);
+            foot.rotation = Quaternion.Slerp(foot.rotation, restRot, FootIkWeight);
+        }
+
+        // Analytic two-bone IK: places the knee by law of cosines with a pole for the
+        // bend direction, then aligns the two bones. Operates in world space on the
+        // rendered bones.
+        private static void SolveTwoBoneIk(Transform a, Transform b, Transform c,
+            Vector3 target, Vector3 pole)
+        {
+            Vector3 aPos = a.position;
+            float lab = Vector3.Distance(aPos, b.position);
+            float lcb = Vector3.Distance(b.position, c.position);
+            Vector3 toTarget = target - aPos;
+            float dist = toTarget.magnitude;
+            if (dist < 1e-5f || lab < 1e-5f || lcb < 1e-5f)
+                return;
+            float lat = Mathf.Clamp(dist, Mathf.Abs(lab - lcb) + 1e-3f, lab + lcb - 1e-3f);
+            Vector3 dir = toTarget / dist;
+
+            float cosA = Mathf.Clamp((lab * lab + lat * lat - lcb * lcb) / (2f * lab * lat), -1f, 1f);
+            float along = lab * cosA;
+            float perpLen = lab * Mathf.Sqrt(Mathf.Max(0f, 1f - cosA * cosA));
+
+            Vector3 poleDir = pole - aPos;
+            Vector3 perp = poleDir - Vector3.Dot(poleDir, dir) * dir;
+            if (perp.sqrMagnitude < 1e-8f)
+            {
+                perp = Vector3.Cross(dir, Vector3.up);
+                if (perp.sqrMagnitude < 1e-8f)
+                    perp = Vector3.Cross(dir, Vector3.forward);
+            }
+            perp.Normalize();
+
+            Vector3 kneePos = aPos + dir * along + perp * perpLen;
+
+            // Upper bone: aim the hip so the knee reaches kneePos.
+            Vector3 curUpper = b.position - aPos;
+            Vector3 newUpper = kneePos - aPos;
+            if (curUpper.sqrMagnitude > 1e-8f && newUpper.sqrMagnitude > 1e-8f)
+                a.rotation = Quaternion.FromToRotation(curUpper, newUpper) * a.rotation;
+
+            // Lower bone: aim the knee so the ankle reaches the target.
+            Vector3 curLower = c.position - b.position;
+            Vector3 newLower = target - b.position;
+            if (curLower.sqrMagnitude > 1e-8f && newLower.sqrMagnitude > 1e-8f)
+                b.rotation = Quaternion.FromToRotation(curLower, newLower) * b.rotation;
         }
 
         private void UpdateBlink()
