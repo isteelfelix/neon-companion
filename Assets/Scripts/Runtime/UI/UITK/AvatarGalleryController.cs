@@ -204,6 +204,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         private int _avatarSelectionRequestVersion;
         private int _avatarRenderRequestVersion;
         private readonly SemaphoreSlim _avatar3DLoadLock = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _avatarSelectionLock = new SemaphoreSlim(1, 1);
         private bool _bindingDisplaySettings;
         private IVisualElementScheduledItem _displaySettingsSaveSchedule;
 
@@ -444,6 +445,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void RegisterCallbacks()
         {
+            Avatar3DWarmup.ThumbnailBaked -= OnWarmedThumbnailBaked;
+            Avatar3DWarmup.ThumbnailBaked += OnWarmedThumbnailBaked;
             RegisterClick(_previewApplyBtn, OnPreviewApplyClicked);
             RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
             RegisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
@@ -490,6 +493,7 @@ namespace NeonCompanion.Runtime.UI.UITK
 
         public void UnregisterCallbacks()
         {
+            Avatar3DWarmup.ThumbnailBaked -= OnWarmedThumbnailBaked;
             UnregisterClick(_previewApplyBtn, OnPreviewApplyClicked);
             UnregisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
             UnregisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
@@ -595,6 +599,8 @@ namespace NeonCompanion.Runtime.UI.UITK
 
             RefreshBuiltInAvatarTileLabels();
             ApplyAvatarFilter();
+            ApplyBakedTileThumbnails();
+            WarmOtherVrmModels();
         }
 
         public void RefreshBuiltInAvatarTileLabels()
@@ -1401,32 +1407,89 @@ namespace NeonCompanion.Runtime.UI.UITK
             CommitAvatarSelection(avatarId);
         }
 
+        // Selecting a VRM has to prove the file still loads before the avatar is
+        // swapped. That probe is a full import, so it is serialized, skipped for a
+        // model the cache already holds, and its result is parked rather than
+        // thrown away — the ApplyAvatarArt load right after it is then a swap
+        // instead of a second import of the same file.
         private async Task SelectVrmAvatarAsync(
             string avatarId,
             AvatarProfile profile,
             int requestVersion)
         {
-            Avatar3DLoadResult validation = await Avatar3DLoader.LoadAsync(profile.modelPath);
-            if (requestVersion != _avatarSelectionRequestVersion)
+            Avatar3DParkedModel warm = Avatar3DModelCache.Peek(profile.modelPath);
+            if (warm != null)
             {
-                if (validation.Instance != null)
-                    UnityEngine.Object.Destroy(validation.Instance);
+                ApplyVrmValidation(
+                    avatarId, profile, warm.Capabilities, warm.AnimationNames);
                 return;
             }
 
-            if (!validation.Success || validation.Instance == null)
+            await _avatarSelectionLock.WaitAsync();
+            try
             {
-                ShowCatalogOnlyProfile(profile);
-                _d.AddSystemMessage?.Invoke(LocalizationExtensions.Get(
-                    "avatar.vrm.invalid.preserved",
-                    "The VRM could not be loaded. The current avatar was preserved."));
-                return;
-            }
+                // Clicking through the gallery used to fire one import per tile,
+                // all of them racing on the main thread. A click that has already
+                // been superseded while queued here never pays for its import.
+                if (requestVersion != _avatarSelectionRequestVersion)
+                    return;
 
-            UnityEngine.Object.Destroy(validation.Instance);
-            profile.capabilities = validation.Capabilities;
-            profile.modelAnimationClips = new List<string>(validation.AnimationNames);
-            profile.diagnostic = validation.Capabilities.isRestricted
+                warm = Avatar3DModelCache.Peek(profile.modelPath);
+                if (warm != null)
+                {
+                    ApplyVrmValidation(
+                        avatarId, profile, warm.Capabilities, warm.AnimationNames);
+                    return;
+                }
+
+                Avatar3DLoadResult validation;
+                await Avatar3DModelCache.ImportLock.WaitAsync();
+                try
+                {
+                    if (requestVersion != _avatarSelectionRequestVersion)
+                        return;
+                    validation = await Avatar3DLoader.LoadAsync(profile.modelPath);
+                }
+                finally
+                {
+                    Avatar3DModelCache.ImportLock.Release();
+                }
+
+                if (!validation.Success || validation.Instance == null)
+                {
+                    if (requestVersion != _avatarSelectionRequestVersion)
+                        return;
+                    ShowCatalogOnlyProfile(profile);
+                    _d.AddSystemMessage?.Invoke(LocalizationExtensions.Get(
+                        "avatar.vrm.invalid.preserved",
+                        "The VRM could not be loaded. The current avatar was preserved."));
+                    return;
+                }
+
+                // Even a superseded probe keeps its model: the user just looked at
+                // that tile, so it is the most likely next click.
+                Avatar3DModelCache.ParkLoadResult(profile.modelPath, validation);
+                if (requestVersion != _avatarSelectionRequestVersion)
+                    return;
+
+                ApplyVrmValidation(
+                    avatarId, profile, validation.Capabilities, validation.AnimationNames);
+            }
+            finally
+            {
+                _avatarSelectionLock.Release();
+            }
+        }
+
+        private void ApplyVrmValidation(
+            string avatarId,
+            AvatarProfile profile,
+            AvatarCapabilities capabilities,
+            List<string> animationNames)
+        {
+            profile.capabilities = capabilities;
+            profile.modelAnimationClips = new List<string>(animationNames);
+            profile.diagnostic = capabilities.isRestricted
                 ? "vrm_restricted_features"
                 : string.Empty;
             CommitAvatarSelection(avatarId);
@@ -1565,9 +1628,11 @@ namespace NeonCompanion.Runtime.UI.UITK
                 app.Avatars.SaveAll(all);
 
                 ReleaseCustomTexture(imagePath);
+                ReleaseCustomTexture(AvatarThumbnailBaker.PathFor(deleteId));
                 DeleteCustomAvatarFileIfUnused(imagePath, all);
                 DeleteCustomAvatarFileIfUnused(modelPath, all);
                 DeleteCustomAvatarFileIfUnused(motionPath, all);
+                AvatarThumbnailBaker.Delete(deleteId);
                 AvatarAssetImporter.DeleteImportedProfileAssets(profile);
 
                 UpdateAvatarProfileCaches(all);
@@ -2182,6 +2247,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 SetDisplay(_preview3DImage, DisplayStyle.Flex);
                 UpdateVrmTileThumbnail(profile.id);
                 RefreshAvatarMotionState();
+                WarmOtherVrmModels();
             }
             finally
             {
@@ -2283,6 +2349,23 @@ namespace NeonCompanion.Runtime.UI.UITK
             return _cachedProfilesById.TryGetValue(avatarId, out var profile) ? profile : null;
         }
 
+        // Imports the gallery's other VRMs in the background so switching tiles is
+        // a swap rather than a multi-second import, and bakes the tile still for
+        // any of them that has none yet. The mounted avatar is excluded (it is
+        // being loaded anyway) and the warm-up always yields to a click.
+        private void WarmOtherVrmModels()
+        {
+            AvatarProfile active = GetStoredProfile(_activeAvatarId);
+            Avatar3DWarmup.Warm(
+                _cachedProfilesById.Values,
+                active != null ? active.modelPath : null);
+        }
+
+        private void OnWarmedThumbnailBaked(string avatarId)
+        {
+            ApplyVrmTileThumbnail(avatarId, true);
+        }
+
         private void UpdateAvatarProfileCaches(List<AvatarProfile> profiles)
         {
             _cachedProfilesById.Clear();
@@ -2357,26 +2440,82 @@ namespace NeonCompanion.Runtime.UI.UITK
             return tile;
         }
 
-        // Swaps the tile's "3D" placeholder for the live column render once the model
-        // is loaded, so the gallery shows the actual avatar instead of a text badge.
+        // Bakes the tile's still once from the model that is loaded right now, then
+        // shows it. Tiles used to display the column's live render texture — a
+        // single texture shared by every VRM tile, so all of them showed whichever
+        // model happened to be mounted.
         private void UpdateVrmTileThumbnail(string avatarId)
         {
-            if (_avatar3DRenderer == null || string.IsNullOrEmpty(avatarId))
+            if (string.IsNullOrEmpty(avatarId))
                 return;
 
+            ApplyVrmTileThumbnail(avatarId, false);
+
+            AvatarProfile profile = GetStoredProfile(avatarId);
+            string modelPath = profile != null ? profile.modelPath : null;
+            if (AvatarThumbnailBaker.Exists(avatarId, modelPath))
+                return;
+
+            // Give the idle pose and the hair springs a beat to settle, so the
+            // still is not a shot of the imported bind pose.
+            if (_d.Root == null)
+                BakeMountedStill(avatarId);
+            else
+                _d.Root.schedule.Execute(() => BakeMountedStill(avatarId))
+                    .ExecuteLater(700);
+        }
+
+        private void BakeMountedStill(string avatarId)
+        {
+            if (_avatar3DService == null || !_avatar3DService.IsLoaded ||
+                !string.Equals(_activeAvatarId, avatarId, StringComparison.Ordinal))
+                return;
+
+            if (AvatarThumbnailBaker.Bake(avatarId, _avatar3DService.GetRuntimeRoot()) == null)
+                return;
+
+            ApplyVrmTileThumbnail(avatarId, true);
+        }
+
+        // Points a tile at its baked still. Cheap enough to run for the whole
+        // gallery on refresh: it is a PNG on disk, no model has to be loaded.
+        private void ApplyVrmTileThumbnail(string avatarId, bool forceReload)
+        {
             VisualElement tile;
-            if (!_customAvatarTiles.TryGetValue(avatarId, out tile) || tile == null)
+            if (string.IsNullOrEmpty(avatarId) ||
+                !_customAvatarTiles.TryGetValue(avatarId, out tile) || tile == null)
                 return;
 
-            RenderTexture rt = _avatar3DRenderer.OutputTexture as RenderTexture;
-            if (rt == null)
+            string path = AvatarThumbnailBaker.PathFor(avatarId);
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 return;
 
-            tile.style.backgroundImage =
-                new StyleBackground(Background.FromRenderTexture(rt));
+            // A re-bake writes the same path, so the cached texture is stale.
+            if (forceReload)
+                ReleaseCustomTexture(path);
+
+            Texture2D texture = GetOrLoadTexture(path);
+            if (texture == null)
+                return;
+
+            tile.style.backgroundImage = new StyleBackground(texture);
+            ResetCustomAvatarTransform(tile);
             Label mark = tile.Q<Label>("avtile-model-mark");
             if (mark != null)
                 SetDisplay(mark, DisplayStyle.None);
+        }
+
+        // Every 3D tile that already has a still shows it straight away — no model
+        // load, no render target, correct on a cold start.
+        private void ApplyBakedTileThumbnails()
+        {
+            foreach (KeyValuePair<string, VisualElement> entry in _customAvatarTiles)
+            {
+                AvatarProfile profile = GetStoredProfile(entry.Key);
+                if (profile == null || profile.avatarType != AvatarProfileTypes.Vrm)
+                    continue;
+                ApplyVrmTileThumbnail(entry.Key, false);
+            }
         }
 
         private VisualElement GalleryForProfile(AvatarProfile profile)

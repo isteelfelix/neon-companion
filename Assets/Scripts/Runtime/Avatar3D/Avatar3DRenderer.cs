@@ -275,6 +275,113 @@ namespace NeonCompanion.Runtime.Avatar3D
             UpdateCameraTransform();
         }
 
+        /// <summary>
+        /// Replaces the quality/lighting settings for this renderer alone. Used by
+        /// the thumbnail baker, which wants a brighter rig than the live view: a
+        /// tile is small and dark stills read as muddy at that size.
+        /// </summary>
+        public void ApplyGraphicsOverride(AvatarGraphicsSettings settings)
+        {
+            if (settings == null)
+                return;
+            _graphics = settings;
+            _graphicsDirty = true;
+        }
+
+        /// <summary>
+        /// Frames a fixed window instead of deriving one from renderer bounds.
+        /// A model that has not been posed yet reports bind-pose bounds wide
+        /// enough to pull the camera back onto the whole T-pose, so the baker
+        /// measures the humanoid rig itself and hands the result over here.
+        /// </summary>
+        public void SetManualFraming(Vector3 focusWorld, float halfHeight)
+        {
+            if (_camera == null)
+                EnsureRenderScene();
+            if (_camera == null || halfHeight <= 0f)
+                return;
+
+            _targetCenter = focusWorld;
+            _targetHeight = halfHeight * 2f;
+            _framedDistance = halfHeight /
+                Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            _orbitDistance = _framedDistance;
+            _targetOrbitDistance = _framedDistance;
+            _viewScale = 1f;
+            _viewOffsetX = 0f;
+            _viewOffsetY = 0f;
+            UpdateCameraTransform();
+        }
+
+        /// <summary>
+        /// Renders the current target once into a fresh texture, using this
+        /// renderer's own framing and light rig. Synchronous — it does not wait
+        /// for a frame — so the caller can stage a model, capture it and put it
+        /// back before anything else in the scene runs.
+        /// </summary>
+        public Texture2D CaptureStill(int width, int height)
+        {
+            if (_target == null || width < 8 || height < 8)
+                return null;
+
+            EnsureRenderScene();
+            if (_camera == null)
+                return null;
+
+            // The framing is whatever SetModelRoot or SetManualFraming last set;
+            // re-deriving it here would throw a manual frame away.
+            if (_graphicsDirty)
+            {
+                _graphicsDirty = false;
+                ApplyCameraQuality();
+                ApplyLightingQuality();
+            }
+            UpdateCameraTransform();
+
+            RenderTexture target = RenderTexture.GetTemporary(
+                width, height, 24, ResolveFormat());
+            target.antiAliasing = DesiredMsaa();
+
+            RenderTexture previousTarget = _camera.targetTexture;
+            RenderTexture previousActive = RenderTexture.active;
+            Texture2D still = null;
+            try
+            {
+                _camera.targetTexture = target;
+                SetRigEnabled(true);
+                try
+                {
+                    _camera.Render();
+                }
+                finally
+                {
+                    SetRigEnabled(false);
+                }
+
+                RenderTexture.active = target;
+                still = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                still.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
+                still.Apply();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[NeonCompanion] Avatar still capture failed: " + ex.Message);
+                if (still != null)
+                {
+                    Destroy(still);
+                    still = null;
+                }
+            }
+            finally
+            {
+                RenderTexture.active = previousActive;
+                _camera.targetTexture = previousTarget;
+                RenderTexture.ReleaseTemporary(target);
+            }
+
+            return still;
+        }
+
         public void ClearModel()
         {
             ClearSpringMotionForce();
@@ -327,7 +434,9 @@ namespace NeonCompanion.Runtime.Avatar3D
         /// </summary>
         private void Update()
         {
-            if (_target == null)
+            // A model that has been parked in the cache (deactivated, kept warm for
+            // the next switch) is still referenced here until a new one is mounted.
+            if (_target == null || !_target.gameObject.activeInHierarchy)
                 return;
 
             float deltaTime = Time.deltaTime;
@@ -445,7 +554,8 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void LateUpdate()
         {
-            if (_camera == null || _target == null)
+            if (_camera == null || _target == null ||
+                !_target.gameObject.activeInHierarchy)
                 return;
 
             if (_graphicsDirty)

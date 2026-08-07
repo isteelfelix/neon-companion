@@ -17,6 +17,8 @@ namespace NeonCompanion.Runtime.Avatar3D
         private readonly List<string> _availableAnimations = new List<string>();
         private readonly AvatarSceneState _scene = new AvatarSceneState();
         private AvatarGazeMode _gazeMode = AvatarGazeMode.Cursor;
+        private Avatar3DParkedModel _current;
+        private string _currentKey;
 
         public bool IsLoaded => _runtimeRoot != null && _scene.CanMutate;
         public IReadOnlyList<string> AvailableAnimations => _availableAnimations;
@@ -24,65 +26,124 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         public async Task<bool> LoadAvatar(string modelPath)
         {
+            string key = Avatar3DModelCache.NormalizeKey(modelPath);
+
+            // Re-selecting the avatar that is already mounted used to tear it down
+            // and re-import the very same file.
+            if (_runtimeRoot != null && _scene.CanMutate &&
+                string.Equals(_currentKey, key, StringComparison.Ordinal))
+                return true;
+
             int generation = _scene.BeginLoad();
-
-            var loadResult = await Avatar3DLoader.LoadAsync(modelPath);
-
-            // Unload() or a newer LoadAvatar() ran while we were loading: this
-            // result is orphaned, so destroy it rather than binding it.
-            if (!_scene.IsCurrent(generation))
+            Avatar3DModelCache.BeginForegroundLoad();
+            try
             {
-                DestroyOwnedObject(loadResult != null ? loadResult.Instance : null);
-                return false;
-            }
-
-            if (!loadResult.Success || loadResult.Instance == null)
-            {
-                _scene.MarkFailed();
-                return false;
-            }
-
-            DisposeCurrentModel();
-            _scene.BeginBinding();
-            _runtimeRoot = loadResult.Instance;
-            _animator = _runtimeRoot.GetComponentInChildren<Animator>(true);
-            _legacyAnimation = _runtimeRoot.GetComponentInChildren<Animation>(true);
-            _capabilities = loadResult.Capabilities ?? new AvatarCapabilities();
-            if (loadResult.VrmInstance != null)
-            {
-                _vrmDriver = _runtimeRoot.AddComponent<VrmAvatarDriver>();
-                bool driverReady = await _vrmDriver.InitializeAsync(
-                    loadResult.VrmInstance,
-                    _capabilities,
-                    BuiltInAvatarProfiles.IsResourcePath(modelPath),
-                    generation,
-                    _scene);
-
-                // Unload() ran during driver init and already tore the model
-                // down; the driver cleaned up whatever it had loaded.
-                if (!_scene.IsCurrent(generation))
-                    return false;
-
-                if (!driverReady)
+                Avatar3DParkedModel model = Avatar3DModelCache.Take(modelPath);
+                if (model == null)
                 {
-                    DisposeCurrentModel();
-                    _scene.MarkFailed();
+                    // Imports are serialized: a burst of gallery clicks otherwise
+                    // runs several multi-second imports against each other and none
+                    // of them finishes in time to be shown.
+                    await Avatar3DModelCache.ImportLock.WaitAsync();
+                    try
+                    {
+                        // Superseded while queued — importing it now would only
+                        // delay the selection the user is actually waiting for.
+                        if (!_scene.IsCurrent(generation))
+                            return false;
+
+                        // Warm-up may have parked it while we waited on the gate.
+                        model = Avatar3DModelCache.Take(modelPath);
+                        if (model == null)
+                        {
+                            Avatar3DLoadResult loadResult =
+                                await Avatar3DLoader.LoadAsync(modelPath);
+                            if (loadResult == null || !loadResult.Success ||
+                                loadResult.Instance == null)
+                            {
+                                if (loadResult != null && loadResult.Instance != null)
+                                    DestroyOwnedObject(loadResult.Instance);
+                                if (_scene.IsCurrent(generation))
+                                    _scene.MarkFailed();
+                                return false;
+                            }
+
+                            model = Avatar3DModelCache.FromLoadResult(modelPath, loadResult);
+                        }
+                    }
+                    finally
+                    {
+                        Avatar3DModelCache.ImportLock.Release();
+                    }
+                }
+
+                // Unload() or a newer LoadAvatar() ran while we were loading: this
+                // result is orphaned. It is still a good model though, so it is
+                // parked instead of destroyed and the next click on it is free.
+                if (!_scene.IsCurrent(generation))
+                {
+                    Avatar3DModelCache.Park(model);
                     return false;
                 }
+
+                ParkCurrentModel();
+                _scene.BeginBinding();
+                _current = model;
+                _currentKey = model.Key;
+                _runtimeRoot = model.Instance;
+                _animator = _runtimeRoot.GetComponentInChildren<Animator>(true);
+                _legacyAnimation = _runtimeRoot.GetComponentInChildren<Animation>(true);
+                _capabilities = model.Capabilities ?? new AvatarCapabilities();
+                if (model.VrmInstance != null)
+                {
+                    _vrmDriver = _runtimeRoot.GetComponent<VrmAvatarDriver>();
+                    if (_vrmDriver == null)
+                        _vrmDriver = _runtimeRoot.AddComponent<VrmAvatarDriver>();
+
+                    // A model coming back from the cache keeps its driver, so gaze,
+                    // touch zones and the rest pose are already wired up.
+                    if (!model.DriverReady)
+                    {
+                        bool driverReady = await _vrmDriver.InitializeAsync(
+                            model.VrmInstance,
+                            _capabilities,
+                            BuiltInAvatarProfiles.IsResourcePath(modelPath),
+                            generation,
+                            _scene);
+
+                        // Unload() ran during driver init and already tore the model
+                        // down; the driver cleaned up whatever it had loaded.
+                        if (!_scene.IsCurrent(generation))
+                            return false;
+
+                        if (!driverReady)
+                        {
+                            DisposeCurrentModel();
+                            _scene.MarkFailed();
+                            return false;
+                        }
+
+                        model.DriverReady = true;
+                    }
+                }
+
+                _availableAnimations.Clear();
+                _availableAnimations.AddRange(model.AnimationNames);
+
+                _scene.MarkMounted();
+
+                // Carry over a gaze mode chosen before the model finished loading.
+                if (_vrmDriver != null)
+                    _vrmDriver.SetGazeMode(_gazeMode);
+
+                if (_availableAnimations.Contains("idle"))
+                    SetAnimation("idle");
+                return true;
             }
-
-            _availableAnimations.Clear();
-            _availableAnimations.AddRange(loadResult.AnimationNames);
-
-            _scene.MarkMounted();
-
-            // Carry over a gaze mode chosen before the model finished loading.
-            if (_vrmDriver != null)
-                _vrmDriver.SetGazeMode(_gazeMode);
-
-            if (_availableAnimations.Contains("idle"))
-                SetAnimation("idle");
-            return true;
+            finally
+            {
+                Avatar3DModelCache.EndForegroundLoad();
+            }
         }
 
         public bool SetAnimation(string clipName)
@@ -95,7 +156,9 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             bool played = false;
 
-            if (_animator != null)
+            // A VRM import gives the Animator an Avatar but no controller, so Play() would
+            // only log "Animator does not have an AnimatorController" and animate nothing.
+            if (_animator != null && _animator.runtimeAnimatorController != null)
             {
                 _animator.Play(clipName, 0, 0f);
                 played = true;
@@ -209,7 +272,43 @@ namespace NeonCompanion.Runtime.Avatar3D
             // Bumping the generation first is what lets a load that is still
             // awaiting notice that it no longer owns the scene.
             _scene.Reset();
-            DisposeCurrentModel();
+            ParkCurrentModel();
+        }
+
+        /// <summary>
+        /// Hands the live model back to the cache instead of destroying it, so
+        /// coming back to this avatar (or reopening the gallery) costs nothing.
+        /// A model the cache will not take is destroyed as before.
+        /// </summary>
+        private void ParkCurrentModel()
+        {
+            if (_runtimeRoot == null)
+            {
+                DisposeCurrentModel();
+                return;
+            }
+
+            if (_current == null || _current.VrmInstance == null)
+            {
+                DisposeCurrentModel();
+                return;
+            }
+
+            // Whatever the face was doing belongs to the session that is ending.
+            if (_vrmDriver != null)
+                _vrmDriver.ClearMouth();
+
+            _current.Instance = _runtimeRoot;
+            Avatar3DModelCache.Park(_current);
+
+            _current = null;
+            _currentKey = null;
+            _runtimeRoot = null;
+            _availableAnimations.Clear();
+            _animator = null;
+            _legacyAnimation = null;
+            _vrmDriver = null;
+            _capabilities = new AvatarCapabilities();
         }
 
         /// <summary>
@@ -223,6 +322,8 @@ namespace NeonCompanion.Runtime.Avatar3D
             _legacyAnimation = null;
             _vrmDriver = null;
             _capabilities = new AvatarCapabilities();
+            _current = null;
+            _currentKey = null;
 
             if (_runtimeRoot != null)
             {

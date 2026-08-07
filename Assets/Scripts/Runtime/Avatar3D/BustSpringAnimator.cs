@@ -24,6 +24,11 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private readonly List<DrivenJoint> _joints = new List<DrivenJoint>();
         private Vrm10Instance _vrm;
+        // Vrm10Instance.Runtime is a lazy factory: reading it builds the control rig and
+        // reparents a new GameObject. OnDisable runs inside SetActive(false), where Unity
+        // forbids reparenting, so touching the property there throws and leaves a half-built
+        // rig behind. Only ever use a reference captured while the object was safely active.
+        private Vrm10Runtime _runtime;
         private float _elapsed;
         private float _turnVelocity;
 
@@ -46,6 +51,7 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             RestoreOriginalSettings();
             _vrm = vrm;
+            _runtime = null;
             _joints.Clear();
             _elapsed = 0f;
             _turnVelocity = 0f;
@@ -102,6 +108,10 @@ namespace NeonCompanion.Runtime.Avatar3D
             if (_vrm == null || _joints.Count == 0 || Time.deltaTime <= 0f)
                 return;
 
+            // Safe to build here: Update never runs during a SetActive transition.
+            if (_runtime == null)
+                _runtime = _vrm.Runtime;
+
             _elapsed += Time.deltaTime;
             float primary = Mathf.Sin(_elapsed * Mathf.PI * 2f * PrimaryFrequency);
             float secondary = Mathf.Sin(
@@ -137,7 +147,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                     ? force / power
                     : Vector3.down;
 
-                _vrm.Runtime.SpringBone.SetJointLevel(
+                _runtime.SpringBone.SetJointLevel(
                     driven.Joint.transform,
                     new BlittableJointMutable(
                         driven.Original.stiffnessForce,
@@ -160,14 +170,16 @@ namespace NeonCompanion.Runtime.Avatar3D
 
         private void RestoreOriginalSettings()
         {
-            if (_vrm == null)
+            // A null runtime means Update() never pushed an override, so there is nothing to
+            // restore. Never fall back to _vrm.Runtime here: this also runs from OnDisable.
+            if (_vrm == null || _runtime == null)
                 return;
 
             for (int i = 0; i < _joints.Count; i++)
             {
                 DrivenJoint driven = _joints[i];
                 if (driven.Joint != null)
-                    _vrm.Runtime.SpringBone.SetJointLevel(
+                    _runtime.SpringBone.SetJointLevel(
                         driven.Joint.transform,
                         driven.Original);
             }
