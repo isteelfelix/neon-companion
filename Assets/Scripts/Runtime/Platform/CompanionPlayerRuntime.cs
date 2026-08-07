@@ -363,12 +363,29 @@ namespace NeonCompanion.Runtime.Platform
             if (snapshot == null)
                 return;
 
+            bool is3D = snapshot.avatarType == AvatarProfileTypes.Generic3D ||
+                snapshot.avatarType == AvatarProfileTypes.Vrm;
+
+            // A display-settings change (avatar scale / offset) arrives as a fresh
+            // "profile" message on the same avatar. For a 3D avatar that is already
+            // loaded, tearing the model down and reloading it on every slider tick is
+            // both wasteful and wrong: the scale/offset must re-frame the camera, not
+            // rebuild the avatar. Detect "same avatar, same model" and only refresh the
+            // live framing.
+            if (is3D && _avatar3DRenderer != null && _snapshot != null &&
+                string.Equals(_snapshot.avatarId, snapshot.avatarId, StringComparison.Ordinal) &&
+                string.Equals(_snapshot.modelPath, snapshot.modelPath, StringComparison.Ordinal))
+            {
+                _snapshot = snapshot;
+                ApplyAvatarDisplayView();
+                return;
+            }
+
             _snapshot = snapshot;
             _loadVersion++;
             ClearDisplayAssets();
 
-            if (snapshot.avatarType == AvatarProfileTypes.Generic3D ||
-                snapshot.avatarType == AvatarProfileTypes.Vrm)
+            if (is3D)
             {
                 if (BuiltInAvatarProfiles.IsResourcePath(snapshot.modelPath) ||
                     IsAllowedLocalAsset(snapshot.modelPath))
@@ -431,8 +448,23 @@ namespace NeonCompanion.Runtime.Platform
             _avatar3DService = service;
             _avatar3DRenderer = gameObject.AddComponent<Avatar3DRenderer>();
             _avatar3DRenderer.SetModelRoot(service.GetRuntimeTransform());
+            ApplyAvatarDisplayView();
             ApplyState(_state);
             ReportBackendReady(_snapshot);
+        }
+
+        // Feeds the saved avatar scale / offset into the renderer's camera framing so
+        // they reposition and zoom the 3D avatar inside the pet window, exactly like the
+        // in-app preview. The draw rect stays full-window (see GetAvatarRect); applying
+        // these to the rect instead would resize and shift the whole window content.
+        private void ApplyAvatarDisplayView()
+        {
+            if (_avatar3DRenderer == null || _snapshot == null)
+                return;
+            _avatar3DRenderer.SetView(
+                _snapshot.avatarScale,
+                _snapshot.avatarOffsetX,
+                _snapshot.avatarOffsetY);
         }
 
         private void UpdateVrmGaze()
@@ -893,6 +925,14 @@ namespace NeonCompanion.Runtime.Platform
 
         private Rect GetAvatarRect()
         {
+            // A loaded 3D avatar is framed by the camera: its scale/offset feed
+            // SetView (see ApplyAvatarDisplayView), so the render texture already holds
+            // the avatar positioned inside a full-window frame. The draw rect must stay
+            // the whole window — baking scale/offset in here as well would resize and
+            // shift the window content instead of moving the avatar within it.
+            if (_avatar3DRenderer != null)
+                return new Rect(0f, 0f, Screen.width, Screen.height);
+
             float scale = _snapshot != null
                 ? Mathf.Clamp(_snapshot.avatarScale, 0.25f, 3f)
                 : 1f;
