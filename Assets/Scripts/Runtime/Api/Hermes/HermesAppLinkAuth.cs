@@ -406,41 +406,32 @@ namespace NeonCompanion.Runtime.Api.Hermes
             return dict;
         }
 
-        /// <summary>Open a URL in system browser (Custom Tab preferred, fallback to ACTION_VIEW).</summary>
+        /// <summary>
+        /// Open a URL in a Custom Tab pinned to ONE browser package via the
+        /// NeonCustomTabsLauncher plugin, so the whole OAuth redirect chain
+        /// (native/authorize → IdP → /auth/callback → loopback) stays in a single
+        /// cookie jar and the gateway's "hermes_session_pkce" cookie survives.
+        /// </summary>
         private static void OpenSystemBrowser(string url)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
-                var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-
-                // Try Chrome Custom Tab via androidx.browser.
-                bool opened = false;
-                try
+                using (AndroidJavaClass launcher =
+                    new AndroidJavaClass("com.neoncompanion.customtabs.NeonCustomTabsLauncher"))
                 {
-                    var builder = new AndroidJavaObject("androidx.browser.customtabs.CustomTabsIntent$Builder");
-                    var customTabsIntent = builder.Call<AndroidJavaObject>("build");
-                    var intent = customTabsIntent.Get<AndroidJavaObject>("intent");
-                    var uri = new AndroidJavaObject("android.net.Uri", url);
-                    intent.Call<AndroidJavaObject>("setData", uri);
-                    activity.Call("startActivity", intent);
-                    opened = true;
-                }
-                catch
-                {
-                    // androidx.browser not available.
-                }
-
-                if (!opened)
-                {
-                    // Fallback: ACTION_VIEW (opens default browser).
-                    var intentClass = new AndroidJavaClass("android.content.Intent");
-                    var intent = new AndroidJavaObject("android.content.Intent",
-                        intentClass.GetStatic<string>("ACTION_VIEW"));
-                    var uri = new AndroidJavaObject("android.net.Uri", url);
-                    intent.Call<AndroidJavaObject>("setData", uri);
-                    activity.Call("startActivity", intent);
+                    string chosen = launcher.CallStatic<string>("open", url);
+                    if (!string.IsNullOrEmpty(chosen) && chosen.StartsWith("ERROR:"))
+                    {
+                        Debug.LogError("[NeonCompanion] Custom Tab launcher error: " + chosen
+                            + " — falling back to Application.OpenURL");
+                        Application.OpenURL(url);
+                    }
+                    else
+                    {
+                        Debug.Log("[NeonCompanion] Native OAuth: browser pinned to '"
+                            + (string.IsNullOrEmpty(chosen) ? "(default, unpinned)" : chosen) + "'");
+                    }
                 }
             }
             catch (Exception ex)

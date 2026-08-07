@@ -88,10 +88,14 @@ Shader "VRM10/Universal Render Pipeline/MToon10"
             Tags { "LightMode" = "UniversalForward" }
 
             Cull [_M_CullMode]
-            Blend [_M_SrcBlend] [_M_DstBlend]
+            // Alpha channel uses a straight "over" (One, OneMinusSrcAlpha) so a transparent
+            // surface over opaque skin keeps dstAlpha=1 in the offscreen RT. The stock
+            // "Add, Max" preserved alpha poorly and punched see-through holes into opaque
+            // geometry once the RT is alpha-composited onto the UI.
+            Blend [_M_SrcBlend] [_M_DstBlend], One OneMinusSrcAlpha
             ZWrite [_M_ZWrite]
             ZTest LEqual
-            BlendOp Add, Max
+            BlendOp Add, Add
             AlphaToMask [_M_AlphaToMask]
 
             HLSLPROGRAM
@@ -142,11 +146,13 @@ Shader "VRM10/Universal Render Pipeline/MToon10"
             Tags { "LightMode" = "MToonOutline" }
 
             Cull Front
-            Blend [_M_SrcBlend] [_M_DstBlend]
+            // Same straight-"over" alpha blend as the forward pass so the outline does not
+            // erode the RT alpha of opaque geometry behind it.
+            Blend [_M_SrcBlend] [_M_DstBlend], One OneMinusSrcAlpha
             ZWrite [_M_ZWrite]
             ZTest LEqual
             Offset 1, 1
-            BlendOp Add, Max
+            BlendOp Add, Add
             AlphaToMask [_M_AlphaToMask]
 
             HLSLPROGRAM
