@@ -52,6 +52,10 @@ namespace NeonCompanion.Runtime.Avatar3D
         private Vector3 _targetCenter;
         private float _targetHeight = 1f;
         private float _framedDistance = 2f;
+        // Wheel/pinch zoom sets this target; _orbitDistance eases toward it each frame
+        // so a scroll glides in instead of snapping. Framing (SetView/FrameTarget) sets
+        // both together so a re-frame is instant, not animated.
+        private float _targetOrbitDistance = 2f;
         private float _viewScale = 1f;
         private float _viewOffsetX;
         private float _viewOffsetY;
@@ -70,7 +74,11 @@ namespace NeonCompanion.Runtime.Avatar3D
         // window is framed by its own saved scale/offset instead, so these only
         // ever run on the interactive column image (the preview ignores picking).
         private const float PanSensitivity = 0.0025f;
-        private const float WheelZoomStep = 0.2f;
+        // Distance added to the zoom target per wheel notch. Kept small for a short
+        // throw; the per-frame easing below spreads it out so it still reads as smooth.
+        private const float WheelZoomStep = 0.09f;
+        // Fraction of the remaining zoom gap closed per second (exponential ease).
+        private const float ZoomSmoothing = 14f;
 
         // ===== Model spin =====
         //
@@ -263,6 +271,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _framedDistance / _viewScale,
                 _minDistance,
                 _maxDistance);
+            _targetOrbitDistance = _orbitDistance;
             UpdateCameraTransform();
         }
 
@@ -346,6 +355,16 @@ namespace NeonCompanion.Runtime.Avatar3D
                 // pose; assigning an absolute rotation here would overwrite them.
                 _target.localRotation =
                     _target.localRotation * Quaternion.Euler(0f, yawDelta, 0f);
+            }
+
+            // Glide the camera toward the wheel/pinch zoom target. Frame-rate
+            // independent exponential ease; snaps the last hair to kill drift.
+            if (deltaTime > 0f && _orbitDistance != _targetOrbitDistance)
+            {
+                float t = 1f - Mathf.Exp(-ZoomSmoothing * deltaTime);
+                _orbitDistance = Mathf.Lerp(_orbitDistance, _targetOrbitDistance, t);
+                if (Mathf.Abs(_orbitDistance - _targetOrbitDistance) < 0.0005f)
+                    _orbitDistance = _targetOrbitDistance;
             }
 
             ApplySpringMotionForce();
@@ -938,6 +957,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 _framedDistance / _viewScale,
                 _minDistance,
                 _maxDistance);
+            _targetOrbitDistance = _orbitDistance;
         }
 
         /// <summary>
@@ -1037,7 +1057,7 @@ namespace NeonCompanion.Runtime.Avatar3D
                 if (_lastPinchDistance > 0f && currentPinchDistance > 0f)
                 {
                     float delta = currentPinchDistance - _lastPinchDistance;
-                    _orbitDistance = Mathf.Clamp(_orbitDistance - delta * _pinchSensitivity, _minDistance, _maxDistance);
+                    _targetOrbitDistance = Mathf.Clamp(_targetOrbitDistance - delta * _pinchSensitivity, _minDistance, _maxDistance);
                 }
 
                 _lastPinchDistance = currentPinchDistance;
@@ -1130,10 +1150,10 @@ namespace NeonCompanion.Runtime.Avatar3D
                 return;
 
             // Mouse-wheel zoom for the in-app column. Scrolling up (negative delta)
-            // pulls the camera in. Mirrors the touch pinch, which also drives
-            // _orbitDistance directly.
-            _orbitDistance = Mathf.Clamp(
-                _orbitDistance + evt.delta.y * WheelZoomStep,
+            // pulls the camera in. Only the target moves here; Update() eases the
+            // actual distance toward it so the zoom glides instead of snapping.
+            _targetOrbitDistance = Mathf.Clamp(
+                _targetOrbitDistance + evt.delta.y * WheelZoomStep,
                 _minDistance,
                 _maxDistance);
             evt.StopPropagation();
