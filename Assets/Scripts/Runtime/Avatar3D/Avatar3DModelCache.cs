@@ -165,9 +165,12 @@ namespace NeonCompanion.Runtime.Avatar3D
 
             // Back to the origin in its own right: a host that does not reparent
             // the model (the pet window) would otherwise inherit wherever the
-            // cache happened to keep it.
+            // cache happened to keep it. Cancel first — a Park() that lost the
+            // race against a deactivating ancestor (see Reparent) may still have
+            // a retry queued against this same transform.
             Transform instanceTransform = model.Instance.transform;
-            instanceTransform.SetParent(null, false);
+            Avatar3DModelCachePump.CancelReparent(instanceTransform);
+            Reparent(instanceTransform, null);
             instanceTransform.localPosition = Vector3.zero;
             instanceTransform.localRotation = Quaternion.identity;
             model.Instance.SetActive(true);
@@ -201,7 +204,7 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
 
             model.Instance.SetActive(false);
-            model.Instance.transform.SetParent(EnsureHolder(), false);
+            Reparent(model.Instance.transform, EnsureHolder());
             Parked.Add(model);
 
             while (Parked.Count > Capacity)
@@ -271,6 +274,22 @@ namespace NeonCompanion.Runtime.Avatar3D
             }
         }
 
+        // Unity refuses to reparent a GameObject while any of its ancestors is
+        // mid SetActive — e.g. parking a model from OnDisable while the whole
+        // Avatars page is being torn down, which is exactly when Park() runs.
+        // SetParent does not throw for this: it logs an error and silently
+        // leaves the transform where it was. Left unchecked, the model would be
+        // recorded as parked while it is still hanging off a hierarchy that may
+        // be destroyed once the deactivation finishes — so success is verified
+        // and a failed attempt is handed off to the pump instead, which is a
+        // separate persistent object unaffected by the cascade that blocked it.
+        private static void Reparent(Transform target, Transform parent)
+        {
+            target.SetParent(parent, false);
+            if (target.parent != parent)
+                Avatar3DModelCachePump.RetryReparent(target, parent);
+        }
+
         // The holder itself is inactive, which is what keeps every parked model out
         // of the render cameras regardless of its own active state.
         private static Transform EnsureHolder()
@@ -303,6 +322,74 @@ namespace NeonCompanion.Runtime.Avatar3D
                 UnityEngine.Object.Destroy(value);
             else
                 UnityEngine.Object.DestroyImmediate(value);
+        }
+    }
+
+    /// <summary>
+    /// Retries a reparent that Unity refused because an ancestor of the target
+    /// was mid activation/deactivation. Lives on its own persistent GameObject
+    /// outside every other hierarchy, so its Update keeps running through
+    /// whatever cascade blocked the original SetParent call.
+    /// </summary>
+    internal sealed class Avatar3DModelCachePump : MonoBehaviour
+    {
+        private struct PendingReparent
+        {
+            public Transform Target;
+            public Transform Parent;
+        }
+
+        private static Avatar3DModelCachePump _instance;
+        private readonly List<PendingReparent> _pending = new List<PendingReparent>();
+
+        internal static void RetryReparent(Transform target, Transform parent)
+        {
+            if (target == null)
+                return;
+            EnsureInstance()._pending.Add(
+                new PendingReparent { Target = target, Parent = parent });
+        }
+
+        internal static void CancelReparent(Transform target)
+        {
+            if (_instance == null || target == null)
+                return;
+            List<PendingReparent> pending = _instance._pending;
+            for (int i = pending.Count - 1; i >= 0; i--)
+            {
+                if (pending[i].Target == target)
+                    pending.RemoveAt(i);
+            }
+        }
+
+        private static Avatar3DModelCachePump EnsureInstance()
+        {
+            if (_instance != null)
+                return _instance;
+
+            var pumpObject = new GameObject("[Avatar3DModelCachePump]");
+            pumpObject.hideFlags = HideFlags.HideAndDontSave;
+            if (Application.isPlaying)
+                DontDestroyOnLoad(pumpObject);
+            _instance = pumpObject.AddComponent<Avatar3DModelCachePump>();
+            return _instance;
+        }
+
+        private void Update()
+        {
+            for (int i = _pending.Count - 1; i >= 0; i--)
+            {
+                PendingReparent entry = _pending[i];
+                if (entry.Target == null)
+                {
+                    _pending.RemoveAt(i);
+                    continue;
+                }
+
+                entry.Target.SetParent(entry.Parent, false);
+                if (entry.Target.parent == entry.Parent)
+                    _pending.RemoveAt(i);
+            }
         }
     }
 }
