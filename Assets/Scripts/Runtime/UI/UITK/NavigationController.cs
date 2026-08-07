@@ -19,6 +19,7 @@ namespace NeonCompanion.Runtime.UI.UITK
         public Func<string, string> AvatarDisplayName;
         public Func<int> GetAvatarTotalCount;
         public Func<string> GetActiveAvatarId;
+        public Action ResetAvatarDetailView;
         public Func<string> GetSessionSearchQuery;
         public VisualElement ChatPanel;
         public VisualElement HistoryPanel;
@@ -153,6 +154,9 @@ namespace NeonCompanion.Runtime.UI.UITK
                 return;
 
             SetActiveNav(_navAvatars);
+
+            // Always land on the tile list, not a stale settings panel from last visit.
+            _deps?.ResetAvatarDetailView?.Invoke();
 
             int total = _deps != null && _deps.GetAvatarTotalCount != null ? _deps.GetAvatarTotalCount() : 0;
             string activeId = _deps != null && _deps.GetActiveAvatarId != null ? _deps.GetActiveAvatarId() : "neon";

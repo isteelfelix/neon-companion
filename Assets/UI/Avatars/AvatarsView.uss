@@ -9,6 +9,17 @@
     overflow: hidden;
 }
 
+/* Compact header: the subtitle repeats what the category tabs already say and
+   ate a whole row (~30% of the fold on a phone). Drop it and tighten the head
+   on every form factor — the title + actions are enough. */
+.avatars-page .page__subtitle {
+    display: none;
+}
+
+.avatars-page .page__head {
+    margin-bottom: 10px;
+}
+
 /* ---- View-mode switcher ---- */
 
 .viewmode-row {
@@ -536,22 +547,79 @@
     min-height: 0;
 }
 
-/* Phone: the preview card is fixed 320px / no-shrink on desktop — make it fluid
-   so it never forces a horizontal scroll on a narrow screen. */
+/* ============================================================
+   Phone / narrow window. `.ff-phone` also applies to a desktop window resized
+   below the phone breakpoint, so these rules cover both. The section becomes
+   single-pane: the tile list fills the width, and tapping a tile swaps it for
+   the settings panel (detail mode, toggled by C# via `avatars-page--detail`).
+   Before this, the desktop list+settings split was crammed side by side and
+   the category row overflowed off the right edge (VRM was unreachable).
+   ============================================================ */
 .ff-phone .avatars-page {
     padding-left: 14px;
     padding-right: 14px;
 }
 
-.ff-phone .previewcard {
-    width: 100%;
+/* Category switcher wraps into a grid that stretches to the window instead of
+   running off-screen. flex-basis 40% + grow ⇒ two equal columns (2×2). */
+.ff-phone .viewmode-row {
+    align-self: stretch;
+    flex-wrap: wrap;
+}
+
+.ff-phone .viewmode-btn {
+    flex-grow: 1;
+    flex-basis: 40%;
     min-width: 0;
-    max-width: 100%;
-    flex-shrink: 1;
+    padding: 0 10px;
+}
+
+.ff-phone .avatar-split {
+    flex-direction: column;
+}
+
+.ff-phone .gallery-container {
+    flex-grow: 1;
 }
 
 .ff-phone .gallery {
     flex-wrap: wrap;
+    margin-right: 0;
+}
+
+/* List mode: settings panel hidden. */
+.ff-phone .previewcard {
+    display: none;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-shrink: 1;
+    margin-top: 0;
+}
+
+/* Detail mode: everything but the settings panel collapses, giving a clean
+   full-screen editor with its own back button. */
+.ff-phone .avatars-page--detail .page__head,
+.ff-phone .avatars-page--detail .viewmode-row,
+.ff-phone .avatars-page--detail .filterrow,
+.ff-phone .avatars-page--detail .gallery-container {
+    display: none;
+}
+
+.ff-phone .avatars-page--detail .previewcard {
+    display: flex;
+    flex-grow: 1;
+}
+
+/* Back-to-list button: phone detail mode only. */
+.preview-back {
+    display: none;
+    align-self: flex-start;
+    margin-bottom: 10px;
+}
+
+.ff-phone .preview-back {
+    display: flex;
 }
 
 .preview-scroll {

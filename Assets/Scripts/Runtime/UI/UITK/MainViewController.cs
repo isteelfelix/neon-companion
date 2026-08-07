@@ -553,6 +553,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 AvatarDisplayName = _avatarGalleryController.AvatarDisplayName,
                 GetAvatarTotalCount = _avatarGalleryController.GetAvatarTotalCount,
                 GetActiveAvatarId = () => _avatarGalleryController.ActiveAvatarId,
+                ResetAvatarDetailView = _avatarGalleryController.HidePhoneAvatarDetail,
                 GetSessionSearchQuery = () => _chatController.SessionSearchQuery,
                 ChatPanel = _chatPanel,
                 HistoryPanel = _historyPanel,

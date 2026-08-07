@@ -65,6 +65,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
 
 #if !UNITY_ANDROID || UNITY_EDITOR
             result.Error = "Native OAuth auth is only available on Android.";
+            await Task.CompletedTask; // keep method truly async in Editor compile (silences CS1998)
             return result;
 #else
             string baseUrl = HermesRemoteAuth.NormalizeBaseUrl(rawBaseUrl);
@@ -105,7 +106,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
             string authCode = null;
             string receivedState = null;
 
-            using (TcpListener listener = new TcpListener(IPAddress.Loopback, port))
+            // TcpListener is not IDisposable on Unity's .NET Standard 2.0 API level,
+            // so manage its lifetime with try/finally instead of a using block.
+            TcpListener listener = new TcpListener(IPAddress.Loopback, port);
+            try
             {
                 try
                 {
@@ -136,10 +140,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     queryParams.TryGetValue("code", out authCode);
                     queryParams.TryGetValue("state", out receivedState);
 
-                    if (!string.IsNullOrEmpty(queryParams.GetValueOrDefault("error")))
+                    string errCode;
+                    if (queryParams.TryGetValue("error", out errCode) && !string.IsNullOrEmpty(errCode))
                     {
-                        result.Error = "OAuth error: " + queryParams.GetValueOrDefault("error_description",
-                            queryParams["error"]);
+                        string errDesc;
+                        if (!queryParams.TryGetValue("error_description", out errDesc)
+                            || string.IsNullOrEmpty(errDesc))
+                        {
+                            errDesc = errCode;
+                        }
+                        result.Error = "OAuth error: " + errDesc;
                         return result;
                     }
                 }
@@ -148,6 +158,10 @@ namespace NeonCompanion.Runtime.Api.Hermes
                     result.Error = "Callback listener error: " + ex.Message;
                     return result;
                 }
+            }
+            finally
+            {
+                try { listener.Stop(); } catch { }
             }
 
             // --- Validate state ---

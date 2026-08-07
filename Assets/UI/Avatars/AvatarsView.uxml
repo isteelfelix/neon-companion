@@ -216,6 +216,7 @@
             </ui:ScrollView> <!-- end gallery-container -->
 
             <ui:VisualElement class="previewcard">
+                <ui:Button name="preview-back-btn" text="← К списку" class="btn preview-back" />
                 <ui:ScrollView name="avatar-preview-scroll" class="preview-scroll" mode="Vertical">
                     <ui:VisualElement name="preview-hero" class="preview-hero preview-hero--neon">
                         <ui:Label name="preview-title" text="Неон" class="preview-hero__title" />

@@ -121,6 +121,8 @@ namespace NeonCompanion.Runtime.UI.UITK
         private Button _previewEditPersonaBtn;
         private Button _previewResetPersonaBtn;
         private Button _previewDeleteAvatarBtn;
+        private Button _previewBackBtn;
+        private VisualElement _avatarsPage;
         private VisualElement _galleryContainer;
         private Label _navAvatarsCount;
         private Label _previewPersonaLabel;
@@ -316,6 +318,8 @@ namespace NeonCompanion.Runtime.UI.UITK
             _previewEditPersonaBtn = root.Q<Button>("preview-edit-persona-btn");
             _previewResetPersonaBtn = root.Q<Button>("preview-reset-persona-btn");
             _previewDeleteAvatarBtn = root.Q<Button>("preview-delete-avatar-btn");
+            _previewBackBtn   = root.Q<Button>("preview-back-btn");
+            _avatarsPage      = root.Q<VisualElement>("avatars-area");
             _previewPersonaLabel  = root.Q<Label>("preview-persona-label");
             _previewActionsRow    = root.Q<VisualElement>("preview-actions-row");
             _personaEditorPanel   = root.Q<VisualElement>("persona-editor-panel");
@@ -444,6 +448,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             RegisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
             RegisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
             RegisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
+            RegisterClick(_previewBackBtn, HidePhoneAvatarDetail);
             RegisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             RegisterClick(_personaCancelBtn, OnPersonaCancelClicked);
             RegisterClick(_viewModeStaticBtn,   OnViewModeStaticClicked);
@@ -489,6 +494,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             UnregisterClick(_previewEditPersonaBtn, OnPreviewEditPersonaClicked);
             UnregisterClick(_previewResetPersonaBtn, OnPreviewResetPersonaClicked);
             UnregisterClick(_previewDeleteAvatarBtn, OnPreviewDeleteAvatarClicked);
+            UnregisterClick(_previewBackBtn, HidePhoneAvatarDetail);
             UnregisterClick(_personaSaveBtn, OnPersonaSaveClicked);
             UnregisterClick(_personaCancelBtn, OnPersonaCancelClicked);
             UnregisterClick(_viewModeStaticBtn,   OnViewModeStaticClicked);
@@ -1167,7 +1173,7 @@ namespace NeonCompanion.Runtime.UI.UITK
                 string capturedId = id;
                 var tile = _d.Root.Q<VisualElement>($"avtile-{capturedId}");
                 if (tile != null)
-                    tile.RegisterCallback<ClickEvent>(_ => SelectAvatar(capturedId));
+                    tile.RegisterCallback<ClickEvent>(_ => ActivateAvatarTile(capturedId));
             }
         }
 
@@ -1179,11 +1185,13 @@ namespace NeonCompanion.Runtime.UI.UITK
         private void OnNeonAnimatedTileClicked(ClickEvent _)
         {
             SelectAnimatedAvatar("neon");
+            ShowPhoneAvatarDetail();
         }
 
         private void OnYorha2bAnimatedTileClicked(ClickEvent _)
         {
             SelectAnimatedAvatar("yorha-2b");
+            ShowPhoneAvatarDetail();
         }
 
         private void SelectAnimatedAvatar(string avatarId)
@@ -1320,6 +1328,46 @@ namespace NeonCompanion.Runtime.UI.UITK
             if (mode == AvatarViewMode.Vrm)
                 return "vrm";
             return "static";
+        }
+
+        // Tile tap entry point. On a phone / narrow window the section is single-pane:
+        // selecting an avatar also slides in its settings panel over the list. On wider
+        // layouts the panel is always visible, so the detail class is inert (its USS is
+        // scoped to .ff-phone) and this behaves exactly like a plain SelectAvatar.
+        private void ActivateAvatarTile(string avatarId)
+        {
+            SelectAvatar(avatarId);
+            ShowPhoneAvatarDetail();
+        }
+
+        private void ShowPhoneAvatarDetail()
+        {
+            // Only meaningful in the single-pane (phone / narrow) layout. Guarding here
+            // keeps the class off the element on wide layouts, so it can't suddenly
+            // swap to the detail view if the window is later shrunk below the breakpoint.
+            if (_avatarsPage == null || !IsNarrowLayout())
+                return;
+            _avatarsPage.AddToClassList("avatars-page--detail");
+        }
+
+        // The form-factor classes live on app-root; walk up from the page to find one.
+        private bool IsNarrowLayout()
+        {
+            VisualElement el = _avatarsPage;
+            while (el != null)
+            {
+                if (el.ClassListContains("ff-phone"))
+                    return true;
+                el = el.parent;
+            }
+            return false;
+        }
+
+        // Public so navigation can force the section back to its list view when the
+        // user leaves and returns (the detail class otherwise persists on the element).
+        public void HidePhoneAvatarDetail()
+        {
+            _avatarsPage?.RemoveFromClassList("avatars-page--detail");
         }
 
         private void SelectAvatar(string avatarId)
@@ -2305,7 +2353,7 @@ namespace NeonCompanion.Runtime.UI.UITK
             tile.Add(badge);
 
             string capturedId = profile.id;
-            tile.RegisterCallback<ClickEvent>(_ => SelectAvatar(capturedId));
+            tile.RegisterCallback<ClickEvent>(_ => ActivateAvatarTile(capturedId));
             return tile;
         }
 
