@@ -1,35 +1,35 @@
-// HermesAppLinkAuth.cs — Android App Link OAuth flow for Companion.
+// HermesAppLinkAuth.cs — Android native OAuth flow (RFC 8252) for Companion.
 //
-// Implements the App Link / Custom Tab auth strategy designed 2026-08-06:
+// Uses the gateway's built-in /auth/native/authorize + /auth/native/token endpoints.
+// No App Links needed — the gateway redirects the browser to a loopback URL
+// (http://127.0.0.1:port/callback?code=...), and the app catches it via TcpListener.
 //
-//   1. App calls GET {base}/auth/login?provider=N via HttpWebRequest (no redirect
-//      following). Captures pre-auth Set-Cookie (PKCE cookie with state + verifier)
-//      and the 302 Location (IdP authorize URL).
-//   2. Opens the IdP URL in a system browser Custom Tab. For Google/GitHub this
-//      is a real browser → OAuth is not blocked.
-//   3. User authenticates. IdP redirects to {base}/auth/callback?code=…&state=…
-//   4. Android intercepts the redirect via the intent-filter (App Link on the
-//      gateway domain) and delivers it to the app via AndroidDeepLinkReceiver.
-//   5. App replays GET /auth/callback?code&state via HttpWebRequest, carrying
-//      the PKCE cookie from step 1. Gateway validates state, mints session,
-//      responds with Set-Cookie: hermes_session_at=…
-//   6. Read Set-Cookie from the response → HermesRemoteAuth.SetSessionCookie → done.
+// Flow:
+//   1. App generates PKCE pair (code_verifier + code_challenge S256) + random state.
+//   2. App starts TcpListener on 127.0.0.1:random_port.
+//   3. App opens /auth/native/authorize?code_challenge=...&redirect_uri=http://127.0.0.1:port/callback
+//      in system browser (Custom Tab). Gateway starts IdP login, sets PKCE cookie in browser.
+//   4. User authenticates at IdP (Nous → Google/GitHub). System browser = OAuth not blocked.
+//   5. IdP redirects to gateway /auth/callback. Gateway validates, mints a one-time gateway code,
+//      redirects browser to http://127.0.0.1:port/callback?code=gw_code&state=client_state.
+//   6. Browser navigates to loopback → app's TcpListener catches the HTTP request → extracts code.
+//   7. App POSTs /auth/native/token {code, code_verifier} → gets access_token + refresh_token in JSON.
+//   8. App builds session cookie header from tokens → SetSessionCookie → done.
 //
-// Uses System.Net.HttpWebRequest (not UnityWebRequest) for steps 1 and 5 because
-// HttpWebRequest.AllowAutoRedirect=false reliably exposes 302 headers, while
-// UnityWebRequest.redirectLimit=0 does not. This mirrors the existing
-// CaptureViaNativeHandoffAsync code (HermesBrowserOAuthLogin.cs:822+).
+// The PKCE cookie stays in the browser's cookie jar throughout — the app never needs it.
+// The app only receives the gateway-brokered code via loopback, then exchanges it for tokens.
 //
-// Zero server-side changes. Only needs /.well-known/assetlinks.json on the gateway
-// for verified App Link (silent interception without disambiguation dialog).
+// Zero server-side changes. Both /auth/native/authorize and /auth/native/token already exist.
 //
 // C# 9 (Unity 6) compatible.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -37,7 +37,7 @@ using UnityEngine;
 
 namespace NeonCompanion.Runtime.Api.Hermes
 {
-    /// <summary>Result of an App Link OAuth attempt.</summary>
+    /// <summary>Result of a native OAuth attempt.</summary>
     public class HermesAppLinkResult
     {
         public bool Ok;
@@ -46,19 +46,16 @@ namespace NeonCompanion.Runtime.Api.Hermes
     }
 
     /// <summary>
-    /// Android-only OAuth flow using system browser (Custom Tab) + App Link callback
-    /// interception. The app never embeds a browser and never reads a foreign cookie
-    /// jar — it replays the gateway callback via its own HttpWebRequest.
+    /// Android OAuth flow using RFC 8252 native app authorization.
+    /// System browser + loopback redirect + PKCE code exchange.
     /// </summary>
     public static class HermesAppLinkAuth
     {
-        private const int HttpTimeoutStep1 = 10;
-        private const int HttpTimeoutStep5 = 15;
-        private const int DeepLinkWaitMs = 180000; // 3 min for user to complete IdP login
+        private const int HttpTimeout = 15;
+        private const int CallbackWaitMs = 180000; // 3 min for user to complete IdP login
 
         /// <summary>
-        /// Run the full App Link OAuth flow. Android-only.
-        /// Returns a session cookie header on success, or an error.
+        /// Run the full native OAuth flow. Android-only.
         /// </summary>
         public static async Task<HermesAppLinkResult> LoginAsync(
             string rawBaseUrl,
@@ -67,7 +64,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             HermesAppLinkResult result = new HermesAppLinkResult();
 
 #if !UNITY_ANDROID || UNITY_EDITOR
-            result.Error = "App Link auth is only available on Android.";
+            result.Error = "Native OAuth auth is only available on Android.";
             return result;
 #else
             string baseUrl = HermesRemoteAuth.NormalizeBaseUrl(rawBaseUrl);
@@ -77,306 +74,326 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 return result;
             }
 
-            // If no provider given, probe /api/auth/providers for the first one.
-            if (string.IsNullOrEmpty(providerName))
+            // --- Step 1: Generate PKCE pair + state ---
+            string codeVerifier = GenerateCodeVerifier();
+            string codeChallenge = GenerateCodeChallenge(codeVerifier);
+            string state = GenerateRandomState();
+
+            // --- Step 2: Find free port + start TcpListener ---
+            int port = FindFreePort();
+            if (port <= 0)
             {
-                string firstProvider = await ProbeFirstProviderNameAsync(baseUrl);
-                if (string.IsNullOrEmpty(firstProvider))
+                result.Error = "Could not allocate a local port for OAuth callback.";
+                return result;
+            }
+
+            string redirectUri = "http://127.0.0.1:" + port + "/callback";
+            Debug.Log("[NeonCompanion] Native OAuth: listening on 127.0.0.1:" + port);
+
+            // --- Step 3: Build authorize URL ---
+            StringBuilder authUrl = new StringBuilder();
+            authUrl.Append(baseUrl);
+            authUrl.Append("/auth/native/authorize");
+            authUrl.Append("?code_challenge=").Append(Uri.EscapeDataString(codeChallenge));
+            authUrl.Append("&code_challenge_method=S256");
+            authUrl.Append("&redirect_uri=").Append(Uri.EscapeDataString(redirectUri));
+            authUrl.Append("&state=").Append(Uri.EscapeDataString(state));
+            if (!string.IsNullOrEmpty(providerName))
+                authUrl.Append("&provider=").Append(Uri.EscapeDataString(providerName));
+
+            // --- Step 4-6: Open browser + wait for loopback callback ---
+            string authCode = null;
+            string receivedState = null;
+
+            using (TcpListener listener = new TcpListener(IPAddress.Loopback, port))
+            {
+                try
                 {
-                    result.Error = "No auth providers found on the gateway.";
+                    listener.Start();
+                }
+                catch (Exception ex)
+                {
+                    result.Error = "Failed to start callback listener: " + ex.Message;
                     return result;
                 }
-                providerName = firstProvider;
+
+                // Open the authorize URL in system browser (Custom Tab).
+                Debug.Log("[NeonCompanion] Native OAuth: opening " + authUrl.ToString());
+                OpenSystemBrowser(authUrl.ToString());
+
+                // Wait for the callback (browser → loopback redirect).
+                try
+                {
+                    string callbackResult = await AcceptCallbackAsync(listener, CallbackWaitMs);
+                    if (callbackResult == null)
+                    {
+                        result.Error = "Timed out waiting for OAuth callback.";
+                        return result;
+                    }
+
+                    // Parse query string from the callback.
+                    var queryParams = ParseQueryString(callbackResult);
+                    queryParams.TryGetValue("code", out authCode);
+                    queryParams.TryGetValue("state", out receivedState);
+
+                    if (!string.IsNullOrEmpty(queryParams.GetValueOrDefault("error")))
+                    {
+                        result.Error = "OAuth error: " + queryParams.GetValueOrDefault("error_description",
+                            queryParams["error"]);
+                        return result;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    result.Error = "Callback listener error: " + ex.Message;
+                    return result;
+                }
             }
 
-            string loginUrl = baseUrl + "/auth/login?provider=" + Uri.EscapeDataString(providerName);
+            // --- Validate state ---
+            if (string.IsNullOrEmpty(authCode))
+            {
+                result.Error = "OAuth callback did not include an authorization code.";
+                return result;
+            }
 
-            // --- Step 1: GET /auth/login (no redirect) → capture PKCE cookie + IdP URL ---
-            HttpCapture step1;
+            if (!string.Equals(receivedState, state, StringComparison.Ordinal))
+            {
+                result.Error = "OAuth state mismatch (possible CSRF).";
+                return result;
+            }
+
+            // --- Step 7: Exchange code for tokens ---
+            NativeTokenResponse tokens;
             try
             {
-                step1 = await HttpGetNoRedirectAsync(loginUrl, HttpTimeoutStep1);
+                tokens = await ExchangeCodeForTokensAsync(baseUrl, authCode, codeVerifier);
             }
             catch (Exception ex)
             {
-                result.Error = "Failed to start login: " + ex.Message;
+                result.Error = "Token exchange failed: " + ex.Message;
                 return result;
             }
 
-            if (string.IsNullOrEmpty(step1.Location))
+            if (string.IsNullOrEmpty(tokens.AccessToken))
             {
-                result.Error = "Login response did not redirect to an identity provider.";
+                result.Error = "Token exchange returned no access token.";
                 return result;
             }
 
-            // Build the Cookie header from ALL Set-Cookie values (there may be several).
-            string pkceCookieHeader = BuildCookieHeader(step1.SetCookies);
-            if (string.IsNullOrEmpty(pkceCookieHeader))
-            {
-                result.Error = "Login response did not include a PKCE cookie.";
-                return result;
-            }
-
-            string idpUrl = step1.Location;
-
-            // --- Step 2: Open IdP URL in system browser Custom Tab ---
-            AndroidDeepLinkReceiver receiver = AndroidDeepLinkReceiver.Instance;
-            if (receiver == null)
-            {
-                result.Error = "Deep link receiver unavailable.";
-                return result;
-            }
-
-            // Clear any stale deep link.
-            receiver.TryConsumeDeepLink();
-
-            Debug.Log("[NeonCompanion] App Link OAuth: opening IdP URL in Custom Tab: " + idpUrl);
-            OpenCustomTab(idpUrl);
-
-            // --- Steps 3-4: Wait for App Link callback ---
-            string callbackUrl = await WaitForDeepLinkAsync(receiver, DeepLinkWaitMs);
-            if (string.IsNullOrEmpty(callbackUrl))
-            {
-                result.Error = "Timed out waiting for login callback.";
-                return result;
-            }
-
-            Debug.Log("[NeonCompanion] App Link OAuth: callback intercepted: " + callbackUrl);
-
-            // --- Step 5: Replay GET /auth/callback with PKCE cookie ---
-            string replayUrl = BuildReplayUrl(callbackUrl, baseUrl);
-
-            HttpCapture step5;
-            try
-            {
-                step5 = await HttpGetWithCookieAsync(replayUrl, pkceCookieHeader, HttpTimeoutStep5, followRedirect: true);
-            }
-            catch (Exception ex)
-            {
-                result.Error = "Callback replay failed: " + ex.Message;
-                return result;
-            }
-
-            // --- Step 6: Extract session cookies ---
-            string sessionCookie = HermesRemoteAuth.ExtractSessionCookies(BuildCookieHeader(step5.SetCookies));
-            if (string.IsNullOrEmpty(sessionCookie) && step5.SetCookies.Count > 0)
-            {
-                // Try raw concatenation as fallback.
-                sessionCookie = HermesRemoteAuth.ExtractSessionCookies(string.Join("; ", step5.SetCookies));
-            }
-
-            if (string.IsNullOrEmpty(sessionCookie))
-            {
-                result.Error = "Callback succeeded but no session cookie was returned.";
-                return result;
-            }
+            // --- Step 8: Build session cookie header from tokens ---
+            StringBuilder cookie = new StringBuilder();
+            cookie.Append("hermes_session_at=").Append(tokens.AccessToken);
+            if (!string.IsNullOrEmpty(tokens.RefreshToken))
+                cookie.Append("; hermes_session_rt=").Append(tokens.RefreshToken);
+            if (!string.IsNullOrEmpty(tokens.Provider))
+                cookie.Append("; hermes_session_provider=").Append(tokens.Provider);
 
             result.Ok = true;
-            result.CookieHeader = sessionCookie;
+            result.CookieHeader = cookie.ToString();
+            Debug.Log("[NeonCompanion] Native OAuth: success, session obtained.");
             return result;
 #endif
         }
 
         // ------------------------------------------------------------------
-        // HTTP helpers (HttpWebRequest for reliable 302 handling)
+        // PKCE helpers
         // ------------------------------------------------------------------
 
-        /// <summary>Captured HTTP response: redirect target + all Set-Cookie values.</summary>
-        private struct HttpCapture
+        private static string GenerateCodeVerifier()
         {
-            public int StatusCode;
-            public string Location;
-            public List<string> SetCookies;
+            // RFC 7636: 43-128 chars from [A-Z][a-z][0-9]-._~
+            byte[] bytes = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+                rng.GetBytes(bytes);
+            return Base64UrlEncode(bytes);
         }
 
-        private static async Task<HttpCapture> HttpGetNoRedirectAsync(string url, int timeoutSec)
+        private static string GenerateCodeChallenge(string verifier)
         {
-            return await HttpGetAsync(url, null, timeoutSec, followRedirect: false);
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(verifier));
+                return Base64UrlEncode(hash);
+            }
         }
 
-        private static async Task<HttpCapture> HttpGetWithCookieAsync(
-            string url, string cookieHeader, int timeoutSec, bool followRedirect)
+        private static string GenerateRandomState()
         {
-            return await HttpGetAsync(url, cookieHeader, timeoutSec, followRedirect);
+            byte[] bytes = new byte[16];
+            using (var rng = RandomNumberGenerator.Create())
+                rng.GetBytes(bytes);
+            return Base64UrlEncode(bytes);
         }
 
-        private static async Task<HttpCapture> HttpGetAsync(
-            string url, string cookieHeader, int timeoutSec, bool followRedirect)
+        private static string Base64UrlEncode(byte[] data)
         {
-            HttpCapture capture = new HttpCapture();
-            capture.SetCookies = new List<string>();
+            return Convert.ToBase64String(data)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
+
+        // ------------------------------------------------------------------
+        // Loopback TCP listener
+        // ------------------------------------------------------------------
+
+        private static int FindFreePort()
+        {
+            try
+            {
+                TcpListener l = new TcpListener(IPAddress.Loopback, 0);
+                l.Start();
+                int p = ((IPEndPoint)l.LocalEndpoint).Port;
+                l.Stop();
+                return p;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Accept one HTTP request on the TcpListener, extract the query string,
+        /// send a simple response to the browser, and return the raw query string.
+        /// </summary>
+        private static async Task<string> AcceptCallbackAsync(TcpListener listener, int timeoutMs)
+        {
+            Task<TcpClient> acceptTask = listener.AcceptTcpClientAsync();
+            Task timeoutTask = Task.Delay(timeoutMs);
+
+            if (await Task.WhenAny(acceptTask, timeoutTask) != acceptTask)
+                return null; // timed out
+
+            using (TcpClient client = await acceptTask)
+            using (NetworkStream stream = client.GetStream())
+            {
+                // Read the HTTP request line (we only need the first line for the URL).
+                byte[] buffer = new byte[4096];
+                int read = await stream.ReadAsync(buffer, 0, buffer.Length);
+                if (read <= 0)
+                    return null;
+
+                string request = Encoding.UTF8.GetString(buffer, 0, read);
+
+                // Parse: "GET /callback?code=...&state=... HTTP/1.1"
+                string queryString = null;
+                int spaceIdx = request.IndexOf(' ');
+                if (spaceIdx > 0)
+                {
+                    int nextSpace = request.IndexOf(' ', spaceIdx + 1);
+                    if (nextSpace > 0)
+                    {
+                        string path = request.Substring(spaceIdx + 1, nextSpace - spaceIdx - 1);
+                        int qIdx = path.IndexOf('?');
+                        if (qIdx >= 0)
+                            queryString = path.Substring(qIdx + 1);
+                    }
+                }
+
+                // Send a simple HTML response so the browser shows something nice.
+                string body = "<html><body style=\"background:#091019;color:#6cf;font-family:sans-serif;"
+                    + "display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">"
+                    + "<p>✅ Authentication complete. You can close this tab.</p></body></html>";
+                byte[] bodyBytes = Encoding.UTF8.GetBytes(body);
+                string response = "HTTP/1.1 200 OK\r\n"
+                    + "Content-Type: text/html; charset=utf-8\r\n"
+                    + "Content-Length: " + bodyBytes.Length + "\r\n"
+                    + "Connection: close\r\n"
+                    + "\r\n";
+                byte[] headerBytes = Encoding.UTF8.GetBytes(response);
+                await stream.WriteAsync(headerBytes, 0, headerBytes.Length);
+                await stream.WriteAsync(bodyBytes, 0, bodyBytes.Length);
+
+                return queryString ?? "";
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Token exchange
+        // ------------------------------------------------------------------
+
+        private class NativeTokenResponse
+        {
+            public string AccessToken;
+            public string RefreshToken;
+            public string Provider;
+        }
+
+        private static async Task<NativeTokenResponse> ExchangeCodeForTokensAsync(
+            string baseUrl, string code, string codeVerifier)
+        {
+            string url = baseUrl + "/auth/native/token";
+            string bodyJson = JsonConvert.SerializeObject(new
+            {
+                code = code,
+                code_verifier = codeVerifier
+            });
+            byte[] data = Encoding.UTF8.GetBytes(bodyJson);
 
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
-            req.Method = "GET";
-            req.AllowAutoRedirect = followRedirect;
-            req.Timeout = timeoutSec * 1000;
-            req.ReadWriteTimeout = timeoutSec * 1000;
+            req.Method = "POST";
+            req.ContentType = "application/json";
+            req.Timeout = HttpTimeout * 1000;
+            req.ContentLength = data.Length;
 
-            if (!string.IsNullOrEmpty(cookieHeader))
-                req.Headers["Cookie"] = cookieHeader;
-
-            // We need to capture Set-Cookie from both the redirect response and the final.
-            // With AllowAutoRedirect=false, we get the 302 directly.
-            HttpWebResponse resp;
-            try
+            using (Stream s = await Task.Factory.FromAsync(
+                req.BeginGetRequestStream, req.EndGetRequestStream, null))
             {
-                WebResponse wr = await Task.Factory.FromAsync(
-                    req.BeginGetResponse, req.EndGetResponse, null);
-                resp = (HttpWebResponse)wr;
-            }
-            catch (WebException wex)
-            {
-                // 302 with AllowAutoRedirect=false raises a WebException.
-                resp = wex.Response as HttpWebResponse;
-                if (resp == null)
-                    throw;
+                await s.WriteAsync(data, 0, data.Length);
             }
 
-            capture.StatusCode = (int)resp.StatusCode;
+            WebResponse wr = await Task.Factory.FromAsync(
+                req.BeginGetResponse, req.EndGetResponse, null);
 
-            // Location header
-            capture.Location = resp.Headers["Location"];
-
-            // Set-Cookie: HttpWebResponse.Headers["Set-Cookie"] returns ALL values
-            // joined by ", " in .NET — same UnityWebRequest issue. But we can iterate
-            // resp.Cookies for properly separated values.
-            if (resp.Cookies != null && resp.Cookies.Count > 0)
+            using (Stream rs = wr.GetResponseStream())
+            using (StreamReader r = new StreamReader(rs, Encoding.UTF8))
             {
-                for (int i = 0; i < resp.Cookies.Count; i++)
+                string json = await r.ReadToEndAsync();
+                wr.Close();
+
+                JObject parsed = JObject.Parse(json);
+                return new NativeTokenResponse
                 {
-                    Cookie c = resp.Cookies[i];
-                    capture.SetCookies.Add(c.Name + "=" + c.Value);
+                    AccessToken = parsed.Value<string>("access_token"),
+                    RefreshToken = parsed.Value<string>("refresh_token"),
+                    Provider = parsed.Value<string>("provider")
+                };
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Utility
+        // ------------------------------------------------------------------
+
+        private static System.Collections.Generic.Dictionary<string, string> ParseQueryString(string qs)
+        {
+            var dict = new System.Collections.Generic.Dictionary<string, string>();
+            if (string.IsNullOrEmpty(qs))
+                return dict;
+
+            string[] pairs = qs.Split('&');
+            for (int i = 0; i < pairs.Length; i++)
+            {
+                string pair = pairs[i];
+                int eq = pair.IndexOf('=');
+                if (eq > 0)
+                {
+                    string key = Uri.UnescapeDataString(pair.Substring(0, eq));
+                    string val = Uri.UnescapeDataString(pair.Substring(eq + 1));
+                    dict[key] = val;
+                }
+                else if (pair.Length > 0)
+                {
+                    dict[Uri.UnescapeDataString(pair)] = "";
                 }
             }
-            else
-            {
-                // Fallback: parse from raw header.
-                string raw = resp.Headers["Set-Cookie"];
-                if (!string.IsNullOrEmpty(raw))
-                {
-                    string[] parts = raw.Split(new[] { ", " }, StringSplitOptions.None);
-                    for (int i = 0; i < parts.Length; i++)
-                        capture.SetCookies.Add(parts[i]);
-                }
-            }
-
-            resp.Close();
-            return capture;
+            return dict;
         }
 
-        // ------------------------------------------------------------------
-        // Deep link waiting
-        // ------------------------------------------------------------------
-
-        private static async Task<string> WaitForDeepLinkAsync(
-            AndroidDeepLinkReceiver receiver, int timeoutMs)
-        {
-            DateTime deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-            while (DateTime.UtcNow < deadline)
-            {
-                string url = receiver.TryConsumeDeepLink();
-                if (!string.IsNullOrEmpty(url))
-                {
-                    if (url.IndexOf("/auth/callback", StringComparison.OrdinalIgnoreCase) >= 0)
-                        return url;
-                    Debug.LogWarning("[NeonCompanion] Ignoring non-auth deep link: " + url);
-                }
-
-                await Task.Delay(200);
-                await Task.Yield();
-            }
-            return null;
-        }
-
-        // ------------------------------------------------------------------
-        // Cookie helpers
-        // ------------------------------------------------------------------
-
-        /// <summary>Build a Cookie header from a list of "name=value" strings.</summary>
-        private static string BuildCookieHeader(List<string> cookies)
-        {
-            if (cookies == null || cookies.Count == 0)
-                return null;
-
-            // Extract just the name=value part (strip attributes after ';').
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < cookies.Count; i++)
-            {
-                string c = cookies[i];
-                int semi = c.IndexOf(';');
-                if (semi >= 0)
-                    c = c.Substring(0, semi);
-
-                if (sb.Length > 0)
-                    sb.Append("; ");
-                sb.Append(c.Trim());
-            }
-            return sb.Length > 0 ? sb.ToString() : null;
-        }
-
-        // ------------------------------------------------------------------
-        // URL helpers
-        // ------------------------------------------------------------------
-
-        private static string BuildReplayUrl(string callbackUrl, string baseUrl)
-        {
-            try
-            {
-                Uri cb = new Uri(callbackUrl);
-                Uri baseUri = new Uri(baseUrl);
-
-                if (string.Equals(cb.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase))
-                    return callbackUrl;
-
-                return baseUrl + cb.AbsolutePath + cb.Query;
-            }
-            catch
-            {
-                return callbackUrl;
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Provider probe
-        // ------------------------------------------------------------------
-
-        private static async Task<string> ProbeFirstProviderNameAsync(string baseUrl)
-        {
-            try
-            {
-                string url = baseUrl + "/api/auth/providers";
-                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = "GET";
-                req.Timeout = HttpTimeoutStep1 * 1000;
-
-                WebResponse wr = await Task.Factory.FromAsync(
-                    req.BeginGetResponse, req.EndGetResponse, null);
-                using (Stream s = wr.GetResponseStream())
-                using (StreamReader r = new StreamReader(s, Encoding.UTF8))
-                {
-                    string json = await r.ReadToEndAsync();
-                    wr.Close();
-
-                    JObject parsed = JObject.Parse(json);
-                    JArray providers = parsed["providers"] as JArray;
-                    if (providers == null || providers.Count == 0)
-                        return null;
-
-                    return providers[0].Value<string>("name");
-                }
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Custom Tab launcher
-        // ------------------------------------------------------------------
-
-        /// <summary>Open a URL in a Chrome Custom Tab (or system browser as fallback).</summary>
-        private static void OpenCustomTab(string url)
+        /// <summary>Open a URL in system browser (Custom Tab preferred, fallback to ACTION_VIEW).</summary>
+        private static void OpenSystemBrowser(string url)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             try
@@ -388,7 +405,6 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 bool opened = false;
                 try
                 {
-                    // Build a CustomTabsIntent
                     var builder = new AndroidJavaObject("androidx.browser.customtabs.CustomTabsIntent$Builder");
                     var customTabsIntent = builder.Call<AndroidJavaObject>("build");
                     var intent = customTabsIntent.Get<AndroidJavaObject>("intent");
@@ -399,12 +415,12 @@ namespace NeonCompanion.Runtime.Api.Hermes
                 }
                 catch
                 {
-                    // androidx.browser not in classpath — fall through.
+                    // androidx.browser not available.
                 }
 
                 if (!opened)
                 {
-                    // Fallback: ACTION_VIEW intent (opens system browser).
+                    // Fallback: ACTION_VIEW (opens default browser).
                     var intentClass = new AndroidJavaClass("android.content.Intent");
                     var intent = new AndroidJavaObject("android.content.Intent",
                         intentClass.GetStatic<string>("ACTION_VIEW"));
@@ -415,7 +431,7 @@ namespace NeonCompanion.Runtime.Api.Hermes
             }
             catch (Exception ex)
             {
-                Debug.LogError("[NeonCompanion] Failed to open Custom Tab: " + ex.Message);
+                Debug.LogError("[NeonCompanion] Failed to open browser: " + ex.Message);
                 Application.OpenURL(url);
             }
 #endif
